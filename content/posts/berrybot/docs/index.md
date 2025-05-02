@@ -1,14 +1,11 @@
 ---
 title: "BerryBot Documentation"
+date: 2025-05-01
 draft: false
+description: "Complete documentation for BerryBot, including setup, features, and development guidelines."
 ---
 
 ### Table of Contents
-- [Features](#features)
-  - [Added Features](#added-features)
-  - [Planned Features](#planned-features)
-    - [Moderation](#moderation)
-    - [Administration](#administration)
   - [Project Structure](#project-structure)
   - [Setup and Installation](#setup-and-installation)
     - [Prerequisites](#prerequisites)
@@ -43,50 +40,22 @@ draft: false
 
 ---
 
-# Features
-
-## Added Features
-
--   Administration
-    -   Self Roles
-        -   Allow users to assign themselves roles in different categories.
-
-## Planned Features
-
-### Moderation
-
-- **Member Screening**
-  - Require users to fill out a form before being allowed access to the server.
-- **Mute, Ban, and Kick Commands**
-  - Punish users for breaking server rules and terms of service, either permanently or temporarily.
-- **Support Tickets**
-  - Allow users to create support tickets and speak directly to server staff about an issue.
-- **Event Logging**
-  - Log all bot moderation events to a specific channel, to easily detect permission abuse by moderators.
-
-### Administration
-
-- **Member Welcoming**
-  - Send personalized welcome messages to new users.
-
----
-
 ## Project Structure
 ```
 src/
-├── commands/     # Bot commands
-│   ├── Public/   # Public commands
-│   └── Private/  # Private/developer commands
-├── components/   # Message components (buttons, select menus, etc.)
-├── config/       # Configuration files
-├── database/     # Database models and connection
-├── events/       # Discord event handlers
-├── handlers/     # Command and event loading handlers
-├── interfaces/   # TypeScript interfaces and types
-├── messages/     # Message templates
-├── util/         # Utility functions
-├── bot.ts        # Bot initialization
-└── index.ts      # Entry point
+├── commands/           # Bot commands
+│   ├── Public/        # Public commands
+│   └── Private/       # Private/developer commands
+├── components/        # Message components (buttons, select menus, etc.)
+├── config/           # Configuration files
+├── database/         # Database models and connection
+├── events/           # Discord event handlers
+├── handlers/         # Command and event loading handlers
+├── interfaces/       # TypeScript interfaces and types
+├── messages/         # Message templates
+├── util/            # Utility functions
+├── bot.ts           # Bot initialization
+└── index.ts         # Entry point
 ```
 
 ---
