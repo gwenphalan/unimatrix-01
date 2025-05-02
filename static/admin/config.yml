@@ -2,45 +2,42 @@ backend:
   name: github
   repo: gwenphalan/unimatrix-01
   branch: master
-  auth_scope: repo
-  base_url: https://unimatrix-01.dev
-  auth_endpoint: /api/auth
-  client_id: Ov23liP4zbOxWPo9hwDV
 
 media_folder: "static/images/uploads"
 public_folder: "/images/uploads"
 
+publish_mode: editorial_workflow
+
 collections:
   - name: "posts"
-    label: "Posts"
-    folder: "content/posts"
-    create: true
-    slug: "{{year}}-{{month}}-{{day}}-{{slug}}"
-    fields:
-      - {label: "Title", name: "title", widget: "string"}
-      - {label: "Publish Date", name: "date", widget: "datetime"}
-      - {label: "Draft", name: "draft", widget: "boolean", default: true}
-      - {label: "Body", name: "body", widget: "markdown"}
-
-  - name: "projects"
     label: "Projects"
-    folder: "content/projects"
+    folder: "content/posts"
     create: true
     slug: "{{slug}}"
     fields:
-      - {label: "Title", name: "title", widget: "string"}
-      - {label: "Publish Date", name: "date", widget: "datetime"}
-      - {label: "Draft", name: "draft", widget: "boolean", default: true}
-      - {label: "Body", name: "body", widget: "markdown"}
+      - { label: "Title", name: "title", widget: "string" }
+      - { label: "Date", name: "date", widget: "datetime" }
+      - { label: "Description", name: "description", widget: "string", required: false }
+      - { label: "Body", name: "body", widget: "markdown" }
 
-  - name: "pages"
-    label: "Pages"
-    files:
-      - file: "content/_index.md"
-        label: "Home Page"
-        name: "home"
-        fields:
-          - {label: "Title", name: "title", widget: "string"}
-          - {label: "Publish Date", name: "date", widget: "datetime"}
-          - {label: "Draft", name: "draft", widget: "boolean", default: false}
-          - {label: "Body", name: "body", widget: "markdown"} 
+  - name: "blog"
+    label: "Blog"
+    folder: "content/blog"
+    create: true
+    slug: "{{slug}}"
+    fields:
+      - { label: "Title", name: "title", widget: "string" }
+      - { label: "Date", name: "date", widget: "datetime" }
+      - { label: "Description", name: "description", widget: "string", required: false }
+      - { label: "Body", name: "body", widget: "markdown" }
+
+  - name: "docs"
+    label: "Documentation"
+    folder: "content/docs"
+    create: true
+    slug: "{{slug}}"
+    fields:
+      - { label: "Title", name: "title", widget: "string" }
+      - { label: "Date", name: "date", widget: "datetime", required: false }
+      - { label: "Description", name: "description", widget: "string", required: false }
+      - { label: "Body", name: "body", widget: "markdown" }
