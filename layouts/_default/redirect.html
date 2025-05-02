@@ -1,0 +1,12 @@
+{{ define "main" }}
+<div class="post">
+  <h1 class="post-title">{{ .Title }}</h1>
+  <div class="post-content">
+    {{ .Content }}
+    <p>Redirecting you to BerryBot's invite page...</p>
+    <script>
+      window.location.href = "{{ .Params.url }}";
+    </script>
+  </div>
+</div>
+{{ end }} 
