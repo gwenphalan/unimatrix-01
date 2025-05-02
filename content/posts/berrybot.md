@@ -1,8 +1,11 @@
 ---
-Title: "BerryBot"
+Title: BerryBot
 date: 2025-05-01
 draft: false
-description: "A free, open-source Discord bot focused on transparency and essential server management features. Built as an ethical alternative to monetization-heavy bots."
+title: BerryBot
+description: A free, open-source Discord bot focused on transparency and
+  essential server management features. Built as an ethical alternative to
+  monetization-heavy bots.
 ---
 ![Logo](https://cdn.unimatrix-01.dev/images/berrybot/github_banner.png)
 
