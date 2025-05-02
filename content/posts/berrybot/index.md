@@ -15,7 +15,7 @@ draft: false
 
 BerryBot is an Open Source discord bot created to replace the corrupt discord bots that have monopolized discord. Too many bots have been created that are designed to milk its users out of as much revenue as possible. BerryBot is designed to be transparent in its data usage and free-to-use forever. There is a berrybot/base branch with a barebones setup for those who want to create their own bots.
 
-<a href="./docs"><button>Documentation</button></a>
+<a href="/docs/berrybot"><button>Documentation</button></a>
 
 ---
 
