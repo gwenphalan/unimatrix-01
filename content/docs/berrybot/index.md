@@ -9,36 +9,35 @@ description: "Complete documentation for BerryBot, including setup, features, an
 - [Features](#features)
   - [Added Features](#added-features)
   - [Planned Features](#planned-features)
-  - [Project Structure](#project-structure)
-  - [Setup and Installation](#setup-and-installation)
-    - [Prerequisites](#prerequisites)
-    - [Environment Variables](#environment-variables)
-    - [Installation](#installation)
-  - [Core Components](#core-components)
-    - [Commands](#commands)
-    - [Message Builders](#message-builders)
-    - [Message Components](#message-components)
-      - [Persistent Component Data](#persistent-component-data)
-      - [Buttons](#buttons)
-      - [Select Menus](#select-menus)
-      - [Modals](#modals)
-    - [Adding a New Component](#adding-a-new-component)
-    - [MongoDB Database](#mongodb-database)
-      - [Creating a new Schema](#creating-a-new-schema)
-  - [Adding New Features](#adding-new-features)
+- [Project Structure](#project-structure)
+- [Setup and Installation](#setup-and-installation)
+  - [Prerequisites](#prerequisites)
+  - [Environment Variables](#environment-variables)
+  - [Installation](#installation)
+- [Core Components](#core-components)
+  - [Commands](#commands)
     - [Adding a New Command](#adding-a-new-command)
-  - [Development Guidelines](#development-guidelines)
-    - [Handlers](#handlers)
-      - [Command Handler](#command-handler)
-      - [Event Handler](#event-handler)
-      - [Message Component Handler](#message-component-handler)
-    - [Logging](#logging)
-  - [Troubleshooting](#troubleshooting)
-    - [Common Issues](#common-issues)
-      - [MongoDB Connection Issues](#mongodb-connection-issues)
-      - [Command Registration Issues](#command-registration-issues)
-      - [Component Interaction Issues](#component-interaction-issues)
-  - [License](#license)
+  - [Message Builders](#message-builders)
+  - [Message Components](#message-components)
+    - [Persistent Component Data](#persistent-component-data)
+    - [Buttons](#buttons)
+    - [Select Menus](#select-menus)
+    - [Modals](#modals)
+    - [Adding a New Component](#adding-a-new-component)
+  - [MongoDB Database](#mongodb-database)
+    - [Creating a new Schema](#creating-a-new-schema)
+- [Development Guidelines](#development-guidelines)
+  - [Handlers](#handlers)
+    - [Command Handler](#command-handler)
+    - [Event Handler](#event-handler)
+    - [Message Component Handler](#message-component-handler)
+  - [Logging](#logging)
+- [Troubleshooting](#troubleshooting)
+  - [Common Issues](#common-issues)
+    - [MongoDB Connection Issues](#mongodb-connection-issues)
+    - [Command Registration Issues](#command-registration-issues)
+    - [Component Interaction Issues](#component-interaction-issues)
+- [License](#license)
 - [Authors](#authors)
 
 ---
@@ -73,7 +72,7 @@ description: "Complete documentation for BerryBot, including setup, features, an
 
 ---
 
-## Project Structure
+# Project Structure
 ```
 src/
 ├── commands/           # Bot commands
@@ -93,14 +92,14 @@ src/
 
 ---
 
-## Setup and Installation
+# Setup and Installation
 
-### Prerequisites
+## Prerequisites
 - Node.js (v16 or higher)
 - MongoDB Atlas account
 - Discord Bot Token
 
-### Environment Variables
+## Environment Variables
 Create a `.env` file in the root directory with the following variables:
 ```env
 DISCORD_TOKEN=your_discord_bot_token
@@ -110,7 +109,7 @@ DEVELOPER_ID=your_discord_user_id
 NODE_ENV=development | production
 ```
 
-### Installation
+## Installation
 1. Clone the repository
 2. Install dependencies:
 ```bash
@@ -131,11 +130,11 @@ yarn start
 
 ---
 
-## Core Components
+# Core Components
 
 ---
 
-### Commands
+## Commands
 Each command is a TypeScript module that exports a command object. The bot's command handler will scan `/dist/commands` for `.js` files, and register them automatically, so it is unnecessary to import your commands manually. 
 
 When a `ChatInputCommandInteraction` event is sent to the bot, it will search it's registry for the command, and run it's `execute()` function.
@@ -187,9 +186,14 @@ const command: Command = {
 module.exports = command;
 ```
 
+### Adding a New Command
+1. Create a new file in `src/commands/Public/` or `src/commands/Private/`
+2. Follow the command structure template
+3. The command will be automatically loaded by the command handler 
+
 ---
 
-### Message Builders
+## Message Builders
 Message builders are reusable templates for Discord messages that can include embeds, components, and other message options. They are useful for creating consistent message layouts across different commands.
 
 1. Create a new file in `src/messages/` with the following structure:
@@ -230,7 +234,7 @@ await interaction.reply(message);
 
 ---
 
-### Message Components
+## Message Components
 
 If you want to utilize message components for interactivity, it is unecessary to script each one from the command file. Rather there is a system for reusable components in `/src/components/`. This allows for reuse of scripted components across multiple commands, and keeps your command files from getting too long.
 
@@ -287,7 +291,7 @@ export const MessageComponent: ButtonComponent = {
 export default MessageComponent;
 ```
 
-#### Persistent Component Data
+### Persistent Component Data
 In some cases it is useful to store extra data in a component. To do this, utilize the `client.getCustomID(id, jsonObject)`. This function utilizes the `LZ-String` library to compress the stringified JSON object into a compact, URI-safe string. This compressed string is then embedded within a Discord component's custom ID, allowing the storage of additional data without exceeding Discord's character limits for component identifiers. (100 haracter limit) 
 
 Note: As this data is stored on discord, it is recommended not to store sensitive data.
@@ -315,14 +319,14 @@ const button_id = await client.getCustomID('open-history', modal_data);
 
 
 
-#### Buttons
+### Buttons
 Buttons are defined in `src/components/buttons/`. They are the only component that does not have any unique properties or arguments.
 
 > [!NOTE]
 > An example button is seen at the start of this [section](#message-components). 
 
 
-#### Select Menus
+### Select Menus
 Select menus are defined in `src/components/selectMenus/`. The property `multi_select` can be set to `true` to toggle multi-select. The argument `seleted` passed through `execute` is a `discord.APISelectMenuOption`. If multi select is enabled, it is passed as an array.
 
 Example select menu structure:
@@ -349,7 +353,7 @@ export const TestSelect: SelectMenuComponent = {
 };
 ```
 
-#### Modals
+### Modals
 Modals are defined in `src/components/modals/`. They are used to collect one or more text inputs. `execute()` passes the responses as the argument `response`, a `Collection<string, discord.TextInputComponent>`. (The key is the customId you gave the TextInputBuilder)
 
 Example modal structure:
@@ -419,10 +423,10 @@ const message = {
 
 ---
 
-### MongoDB Database
+## MongoDB Database
 This bot optionally uses MongoDB for data storage. To use this you'll need to create a free [MongoDB Atlas](https://www.mongodb.com/cloud/atlas/register) account.
 
-#### Creating a new Schema
+### Creating a new Schema
 
 1. Create a new `.ts` file in src/database/schemas with the following structure:
 ```typescript
@@ -512,19 +516,12 @@ export const event: Event = {
 
 ---
 
-## Adding New Features
+# Development Guidelines
 
-### Adding a New Command
-1. Create a new file in `src/commands/Public/` or `src/commands/Private/`
-2. Follow the command structure template
-3. The command will be automatically loaded by the command handler 
-
-## Development Guidelines
-
-### Handlers
+## Handlers
 The bot uses three main handlers to manage its components:
 
-#### Command Handler
+### Command Handler
 Located in `src/handlers/CommandHandler.ts`, this handler:
 - Loads all commands from the `commands/` directory
 - Registers slash commands with Discord
@@ -532,21 +529,21 @@ Located in `src/handlers/CommandHandler.ts`, this handler:
 - Supports both public and private commands
 - Automatically loads subcommands
 
-#### Event Handler
+### Event Handler
 Located in `src/handlers/EventHandler.ts`, this handler:
 - Loads all events from the `events/` directory
 - Registers event listeners with Discord.js
 - Supports both once and regular event listeners
 - Handles event execution with proper error catching
 
-#### Message Component Handler
+### Message Component Handler
 Located in `src/handlers/MessageComponentHandler.ts`, this handler:
 - Loads all message components (buttons, select menus, modals) from the `components/` directory
 - Registers component interactions
 - Handles component execution
 - Manages component state and data
 
-### Logging
+## Logging
 The bot uses Pino for logging. Pino logs are saved to `logs/`. It is recommended to use the logger utility for all logging:
 ```typescript
 import { logger } from '../util';
@@ -559,28 +556,28 @@ logger.debug('Debug message');
 
 ---
 
-## Troubleshooting
+# Troubleshooting
 
-### Common Issues
+## Common Issues
 
-#### MongoDB Connection Issues
+### MongoDB Connection Issues
 1. Check your MongoDB Atlas connection string
 2. Verify your IP is whitelisted in MongoDB Atlas
 3. Ensure your database user has proper permissions
 4. Check if your MongoDB cluster is running
 
-#### Command Registration Issues
+### Command Registration Issues
 1. Check the command handler logs
 2. Verify command structure follows the interface
 3. Ensure the bot has proper permissions
 4. SubcommandsL Ensure the proper parent ID is set
 
-#### Component Interaction Issues
+### Component Interaction Issues
 1. Check the component's custom ID
 2. Ensure there are no errors in the component's execute function
 3. Ensure any data stored in the component is not too large (you will be notified in the logs)
 
-## License
+# License
 This project is licensed under the MIT License - see the LICENSE file for details.
 
 # Authors
