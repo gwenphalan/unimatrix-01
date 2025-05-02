@@ -3,7 +3,7 @@ Title: "Heya, I'm Gwenny!"
 date: 2025-05-01
 draft: false
 ---
-# About Me - Testing Webhook
+# About Me
 
 ---
 
