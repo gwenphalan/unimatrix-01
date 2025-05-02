@@ -19,7 +19,14 @@
                                 {{ .Description }}
                             </div>
                             <div class="post-badges">
-                                {{ .Content }}
+                                {{ with .Params.badges }}
+                                    {{ range . }}
+                                        <img src="{{ . }}" alt="Project Badge">
+                                    {{ end }}
+                                {{ end }}
+                            </div>
+                            <div class="read-more">
+                                <a href="{{ .Permalink }}">Read more →</a>
                             </div>
                         </article>
                     {{ end }}
@@ -131,6 +138,21 @@
     color: var(--primary-color);
     text-decoration: none;
     font-weight: 500;
+}
+
+.read-more {
+    margin-top: 15px;
+}
+
+.read-more a {
+    color: var(--primary-color);
+    text-decoration: none;
+    font-size: 0.9em;
+    font-weight: 500;
+}
+
+.read-more a:hover {
+    text-decoration: underline;
 }
 
 @media (max-width: 768px) {
