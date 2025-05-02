@@ -16,7 +16,7 @@ I'm an aspiring backend developer with a passion for cybersecurity and open-sour
 I'm actively working toward a formal education in cybersecurity and pursuing my TryHackMe SOC Level 1 certification to strengthen my skills.
 </div>
 <div style="flex: 0 0 auto;">
-<img src="https://cdn.unimatrix-01.dev/images/portfolio/fun_will_now_commence.gif" alt="Fun will now commence.gif" style="width: 300px;">
+<img src="https://cdn.unimatrix-01.dev/images/portfolio/fun_will_now_commence.gif" alt="Fun will now commence" style="width: 300px;">
 </div>
 </div>
 
