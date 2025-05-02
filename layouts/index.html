@@ -1,0 +1,142 @@
+{{ define "main" }}
+    {{ .Content }}
+
+    <div class="post-list" style="margin-top: 40px;">
+        <div class="row">
+            <!-- Projects Section -->
+            <div class="col-md-6" id="projects">
+                <h2>Latest Projects</h2>
+                <div class="posts-list">
+                    {{ range first 3 (where .Site.RegularPages "Section" "posts") }}
+                        <article class="post-item">
+                            <h3 class="post-title">
+                                <a href="{{ .Permalink }}">{{ .Title }}</a>
+                            </h3>
+                            <div class="post-meta">
+                                <time datetime="{{ .Date.Format "2006-01-02" }}">{{ .Date.Format "January 2, 2006" }}</time>
+                            </div>
+                            <div class="post-description">
+                                {{ .Description }}
+                            </div>
+                            <div class="post-badges">
+                                {{ .Content }}
+                            </div>
+                        </article>
+                    {{ end }}
+                    <div class="view-all">
+                        <a href="/posts/">View all projects →</a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Blog Section -->
+            <div class="col-md-6" id="blog">
+                <h2>Latest Blog Posts</h2>
+                <div class="posts-list">
+                    {{ range first 3 (where .Site.RegularPages "Section" "blog") }}
+                        <article class="post-item">
+                            <h3 class="post-title">
+                                <a href="{{ .Permalink }}">{{ .Title }}</a>
+                            </h3>
+                            <div class="post-meta">
+                                <time datetime="{{ .Date.Format "2006-01-02" }}">{{ .Date.Format "January 2, 2006" }}</time>
+                            </div>
+                            <div class="post-description">
+                                {{ .Description }}
+                            </div>
+                        </article>
+                    {{ end }}
+                    <div class="view-all">
+                        <a href="/blog/">View all posts →</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+<style>
+
+#projects {
+    border-right: 1px solid color-mix(in srgb, var(--accent) 10%, transparent)
+}
+
+.container {
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.row {
+    display: flex;
+    flex-wrap: wrap;
+    margin: -10px;
+}
+
+.col-md-6 {
+    flex: 0 0 50%;
+    padding: 20px;
+    box-sizing: border-box;
+}
+
+.posts-list {
+    margin-top: 20px;
+}
+
+.post-item {
+    margin-bottom: 30px;
+    padding: 15px;
+}
+
+.post-title {
+    margin: 0 0 10px 0;
+    font-size: 1.2em;
+}
+
+.post-title a {
+    color: var(--primary-color);
+    text-decoration: none;
+}
+
+.post-meta {
+    font-size: 0.9em;
+    color: var(--secondary-color);
+    margin-bottom: 10px;
+}
+
+.post-description {
+    font-size: 0.95em;
+    color: var(--text-color);
+    margin-bottom: 10px;
+}
+
+.post-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+}
+
+.post-badges img {
+    display: inline;
+    border: none;
+    margin: 0;
+    padding: 0;
+}
+
+.view-all {
+    margin-top: 20px;
+    text-align: right;
+}
+
+.view-all a {
+    color: var(--primary-color);
+    text-decoration: none;
+    font-weight: 500;
+}
+
+@media (max-width: 768px) {
+    .col-md-6 {
+        flex: 0 0 100%;
+    }
+}
+</style>
+{{ end }} 

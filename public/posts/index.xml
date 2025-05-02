@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Posts on Unimatrix-01</title>
+    <link>http://localhost:1313/posts/</link>
+    <description>Recent content in Posts on Unimatrix-01</description>
+    <generator>Hugo</generator>
+    <language>en</language>
+    <lastBuildDate>Thu, 01 May 2025 00:00:00 +0000</lastBuildDate>
+    <atom:link href="http://localhost:1313/posts/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>BerryBot</title>
+      <link>http://localhost:1313/posts/berrybot/</link>
+      <pubDate>Thu, 01 May 2025 00:00:00 +0000</pubDate>
+      <guid>http://localhost:1313/posts/berrybot/</guid>
+      <description>&lt;p&gt;&lt;img src=&#34;https://cdn.unimatrix-01.dev/images/berrybot/github_banner.png&#34; alt=&#34;Logo&#34;&gt;&lt;/p&gt;&#xA;&lt;h2 id=&#34;github-repo&#34;&gt;&lt;a href=&#34;https://choosealicense.com/licenses/mit/&#34;&gt;&lt;img src=&#34;https://img.shields.io/badge/License-MIT-green.svg&#34; alt=&#34;MIT License&#34;&gt;&lt;/a&gt;&#xA;&lt;a href=&#34;https://discord.gg/82WsGtJmBd&#34;&gt;&lt;img src=&#34;https://img.shields.io/discord/1034695813026283580?color=%235865F2&amp;amp;label=Discord&amp;amp;logo=Discord&#34; alt=&#34;Discord&#34;&gt;&lt;/a&gt;&#xA;&lt;img src=&#34;https://img.shields.io/badge/version-0.0.1-ff69b4&#34; alt=&#34;Version&#34;&gt;&#xA;&lt;a href=&#34;https://github.com/gwenphalan/berrybot&#34;&gt;&lt;img src=&#34;https://img.shields.io/badge/-Github%20Repo-informational?logo=github&amp;amp;style=flat&amp;amp;logoColor=333333&amp;amp;color=333333&amp;amp;labelColor=999999&#34; alt=&#34;Github Repo&#34;&gt;&lt;/a&gt;&lt;/h2&gt;&#xA;&lt;h1 id=&#34;about&#34;&gt;About&lt;/h1&gt;&#xA;&lt;p&gt;BerryBot is an Open Source discord bot created to replace the corrupt discord bots that have monopolized discord. Too many bots have been created that are designed to milk its users out of as much revenue as possible. BerryBot is designed to be transparent in its data usage and free-to-use forever. There is a berrybot/base branch with a barebones setup for those who want to create their own bots.&lt;/p&gt;</description>
+    </item>
+  </channel>
+</rss>

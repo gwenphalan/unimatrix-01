@@ -1,0 +1,52 @@
+# hugo.toml
+baseURL       = "https://unimatrix-01.dev"    # Your site's production URL :contentReference[oaicite:6]{index=6}
+languageCode  = "en-us"                        # Default language code :contentReference[oaicite:7]{index=7}
+title         = "Unimatrix-01"                 # Site title :contentReference[oaicite:8]{index=8}
+theme         = "terminal"                     # Uses the Terminal theme from themes/terminal :contentReference[oaicite:9]{index=9}
+
+[pagination]
+  pagerSize = 5   # was 'paginate = 5' :contentReference[oaicite:10]{index=10}
+
+[params]
+  contentTypeName = "posts"       # Directory under content/ holding your posts :contentReference[oaicite:11]{index=11}
+  themeColor      = "green"       # One of: blue, red, orange, pink, green, paper :contentReference[oaicite:12]{index=12}
+  showMenuItems   = 5             # How many menu items to show before "More" :contentReference[oaicite:13]{index=13}
+  fullWidthTheme  = false         # Toggle full-width layout :contentReference[oaicite:14]{index=14}
+  centerTheme     = false         # Centered content layout toggle :contentReference[oaicite:15]{index=15}
+  framed          = true          # Use framed homepage layout (if desired) :contentReference[oaicite:16]{index=16}
+
+[languages]
+  [languages.en]
+    title      = "Unimatrix-01"            # Shown in the header :contentReference[oaicite:17]{index=17}
+    subtitle   = "Your journey starts here" # Shown under the main title :contentReference[oaicite:18]{index=18}
+    keywords   = "portfolio, developer, blog" # Comma-separated SEO keywords :contentReference[oaicite:19]{index=19}
+    menuMore   = "More"                    # Label for overflow menu :contentReference[oaicite:20]{index=20}
+    readMore   = "Read more"               # Label on list pages :contentReference[oaicite:21]{index=21}
+
+[menu]
+  [[menu.main]]
+    identifier = "home"
+    name       = "Home"
+    url        = "/"
+    weight     = 1
+
+  [[menu.main]]
+    identifier = "posts"
+    name       = "Projects"
+    url        = "/posts/"
+    weight     = 2
+
+  [[menu.main]]
+    identifier = "blog"
+    name       = "Blog"
+    url        = "/blog/"
+    weight     = 3
+
+[markup]
+  [markup.goldmark]
+    [markup.goldmark.renderer]
+      hardWraps = false
+      unsafe = true
+      xhtml = false
+  [markup.highlight]
+    noClasses = false   # Use CSS classes for syntax highlighting :contentReference[oaicite:22]{index=22}

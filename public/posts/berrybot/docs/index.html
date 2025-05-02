@@ -1,0 +1,848 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><script src="/livereload.js?mindelay=10&amp;v=2&amp;port=1313&amp;path=livereload" data-no-instant defer></script>
+  
+    <title>BerryBot Documentation :: Unimatrix-01</title>
+  
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Table of Contents Features Added Features Planned Features Moderation Administration Project Structure Setup and Installation Prerequisites Environment Variables Installation Core Components Commands Message Builders Message Components Persistent Component Data Buttons Select Menus Modals Adding a New Component MongoDB Database Creating a new Schema Adding New Features Adding a New Command Development Guidelines Handlers Command Handler Event Handler Message Component Handler Logging Troubleshooting Common Issues MongoDB Connection Issues Command Registration Issues Component Interaction Issues License Authors Features Added Features Administration Self Roles Allow users to assign themselves roles in different categories. Planned Features Moderation Member Screening Require users to fill out a form before being allowed access to the server. Mute, Ban, and Kick Commands Punish users for breaking server rules and terms of service, either permanently or temporarily. Support Tickets Allow users to create support tickets and speak directly to server staff about an issue. Event Logging Log all bot moderation events to a specific channel, to easily detect permission abuse by moderators. Administration Member Welcoming Send personalized welcome messages to new users. Project Structure src/├── commands/ # Bot commands│ ├── Public/ # Public commands│ └── Private/ # Private/developer commands├── components/ # Message components (buttons, select menus, etc.)├── config/ # Configuration files├── database/ # Database models and connection├── events/ # Discord event handlers├── handlers/ # Command and event loading handlers├── interfaces/ # TypeScript interfaces and types├── messages/ # Message templates├── util/ # Utility functions├── bot.ts # Bot initialization└── index.ts # Entry point Setup and Installation Prerequisites Node.js (v16 or higher) MongoDB Atlas account Discord Bot Token Environment Variables Create a .env file in the root directory with the following variables:
+" />
+<meta name="keywords" content="" />
+
+  <meta name="robots" content="noodp" />
+
+<link rel="canonical" href="http://localhost:1313/posts/berrybot/docs/" />
+
+
+
+
+
+  
+  <link rel="stylesheet" href="http://localhost:1313/css/buttons.min.86f6b4c106b6c6eb690ae5203d36b442c1f66f718ff4e8164fa86cf6c61ad641.css">
+
+  
+  <link rel="stylesheet" href="http://localhost:1313/css/code.min.a3670726bb66927824e4c3fa3f20388aacc1e7aa65014ae144e350ce59593b78.css">
+
+  
+  <link rel="stylesheet" href="http://localhost:1313/css/fonts.min.5bb7ed13e1d00d8ff39ea84af26737007eb5051b157b86fc24487c94f3dc8bbe.css">
+
+  
+  <link rel="stylesheet" href="http://localhost:1313/css/footer.min.eb8dfc2c6a7eafa36cd3ba92d63e69e849e2200e0002a228d137f236b09ecd75.css">
+
+  
+  <link rel="stylesheet" href="http://localhost:1313/css/gist.min.a751e8b0abe1ba8bc53ced52a38b19d8950fe78ca29454ea8c2595cf26aad5c0.css">
+
+  
+  <link rel="stylesheet" href="http://localhost:1313/css/header.min.6b38126489aba8d44a047ea2bfc066490bb6b135db70e2510f5e99227545f0f4.css">
+
+  
+  <link rel="stylesheet" href="http://localhost:1313/css/main.min.86ba3e436440d59e9d951202f5d1eb0973d4fcf8de5fe64c88b36ccc960e4773.css">
+
+  
+  <link rel="stylesheet" href="http://localhost:1313/css/menu.min.3c17467ebeb3d38663dce68f71f519901124fa5cbb4519b2fb0667a21e9aca39.css">
+
+  
+  <link rel="stylesheet" href="http://localhost:1313/css/pagination.min.bbb986dbce00a5ce5aca0504b7925fc1c581992a4bf57f163e5d69cc1db7d836.css">
+
+  
+  <link rel="stylesheet" href="http://localhost:1313/css/post.min.85ad639dd52bdee34eee88c53c59b5e2af85b2104ecd61c153d7c8137bc9b6c9.css">
+
+  
+  <link rel="stylesheet" href="http://localhost:1313/css/syntax.min.a0773cce9310cb6d8ed23e50f005448facf29a53001b57e038828daa466b25c0.css">
+
+  
+  <link rel="stylesheet" href="http://localhost:1313/css/terminal.min.6a52b943324a1495d0d7aa2641c7cfbb470599cc0317dc9e6fa96b956173d9ad.css">
+
+  
+  <link rel="stylesheet" href="http://localhost:1313/css/terms.min.b81791663c3790e738e571cdbf802312390d30e4b1d8dc9d814a5b5454d0ac11.css">
+
+
+
+
+
+
+
+<link rel="shortcut icon" href="http://localhost:1313/favicon.png">
+<link rel="apple-touch-icon" href="http://localhost:1313/apple-touch-icon.png">
+
+
+<meta name="twitter:card" content="summary" />
+
+  
+    <meta name="twitter:site" content="" />
+  
+    <meta name="twitter:creator" content="" />
+
+
+
+<meta property="og:locale" content="en" />
+<meta property="og:type" content="article" />
+<meta property="og:title" content="BerryBot Documentation">
+<meta property="og:description" content="Table of Contents Features Added Features Planned Features Moderation Administration Project Structure Setup and Installation Prerequisites Environment Variables Installation Core Components Commands Message Builders Message Components Persistent Component Data Buttons Select Menus Modals Adding a New Component MongoDB Database Creating a new Schema Adding New Features Adding a New Command Development Guidelines Handlers Command Handler Event Handler Message Component Handler Logging Troubleshooting Common Issues MongoDB Connection Issues Command Registration Issues Component Interaction Issues License Authors Features Added Features Administration Self Roles Allow users to assign themselves roles in different categories. Planned Features Moderation Member Screening Require users to fill out a form before being allowed access to the server. Mute, Ban, and Kick Commands Punish users for breaking server rules and terms of service, either permanently or temporarily. Support Tickets Allow users to create support tickets and speak directly to server staff about an issue. Event Logging Log all bot moderation events to a specific channel, to easily detect permission abuse by moderators. Administration Member Welcoming Send personalized welcome messages to new users. Project Structure src/├── commands/ # Bot commands│ ├── Public/ # Public commands│ └── Private/ # Private/developer commands├── components/ # Message components (buttons, select menus, etc.)├── config/ # Configuration files├── database/ # Database models and connection├── events/ # Discord event handlers├── handlers/ # Command and event loading handlers├── interfaces/ # TypeScript interfaces and types├── messages/ # Message templates├── util/ # Utility functions├── bot.ts # Bot initialization└── index.ts # Entry point Setup and Installation Prerequisites Node.js (v16 or higher) MongoDB Atlas account Discord Bot Token Environment Variables Create a .env file in the root directory with the following variables:
+" />
+<meta property="og:url" content="http://localhost:1313/posts/berrybot/docs/" />
+<meta property="og:site_name" content="Unimatrix-01" />
+
+  <meta property="og:image" content="http://localhost:1313/og-image.png">
+
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="627">
+
+
+
+
+
+
+
+
+
+
+
+
+
+  <script>
+    const rickroll = `⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⢿⡿⣿⣿⡿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡿⣻⣻⣿⣿⣿⣿⣿⣿⣿⣿⣿⣟⡽⣯⣻⣻⡽⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⢿⣻⣻
+⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⢿⡿⣿⣿⣿⣿⣿⣿⡿⣻⣻⣻⣻⣻⣻⡽⣯⣟⢷⠍⠟⠉⠛⢿⢿⣻⣻⢿⣿⣿⣯⣻⡽⣯⣻⣻⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣻⢯
+⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣻⣻⣻⣻⡟⡅⠀⠀⠀⠠⠀⠀⠆⡹⣻⣻⡽⣯⣻⡽⣯⣻⡽⣻⣻⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣻⣻⣻
+⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣻⣿⡟⡛⡜⡜⣎⢦⢶⣖⡴⡀⠠⣿⣿⣿⣟⣟⣟⣟⣟⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣻⣻⣻⣻
+⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣻⣻⢆⢭⢎⢎⢞⡝⣝⡽⡽⡣⢂⣟⢯⢯⢯⣿⣻⣻⡽⣻⡽⣻⣻⣿⣿⣿⣿⣿⣿⣿⡿⣟⣿⣿⣿⣿⣻
+⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡿⣟⢧⡒⡔⢆⢯⢎⠚⡜⡇⣼⣿⣿⣯⣻⣻⣻⣻⢯⣿⣿⣻⣻⣻⣻⢿⣿⣿⣿⣿⡿⣻⣻⣻⣟⣿⣿
+⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣷⢹⢧⢣⢣⠡⡋⡯⣫⢯⡹⣹⣿⣿⣿⣿⣯⣻⣻⣻⣿⣿⣻⣻⣻⣿⣟⣟⢿⣿⣿⣿⣿⣻⢿⣿⣿⣿
+⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠧⢣⢢⢌⣍⡹⡽⣹⣽⣿⣿⣿⣿⣿⡽⣯⣻⢯⣻⢯⣻⣻⣿⣿⣿⣿⣻⣻⣻⣻⢿⢿⣿⣿⣿⣿
+⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣟⡽⣍⢎⢎⢝⢏⢏⣝⢿⣿⣿⣿⣿⣿⣿⣻⡽⣯⣻⣻⣿⣿⣟⢿⣿⢿⣻⣻⣿⣿⢿⣿⣿⣿⣿⣿⣿
+⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⢿⣿⣿⣟⣟⣟⡜⡜⡜⡝⡭⣫⢫⠂⢫⣿⣿⣿⣟⢯⣻⣻⣻⡽⣻⣿⣿⣿⣟⣿⣿⣿⣻⣟⣟⣿⣿⣿⣿⣿⣿⣿
+⣿⣿⣿⣿⢿⡿⣿⢿⡿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⢿⣿⣿⣿⡿⡽⡻⡿⣇⢣⢣⠱⡱⡱⣽⣿⠀⠀⠀⠀⠐⢉⠍⡛⢿⢯⣻⣻⣿⣿⡿⣿⣿⣿⣿⣟⣟⣿⣿⣿⣿⣿⣿⣿⣿
+⣿⣿⣿⣿⣿⣿⣿⣿⣟⢿⣿⣿⣿⡿⣿⣿⣟⢿⣻⣻⡿⣏⢋⠀⠀⠀⣹⣻⡇⢣⠱⣥⣻⣿⡿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢹⣿⣿⣻⣿⣿⣿⣟⣟⣟⡽⣻⣿⡿⡿⣿⣿⣿
+⣿⣿⣿⣿⣿⢿⣿⣿⣿⢿⣻⣿⢿⣿⣿⢿⣻⣻⣻⡃⠀⠀⠀⠀⠀⠀⠠⠠⡣⢢⠱⡉⠙⠛⠄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣿⣻⡽⣻⣿⢯⣻⣿⣿⢯⣻⣿⣿⣿⣿⣿⣿
+⣿⣿⣿⣿⢿⣻⣻⣿⣟⣟⣟⣿⣿⣿⣿⣿⡿⣟⣟⠄⠀⠀⠀⠀⠀⠀⠀⢀⢆⡑⠡⠉⠋⠖⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣿⣿⣻⢯⣻⡽⣻⣻⡿⣯⢿⣿⣿⣿⣿⣿
+⣿⣻⣟⣟⣿⣿⣿⣿⣟⣟⣟⣟⣿⣿⣿⣿⣟⣟⡽⡄⠀⠀⠀⠀⠀⠀⠀⢀⠁⣯⠚⠹⠶⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢿⣿⣻⢯⢯⣻⣿⣿⣻⣻⣻⣿⣿⣿⣿⣿
+⣿⣟⢿⣿⣿⣿⣿⣿⣻⣿⡿⣻⣻⣿⣿⣿⢿⣻⢯⠀⠀⠀⠀⠀⠀⠀⠀⠀⠛⣟⠖⡖⡤⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢻⢿⣻⣿⣻⣿⣿⣿⣿⣿⣻⢯⣻⣻⣻
+⣿⣻⣻⣿⣿⣿⣿⣻⣽⣿⣿⣟⣟⢿⣿⣿⡿⣻⣻⠀⠀⠀⠀⠀⠀⠀⠀⠀⢦⢢⣠⣀⠀⠀⠀⠀⠩⡛⡝⡜⡖⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠘⢿⣿⣻⣿⣿⣿⣿⣿⣿⣿⣿⣿
+⣿⣻⣻⣻⣿⣿⡿⣻⣿⣿⣻⣻⣿⣿⡿⣿⣻⣻⣻⠀⠀⠀⠀⠀⠀⠀⠀⠀⡀⡜⠈⠁⠀⠀⠀⠀⠀⠌⣌⢎⡜⡜⡄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣿⣻⣿⣿⡿⣟⢿⣿⣿⣿
+⣟⣿⣿⣿⡽⡽⡽⣻⣹⡽⣿⣿⣿⣻⣻⣻⣻⡽⣻⠀⠀⠀⠀⠀⠀⠀⠀⠀⠉⢢⠣⠒⠀⠀⠀⠀⠀⠀⠎⢎⢎⢎⢎⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣟⡽⣿⣿⣻⣻⣻⢿⣿⣿
+⣿⣿⢿⣿⣯⣫⣏⢯⣫⣿⣿⣿⣿⣟⣟⣟⣟⡽⡽⠀⡀⠀⠀⠀⠀⢀⢀⠀⠰⡰⠤⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠂⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⡝⡽⡽⣿⣿⣿⣻⡝⡽
+⣯⣯⣯⣯⢯⣫⢫⣻⡿⣻⣿⣿⣿⣿⣿⣻⡽⡽⣭⠂⠀⡰⡱⠡⠢⢂⠆⠀⢠⠰⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣠⢯⢫⣫⡿⣻⣿⣿⣿⣻⡹
+⡿⡿⣻⣻⣻⢭⣚⢧⢫⣻⣿⣿⡿⡽⡽⡽⡽⣹⣝⢇⠄⠀⠀⠄⠄⠄⡐⠀⠄⡐⠐⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⡝⣝⡽⣹⢽⢯⡻⣻⣟⢯⢫⣚⣟⣟⣟⣟⣟⣟⡝
+⣯⣻⡽⣯⣻⡜⡵⡽⣎⢭⣻⡝⡽⣽⡽⣝⣝⣝⡝⣗⢭⢎⠀⠀⠂⠂⠀⠀⠀⡐⠐⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⣹⣝⣝⡝⣝⡽⡽⡹⣚⠵⡭⢯⢯⢯⣻⡽⡽⣣
+⣟⣟⡽⣯⢯⢎⢎⢯⣏⡗⡝⣝⡽⣻⢯⣫⢫⢫⣫⣻⢯⡳⡱⡱⡱⠀⠀⠀⠀⠠⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠐⡝⡝⡝⣝⡝⡝⡭⣫⢫⢭⣚⣝⣝⣝⡽⣹⣹⢧
+⢏⠯⢫⢫⢫⢪⢎⢯⢏⠳⡹⡹⣻⡿⡯⣫⢫⡹⡹⡽⡽⡹⡸⡜⡄⠀⠀⢀⢂⠄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⡭⡭⣫⡹⡹⡭⣫⢫⢫⣚⡜⡝⡝⣝⣝⢽⡹⡭`;
+
+    console.log(rickroll);
+  </script>
+</head>
+<body>
+
+
+<div class="container">
+
+  <header class="header">
+  <div class="header__inner">
+    <div class="header__logo">
+      <a href="/">
+  <div class="logo">
+    <img src="https://cdn.unimatrix-01.dev/images/logo.png" alt="Logo" />
+    Unimatrix-01
+  </div>
+</a>
+    </div>
+    
+      <ul class="menu menu--mobile">
+  <li class="menu__trigger">Menu&nbsp;▾</li>
+  <li>
+    <ul class="menu__dropdown">
+      
+        
+          <li><a href="/">Home</a></li>
+        
+      
+        
+          <li><a href="/posts/">Projects</a></li>
+        
+      
+        
+          <li><a href="/blog/">Blog</a></li>
+        
+      
+      
+    </ul>
+  </li>
+</ul>
+
+    
+    
+  </div>
+  
+    <nav class="navigation-menu">
+  <ul class="navigation-menu__inner menu--desktop">
+    
+      
+        
+          <li><a href="/" >Home</a></li>
+        
+      
+        
+          <li><a href="/posts/" >Projects</a></li>
+        
+      
+        
+          <li><a href="/blog/" >Blog</a></li>
+        
+      
+      
+    
+  </ul>
+</nav>
+
+  
+</header>
+
+
+  <div class="content">
+    
+<article class="post">
+  <h1 class="post-title">
+    <a href="http://localhost:1313/posts/berrybot/docs/">BerryBot Documentation</a>
+  </h1>
+  <div class="post-meta"></div>
+
+  
+  
+
+
+  
+
+  <div class="post-content"><div>
+        <h3 id="table-of-contents">Table of Contents<a href="#table-of-contents" class="hanchor" ariaLabel="Anchor">#</a> </h3>
+<ul>
+<li><a href="/posts/berrybot/docs/#features">Features</a>
+<ul>
+<li><a href="/posts/berrybot/docs/#added-features">Added Features</a></li>
+<li><a href="/posts/berrybot/docs/#planned-features">Planned Features</a>
+<ul>
+<li><a href="/posts/berrybot/docs/#moderation">Moderation</a></li>
+<li><a href="/posts/berrybot/docs/#administration">Administration</a></li>
+</ul>
+</li>
+<li><a href="/posts/berrybot/docs/#project-structure">Project Structure</a></li>
+<li><a href="/posts/berrybot/docs/#setup-and-installation">Setup and Installation</a>
+<ul>
+<li><a href="/posts/berrybot/docs/#prerequisites">Prerequisites</a></li>
+<li><a href="/posts/berrybot/docs/#environment-variables">Environment Variables</a></li>
+<li><a href="/posts/berrybot/docs/#installation">Installation</a></li>
+</ul>
+</li>
+<li><a href="/posts/berrybot/docs/#core-components">Core Components</a>
+<ul>
+<li><a href="/posts/berrybot/docs/#commands">Commands</a></li>
+<li><a href="/posts/berrybot/docs/#message-builders">Message Builders</a></li>
+<li><a href="/posts/berrybot/docs/#message-components">Message Components</a>
+<ul>
+<li><a href="/posts/berrybot/docs/#persistent-component-data">Persistent Component Data</a></li>
+<li><a href="/posts/berrybot/docs/#buttons">Buttons</a></li>
+<li><a href="/posts/berrybot/docs/#select-menus">Select Menus</a></li>
+<li><a href="/posts/berrybot/docs/#modals">Modals</a></li>
+</ul>
+</li>
+<li><a href="/posts/berrybot/docs/#adding-a-new-component">Adding a New Component</a></li>
+<li><a href="/posts/berrybot/docs/#mongodb-database">MongoDB Database</a>
+<ul>
+<li><a href="/posts/berrybot/docs/#creating-a-new-schema">Creating a new Schema</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="/posts/berrybot/docs/#adding-new-features">Adding New Features</a>
+<ul>
+<li><a href="/posts/berrybot/docs/#adding-a-new-command">Adding a New Command</a></li>
+</ul>
+</li>
+<li><a href="/posts/berrybot/docs/#development-guidelines">Development Guidelines</a>
+<ul>
+<li><a href="/posts/berrybot/docs/#handlers">Handlers</a>
+<ul>
+<li><a href="/posts/berrybot/docs/#command-handler">Command Handler</a></li>
+<li><a href="/posts/berrybot/docs/#event-handler">Event Handler</a></li>
+<li><a href="/posts/berrybot/docs/#message-component-handler">Message Component Handler</a></li>
+</ul>
+</li>
+<li><a href="/posts/berrybot/docs/#logging">Logging</a></li>
+</ul>
+</li>
+<li><a href="/posts/berrybot/docs/#troubleshooting">Troubleshooting</a>
+<ul>
+<li><a href="/posts/berrybot/docs/#common-issues">Common Issues</a>
+<ul>
+<li><a href="/posts/berrybot/docs/#mongodb-connection-issues">MongoDB Connection Issues</a></li>
+<li><a href="/posts/berrybot/docs/#command-registration-issues">Command Registration Issues</a></li>
+<li><a href="/posts/berrybot/docs/#component-interaction-issues">Component Interaction Issues</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="/posts/berrybot/docs/#license">License</a></li>
+</ul>
+</li>
+<li><a href="/posts/berrybot/docs/#authors">Authors</a></li>
+</ul>
+<hr>
+<h1 id="features">Features<a href="#features" class="hanchor" ariaLabel="Anchor">#</a> </h1>
+<h2 id="added-features">Added Features<a href="#added-features" class="hanchor" ariaLabel="Anchor">#</a> </h2>
+<ul>
+<li>Administration
+<ul>
+<li>Self Roles
+<ul>
+<li>Allow users to assign themselves roles in different categories.</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<h2 id="planned-features">Planned Features<a href="#planned-features" class="hanchor" ariaLabel="Anchor">#</a> </h2>
+<h3 id="moderation">Moderation<a href="#moderation" class="hanchor" ariaLabel="Anchor">#</a> </h3>
+<ul>
+<li><strong>Member Screening</strong>
+<ul>
+<li>Require users to fill out a form before being allowed access to the server.</li>
+</ul>
+</li>
+<li><strong>Mute, Ban, and Kick Commands</strong>
+<ul>
+<li>Punish users for breaking server rules and terms of service, either permanently or temporarily.</li>
+</ul>
+</li>
+<li><strong>Support Tickets</strong>
+<ul>
+<li>Allow users to create support tickets and speak directly to server staff about an issue.</li>
+</ul>
+</li>
+<li><strong>Event Logging</strong>
+<ul>
+<li>Log all bot moderation events to a specific channel, to easily detect permission abuse by moderators.</li>
+</ul>
+</li>
+</ul>
+<h3 id="administration">Administration<a href="#administration" class="hanchor" ariaLabel="Anchor">#</a> </h3>
+<ul>
+<li><strong>Member Welcoming</strong>
+<ul>
+<li>Send personalized welcome messages to new users.</li>
+</ul>
+</li>
+</ul>
+<hr>
+<h2 id="project-structure">Project Structure<a href="#project-structure" class="hanchor" ariaLabel="Anchor">#</a> </h2>
+<pre tabindex="0"><code>src/
+├── commands/     # Bot commands
+│   ├── Public/   # Public commands
+│   └── Private/  # Private/developer commands
+├── components/   # Message components (buttons, select menus, etc.)
+├── config/       # Configuration files
+├── database/     # Database models and connection
+├── events/       # Discord event handlers
+├── handlers/     # Command and event loading handlers
+├── interfaces/   # TypeScript interfaces and types
+├── messages/     # Message templates
+├── util/         # Utility functions
+├── bot.ts        # Bot initialization
+└── index.ts      # Entry point
+</code></pre><hr>
+<h2 id="setup-and-installation">Setup and Installation<a href="#setup-and-installation" class="hanchor" ariaLabel="Anchor">#</a> </h2>
+<h3 id="prerequisites">Prerequisites<a href="#prerequisites" class="hanchor" ariaLabel="Anchor">#</a> </h3>
+<ul>
+<li>Node.js (v16 or higher)</li>
+<li>MongoDB Atlas account</li>
+<li>Discord Bot Token</li>
+</ul>
+<h3 id="environment-variables">Environment Variables<a href="#environment-variables" class="hanchor" ariaLabel="Anchor">#</a> </h3>
+<p>Create a <code>.env</code> file in the root directory with the following variables:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-env" data-lang="env"><span class="line"><span class="cl"><span class="nv">DISCORD_TOKEN</span><span class="o">=</span>your_discord_bot_token
+</span></span><span class="line"><span class="cl"><span class="nv">MONGO_STRING</span><span class="o">=</span>your_mongodb_connection_string
+</span></span><span class="line"><span class="cl"><span class="nv">DATABASE_NAME</span><span class="o">=</span>your_database_name
+</span></span><span class="line"><span class="cl"><span class="nv">DEVELOPER_ID</span><span class="o">=</span>your_discord_user_id
+</span></span><span class="line"><span class="cl"><span class="nv">NODE_ENV</span><span class="o">=</span>development <span class="p">|</span> production
+</span></span></code></pre></div><h3 id="installation">Installation<a href="#installation" class="hanchor" ariaLabel="Anchor">#</a> </h3>
+<ol>
+<li>Clone the repository</li>
+<li>Install dependencies:</li>
+</ol>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">yarn install
+</span></span></code></pre></div><ol start="3">
+<li>Build the project:</li>
+</ol>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">yarn build
+</span></span></code></pre></div><ol start="4">
+<li>Start the bot:</li>
+</ol>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">// For development
+</span></span><span class="line"><span class="cl">yarn dev
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">// For production
+</span></span><span class="line"><span class="cl">yarn start
+</span></span></code></pre></div><hr>
+<h2 id="core-components">Core Components<a href="#core-components" class="hanchor" ariaLabel="Anchor">#</a> </h2>
+<hr>
+<h3 id="commands">Commands<a href="#commands" class="hanchor" ariaLabel="Anchor">#</a> </h3>
+<p>Each command is a TypeScript module that exports a command object. The bot&rsquo;s command handler will scan <code>/dist/commands</code> for <code>.js</code> files, and register them automatically, so it is unnecessary to import your commands manually.</p>
+<p>When a <code>ChatInputCommandInteraction</code> event is sent to the bot, it will search it&rsquo;s registry for the command, and run it&rsquo;s <code>execute()</code> function.</p>
+<p>Example command structure:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-typescript" data-lang="typescript"><span class="line"><span class="cl"><span class="kr">import</span> <span class="p">{</span> <span class="nx">SlashCommandBuilder</span><span class="p">,</span> <span class="nx">ChatInputCommandInteraction</span> <span class="p">}</span> <span class="kr">from</span> <span class="s1">&#39;discord.js&#39;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="kr">import</span> <span class="p">{</span> <span class="nx">Command</span> <span class="p">}</span> <span class="kr">from</span> <span class="s1">&#39;../../../interfaces&#39;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="kr">import</span> <span class="p">{</span> <span class="nx">logger</span> <span class="p">}</span> <span class="kr">from</span> <span class="s1">&#39;../../util&#39;</span><span class="o">:</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">command</span>: <span class="kt">Command</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">data</span>: <span class="kt">new</span> <span class="nx">SlashCommandBuilder</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">        <span class="p">.</span><span class="nx">setName</span><span class="p">(</span><span class="s1">&#39;test&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="p">.</span><span class="nx">setDescription</span><span class="p">(</span><span class="s1">&#39;Test command&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="p">.</span><span class="nx">setDefaultMemberPermissions</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span> <span class="c1">// Can only be used in a server
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="kr">async</span> <span class="nx">execute</span><span class="p">(</span><span class="nx">interaction</span>: <span class="kt">ChatInputCommandInteraction</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span> <span class="k">await</span> <span class="nx">interaction</span><span class="p">.</span><span class="nx">reply</span><span class="p">(</span><span class="s1">&#39;Test command executed!&#39;</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">module</span><span class="p">.</span><span class="nx">exports</span> <span class="o">=</span> <span class="nx">command</span><span class="p">;</span>
+</span></span></code></pre></div><p>If you want to add subcommands to a command (ex <code>/command subCommand</code>), you must replace <code>data</code> with a <code>SlashCommandSubCommandBuilder</code>. They also have the required property <code>parent</code>.</p>
+<p>Example subcommand structure:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-typescript" data-lang="typescript"><span class="line"><span class="cl"><span class="kr">import</span> <span class="p">{</span> <span class="nx">ActionRowBuilder</span><span class="p">,</span> <span class="nx">ButtonBuilder</span><span class="p">,</span> <span class="nx">ChatInputCommandInteraction</span><span class="p">,</span> <span class="nx">SlashCommandSubcommandBuilder</span> <span class="p">}</span> <span class="kr">from</span> <span class="s1">&#39;discord.js&#39;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="kr">import</span> <span class="p">{</span> <span class="nx">buttons</span> <span class="p">}</span> <span class="kr">from</span> <span class="s1">&#39;../../../components&#39;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="kr">import</span> <span class="p">{</span> <span class="nx">Command</span> <span class="p">}</span> <span class="kr">from</span> <span class="s1">&#39;../../../interfaces&#39;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">command</span>: <span class="kt">Command</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">parent</span><span class="o">:</span> <span class="s1">&#39;test&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">data</span>: <span class="kt">new</span> <span class="nx">SlashCommandSubcommandBuilder</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">        <span class="p">.</span><span class="nx">setName</span><span class="p">(</span><span class="s1">&#39;button&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="p">.</span><span class="nx">setDescription</span><span class="p">(</span><span class="s1">&#39;Test button&#39;</span><span class="p">),</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">async</span> <span class="nx">execute</span><span class="p">(</span><span class="nx">interaction</span>: <span class="kt">ChatInputCommandInteraction</span><span class="p">,</span> <span class="nx">client</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="c1">// Return if the interaction wasn&#39;t used in a guild.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>        <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="nx">interaction</span><span class="p">.</span><span class="nx">guild</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="k">return</span> <span class="k">await</span> <span class="nx">interaction</span><span class="p">.</span><span class="nx">reply</span><span class="p">({</span> <span class="nx">content</span><span class="o">:</span> <span class="s1">&#39;This command can only be used in a server.&#39;</span><span class="p">,</span> <span class="nx">ephemeral</span>: <span class="kt">true</span> <span class="p">});</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">        <span class="kr">const</span> <span class="nx">row</span> <span class="o">=</span> <span class="k">new</span> <span class="nx">ActionRowBuilder</span><span class="p">&lt;</span><span class="nt">ButtonBuilder</span><span class="p">&gt;().</span><span class="nx">addComponents</span><span class="p">(</span><span class="k">await</span> <span class="nx">buttons</span><span class="p">.</span><span class="nx">TestButton</span><span class="p">.</span><span class="nx">build</span><span class="p">(</span><span class="nx">client</span><span class="p">));</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">        <span class="k">return</span> <span class="k">await</span> <span class="nx">interaction</span><span class="p">.</span><span class="nx">reply</span><span class="p">({</span> <span class="nx">content</span><span class="o">:</span> <span class="s1">&#39;Test Button&#39;</span><span class="p">,</span> <span class="nx">components</span><span class="o">:</span> <span class="p">[</span><span class="nx">row</span><span class="p">]</span> <span class="p">});</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">module</span><span class="p">.</span><span class="nx">exports</span> <span class="o">=</span> <span class="nx">command</span><span class="p">;</span>
+</span></span></code></pre></div><hr>
+<h3 id="message-builders">Message Builders<a href="#message-builders" class="hanchor" ariaLabel="Anchor">#</a> </h3>
+<p>Message builders are reusable templates for Discord messages that can include embeds, components, and other message options. They are useful for creating consistent message layouts across different commands.</p>
+<ol>
+<li>Create a new file in <code>src/messages/</code> with the following structure:</li>
+</ol>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-typescript" data-lang="typescript"><span class="line"><span class="cl"><span class="kr">import</span> <span class="p">{</span> <span class="nx">MessageBuilder</span> <span class="p">}</span> <span class="kr">from</span> <span class="s1">&#39;../../interfaces&#39;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="kr">import</span> <span class="p">{</span> <span class="nx">Client</span> <span class="p">}</span> <span class="kr">from</span> <span class="s1">&#39;../../interfaces/Client&#39;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">export</span> <span class="kr">const</span> <span class="nx">WelcomeMessage</span>: <span class="kt">MessageBuilder</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">embeds</span><span class="o">:</span> <span class="p">[],</span> <span class="c1">// Array of embeds to include
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">components</span><span class="o">:</span> <span class="p">[],</span> <span class="c1">// Array of action rows with components
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    
+</span></span><span class="line"><span class="cl">    <span class="c1">// Build function that returns the final message options
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="kr">async</span> <span class="nx">build</span><span class="p">(</span><span class="nx">client</span>: <span class="kt">Client</span><span class="p">,</span> <span class="nx">username</span>: <span class="kt">string</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="nx">embeds</span><span class="o">:</span> <span class="p">[</span>
+</span></span><span class="line"><span class="cl">                <span class="p">{</span>
+</span></span><span class="line"><span class="cl">                    <span class="nx">title</span><span class="o">:</span> <span class="sb">`Welcome </span><span class="si">${</span><span class="nx">username</span><span class="si">}</span><span class="sb">!`</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">                    <span class="nx">description</span><span class="o">:</span> <span class="s1">&#39;Thanks for joining our server!&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">                    <span class="nx">color</span>: <span class="kt">0x00ff00</span>
+</span></span><span class="line"><span class="cl">                <span class="p">}</span>
+</span></span><span class="line"><span class="cl">            <span class="p">],</span>
+</span></span><span class="line"><span class="cl">            <span class="nx">components</span><span class="o">:</span> <span class="p">[</span>
+</span></span><span class="line"><span class="cl">                <span class="c1">// Add your components here
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>            <span class="p">]</span>
+</span></span><span class="line"><span class="cl">        <span class="p">};</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span></code></pre></div><ol start="2">
+<li>Use the message builder in your commands:</li>
+</ol>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-typescript" data-lang="typescript"><span class="line"><span class="cl"><span class="kr">import</span> <span class="p">{</span> <span class="nx">WelcomeMessage</span> <span class="p">}</span> <span class="kr">from</span> <span class="s1">&#39;../../messages&#39;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// In your command
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kr">const</span> <span class="nx">message</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">WelcomeMessage</span><span class="p">.</span><span class="nx">build</span><span class="p">(</span><span class="nx">client</span><span class="p">,</span> <span class="nx">interaction</span><span class="p">.</span><span class="nx">user</span><span class="p">.</span><span class="nx">username</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl"><span class="k">await</span> <span class="nx">interaction</span><span class="p">.</span><span class="nx">reply</span><span class="p">(</span><span class="nx">message</span><span class="p">);</span>
+</span></span></code></pre></div><hr>
+<h3 id="message-components">Message Components<a href="#message-components" class="hanchor" ariaLabel="Anchor">#</a> </h3>
+<p>If you want to utilize message components for interactivity, it is unecessary to script each one from the command file. Rather there is a system for reusable components in <code>/src/components/</code>. This allows for reuse of scripted components across multiple commands, and keeps your command files from getting too long.</p>
+<p>Message components have following properties:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-typescript" data-lang="typescript"><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">id</span>: <span class="kt">string</span><span class="p">;</span> <span class="c1">// Unique ID for this component. (EX: &#39;role-selector&#39;)
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">permissions?</span>: <span class="kt">bigint</span><span class="p">[];</span> <span class="c1">// Permission Bits required to interact with this component
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">multi_select?</span>: <span class="kt">boolean</span><span class="p">;</span> <span class="c1">// [SELECT MENU ONLY] Toggle Multi Select
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">developer?</span>: <span class="kt">boolean</span><span class="p">;</span> <span class="c1">// Developer only
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">execute</span><span class="p">(</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">interaction</span>: <span class="kt">ComponentInteraction</span><span class="p">,</span> <span class="c1">// Interaction object
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>        <span class="nx">client</span>: <span class="kt">Client</span><span class="p">,</span> <span class="c1">// Bot client
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>        <span class="nx">data</span><span class="o">?:</span> <span class="p">{</span> <span class="p">[</span><span class="nx">key</span>: <span class="kt">string</span><span class="p">]</span><span class="o">:</span> <span class="kt">any</span> <span class="p">},</span> <span class="c1">// Any data parsed from the components unique ID
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>        <span class="nx">guild?</span>: <span class="kt">discord.Guild</span><span class="p">,</span> <span class="c1">// Guild the component is in
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>        <span class="nx">response?</span>: <span class="kt">discord.Collection</span><span class="p">&lt;</span><span class="nt">string</span><span class="p">,</span> <span class="na">discord.TextInputComponent</span><span class="p">&gt;,</span> <span class="c1">// [MODAL ONLY] Values entered into Text Inputs
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>        <span class="nx">selected?</span>: <span class="kt">discord.APISelectMenuOption</span> <span class="o">|</span> <span class="nx">discord</span><span class="p">.</span><span class="nx">APISelectMenuOption</span><span class="p">[]</span> <span class="c1">// [SELECT MENU ONLY] Menu items selected
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="p">)</span><span class="o">:</span> <span class="k">void</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">build</span><span class="p">(</span><span class="nx">client</span>: <span class="kt">Client</span><span class="p">,</span> <span class="p">...</span><span class="nx">args</span>: <span class="kt">any</span><span class="p">)</span><span class="o">:</span> <span class="nx">Promise</span><span class="p">&lt;</span><span class="nt">discord.ComponentBuilder</span><span class="p">&gt;;</span> <span class="c1">// Any code and arguments needed to build the component.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">}</span>
+</span></span></code></pre></div><p>Example component structure:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-typescript" data-lang="typescript"><span class="line"><span class="cl"><span class="kr">import</span> <span class="p">{</span> <span class="nx">ButtonBuilder</span><span class="p">,</span> <span class="nx">ButtonStyle</span><span class="p">,</span> <span class="nx">PermissionFlagsBits</span> <span class="p">}</span> <span class="kr">from</span> <span class="s1">&#39;discord.js&#39;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="kr">import</span> <span class="p">{</span> <span class="nx">ButtonComponent</span>  <span class="p">}</span> <span class="kr">from</span> <span class="s1">&#39;../../interfaces/MessageComponent&#39;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// Example button component that requires certain permissions to use
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kr">export</span> <span class="kr">const</span> <span class="nx">MessageComponent</span>: <span class="kt">ButtonComponent</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">id</span><span class="o">:</span> <span class="s1">&#39;test-button&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">type</span><span class="o">:</span> <span class="nx">ComponentTypes</span><span class="p">.</span><span class="nx">Button</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// User needs ManageEvents and ManageRoles permissions
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">permissions</span><span class="o">:</span> <span class="p">[</span><span class="nx">PermissionFlagsBits</span><span class="p">.</span><span class="nx">ManageEvents</span><span class="p">,</span> <span class="nx">PermissionFlagsBits</span><span class="p">.</span><span class="nx">ManageRoles</span><span class="p">],</span>
+</span></span><span class="line"><span class="cl">    
+</span></span><span class="line"><span class="cl">    <span class="kr">async</span> <span class="nx">build</span><span class="p">(</span><span class="nx">client</span><span class="p">,</span> <span class="kr">boolean</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span> <span class="k">new</span> <span class="nx">ButtonBuilder</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">            <span class="p">.</span><span class="nx">setCustomId</span><span class="p">(</span><span class="k">await</span> <span class="nx">client</span><span class="p">.</span><span class="nx">getCustomID</span><span class="p">(</span><span class="s1">&#39;test-button&#39;</span><span class="p">,</span> <span class="nx">testJSON</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl">            <span class="p">.</span><span class="nx">setLabel</span><span class="p">(</span><span class="s1">&#39;Test Button&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">            <span class="p">.</span><span class="nx">setStyle</span><span class="p">(</span><span class="nx">ButtonStyle</span><span class="p">.</span><span class="nx">Primary</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="p">},</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// Handles the button click
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">execute</span><span class="p">(</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">interaction</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">_client</span>
+</span></span><span class="line"><span class="cl">    <span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">interaction</span><span class="p">.</span><span class="nx">reply</span><span class="p">({</span>
+</span></span><span class="line"><span class="cl">            <span class="nx">content</span><span class="o">:</span> <span class="sb">`You pressed the test button!`</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">            <span class="nx">ephemeral</span>: <span class="kt">true</span>
+</span></span><span class="line"><span class="cl">        <span class="p">});</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">export</span> <span class="k">default</span> <span class="nx">MessageComponent</span><span class="p">;</span>
+</span></span></code></pre></div><h4 id="persistent-component-data">Persistent Component Data<a href="#persistent-component-data" class="hanchor" ariaLabel="Anchor">#</a> </h4>
+<p>In some cases it is useful to store extra data in a component. To do this, utilize the <code>client.getCustomID(id, jsonObject)</code>. This function utilizes the <code>LZ-String</code> library to compress the stringified JSON object into a compact, URI-safe string. This compressed string is then embedded within a Discord component&rsquo;s custom ID, allowing the storage of additional data without exceeding Discord&rsquo;s character limits for component identifiers. (100 haracter limit)</p>
+<p>Note: As this data is stored on discord, it is recommended not to store sensitive data.</p>
+<p>Example Json:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-TypeScript" data-lang="TypeScript"><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">modal_data</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">type</span><span class="o">:</span>    <span class="s2">&#34;modal&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">id</span><span class="o">:</span>      <span class="s2">&#34;mod_history&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">userId</span><span class="o">:</span>  <span class="s2">&#34;123456789012345678&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">page</span>:    <span class="kt">2</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">filters</span><span class="o">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">sort</span><span class="o">:</span>     <span class="s2">&#34;recent&#34;</span><span class="p">,</span> 
+</span></span><span class="line"><span class="cl">        <span class="nx">category</span><span class="o">:</span> <span class="s2">&#34;moderation&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">tags</span><span class="o">:</span>     <span class="p">[</span><span class="s2">&#34;bans&#34;</span><span class="p">,</span> <span class="s2">&#34;kicks&#34;</span><span class="p">,</span> <span class="s2">&#34;mutes&#34;</span><span class="p">],</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">priority</span><span class="o">:</span> <span class="s2">&#34;high&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">resolved</span>: <span class="kt">false</span>
+</span></span><span class="line"><span class="cl">    <span class="p">},</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">button_id</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">client</span><span class="p">.</span><span class="nx">getCustomID</span><span class="p">(</span><span class="s1">&#39;open-history&#39;</span><span class="p">,</span> <span class="nx">modal_data</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl"> <span class="c1">//console.log(button_id) =&gt; open-history[ᯡࠫ䅜Ā匰ᜨאỠጢణㄠ㑀আ䆅栯倢恠材⠤炯ࠢ巉你䦃ࠨ怩䀹䀥䀵䀭䀽䀣䀳䀡䁄≬獈డ暑爛瀣ᠲ挡浡ᑕ͐ጔ〣ಀǹ々壬㇁䧂⩔ຎѰ໬ね⧜;∠ɐ恚丐öɻʜ㤥䲊〥氁∈ș䠲ᔦ䊹䎁㋠ǘ悘竸瘠⿃⠠]
+</span></span></span></code></pre></div><p><em>Tip: Avoid including &ldquo;dynamic&rdquo; data, like user provided text or anything that isn&rsquo;t predictable.</em></p>
+<h4 id="buttons">Buttons<a href="#buttons" class="hanchor" ariaLabel="Anchor">#</a> </h4>
+<p>Buttons are defined in <code>src/components/buttons/</code>. They are the only component that does not have any unique properties or arguments.</p>
+<blockquote>
+<p>[!NOTE]
+An example button is seen at the start of this <a href="/posts/berrybot/docs/#message-components">section</a>.</p></blockquote>
+<h4 id="select-menus">Select Menus<a href="#select-menus" class="hanchor" ariaLabel="Anchor">#</a> </h4>
+<p>Select menus are defined in <code>src/components/selectMenus/</code>. The property <code>multi_select</code> can be set to <code>true</code> to toggle multi-select. The argument <code>seleted</code> passed through <code>execute</code> is a <code>discord.APISelectMenuOption</code>. If multi select is enabled, it is passed as an array.</p>
+<p>Example select menu structure:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-typescript" data-lang="typescript"><span class="line"><span class="cl"><span class="kr">import</span> <span class="p">{</span> <span class="nx">StringSelectMenuBuilder</span> <span class="p">}</span> <span class="kr">from</span> <span class="s1">&#39;discord.js&#39;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="kr">import</span> <span class="p">{</span> <span class="nx">SelectMenuComponent</span> <span class="p">}</span> <span class="kr">from</span> <span class="s1">&#39;../../interfaces&#39;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">export</span> <span class="kr">const</span> <span class="nx">TestSelect</span>: <span class="kt">SelectMenuComponent</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">customId</span><span class="o">:</span> <span class="s1">&#39;test-select&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">multi_select</span>: <span class="kt">false</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">build</span>: <span class="kt">async</span> <span class="p">(</span><span class="nx">client</span><span class="p">)</span> <span class="o">=&gt;</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span> <span class="k">new</span> <span class="nx">StringSelectMenuBuilder</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">            <span class="p">.</span><span class="nx">setCustomId</span><span class="p">(</span><span class="s1">&#39;test-select&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">            <span class="p">.</span><span class="nx">setPlaceholder</span><span class="p">(</span><span class="s1">&#39;Select an option&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">            <span class="p">.</span><span class="nx">addOptions</span><span class="p">([</span>
+</span></span><span class="line"><span class="cl">                <span class="p">{</span> <span class="nx">label</span><span class="o">:</span> <span class="s1">&#39;Option 1&#39;</span><span class="p">,</span> <span class="nx">value</span><span class="o">:</span> <span class="s1">&#39;1&#39;</span> <span class="p">},</span>
+</span></span><span class="line"><span class="cl">                <span class="p">{</span> <span class="nx">label</span><span class="o">:</span> <span class="s1">&#39;Option 2&#39;</span><span class="p">,</span> <span class="nx">value</span><span class="o">:</span> <span class="s1">&#39;2&#39;</span> <span class="p">}</span>
+</span></span><span class="line"><span class="cl">            <span class="p">]);</span>
+</span></span><span class="line"><span class="cl">    <span class="p">},</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">execute</span>: <span class="kt">async</span> <span class="p">(</span><span class="nx">interaction</span><span class="p">,</span> <span class="nx">_client</span><span class="p">,</span> <span class="nx">selected</span><span class="p">)</span> <span class="o">=&gt;</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="c1">// Reply to the interaction with the selected option&#39;s label
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>        <span class="nx">interaction</span><span class="p">.</span><span class="nx">reply</span><span class="p">({</span> <span class="nx">content</span><span class="o">:</span> <span class="sb">`You selected </span><span class="si">${</span><span class="nx">selected</span><span class="p">.</span><span class="nx">label</span><span class="si">}</span><span class="sb">`</span><span class="p">,</span> <span class="nx">ephemeral</span>: <span class="kt">true</span> <span class="p">});</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span></code></pre></div><h4 id="modals">Modals<a href="#modals" class="hanchor" ariaLabel="Anchor">#</a> </h4>
+<p>Modals are defined in <code>src/components/modals/</code>. They are used to collect one or more text inputs. <code>execute()</code> passes the responses as the argument <code>response</code>, a <code>Collection&lt;string, discord.TextInputComponent&gt;</code>. (The key is the customId you gave the TextInputBuilder)</p>
+<p>Example modal structure:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-typescript" data-lang="typescript"><span class="line"><span class="cl"><span class="kr">import</span> <span class="p">{</span> <span class="nx">ActionRowBuilder</span><span class="p">,</span> <span class="nx">ModalBuilder</span><span class="p">,</span> <span class="nx">TextInputBuilder</span><span class="p">,</span> <span class="nx">TextInputStyle</span> <span class="p">}</span> <span class="kr">from</span> <span class="s1">&#39;discord.js&#39;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="kr">import</span> <span class="p">{</span> <span class="nx">ModalComponent</span><span class="p">,</span> <span class="nx">ComponentTypes</span> <span class="p">}</span> <span class="kr">from</span> <span class="s1">&#39;../../interfaces/MessageComponent&#39;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="kr">import</span> <span class="p">{</span> <span class="nx">logger</span> <span class="p">}</span> <span class="kr">from</span> <span class="s1">&#39;../../util&#39;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">export</span> <span class="kr">const</span> <span class="nx">MessageComponent</span>: <span class="kt">ModalComponent</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">id</span><span class="o">:</span> <span class="s1">&#39;test-modal&#39;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">async</span> <span class="nx">build</span><span class="p">(</span><span class="nx">_client</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="kr">const</span> <span class="nx">row</span> <span class="o">=</span> <span class="k">new</span> <span class="nx">ActionRowBuilder</span><span class="p">&lt;</span><span class="nt">TextInputBuilder</span><span class="p">&gt;().</span><span class="nx">addComponents</span><span class="p">(</span>
+</span></span><span class="line"><span class="cl">            <span class="k">new</span> <span class="nx">TextInputBuilder</span><span class="p">().</span><span class="nx">setCustomId</span><span class="p">(</span><span class="s1">&#39;test-modal-input&#39;</span><span class="p">).</span><span class="nx">setPlaceholder</span><span class="p">(</span><span class="s1">&#39;Test Input&#39;</span><span class="p">).</span><span class="nx">setStyle</span><span class="p">(</span><span class="nx">TextInputStyle</span><span class="p">.</span><span class="nx">Short</span><span class="p">).</span><span class="nx">setLabel</span><span class="p">(</span><span class="s1">&#39;Test Input&#39;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="p">);</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span> <span class="k">new</span> <span class="nx">ModalBuilder</span><span class="p">().</span><span class="nx">setTitle</span><span class="p">(</span><span class="s1">&#39;Test Modal&#39;</span><span class="p">).</span><span class="nx">setCustomId</span><span class="p">(</span><span class="s1">&#39;test-modal&#39;</span><span class="p">).</span><span class="nx">setComponents</span><span class="p">([</span><span class="nx">row</span><span class="p">]);</span>
+</span></span><span class="line"><span class="cl">    <span class="p">},</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="kr">async</span> <span class="nx">execute</span><span class="p">(</span><span class="nx">interaction</span><span class="p">,</span> <span class="nx">_client</span><span class="p">,</span> <span class="nx">fields</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">logger</span><span class="p">.</span><span class="nx">info</span><span class="p">(</span>
+</span></span><span class="line"><span class="cl">            <span class="s1">&#39;\n&#39;</span> <span class="o">+</span> <span class="k">new</span> <span class="p">(</span><span class="kr">require</span><span class="p">(</span><span class="s1">&#39;ascii-table&#39;</span><span class="p">))().</span><span class="nx">setHeading</span><span class="p">(</span><span class="s1">&#39;Field&#39;</span><span class="p">,</span> <span class="s1">&#39;Response&#39;</span><span class="p">).</span><span class="nx">addRow</span><span class="p">(</span><span class="s1">&#39;test-modal-input&#39;</span><span class="p">,</span> <span class="nx">fields</span><span class="p">.</span><span class="kr">get</span><span class="p">(</span><span class="s1">&#39;test-modal-input&#39;</span><span class="p">)</span><span class="o">?</span><span class="p">.</span><span class="nx">value</span><span class="p">).</span><span class="nx">toString</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">        <span class="p">);</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">        <span class="c1">// Reply to the interaction with the response.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>        <span class="nx">interaction</span><span class="p">.</span><span class="nx">reply</span><span class="p">({</span> <span class="nx">content</span><span class="o">:</span> <span class="sb">`This is a test modal! You said: </span><span class="si">${</span><span class="nx">fields</span><span class="p">.</span><span class="kr">get</span><span class="p">(</span><span class="s1">&#39;test-modal-input&#39;</span><span class="p">)</span><span class="o">?</span><span class="p">.</span><span class="nx">value</span><span class="si">}</span><span class="sb">`</span><span class="p">,</span> <span class="nx">ephemeral</span>: <span class="kt">true</span> <span class="p">});</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">export</span> <span class="k">default</span> <span class="nx">MessageComponent</span><span class="p">;</span>
+</span></span></code></pre></div><h3 id="adding-a-new-component">Adding a New Component<a href="#adding-a-new-component" class="hanchor" ariaLabel="Anchor">#</a> </h3>
+<ol>
+<li>Choose the appropriate component type (Button, Select Menu, or Modal)</li>
+<li>Create a new file in the corresponding directory:
+<ul>
+<li><code>src/components/buttons/</code> for buttons</li>
+<li><code>src/components/selectMenus/</code> for select menus</li>
+<li><code>src/components/modals/</code> for modals</li>
+</ul>
+</li>
+<li>Follow the component interface structure.</li>
+<li>Import and register the component in <code>src/components/index.ts</code> for easy access.</li>
+</ol>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-typescript" data-lang="typescript"><span class="line"><span class="cl"><span class="kr">import</span> <span class="p">{</span> <span class="nx">TestButton</span> <span class="p">}</span> <span class="kr">from</span> <span class="s1">&#39;./buttons/TestButton&#39;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="kr">import</span> <span class="p">{</span> <span class="nx">TestSelect</span> <span class="p">}</span> <span class="kr">from</span> <span class="s1">&#39;./selectMenus/TestSelect&#39;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="kr">import</span> <span class="p">{</span> <span class="nx">TestModal</span> <span class="p">}</span> <span class="kr">from</span> <span class="s1">&#39;./modals/TestModal&#39;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">export</span> <span class="kr">const</span> <span class="nx">components</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">buttons</span><span class="o">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">TestButton</span>
+</span></span><span class="line"><span class="cl">    <span class="p">},</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">selectMenus</span><span class="o">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">TestSelect</span>
+</span></span><span class="line"><span class="cl">    <span class="p">},</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">modals</span><span class="o">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">TestModal</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span></code></pre></div><p>Example Usage:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-typescript" data-lang="typescript"><span class="line"><span class="cl"><span class="kr">import</span> <span class="nx">buttons</span> <span class="kr">from</span> <span class="s1">&#39;../components/&#39;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">row</span> <span class="o">=</span> <span class="k">new</span> <span class="nx">ActionRowBuilder</span><span class="p">().</span><span class="nx">addComponents</span><span class="p">(</span><span class="nx">button</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kr">const</span> <span class="nx">message</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">components</span><span class="o">:</span> <span class="p">[</span><span class="nx">row</span><span class="p">]</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><hr>
+<h3 id="mongodb-database">MongoDB Database<a href="#mongodb-database" class="hanchor" ariaLabel="Anchor">#</a> </h3>
+<p>This bot optionally uses MongoDB for data storage. To use this you&rsquo;ll need to create a free <a href="https://www.mongodb.com/cloud/atlas/register">MongoDB Atlas</a> account.</p>
+<h4 id="creating-a-new-schema">Creating a new Schema<a href="#creating-a-new-schema" class="hanchor" ariaLabel="Anchor">#</a> </h4>
+<ol>
+<li>Create a new <code>.ts</code> file in src/database/schemas with the following structure:</li>
+</ol>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-typescript" data-lang="typescript"><span class="line"><span class="cl"><span class="kr">import</span> <span class="nx">mongoose</span> <span class="kr">from</span> <span class="s1">&#39;mongoose&#39;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// TypeScript interface for MongoDB documents - includes all fields and Mongoose methods
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kr">export</span> <span class="kr">interface</span> <span class="nx">ExampleModel</span> <span class="kr">extends</span> <span class="nx">mongoose</span><span class="p">.</span><span class="nx">Document</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">document_id</span>: <span class="kt">number</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">string</span><span class="o">:</span> <span class="kt">string</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">number</span><span class="o">:</span> <span class="kt">number</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">boolean</span><span class="o">:</span> <span class="kr">boolean</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">object</span><span class="o">:</span> <span class="nx">ExampleObject</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// Example interface for nested object structure.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kr">export</span> <span class="kr">interface</span> <span class="nx">ExampleObject</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">string</span><span class="o">:</span> <span class="kt">string</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">number</span><span class="o">:</span> <span class="kt">number</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">boolean</span><span class="o">:</span> <span class="kr">boolean</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// Mongoose schema defines document structure and validation rules. Note this does not use traditional typings, thus the need to be manually outlined.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kr">const</span> <span class="nx">ExampleSchema</span> <span class="o">=</span> <span class="k">new</span> <span class="nx">mongoose</span><span class="p">.</span><span class="nx">Schema</span><span class="p">({</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">document_id</span>: <span class="kt">Number</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">string</span><span class="o">:</span> <span class="nb">String</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">number</span><span class="o">:</span> <span class="nb">Number</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="kr">boolean</span><span class="o">:</span> <span class="nb">Boolean</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">object</span><span class="o">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="kt">string</span><span class="o">:</span> <span class="nb">String</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="kt">number</span><span class="o">:</span> <span class="nb">Number</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="kr">boolean</span><span class="o">:</span> <span class="nb">Boolean</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">});</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// Creates Mongoose model with TypeScript type safety
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kr">export</span> <span class="kr">const</span> <span class="nx">ExampleModel</span> <span class="o">=</span> <span class="nx">mongoose</span><span class="p">.</span><span class="nx">model</span><span class="p">&lt;</span><span class="nt">ExampleModel</span><span class="p">&gt;(</span><span class="s1">&#39;ExampleSchema&#39;</span><span class="p">,</span> <span class="nx">ExampleSchema</span><span class="p">);</span>
+</span></span></code></pre></div><ol start="2">
+<li>In <code>src/database/index.ts</code>, import your database model:</li>
+</ol>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-typescript" data-lang="typescript"><span class="line"><span class="cl"><span class="kr">import</span> <span class="nx">mongoose</span> <span class="kr">from</span> <span class="s1">&#39;mongoose&#39;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="kr">import</span> <span class="p">{</span> <span class="nx">config</span> <span class="p">}</span> <span class="kr">from</span> <span class="s1">&#39;../config&#39;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="kr">import</span> <span class="p">{</span> <span class="nx">ExampleModel</span> <span class="p">}</span> <span class="kr">from</span> <span class="s1">&#39;./schemas/Example&#39;</span><span class="p">;</span> <span class="c1">// Imported Model
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="p">...</span>
+</span></span></code></pre></div><ol start="3">
+<li>Create a <code>Model</code> object with the following properties and functions:</li>
+</ol>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-typescript" data-lang="typescript"><span class="line"><span class="cl"><span class="kr">export</span> <span class="kr">const</span> <span class="nx">example</span>: <span class="kt">Model</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// Function used to retrieve documents, and create a new one if it is not found.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="kr">get</span><span class="o">:</span> <span class="kr">async</span> <span class="p">(</span><span class="nx">document_id</span>: <span class="kt">string</span><span class="p">)</span> <span class="o">=&gt;</span>
+</span></span><span class="line"><span class="cl">        <span class="p">(</span><span class="k">await</span> <span class="nx">ExampleModel</span><span class="p">.</span><span class="nx">findOne</span><span class="p">({</span> <span class="nx">document_id</span>: <span class="kt">document_id</span> <span class="p">}))</span> <span class="o">||</span>
+</span></span><span class="line"><span class="cl">        <span class="p">(</span><span class="k">await</span> <span class="nx">ExampleModel</span><span class="p">.</span><span class="nx">create</span><span class="p">({</span>
+</span></span><span class="line"><span class="cl">            <span class="nx">document_id</span>: <span class="kt">document_id</span>
+</span></span><span class="line"><span class="cl">            <span class="c1">// Add any default values here
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>        <span class="p">})),</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">update</span>: <span class="kt">async</span><span class="p">(</span><span class="nx">document_id</span>: <span class="kt">string</span><span class="p">,</span> <span class="nx">data</span>: <span class="kt">ExampleModel</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">await</span> <span class="nx">GuildSettings</span><span class="p">.</span><span class="nx">updateOne</span><span class="p">({</span> <span class="nx">document_id</span>: <span class="kt">document_id</span> <span class="p">},</span> <span class="nx">settings</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">model</span>: <span class="kt">ExampleModel</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span></code></pre></div><ol start="4">
+<li>Add your model to the <code>database</code> object at the end of the file. This object is accessible from the bot <code>client</code> object. (Ex: <code>client.database.serverSettings.get(guildId))</code>)</li>
+</ol>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-typescript" data-lang="typescript"><span class="line"><span class="cl"><span class="kr">export</span> <span class="kr">const</span> <span class="nx">database</span> <span class="o">=</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">modReports</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">userProfiles</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">example</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// Add models here
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">};</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="err">###</span> <span class="nx">Events</span>
+</span></span><span class="line"><span class="cl"><span class="nx">Events</span> <span class="nx">are</span> <span class="nx">handled</span> <span class="k">in</span> <span class="nx">the</span> <span class="sb">`events/`</span> <span class="nx">directory</span><span class="p">.</span> <span class="nx">Each</span> <span class="nx">event</span> <span class="k">is</span> <span class="nx">a</span> <span class="nx">TypeScript</span> <span class="nx">module</span> <span class="nx">that</span> <span class="nx">exports</span> <span class="nx">an</span> <span class="nx">event</span> <span class="kt">object</span><span class="p">.</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">Example</span> <span class="nx">event</span> <span class="nx">structure</span><span class="o">:</span>
+</span></span><span class="line"><span class="cl"><span class="sb">```typescript
+</span></span></span><span class="line"><span class="cl"><span class="sb">import { Event } from &#39;../../interfaces&#39;;
+</span></span></span><span class="line"><span class="cl"><span class="sb">
+</span></span></span><span class="line"><span class="cl"><span class="sb">export const event: Event = {
+</span></span></span><span class="line"><span class="cl"><span class="sb">    name: &#39;eventName&#39;,
+</span></span></span><span class="line"><span class="cl"><span class="sb">    once: true,
+</span></span></span><span class="line"><span class="cl"><span class="sb">    execute: async (client) =&gt; {
+</span></span></span><span class="line"><span class="cl"><span class="sb">        // Event handling logic
+</span></span></span><span class="line"><span class="cl"><span class="sb">    }
+</span></span></span><span class="line"><span class="cl"><span class="sb">};
+</span></span></span></code></pre></div><hr>
+<h2 id="adding-new-features">Adding New Features<a href="#adding-new-features" class="hanchor" ariaLabel="Anchor">#</a> </h2>
+<h3 id="adding-a-new-command">Adding a New Command<a href="#adding-a-new-command" class="hanchor" ariaLabel="Anchor">#</a> </h3>
+<ol>
+<li>Create a new file in <code>src/commands/Public/</code> or <code>src/commands/Private/</code></li>
+<li>Follow the command structure template</li>
+<li>The command will be automatically loaded by the command handler</li>
+</ol>
+<h2 id="development-guidelines">Development Guidelines<a href="#development-guidelines" class="hanchor" ariaLabel="Anchor">#</a> </h2>
+<h3 id="handlers">Handlers<a href="#handlers" class="hanchor" ariaLabel="Anchor">#</a> </h3>
+<p>The bot uses three main handlers to manage its components:</p>
+<h4 id="command-handler">Command Handler<a href="#command-handler" class="hanchor" ariaLabel="Anchor">#</a> </h4>
+<p>Located in <code>src/handlers/CommandHandler.ts</code>, this handler:</p>
+<ul>
+<li>Loads all commands from the <code>commands/</code> directory</li>
+<li>Registers slash commands with Discord</li>
+<li>Handles command execution</li>
+<li>Supports both public and private commands</li>
+<li>Automatically loads subcommands</li>
+</ul>
+<h4 id="event-handler">Event Handler<a href="#event-handler" class="hanchor" ariaLabel="Anchor">#</a> </h4>
+<p>Located in <code>src/handlers/EventHandler.ts</code>, this handler:</p>
+<ul>
+<li>Loads all events from the <code>events/</code> directory</li>
+<li>Registers event listeners with Discord.js</li>
+<li>Supports both once and regular event listeners</li>
+<li>Handles event execution with proper error catching</li>
+</ul>
+<h4 id="message-component-handler">Message Component Handler<a href="#message-component-handler" class="hanchor" ariaLabel="Anchor">#</a> </h4>
+<p>Located in <code>src/handlers/MessageComponentHandler.ts</code>, this handler:</p>
+<ul>
+<li>Loads all message components (buttons, select menus, modals) from the <code>components/</code> directory</li>
+<li>Registers component interactions</li>
+<li>Handles component execution</li>
+<li>Manages component state and data</li>
+</ul>
+<h3 id="logging">Logging<a href="#logging" class="hanchor" ariaLabel="Anchor">#</a> </h3>
+<p>The bot uses Pino for logging. Pino logs are saved to <code>logs/</code>. It is recommended to use the logger utility for all logging:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-typescript" data-lang="typescript"><span class="line"><span class="cl"><span class="kr">import</span> <span class="p">{</span> <span class="nx">logger</span> <span class="p">}</span> <span class="kr">from</span> <span class="s1">&#39;../util&#39;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">logger</span><span class="p">.</span><span class="nx">info</span><span class="p">(</span><span class="s1">&#39;Your log message&#39;</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl"><span class="nx">logger</span><span class="p">.</span><span class="nx">error</span><span class="p">(</span><span class="s1">&#39;Error message&#39;</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl"><span class="nx">logger</span><span class="p">.</span><span class="nx">warn</span><span class="p">(</span><span class="s1">&#39;Warning message&#39;</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl"><span class="nx">logger</span><span class="p">.</span><span class="nx">debug</span><span class="p">(</span><span class="s1">&#39;Debug message&#39;</span><span class="p">);</span>
+</span></span></code></pre></div><hr>
+<h2 id="troubleshooting">Troubleshooting<a href="#troubleshooting" class="hanchor" ariaLabel="Anchor">#</a> </h2>
+<h3 id="common-issues">Common Issues<a href="#common-issues" class="hanchor" ariaLabel="Anchor">#</a> </h3>
+<h4 id="mongodb-connection-issues">MongoDB Connection Issues<a href="#mongodb-connection-issues" class="hanchor" ariaLabel="Anchor">#</a> </h4>
+<ol>
+<li>Check your MongoDB Atlas connection string</li>
+<li>Verify your IP is whitelisted in MongoDB Atlas</li>
+<li>Ensure your database user has proper permissions</li>
+<li>Check if your MongoDB cluster is running</li>
+</ol>
+<h4 id="command-registration-issues">Command Registration Issues<a href="#command-registration-issues" class="hanchor" ariaLabel="Anchor">#</a> </h4>
+<ol>
+<li>Check the command handler logs</li>
+<li>Verify command structure follows the interface</li>
+<li>Ensure the bot has proper permissions</li>
+<li>SubcommandsL Ensure the proper parent ID is set</li>
+</ol>
+<h4 id="component-interaction-issues">Component Interaction Issues<a href="#component-interaction-issues" class="hanchor" ariaLabel="Anchor">#</a> </h4>
+<ol>
+<li>Check the component&rsquo;s custom ID</li>
+<li>Ensure there are no errors in the component&rsquo;s execute function</li>
+<li>Ensure any data stored in the component is not too large (you will be notified in the logs)</li>
+</ol>
+<h2 id="license">License<a href="#license" class="hanchor" ariaLabel="Anchor">#</a> </h2>
+<p>This project is licensed under the MIT License - see the LICENSE file for details.</p>
+<h1 id="authors">Authors<a href="#authors" class="hanchor" ariaLabel="Anchor">#</a> </h1>
+<ul>
+<li><a href="https://www.github.com/gwenphalan">@gwenphalan</a></li>
+</ul>
+
+      </div></div>
+
+  
+    
+<div class="pagination">
+  <div class="pagination__title">
+    <span class="pagination__title-h">Read other posts</span>
+    <hr />
+  </div>
+  <div class="pagination__buttons">
+    
+      <a href="http://localhost:1313/posts/berrybot/" class="button inline prev">
+        &lt; [<span class="button__text">BerryBot</span>]
+      </a>
+    
+    
+    
+  </div>
+</div>
+
+
+  
+
+  
+    
+
+  
+</article>
+
+  </div>
+
+  
+    <footer class="footer">
+  <div class="footer__inner">
+    
+      <div class="copyright">
+        <span>© 2025 Powered by <a href="https://github.com/gwenphalan">Gwen Phalan</a></span>
+    
+      <span> | Built with 💚 | [contact@unimatrix-01.dev]</span>
+      </div>
+  </div>
+</footer>
+
+
+
+
+
+
+<script type="text/javascript" src="/bundle.min.js"></script>
+
+
+
+
+
+  
+</div>
+
+</body>
+</html>
