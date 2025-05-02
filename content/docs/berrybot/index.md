@@ -6,6 +6,9 @@ description: "Complete documentation for BerryBot, including setup, features, an
 ---
 
 ### Table of Contents
+- [Features](#features)
+  - [Added Features](#added-features)
+  - [Planned Features](#planned-features)
   - [Project Structure](#project-structure)
   - [Setup and Installation](#setup-and-installation)
     - [Prerequisites](#prerequisites)
@@ -37,6 +40,36 @@ description: "Complete documentation for BerryBot, including setup, features, an
       - [Component Interaction Issues](#component-interaction-issues)
   - [License](#license)
 - [Authors](#authors)
+
+---
+
+# Features
+
+## Added Features
+
+-   Administration
+
+    -   Self Roles
+        -   Allow users to assign themselves roles in different categories.
+
+## Planned Features
+
+-   Moderation
+
+    -   Member Screening
+        -   Require users to fill out a form before being allowed access to the server.
+    -   Mute, Ban, and Kick Commands
+        -   Punish users for breaking server rules and terms of service, either permanently or temporarily.
+    -   Support Tickets
+        -   Allow users to create support tickets and speak directly to server staff about an issue.
+    -   Event Logging
+
+        -   Log all bot moderation events to a specific channel, to easily detect permission abuse by moderators.
+
+-   Administration
+
+    -   Member Welcoming
+        -   Send personlized welcome messages to new users.
 
 ---
 
