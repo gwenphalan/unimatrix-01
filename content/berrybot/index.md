@@ -2,7 +2,7 @@
 title: "Redirecting to BerryBot"
 type: "redirect"
 layout: "redirect"
-url: "https://discord.com/api/oauth2/authorize?client_id=1367273501828059318&permissions=1374524022848&scope=bot%20applications.commands"
+redirect_url: "https://discord.com/api/oauth2/authorize?client_id=1367273501828059318&permissions=1374524022848&scope=bot%20applications.commands"
 aliases: ["/berrybot"]
 ---
 
