@@ -2,6 +2,7 @@
 title: "BerryBot Documentation"
 draft: false
 ---
+
 ### Table of Contents
 - [Features](#features)
   - [Added Features](#added-features)
