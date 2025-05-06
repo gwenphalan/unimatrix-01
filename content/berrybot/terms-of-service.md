@@ -7,8 +7,6 @@ description: "Terms of Service for using BerryBot."
 
 # Terms of Service
 
-_Last updated: May 6, 2025_
-
 Welcome to BerryBot, a Discord bot operated by Unimatrix-01 ("we", "us", or "our"). By inviting, accessing, or using BerryBot (the "Service"), you agree to be bound by these Terms of Service ("Terms"). If you do not agree to these Terms, please do not use the Service.
 
 BerryBot is an open source project. You can review the source code and contribute at [https://github.com/gwenphalan/berrybot/](https://github.com/gwenphalan/berrybot/).

@@ -1,0 +1,29 @@
+# Hugo build output
+/public/
+/resources/
+
+# Hugo build lock file
+.hugo_build.lock
+
+# Node modules (if using npm/yarn for assets)
+node_modules/
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Editor directories and files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Backup files
+*~
+*.bak
+
+# Log files
+*.log
+
+# Netlify CMS admin config (optional, if you use it)
+/admin/config.yml
