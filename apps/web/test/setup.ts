@@ -7,7 +7,6 @@ import { afterEach } from "vitest";
 
 // Polyfill window.matchMedia for the jsdom environment used by Vitest.
 // Some components use matchMedia and will throw without this.
-// @ts-expect-error - extending window for test environment
 Object.defineProperty(window, "matchMedia", {
   configurable: true,
   writable: true,
