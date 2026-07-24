@@ -745,11 +745,15 @@ function useReducedMotion(): boolean {
 
   React.useEffect(() => {
     const media = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const update = () => setReduced(media.matches);
+    const update = () => {
+      setReduced(media.matches);
+    };
 
     update();
     media.addEventListener("change", update);
-    return () => media.removeEventListener("change", update);
+    return () => {
+      media.removeEventListener("change", update);
+    };
   }, []);
 
   return reduced;
@@ -759,7 +763,9 @@ function useViewportSize(): { width: number; height: number } | null {
   const [size, setSize] = React.useState<{ width: number; height: number } | null>(null);
 
   React.useEffect(() => {
-    const update = () => setSize({ width: window.innerWidth, height: window.innerHeight });
+    const update = () => {
+      setSize({ width: window.innerWidth, height: window.innerHeight });
+    };
 
     update();
 
@@ -803,7 +809,9 @@ function useDebouncedSize(
     }
 
     if (timeoutRef.current !== undefined) window.clearTimeout(timeoutRef.current);
-    timeoutRef.current = window.setTimeout(() => setDebounced(size), delay);
+    timeoutRef.current = window.setTimeout(() => {
+      setDebounced(size);
+    }, delay);
 
     return () => {
       if (timeoutRef.current !== undefined) window.clearTimeout(timeoutRef.current);
@@ -1251,7 +1259,6 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
     rafRef.current = requestAnimationFrame(tick);
     // Only the target trace identity should retrigger this effect — the
     // refs and callbacks it closes over are stable across renders.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [targetTraces]);
 
   React.useEffect(
