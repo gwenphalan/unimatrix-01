@@ -32,7 +32,28 @@ export const unimatrixClerkAppearance: ClerkAppearance = {
     fontFamily: "var(--font-mono)",
   },
   elements: {
-    card: "shadow-none",
+    // Clerk injects its own <style> tag as unlayered CSS, which beats
+    // Tailwind's output (emitted inside @layer) regardless of specificity —
+    // so anything fighting a Clerk default (border, shadow, background)
+    // needs `!` to force !important and actually win.
+    card: "site-panel site-panel-strong !border !border-border/70 !bg-background/80 !shadow-[0_0_0_1px_color-mix(in_oklab,var(--primary)_12%,transparent),0_22px_72px_-68px_color-mix(in_oklab,var(--primary)_22%,transparent)] !backdrop-blur-xl",
+    headerTitle: "font-medium tracking-[-0.02em]",
+    headerSubtitle: "text-muted-foreground",
+    socialButtonsBlockButton:
+      "!border !border-border !bg-secondary/60 hover:!bg-secondary hover:!border-primary/35 transition-colors",
+    socialButtonsBlockButtonText: "font-medium text-foreground/85",
+    // Clerk renders `socialButtonsIconButton` instead of `socialButtonsBlockButton`
+    // once 3+ social providers are configured, so both need the same treatment.
+    socialButtonsIconButton:
+      "!border !border-border !bg-secondary/60 hover:!bg-secondary hover:!border-primary/35 transition-colors",
+    dividerLine: "!bg-border",
+    dividerText: "text-muted-foreground",
+    formFieldLabel: "text-foreground/85",
+    formFieldInput: "!border !border-input !bg-background text-foreground",
+    formButtonPrimary:
+      "!bg-primary !text-primary-foreground !shadow-none transition-colors hover:!bg-primary/80",
+    footerActionLink: "text-primary transition-colors hover:text-foreground",
+    footer: "!bg-transparent",
   },
 };
 
