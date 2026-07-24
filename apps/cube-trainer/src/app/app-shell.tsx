@@ -1,4 +1,6 @@
 import type { ReactNode } from "react";
+import { useRouterState } from "@tanstack/react-router";
+import { CircuitField } from "@unimatrix/ui/public";
 
 import { AppFooter, AppPageContainer } from "@/features/cube-trainer-site/components";
 
@@ -7,8 +9,14 @@ type AppShellProps = {
 };
 
 export function AppShell({ children }: AppShellProps) {
+  const pathname = useRouterState({
+    select: (state) => state.location.pathname,
+  });
+
   return (
     <AppPageContainer>
+      <CircuitField routeKey={pathname} />
+
       <a
         className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:border focus:border-primary/45 focus:bg-background focus:px-3 focus:py-2 focus:text-sm"
         href="#main-content"

@@ -56,8 +56,8 @@
   --accent: oklch(0.432 0.095 166.913);
   --accent-foreground: oklch(0.979 0.021 166.113);
   --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
+  --border: oklch(1 0 0 / 16%);
+  --input: oklch(1 0 0 / 20%);
   --ring: oklch(0.552 0.016 285.938);
   --chart-1: oklch(0.845 0.143 164.978);
   --chart-2: oklch(0.696 0.17 162.48);
@@ -148,57 +148,143 @@
   .grid-backdrop {
     position: relative;
     overflow-x: hidden;
-    background-color: var(--background);
+    background-color: color-mix(in srgb, var(--background) 88%, var(--primary) 12%);
     background-image:
       radial-gradient(
-        circle at 12% 12%,
-        color-mix(in oklab, var(--primary) 18%, transparent) 0%,
-        transparent 28%
-      ),
-      radial-gradient(
-        circle at 88% 10%,
-        color-mix(in oklab, var(--chart-2) 12%, transparent) 0%,
-        transparent 20%
+        circle 2px at 0 0,
+        color-mix(in srgb, var(--primary) 65%, transparent) 0%,
+        transparent 100%
       ),
       linear-gradient(
         0deg,
-        color-mix(in oklab, white 3%, transparent) 1px,
+        color-mix(in srgb, var(--primary) 22%, transparent) 1.5px,
+        transparent 1.5px
+      ),
+      linear-gradient(
+        90deg,
+        color-mix(in srgb, var(--primary) 22%, transparent) 1.5px,
+        transparent 1.5px
+      ),
+      linear-gradient(
+        0deg,
+        color-mix(in srgb, var(--primary) 11%, transparent) 1px,
         transparent 1px
       ),
       linear-gradient(
         90deg,
-        color-mix(in oklab, white 3%, transparent) 1px,
+        color-mix(in srgb, var(--primary) 11%, transparent) 1px,
         transparent 1px
       ),
       linear-gradient(
         180deg,
-        color-mix(in oklab, var(--background) 88%, black) 0%,
-        color-mix(in oklab, var(--background) 94%, var(--secondary)) 100%
+        color-mix(in srgb, var(--background) 86%, black) 0%,
+        color-mix(in srgb, var(--background) 92%, var(--primary)) 55%,
+        color-mix(in srgb, var(--background) 90%, black) 100%
       );
-    background-size: 100% 100%, 100% 100%, 64px 64px, 64px 64px, 100% 100%;
+    background-size:
+      240px 240px,
+      240px 240px,
+      240px 240px,
+      40px 40px,
+      40px 40px,
+      100% 100%;
     background-attachment: fixed;
   }
 
-  .grid-backdrop::before {
+  /*
+   * No static circuit-trace layer: it can only ever approximate the grid
+   * (a fixed-canvas mask scaled to the viewport drifts off the real 40px
+   * grid at most aspect ratios). CircuitField (JS) draws the real,
+   * grid-exact traces; without it, the plain dual-tier grid above is the
+   * fallback, which is intentional and complete on its own.
+   */
+
+  .circuit-field-glow {
+    filter: drop-shadow(0 0 2px color-mix(in oklab, var(--primary) 65%, transparent));
+    opacity: 0.55;
+  }
+
+  .circuit-field-trace {
+    animation: circuit-draw 650ms ease-out forwards;
+  }
+
+  .circuit-field-via {
+    opacity: 0;
+    animation: circuit-via-in 250ms ease-out forwards;
+  }
+
+  @keyframes circuit-draw {
+    to {
+      stroke-dashoffset: 0;
+    }
+  }
+
+  @keyframes circuit-via-in {
+    to {
+      opacity: 1;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .circuit-field-trace,
+    .circuit-field-via {
+      animation: none;
+    }
+
+    /*
+     * Pin both to their finished-animation state, not just "no animation" —
+     * the JS boot path already skips writing these inline styles when
+     * reduced motion is on from the start, but a preference flipped mid-
+     * session leaves boot's inline stroke-dashoffset/opacity: 0 in place,
+     * which `animation: none` alone doesn't clear.
+     */
+    .circuit-field-trace {
+      stroke-dasharray: none !important;
+      stroke-dashoffset: 0 !important;
+    }
+
+    .circuit-field-via {
+      opacity: 1;
+    }
+  }
+
+  .site-panel {
+    @apply relative border border-border/70 bg-background/80 backdrop-blur-xl;
+    box-shadow:
+      0 0 0 1px color-mix(in oklab, var(--primary) 12%, transparent),
+      0 22px 72px -68px color-mix(in oklab, var(--primary) 22%, transparent);
+  }
+
+  .site-panel::before {
     content: "";
-    position: fixed;
+    position: absolute;
     inset: 0;
     pointer-events: none;
-    background:
-      linear-gradient(
-        180deg,
-        transparent 0%,
-        color-mix(in oklab, var(--primary) 5%, transparent) 50%,
-        transparent 100%
-      ),
-      linear-gradient(
-        180deg,
-        color-mix(in oklab, white 2%, transparent) 0,
-        transparent 3px,
-        transparent 8px,
-        color-mix(in oklab, white 1%, transparent) 9px
-      );
-    opacity: 0.16;
-    z-index: -1;
+    background: linear-gradient(
+      180deg,
+      color-mix(in oklab, var(--primary) 8%, transparent) 0%,
+      transparent 32%
+    );
+    opacity: 0.55;
+  }
+
+  .site-panel-strong {
+    box-shadow:
+      0 0 0 1px color-mix(in oklab, var(--primary) 16%, transparent),
+      0 26px 88px -78px color-mix(in oklab, var(--primary) 28%, transparent);
+  }
+
+  .site-shell::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(
+      90deg,
+      color-mix(in oklab, white 2%, transparent) 1px,
+      transparent 1px
+    );
+    background-size: 18rem 100%;
+    opacity: 0.08;
   }
 }
