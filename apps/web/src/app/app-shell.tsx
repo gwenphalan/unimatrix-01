@@ -17,7 +17,7 @@ import {
 } from "@/features/content/site-content";
 import { PublicPageContainer, PublicSiteFooter } from "@/features/public-site/components";
 import { isAuthEnabled, loadWebRuntimeConfig } from "@/lib/config";
-import { cn } from "@unimatrix/ui/public";
+import { CircuitField, cn } from "@unimatrix/ui/public";
 
 const runtimeConfig = loadWebRuntimeConfig({
   VITE_API_BASE_URL: import.meta.env.VITE_API_BASE_URL,
@@ -115,7 +115,7 @@ function AuthHeaderAction() {
       </SignedIn>
       <SignedOut>
         <a
-          className="inline-flex items-center gap-2 border border-border/70 bg-background/72 px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:border-primary/35 hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary/45 focus-visible:outline-none"
+          className="inline-flex items-center gap-2 border border-border bg-secondary/60 px-3 py-1.5 text-sm font-medium text-foreground/75 transition-colors hover:border-primary/35 hover:bg-secondary hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary/45 focus-visible:outline-none"
           href={buildSignInHref()}
         >
           <RiLoginBoxLine aria-hidden="true" className="size-3.5" />
@@ -194,6 +194,8 @@ export function AppShell({ children }: AppShellProps) {
 
   return (
     <PublicPageContainer>
+      <CircuitField routeKey={pathname} />
+
       <a
         className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:border focus:border-primary/45 focus:bg-background focus:px-3 focus:py-2 focus:text-sm"
         href="#main-content"
@@ -222,7 +224,7 @@ export function AppShell({ children }: AppShellProps) {
                       "inline-flex w-full items-center justify-center gap-2 border px-3 py-1.5 text-sm font-medium transition-[border-color,background-color,color] duration-200 outline-none focus-visible:ring-2 focus-visible:ring-primary/45 sm:w-auto",
                       active
                         ? "border-primary/45 bg-primary/12 text-foreground"
-                        : "border-border/70 bg-background/72 text-muted-foreground hover:border-primary/35 hover:text-foreground",
+                        : "border-border bg-secondary/60 text-foreground/75 hover:border-primary/35 hover:bg-secondary hover:text-foreground",
                     )}
                     key={to}
                     to={to}
