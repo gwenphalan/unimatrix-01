@@ -188,7 +188,7 @@
       40px 40px,
       40px 40px,
       100% 100%;
-    background-attachment: scroll;
+    background-attachment: fixed;
   }
 
   /*
@@ -229,6 +229,22 @@
     .circuit-field-trace,
     .circuit-field-via {
       animation: none;
+    }
+
+    /*
+     * Pin both to their finished-animation state, not just "no animation" —
+     * the JS boot path already skips writing these inline styles when
+     * reduced motion is on from the start, but a preference flipped mid-
+     * session leaves boot's inline stroke-dashoffset/opacity: 0 in place,
+     * which `animation: none` alone doesn't clear.
+     */
+    .circuit-field-trace {
+      stroke-dasharray: none !important;
+      stroke-dashoffset: 0 !important;
+    }
+
+    .circuit-field-via {
+      opacity: 1;
     }
   }
 

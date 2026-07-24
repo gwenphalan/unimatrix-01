@@ -298,6 +298,12 @@ function buildTraceFromStart(
     }
   }
 
+  // Every direction is blocked: return a zero-length degenerate trace. Once
+  // densified this collapses to a single point, so it never has a "next"
+  // point to derive a tip axis from — mount/transition code simply skips
+  // positioning its tip rects, which stay at their default hidden opacity.
+  // That's intentional: a zero-length trace has no visible line, so no tip
+  // should show.
   return { id, points: [start, { ...start }], length: 0 };
 }
 
@@ -1292,8 +1298,24 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
           />
         ))}
         {traceIds.flatMap((id) => [
-          <rect height={6} key={`${id}-tail`} ref={tipRefCallback(`${id}-tail`)} width={6} x={-3} y={-3} />,
-          <rect height={6} key={`${id}-head`} ref={tipRefCallback(`${id}-head`)} width={6} x={-3} y={-3} />,
+          <rect
+            height={6}
+            key={`${id}-tail`}
+            ref={tipRefCallback(`${id}-tail`)}
+            style={{ opacity: 0 }}
+            width={6}
+            x={-3}
+            y={-3}
+          />,
+          <rect
+            height={6}
+            key={`${id}-head`}
+            ref={tipRefCallback(`${id}-head`)}
+            style={{ opacity: 0 }}
+            width={6}
+            x={-3}
+            y={-3}
+          />,
         ])}
         {intersectionSlotIds.map((key) => (
           <rect
