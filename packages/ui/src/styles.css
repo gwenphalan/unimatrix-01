@@ -252,53 +252,10 @@
     opacity: 0.55;
   }
 
-  .site-panel::after {
-    content: "";
-    position: absolute;
-    inset: 5px;
-    pointer-events: none;
-    --bracket: color-mix(in oklab, var(--primary) 90%, transparent);
-    background-image:
-      linear-gradient(90deg, var(--bracket) 1.5px, transparent 1.5px),
-      linear-gradient(0deg, var(--bracket) 1.5px, transparent 1.5px),
-      linear-gradient(90deg, var(--bracket) 1.5px, transparent 1.5px),
-      linear-gradient(0deg, var(--bracket) 1.5px, transparent 1.5px),
-      linear-gradient(90deg, var(--bracket) 1.5px, transparent 1.5px),
-      linear-gradient(0deg, var(--bracket) 1.5px, transparent 1.5px),
-      linear-gradient(90deg, var(--bracket) 1.5px, transparent 1.5px),
-      linear-gradient(0deg, var(--bracket) 1.5px, transparent 1.5px);
-    background-repeat: no-repeat;
-    background-size:
-      13px 2px,
-      2px 13px,
-      13px 2px,
-      2px 13px,
-      13px 2px,
-      2px 13px,
-      13px 2px,
-      2px 13px;
-    background-position:
-      top left,
-      top left,
-      top right,
-      top right,
-      bottom left,
-      bottom left,
-      bottom right,
-      bottom right;
-    opacity: 0.9;
-  }
-
   .site-panel-strong {
     box-shadow:
       0 0 0 1px color-mix(in oklab, var(--primary) 16%, transparent),
       0 26px 88px -78px color-mix(in oklab, var(--primary) 28%, transparent);
-  }
-
-  /* Clerk's own card padding/layout doesn't line up with the corner-bracket
-   * accent the way the site's own cards do, so skip it there specifically. */
-  .site-panel.cl-card::after {
-    content: none;
   }
 
   .site-shell::after {
