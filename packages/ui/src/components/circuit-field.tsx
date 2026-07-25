@@ -2,8 +2,8 @@ import * as React from "react";
 
 import { HEIGHT_JITTER_IGNORE_PX, RESIZE_SETTLE_MS, useDebouncedSize, useReducedMotion, useViewportSize } from "./circuit-field-hooks.js";
 import { useCircuitOccluderDelta, useCircuitOccluderRects } from "./circuit-occluder.js";
-import { type Point, type RoutePoint, densify, easeInOutCubic, hashString, pathData, polylineLength, recomputeCorners, snap } from "./grid-math.js";
-import { type Rect, OCCLUDER_FALLOFF_PX, estimateEffectiveArea } from "./occlusion.js";
+import { type Point, type RoutePoint, cellKey, densify, easeInOutCubic, hashString, pathData, polylineLength, recomputeCorners, snap } from "./grid-math.js";
+import { type Occluder, type Rect, OCCLUDER_FALLOFF_PX, estimateEffectiveArea } from "./occlusion.js";
 import {
   buildCellAxisMap,
   buildRoute,
@@ -658,7 +658,7 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
   // and writes SVG attributes directly, the same "outside the render cycle"
   // approach `runTick` already uses.
   const handleOccluderDelta = React.useCallback(
-    (dirtyRects: Rect[]) => {
+    (dirtyRects: Rect[], liveOccluders: Occluder[]) => {
       if (!debouncedSize) return;
       const now = performance.now();
 
@@ -681,6 +681,13 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
       if (candidateIds.length === 0) return;
 
       const retargets: { id: string; route: RoutePoint[]; lenO: number; lenN: number; toBody: RoutePoint[] }[] = [];
+      // Cells claimed by a candidate already resolved earlier in this same
+      // delta event — `liveBodyRef` for that candidate isn't mutated until
+      // later (the reduced-motion branch below, or `runTick` draining
+      // `transitionsRef` on a future frame), so without this a second
+      // candidate in the same event can't see the first one's new tip and
+      // could pick the same cell.
+      const pendingCells = new Set<string>();
 
       candidateIds.forEach((id) => {
         const liveBody = liveBodyRef.current.get(id);
@@ -688,8 +695,10 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
         if (!liveBody || !trace) return;
 
         const occupied = buildOccupiedFootprint(liveBodyRef.current, id);
-        const newTip = retargetTip(liveBody, occupied, occluders, debouncedSize.width, debouncedSize.height);
+        pendingCells.forEach((cell) => occupied.add(cell));
+        const newTip = retargetTip(liveBody, occupied, liveOccluders, debouncedSize.width, debouncedSize.height);
         if (!newTip) return;
+        pendingCells.add(cellKey(newTip));
 
         const sparsePoints = [...trace.points.slice(0, -1), newTip];
         const toBody = recomputeCorners(
@@ -808,7 +817,7 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
         rafActiveRef.current = requestAnimationFrame(runTick);
       }
     },
-    [applyIntersections, debouncedSize, occluders, runTick, setTipPosition, setViaItems, traceIds],
+    [applyIntersections, debouncedSize, runTick, setTipPosition, setViaItems, traceIds],
   );
 
   useCircuitOccluderDelta(handleOccluderDelta);

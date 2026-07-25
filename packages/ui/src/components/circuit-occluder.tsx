@@ -31,7 +31,7 @@ type OccluderRegistry = {
   unregister: (id: symbol) => void;
 };
 
-type DeltaListener = (dirtyRects: Rect[]) => void;
+type DeltaListener = (dirtyRects: Rect[], liveOccluders: Occluder[]) => void;
 type DeltaSubscribe = (listener: DeltaListener) => () => void;
 
 // A registrant only counts as "changed" for the scroll-delta path once an
@@ -144,8 +144,14 @@ export function CircuitOccluderProvider({ children }: { children: React.ReactNod
     const dirty = diffMeasurements(measuredRef.current, next);
     measuredRef.current = next;
     if (dirty.length > 0) {
+      // The freshly measured full set, not the stale `rects` state — the
+      // scroll path deliberately never commits `RectsContext` (see the
+      // provider doc comment above), so a delta listener that scores
+      // candidates against occluder geometry needs this snapshot instead of
+      // `useCircuitOccluderRects()`, which would still be pre-scroll.
+      const liveOccluders = Array.from(next.values());
       deltaListenersRef.current.forEach((listener) => {
-        listener(dirty);
+        listener(dirty, liveOccluders);
       });
     }
   }, []);
@@ -286,14 +292,14 @@ export function useCircuitOccluderRects(): Occluder[] {
  * `@unimatrix/ui/public`'s exported surface; `CircuitField` is the only
  * intended consumer.
  */
-export function useCircuitOccluderDelta(onDelta: (dirtyRects: Rect[]) => void): void {
+export function useCircuitOccluderDelta(onDelta: (dirtyRects: Rect[], liveOccluders: Occluder[]) => void): void {
   const subscribe = React.useContext(DeltaContext);
   const onDeltaRef = React.useRef(onDelta);
   onDeltaRef.current = onDelta;
 
   React.useEffect(() => {
-    return subscribe((dirtyRects) => {
-      onDeltaRef.current(dirtyRects);
+    return subscribe((dirtyRects, liveOccluders) => {
+      onDeltaRef.current(dirtyRects, liveOccluders);
     });
   }, [subscribe]);
 }
