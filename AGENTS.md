@@ -9,8 +9,8 @@
 
 ## Workspace
 - Monorepo: `apps/*` and `packages/*` from `pnpm-workspace.yaml`; root scripts fan out through Turbo
-- Live apps: `apps/web` (Vite + React + TanStack Router public site), `apps/api` (Fastify API), `apps/cube-trainer` (Vite + React + TanStack Router OLL/PLL algorithm trainer, no backend dependency), `apps/auth` (package `@unimatrix/auth-app`; Vite + React + TanStack Router central auth hub for `auth.unimatrix-01.dev`: sign-in/up and account settings)
-- Live packages: `packages/ui`, `packages/shared`, `packages/api-client`, `packages/content`, `packages/db`, `packages/auth` (shared Clerk auth + permission scheme), `packages/user-data` (per-user account/guest data store), `packages/config-typescript`, `packages/config-eslint`
+- Live apps: `apps/web`, `apps/api`, `apps/cube-trainer`, `apps/auth` (package `@unimatrix/auth-app`) — all Vite + React + TanStack Router except `apps/api` (Fastify); see Workspace Responsibilities for what each owns
+- Live packages: `packages/ui`, `packages/shared`, `packages/api-client`, `packages/content`, `packages/db`, `packages/auth`, `packages/user-data`, `packages/config-typescript`, `packages/config-eslint`
 - Live content: `content/home`, `content/projects`, `content/blog`
 - Repo-internal docs: `docs/`; infra/runtime helpers: `infra/scripts`, `infra/deployment`, `infra/docker`
 - Reserved, not live: `apps/workers`, `content/docs`, `content/notes`, future packages like `packages/bmd-parser`
@@ -31,20 +31,15 @@
 - `packages/user-data`: unified per-user store (settings as JSON documents, files as blobs) with an account adapter (via `@unimatrix/api-client`) and a browser-only IndexedDB guest adapter
 
 ## File-Scoped Commands
+Package names: `apps/web`→`@unimatrix/web`, `apps/api`→`@unimatrix/api`, `apps/cube-trainer`→`@unimatrix/cube-trainer`, `apps/auth`→`@unimatrix/auth-app`; packages use `@unimatrix/<dir-name>` (e.g. `packages/auth`→`@unimatrix/auth`).
+
 | Task | Command |
 | --- | --- |
 | Lint one file | `pnpm exec eslint path/to/file.ts` |
-| Web unit test file | `pnpm --filter @unimatrix/web exec vitest run path/to/test.tsx` |
-| API test file | `pnpm --filter @unimatrix/api exec node --import tsx --test path/to/test.ts` |
-| Package test file | `pnpm --filter <workspace> exec vitest run path/to/test.ts` |
-| Web typecheck | `pnpm --filter @unimatrix/web typecheck` |
-| API typecheck | `pnpm --filter @unimatrix/api typecheck` |
-| Cube Trainer test file | `pnpm --filter @unimatrix/cube-trainer exec vitest run path/to/test.ts` |
-| Cube Trainer typecheck | `pnpm --filter @unimatrix/cube-trainer typecheck` |
-| Auth app test file | `pnpm --filter @unimatrix/auth-app exec vitest run path/to/test.ts` |
-| Auth app typecheck | `pnpm --filter @unimatrix/auth-app typecheck` |
-| Auth package test/typecheck | `pnpm --filter @unimatrix/auth test` / `pnpm --filter @unimatrix/auth typecheck` |
-| User-data package test/typecheck | `pnpm --filter @unimatrix/user-data test` / `pnpm --filter @unimatrix/user-data typecheck` |
+| Test one file (all workspaces except api) | `pnpm --filter <package> exec vitest run path/to/test.ts` |
+| API test one file | `pnpm --filter @unimatrix/api exec node --import tsx --test path/to/test.ts` |
+| Typecheck a workspace | `pnpm --filter <package> typecheck` |
+| Whole-package test (auth, user-data) | `pnpm --filter <package> test` |
 
 ## Runtime And Bootstrap
 - `pnpm dev` starts only `@unimatrix/api` and `@unimatrix/web`; run `pnpm --filter @unimatrix/cube-trainer dev` (port 5173) and `pnpm --filter @unimatrix/auth-app dev` (port 5175) separately
@@ -88,16 +83,14 @@
 - Run the narrowest relevant checks for the files you changed
 - Use `pnpm check` as the normal pre-review gate
 - Use `pnpm verify` when changes span multiple workspaces or affect runtime/build behavior
-- Web-specific deeper checks: `pnpm --filter @unimatrix/web test:unit`, `pnpm --filter @unimatrix/web test:smoke`
-- Cube Trainer deeper checks: `pnpm --filter @unimatrix/cube-trainer test:unit`, `pnpm --filter @unimatrix/cube-trainer test:smoke`
+- Deeper checks (web, cube-trainer): `pnpm --filter <package> test:unit`, `pnpm --filter <package> test:smoke`
 - Auth app deeper checks: `pnpm --filter @unimatrix/auth-app test` (unit only), `pnpm --filter @unimatrix/auth-app build`
 - Auth / user-data package checks: `pnpm --filter @unimatrix/auth test`, `pnpm --filter @unimatrix/user-data test`
 
 ## Git And PR Rules
 - Keep PRs small and issue-aligned; avoid unrelated scaffolding or setup churn
-- Use one issue branch per scoped piece of work; prefer the Linear-suggested branch name when one exists
+- Use one issue branch per scoped piece of work
 - Use conventional commits
-- End PR bodies with `Closes LOC-<issue-key>` when applicable
 
 ## Commit Attribution
 AI commits MUST include attribution matching the acting AI agent or model identity in the `Co-Authored-By` header (e.g. `Co-Authored-By: Antigravity <noreply@google.com>` or `Co-Authored-By: Gemini <noreply@google.com>`).
