@@ -71,7 +71,12 @@ export function densify(points: Point[]): RoutePoint[] {
     const point = points[i] as Point;
     const dx = point.x - prev.x;
     const dy = point.y - prev.y;
-    const steps = Math.round((Math.abs(dx) + Math.abs(dy)) / GRID);
+    const distance = Math.abs(dx) + Math.abs(dy);
+    // A non-zero delta below half a GRID cell would otherwise round down to
+    // 0 steps, silently dropping `point` from the result and breaking
+    // continuity with whatever comes after it — only an exactly-zero delta
+    // should collapse to no steps.
+    const steps = distance === 0 ? 0 : Math.max(1, Math.round(distance / GRID));
 
     if (Math.abs(dx) > 0.6 && Math.abs(dy) > 0.6) {
       // Every caller is expected to pass axis-aligned segments; densify

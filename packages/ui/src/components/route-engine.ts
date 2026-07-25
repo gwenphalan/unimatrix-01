@@ -4,7 +4,9 @@ const MS_PER_STEP = 150;
 const MIN_TRAVEL_MS = 4000;
 const MAX_TRAVEL_MS = 8000;
 
-type CellAxisMap = Map<string, { h: Set<string>; v: Set<string> }>;
+export type CellAxisEntry = { h: Set<string>; v: Set<string> };
+export type CellAxisMap = Map<string, CellAxisEntry>;
+export type TraceBody = { id: string; points: Point[] };
 
 /**
  * Rasterizes every currently-visible trace body into grid cells tagged with
@@ -13,7 +15,7 @@ type CellAxisMap = Map<string, { h: Set<string>; v: Set<string> }>;
  * (suppressing a tip via where it'd sit in the middle of what reads as one
  * continuous straight line). O(total visible points); safe every frame.
  */
-export function buildCellAxisMap(bodies: { id: string; points: Point[] }[]): CellAxisMap {
+export function buildCellAxisMap(bodies: TraceBody[]): CellAxisMap {
   const cells: CellAxisMap = new Map();
 
   bodies.forEach(({ id, points }) => {

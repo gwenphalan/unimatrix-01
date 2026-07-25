@@ -91,7 +91,11 @@ export function buildStartPoints(
     }
 
     if (inKeepOut(point.x, point.y)) {
-      point = clampPoint({ x: snap(keepOut.x0 - GRID), y: point.y });
+      // Escape left of the keep-out first; on a narrow-enough viewport that
+      // still clamps back inside it (`keepOut.x0 <= GRID`), try the right
+      // side instead so the point doesn't land back over the keep-out area.
+      const left = clampPoint({ x: snap(keepOut.x0 - GRID), y: point.y });
+      point = inKeepOut(left.x, left.y) ? clampPoint({ x: snap(keepOut.x1 + GRID), y: point.y }) : left;
     }
 
     points.push(point);

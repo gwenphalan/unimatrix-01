@@ -184,8 +184,9 @@ Fill in briefly at the end of each session — what landed, what got deferred, w
 you. Keep entries short; this file is a resume point, not a changelog.
 
 - Session A: Done. Split into `grid-math.ts`, `grid-graph.ts`, `trace-generation.ts`,
-  `route-engine.ts`, `circuit-field-hooks.ts` (verbatim moves, zero React import on the five),
-  `circuit-field.tsx` down to component+JSX. Added `test/trace-generation.test.ts` (20 cases
+  `route-engine.ts` (verbatim moves, zero React import — the pure geometry/generation
+  modules), `circuit-field-hooks.ts` (verbatim move, does import React — it holds the
+  hooks), `circuit-field.tsx` down to component+JSX. Added `test/trace-generation.test.ts` (20 cases
   across 4 viewport/seed/count scenarios) covering all four Hard Invariants against
   `generateTraces`' real output — all pass. Boot animation: `targetTraces` memo now returns
   `{ traces, keepOut }`; per-trace boot delay is keep-out-center distance (normalized 0–500ms,
