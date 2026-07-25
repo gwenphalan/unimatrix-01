@@ -201,7 +201,6 @@
 
   .circuit-field-glow {
     filter: drop-shadow(0 0 2px color-mix(in oklab, var(--primary) 65%, transparent));
-    opacity: 0.55;
   }
 
   .circuit-field-trace {

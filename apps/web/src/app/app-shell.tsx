@@ -17,7 +17,7 @@ import {
 } from "@/features/content/site-content";
 import { PublicPageContainer, PublicSiteFooter } from "@/features/public-site/components";
 import { isAuthEnabled, loadWebRuntimeConfig } from "@/lib/config";
-import { CircuitField, cn } from "@unimatrix/ui/public";
+import { CircuitField, CircuitOccluderProvider, cn, useCircuitOccluder } from "@unimatrix/ui/public";
 
 const runtimeConfig = loadWebRuntimeConfig({
   VITE_API_BASE_URL: import.meta.env.VITE_API_BASE_URL,
@@ -126,12 +126,24 @@ function AuthHeaderAction() {
   );
 }
 
-export function AppShell({ children }: AppShellProps) {
+// `useCircuitOccluder` calls must live in a component rendered *inside*
+// `CircuitOccluderProvider`, not the component that creates the provider —
+// a component can't consume a context it renders as its own descendant.
+function AppShellContent({ children }: AppShellProps) {
   const headerRef = useRef<HTMLElement | null>(null);
+  const mainRef = useRef<HTMLElement | null>(null);
+  const condensedHeaderRef = useRef<HTMLDivElement | null>(null);
   const [isCondensed, setIsCondensed] = useState(false);
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
   });
+
+  useCircuitOccluder(headerRef);
+  useCircuitOccluder(mainRef);
+  // Only occlude while the condensed bar is actually visible — it's always
+  // mounted (opacity-toggled, not conditionally rendered), so an
+  // unconditional registration would occlude this strip even when hidden.
+  useCircuitOccluder(condensedHeaderRef, { enabled: isCondensed });
 
   useEffect(() => {
     const updateCollapsedState = () => {
@@ -254,7 +266,10 @@ export function AppShell({ children }: AppShellProps) {
         )}
       >
         <div className="mx-auto w-full max-w-[92rem] px-4 sm:px-6 lg:px-8 xl:px-10">
-          <div className="site-panel site-shell overflow-hidden border-primary/45 shadow-[0_0_0_1px_color-mix(in_oklab,var(--primary)_35%,transparent),0_18px_48px_-32px_color-mix(in_oklab,var(--primary)_35%,transparent)] px-3 py-2 lg:px-4 lg:py-2">
+          <div
+            className="site-panel site-shell overflow-hidden border-primary/45 shadow-[0_0_0_1px_color-mix(in_oklab,var(--primary)_35%,transparent),0_18px_48px_-32px_color-mix(in_oklab,var(--primary)_35%,transparent)] px-3 py-2 lg:px-4 lg:py-2"
+            ref={condensedHeaderRef}
+          >
             <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex items-center gap-2.5">
                 <Link aria-label="Unimatrix-01 home" to="/">
@@ -301,11 +316,19 @@ export function AppShell({ children }: AppShellProps) {
         </div>
       </div>
 
-      <main id="main-content" className="-mt-4 grid flex-1 gap-8 lg:-mt-5 lg:gap-10">
+      <main id="main-content" className="-mt-4 grid flex-1 gap-8 lg:-mt-5 lg:gap-10" ref={mainRef}>
         {children}
       </main>
 
       <PublicSiteFooter />
     </PublicPageContainer>
+  );
+}
+
+export function AppShell({ children }: AppShellProps) {
+  return (
+    <CircuitOccluderProvider>
+      <AppShellContent>{children}</AppShellContent>
+    </CircuitOccluderProvider>
   );
 }

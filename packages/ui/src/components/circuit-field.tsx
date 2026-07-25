@@ -1,7 +1,9 @@
 import * as React from "react";
 
 import { RESIZE_SETTLE_MS, useDebouncedSize, useReducedMotion, useViewportSize } from "./circuit-field-hooks.js";
+import { useCircuitOccluderRects } from "./circuit-occluder.js";
 import { type Point, type RoutePoint, densify, easeInOutCubic, hashString, pathData, recomputeCorners } from "./grid-math.js";
+import { estimateEffectiveArea } from "./occlusion.js";
 import {
   buildCellAxisMap,
   buildRoute,
@@ -10,17 +12,26 @@ import {
   sliceWindow,
   travelDuration,
 } from "./route-engine.js";
-import { type KeepOut, generateTraces } from "./trace-generation.js";
+import { type Trace, generateTraces } from "./trace-generation.js";
 
+const MIN_TRACE_COUNT = 14;
 const MIN_TRACE_COUNT_AREA_DIVISOR = 55000;
+// A traceCount recompute only commits if the desired value differs from the
+// currently-committed one by more than this band — otherwise small occluder
+// jitter (e.g. a header reflowing a couple px on font load) would thrash the
+// slot count on every measurement.
+const TRACE_COUNT_HYSTERESIS_RATIO = 0.1;
+const TRACE_COUNT_HYSTERESIS_MIN_STEP = 2;
 // Mirrors `circuit-draw`'s animation-duration in packages/ui/src/styles.css —
 // JS can't read a CSS animation-duration back out, so a via's boot delay
 // (computed from how far along the trace it sits) needs this value kept in
 // sync by hand if that keyframe's duration ever changes.
 const TRACE_DRAW_MS = 650;
-// Cap on the trace-to-trace boot stagger, matching the old index-based
-// `Math.min(i * 30, 500)` cap this replaces.
+// Cap on the trace-to-trace boot stagger.
 const BOOT_STAGGER_MAX_MS = 500;
+// Per-tree-depth-level boot delay step — replaces the old distance-from-
+// keep-out-center proxy now that generation produces a real spanning tree.
+const DEPTH_STAGGER_MS = 60;
 
 type ViaItem = {
   key: string;
@@ -51,40 +62,62 @@ export type CircuitFieldProps = {
   routeKey?: string;
 };
 
+function pointsEqual(a: readonly Point[], b: readonly Point[]): boolean {
+  if (a.length !== b.length) return false;
+  return a.every((point, i) => point.x === b[i]?.x && point.y === b[i]?.y);
+}
+
 /**
  * Animated, grid-aligned circuit-trace layer for `.grid-backdrop` pages.
  * Renders above the static CSS grid and below page content (fixed,
  * `z-index: -1`, so any unpositioned in-flow content still paints on top).
  *
- * A fixed number of trace "slots" is picked once from the first known
- * viewport size and kept alive for the component's whole lifetime. On the
- * very first mount, traces draw in with a staggered stroke animation (the
- * "boot" moment). On every subsequent `routeKey` change or settled resize,
- * each trace crawls — snake-style — from its old body to its new one: a
- * lattice route is built from the current body, through an L-shaped
- * connector corridor, to the target body, and a `requestAnimationFrame` loop
- * slides a fixed-arc-length window along that route each frame, writing the
- * SVG path/via attributes directly. Every frame's visible body is a
- * contiguous sub-path of an orthogonal lattice route, so it only ever moves
- * along grid lines — never diagonally — and never fully disappears; an
- * in-flight crawl retargets smoothly if interrupted by another change.
- * Skips the crawl (snaps immediately) under `prefers-reduced-motion`.
+ * Trace count reacts to *available* area (viewport size minus soft DOM
+ * occlusion, registered via `useCircuitOccluder`/`CircuitOccluderProvider`)
+ * rather than being frozen at mount. On the very first mount, traces draw in
+ * with a staggered stroke animation (the "boot" moment, ordered by each
+ * trace's depth in the generated spanning tree — see `trace-generation.ts`).
+ * The same boot treatment applies to any slot added later by a trace-count
+ * increase. On every `routeKey` change, settled resize, or occlusion change,
+ * each *already-live* trace crawls — snake-style — from its old body to its
+ * new one: a lattice route is built from the current body, through an
+ * L-shaped connector corridor, to the target body, and a
+ * `requestAnimationFrame` loop slides a fixed-arc-length window along that
+ * route each frame, writing the SVG path/via attributes directly. Every
+ * frame's visible body is a contiguous sub-path of an orthogonal lattice
+ * route, so it only ever moves along grid lines — never diagonally — and
+ * never fully disappears; an in-flight crawl retargets smoothly if
+ * interrupted by another change. A trace whose target geometry is unchanged
+ * since the last generation is skipped entirely (no transition, no DOM
+ * write) — occlusion-driven regeneration is expected to be small/frequent,
+ * so most traces on most updates are untouched. Skips the crawl (snaps
+ * immediately) under `prefers-reduced-motion`.
  */
 export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.Element | null {
   const size = useViewportSize();
   const debouncedSize = useDebouncedSize(size, RESIZE_SETTLE_MS);
   const reducedMotion = useReducedMotion();
+  const occluders = useCircuitOccluderRects();
 
   const reducedMotionRef = React.useRef(reducedMotion);
   React.useEffect(() => {
     reducedMotionRef.current = reducedMotion;
   }, [reducedMotion]);
 
-  const traceCountRef = React.useRef<number | null>(null);
-  if (traceCountRef.current === null && size) {
-    traceCountRef.current = Math.max(14, Math.round((size.width * size.height) / MIN_TRACE_COUNT_AREA_DIVISOR));
-  }
-  const traceCount = traceCountRef.current;
+  const [traceCount, setTraceCount] = React.useState<number | null>(null);
+
+  React.useEffect(() => {
+    if (!debouncedSize) return;
+
+    const effectiveArea = estimateEffectiveArea(debouncedSize.width, debouncedSize.height, occluders);
+    const desired = Math.max(MIN_TRACE_COUNT, Math.round(effectiveArea / MIN_TRACE_COUNT_AREA_DIVISOR));
+
+    setTraceCount((current) => {
+      if (current === null) return desired;
+      const band = Math.max(TRACE_COUNT_HYSTERESIS_MIN_STEP, Math.round(current * TRACE_COUNT_HYSTERESIS_RATIO));
+      return Math.abs(desired - current) > band ? desired : current;
+    });
+  }, [debouncedSize?.width, debouncedSize?.height, occluders]);
 
   const traceIds = React.useMemo(
     () => (traceCount === null ? [] : Array.from({ length: traceCount }, (_, i) => `t${i}`)),
@@ -95,7 +128,8 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
   const viaElRefs = React.useRef(new Map<string, SVGRectElement>());
   const viaItemIndexRef = React.useRef(new Map<string, ViaItem>());
   const tipElRefs = React.useRef(new Map<string, SVGRectElement>());
-  const liveBodyRef = React.useRef<RoutePoint[][] | null>(null);
+  const liveBodyRef = React.useRef(new Map<string, RoutePoint[]>());
+  const previousTracesRef = React.useRef(new Map<string, Trace>());
   const transitionsRef = React.useRef(new Map<string, TraceTransition>());
   const rafActiveRef = React.useRef<number | null>(null);
 
@@ -214,16 +248,11 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
   const targetTraces = React.useMemo(() => {
     if (!debouncedSize || traceCount === null) return null;
 
+    // Occluder rects feed weighting only, never the seed — a panel resize
+    // must not re-seed the whole field and blow away an in-flight crawl.
     const seed = hashString(`${routeKey}:${debouncedSize.width}x${debouncedSize.height}`);
-    const keepOut: KeepOut = {
-      x0: debouncedSize.width * 0.14,
-      y0: debouncedSize.height * 0.1,
-      x1: debouncedSize.width * 0.86,
-      y1: debouncedSize.height * 0.78,
-    };
-
-    return { traces: generateTraces(debouncedSize.width, debouncedSize.height, seed, keepOut, traceCount), keepOut };
-  }, [routeKey, debouncedSize?.width, debouncedSize?.height, traceCount]);
+    return generateTraces(debouncedSize.width, debouncedSize.height, seed, occluders, traceCount);
+  }, [routeKey, debouncedSize?.width, debouncedSize?.height, traceCount, occluders]);
 
   // The single shared rAF driving every in-flight transition. Reads
   // `transitionsRef` fresh each frame instead of closing over a fixed
@@ -236,22 +265,17 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
   // as it finishes, independent of any siblings still crawling.
   const runTick = React.useCallback(() => {
     const bodies = liveBodyRef.current;
-    if (!bodies) {
-      rafActiveRef.current = null;
-      return;
-    }
-
     const now = performance.now();
     const currentBodies: { id: string; points: RoutePoint[] }[] = [];
     const tipInfo: { id: string; end: "tail" | "head"; point: RoutePoint; axis: "h" | "v" }[] = [];
     const windowBounds = new Map<string, { tail: number; head: number }>();
     const finished: { id: string; toBody: RoutePoint[] }[] = [];
 
-    traceIds.forEach((id, index) => {
+    traceIds.forEach((id) => {
       const transition = transitionsRef.current.get(id);
 
       if (!transition) {
-        const points = bodies[index] ?? [];
+        const points = bodies.get(id) ?? [];
         currentBodies.push({ id, points });
 
         const tail = points[0];
@@ -270,7 +294,7 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
       const tailIndex = Math.max(0, headIndex - bodySpan);
       const window = sliceWindow(transition.route, tailIndex, headIndex);
 
-      bodies[index] = window;
+      bodies.set(id, window);
       currentBodies.push({ id, points: window });
 
       const el = pathElRefs.current.get(id);
@@ -284,7 +308,7 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
       if (head && headPrev) tipInfo.push({ id, end: "head", point: head, axis: headPrev.y === head.y ? "h" : "v" });
 
       if (t >= 1) {
-        bodies[index] = transition.toBody;
+        bodies.set(id, transition.toBody);
         transitionsRef.current.delete(id);
         finished.push({ id, toBody: transition.toBody });
       } else {
@@ -345,48 +369,82 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
     }
   }, [applyIntersections, setTipPosition, setViaItems, traceIds]);
 
+  // Handles a trace-count *shrink*: prunes stale entries for ids no longer
+  // in `traceIds` from every id-keyed structure, and stops the shared rAF
+  // loop if the only transitions left in flight belonged to removed ids
+  // (otherwise it would keep animating something nobody renders, forever).
+  // Declared before the main targetTraces effect (React runs layout effects
+  // in declaration order) so a count change is fully pruned before the boot/
+  // crawl effect below runs against the new `targetTraces`.
+  React.useLayoutEffect(() => {
+    const validIds = new Set(traceIds);
+
+    liveBodyRef.current.forEach((_body, id) => {
+      if (!validIds.has(id)) liveBodyRef.current.delete(id);
+    });
+    previousTracesRef.current.forEach((_trace, id) => {
+      if (!validIds.has(id)) previousTracesRef.current.delete(id);
+    });
+
+    let removedInFlight = false;
+    transitionsRef.current.forEach((_transition, id) => {
+      if (!validIds.has(id)) {
+        transitionsRef.current.delete(id);
+        removedInFlight = true;
+      }
+    });
+
+    if (removedInFlight && transitionsRef.current.size === 0 && rafActiveRef.current !== null) {
+      cancelAnimationFrame(rafActiveRef.current);
+      rafActiveRef.current = null;
+    }
+
+    const stale = Array.from(viaItemIndexRef.current.values()).some((item) => !validIds.has(item.traceId));
+    if (stale) {
+      setViaItems(Array.from(viaItemIndexRef.current.values()).filter((item) => validIds.has(item.traceId)));
+    }
+  }, [traceIds, setViaItems]);
+
   React.useLayoutEffect(() => {
     if (!targetTraces) return;
 
-    if (liveBodyRef.current === null) {
-      const bodies = targetTraces.traces.map((trace) => recomputeCorners(densify(trace.points)));
-      liveBodyRef.current = bodies;
+    const liveBodies = liveBodyRef.current;
+    const priorBodies = new Map(liveBodies);
+    const newTraces = targetTraces.traces.filter((trace) => !liveBodies.has(trace.id));
+    const existingTraces = targetTraces.traces.filter((trace) => {
+      if (!liveBodies.has(trace.id)) return false;
+      const previous = previousTracesRef.current.get(trace.id);
+      // A trace whose target geometry hasn't changed since the last
+      // generation is skipped entirely — no transition, no DOM write. Most
+      // traces on most occlusion-driven regenerations are unaffected, so
+      // this is what keeps visible churn roughly proportional to what
+      // actually changed rather than retargeting everything every time.
+      return !previous || !pointsEqual(previous.points, trace.points);
+    });
 
-      const cellAxisMap = buildCellAxisMap(
-        targetTraces.traces.map((trace, i) => ({ id: trace.id, points: bodies[i] as RoutePoint[] })),
-      );
+    previousTracesRef.current = new Map(targetTraces.traces.map((trace) => [trace.id, trace]));
 
-      // "Sequential board power-on": traces closer to the keep-out's center
-      // (the board's "chip") boot first, farther ones trail — a proxy for
-      // real dependency order until Session C's spanning tree exists. Each
-      // via's own delay then rides its trace's delay plus how far along the
-      // body it sits, so vias pop in sequence as the stroke-draw animation
-      // visually reaches them instead of all together.
-      const keepOutCenter = {
-        x: (targetTraces.keepOut.x0 + targetTraces.keepOut.x1) / 2,
-        y: (targetTraces.keepOut.y0 + targetTraces.keepOut.y1) / 2,
-      };
-      const startDistances = targetTraces.traces.map((trace) => {
-        const start = trace.points[0] as Point;
-        return Math.hypot(start.x - keepOutCenter.x, start.y - keepOutCenter.y);
-      });
-      const minDistance = Math.min(...startDistances);
-      const maxDistance = Math.max(...startDistances);
-      const traceDelays = startDistances.map((distance) =>
-        maxDistance > minDistance
-          ? Math.round(((distance - minDistance) / (maxDistance - minDistance)) * BOOT_STAGGER_MAX_MS)
-          : 0,
-      );
+    // --- Boot pass: brand-new slots (first mount, or growth from a
+    // reactive trace-count increase) draw in with the staggered stroke
+    // animation, ordered by their depth in the generated spanning tree.
+    if (newTraces.length > 0) {
+      const newBodies = new Map(newTraces.map((trace) => [trace.id, recomputeCorners(densify(trace.points))]));
+      newBodies.forEach((body, id) => liveBodies.set(id, body));
 
-      const items: ViaItem[] = [];
-      targetTraces.traces.forEach((trace, i) => {
-        const body = bodies[i] as RoutePoint[];
-        const traceDelay = traceDelays[i] as number;
+      const cellAxisMap = buildCellAxisMap([
+        ...newTraces.map((trace) => ({ id: trace.id, points: newBodies.get(trace.id) as RoutePoint[] })),
+        ...existingTraces.map((trace) => ({ id: trace.id, points: priorBodies.get(trace.id) as RoutePoint[] })),
+      ]);
+
+      const bootItems: ViaItem[] = [];
+      newTraces.forEach((trace) => {
+        const body = newBodies.get(trace.id) as RoutePoint[];
+        const traceDelay = Math.min(trace.depth * DEPTH_STAGGER_MS, BOOT_STAGGER_MAX_MS);
 
         body.forEach((point, idx) => {
           if (!point.corner || idx === 0 || idx === body.length - 1) return;
           const arcFraction = body.length > 1 ? idx / (body.length - 1) : 0;
-          items.push({
+          bootItems.push({
             key: `${trace.id}-${idx}`,
             traceId: trace.id,
             index: idx,
@@ -410,14 +468,9 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
           const axis: "h" | "v" = beforeLast.y === last.y ? "h" : "v";
           setTipPosition(trace.id, "head", last, !isColinearWithOther(cellAxisMap, trace.id, last, axis));
         }
-      });
-      setViaItems(items);
-      applyIntersections(findIntersections(cellAxisMap));
 
-      targetTraces.traces.forEach((trace, i) => {
         const el = pathElRefs.current.get(trace.id);
-        const body = bodies[i];
-        if (!el || !body) return;
+        if (!el) return;
 
         el.setAttribute("d", pathData(body));
 
@@ -429,22 +482,28 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
           el.classList.add("circuit-field-trace");
           el.style.strokeDasharray = String(dashLength);
           el.style.strokeDashoffset = String(dashLength);
-          el.style.animationDelay = `${traceDelays[i]}ms`;
+          el.style.animationDelay = `${traceDelay}ms`;
         }
       });
 
-      return;
+      setViaItems([...Array.from(viaItemIndexRef.current.values()), ...bootItems]);
+      applyIntersections(findIntersections(cellAxisMap));
     }
 
-    pathElRefs.current.forEach((el) => {
-      el.classList.remove("circuit-field-trace");
-      el.style.strokeDasharray = "none";
-      el.style.strokeDashoffset = "0";
+    // --- Crawl pass: already-live traces whose target geometry changed.
+    if (existingTraces.length === 0) return;
+
+    existingTraces.forEach((trace) => {
+      const el = pathElRefs.current.get(trace.id);
+      if (el) {
+        el.classList.remove("circuit-field-trace");
+        el.style.strokeDasharray = "none";
+        el.style.strokeDashoffset = "0";
+      }
     });
 
-    const fromBodies = liveBodyRef.current;
-    const transitions = targetTraces.traces.map((trace, i) => {
-      const from = fromBodies[i] ?? recomputeCorners(densify(trace.points));
+    const transitions = existingTraces.map((trace) => {
+      const from = liveBodies.get(trace.id) ?? recomputeCorners(densify(trace.points));
       const to = recomputeCorners(densify(trace.points));
       const route = buildRoute(from, to);
 
@@ -452,13 +511,15 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
     });
 
     if (reducedMotionRef.current) {
-      transitionsRef.current.clear();
-      if (rafActiveRef.current !== null) {
+      transitions.forEach((transition) => {
+        transitionsRef.current.delete(transition.id);
+        liveBodies.set(transition.id, transition.toBody);
+      });
+
+      if (rafActiveRef.current !== null && transitionsRef.current.size === 0) {
         cancelAnimationFrame(rafActiveRef.current);
         rafActiveRef.current = null;
       }
-
-      liveBodyRef.current = transitions.map((transition) => transition.toBody);
 
       const cellAxisMap = buildCellAxisMap(
         transitions.map((transition) => ({ id: transition.id, points: transition.toBody })),
@@ -496,7 +557,11 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
           setTipPosition(transition.id, "head", last, !isColinearWithOther(cellAxisMap, transition.id, last, axis));
         }
       });
-      setViaItems(items);
+
+      const untouched = Array.from(viaItemIndexRef.current.values()).filter(
+        (item) => !existingTraces.some((trace) => trace.id === item.traceId),
+      );
+      setViaItems([...untouched, ...items]);
       applyIntersections(findIntersections(cellAxisMap));
 
       return;
@@ -506,11 +571,11 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
       transitions.map((transition) => ({ id: transition.id, points: transition.route.slice(0, transition.lenO) })),
     );
 
-    const items: ViaItem[] = [];
+    const crawlItems: ViaItem[] = [];
     transitions.forEach((transition) => {
       transition.route.forEach((point, idx) => {
         if (!point.corner || idx === 0 || idx === transition.route.length - 1) return;
-        items.push({
+        crawlItems.push({
           key: `${transition.id}-${idx}`,
           traceId: transition.id,
           index: idx,
@@ -545,12 +610,16 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
         );
       }
     });
-    setViaItems(items);
+
+    const untouched = Array.from(viaItemIndexRef.current.values()).filter(
+      (item) => !existingTraces.some((trace) => trace.id === item.traceId),
+    );
+    setViaItems([...untouched, ...crawlItems]);
 
     // Seed/replace each trace's transition in place — an id already mid-crawl
     // keeps its slot overwritten (retargeting from its live in-flight body,
-    // read back via `liveBodyRef.current[i]` above), everyone else gets a
-    // fresh one. The shared loop below is started only if it isn't already
+    // read back via `liveBodies.get(id)` above), everyone else gets a fresh
+    // one. The shared loop below is started only if it isn't already
     // running; it drains whichever ids are in the map each frame, so this
     // never needs to cancel/restart transitions for ids that aren't changing.
     const startTime = performance.now();
@@ -570,7 +639,7 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
     }
     // Only the target trace identity should retrigger this effect — the
     // refs and callbacks it closes over are stable across renders.
-  }, [runTick, targetTraces]);
+  }, [applyIntersections, runTick, setTipPosition, setViaItems, targetTraces]);
 
   React.useEffect(
     () => () => {
@@ -594,7 +663,7 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
       <g
         className="circuit-field-glow"
         fill="none"
-        stroke="var(--primary)"
+        stroke="color-mix(in oklab, var(--primary) 60%, var(--background))"
         strokeLinecap="square"
         strokeWidth={1.5}
       >
@@ -602,7 +671,7 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
           <path key={id} ref={pathRefCallbacks.get(id)} />
         ))}
       </g>
-      <g className="circuit-field-glow" fill="var(--primary)">
+      <g className="circuit-field-glow" fill="color-mix(in oklab, var(--primary) 60%, var(--background))">
         {viaItems.map((item) => (
           <rect
             className={item.boot ? "circuit-field-via" : undefined}

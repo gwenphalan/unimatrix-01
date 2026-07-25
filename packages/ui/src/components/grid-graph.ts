@@ -48,6 +48,21 @@ export class GridGraph {
     return copy;
   }
 
+  /** Test-support only: true if `x` and `y` have been unioned into the same
+   * component (production code no longer needs this — generation is acyclic
+   * by construction, see `trace-generation.ts`). */
+  sameComponent(x: string, y: string): boolean {
+    return this.find(x) === this.find(y);
+  }
+
+  /** Test-support only: number of distinct components across every point
+   * this graph has ever seen. */
+  componentCount(): number {
+    const roots = new Set<string>();
+    for (const key of this.parent.keys()) roots.add(this.find(key));
+    return roots.size;
+  }
+
   /** Adopts another graph's edges (used to commit a validated trial clone). */
   adopt(other: GridGraph): void {
     this.parent = other.parent;
