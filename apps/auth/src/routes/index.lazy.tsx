@@ -1,7 +1,8 @@
 import { Link, Navigate, createLazyFileRoute } from "@tanstack/react-router";
+import { useRef } from "react";
 
 import { SignedIn, SignedOut } from "@unimatrix/auth/react";
-import { Button, Card } from "@unimatrix/ui/public";
+import { Button, Card, useCircuitOccluder } from "@unimatrix/ui/public";
 
 export const Route = createLazyFileRoute("/")({
   component: IndexRoute,
@@ -24,8 +25,11 @@ function IndexRoute() {
 }
 
 function WelcomeCard() {
+  const ref = useRef<HTMLDivElement | null>(null);
+  useCircuitOccluder(ref);
+
   return (
-    <Card className="w-full max-w-md px-6 py-8">
+    <Card className="w-full max-w-md px-6 py-8" ref={ref}>
       <div className="space-y-5">
         <h1 className="text-2xl leading-tight font-medium tracking-[-0.05em] text-foreground">
           Unimatrix Accounts

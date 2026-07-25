@@ -3,7 +3,7 @@ import * as React from "react";
 import { HEIGHT_JITTER_IGNORE_PX, RESIZE_SETTLE_MS, useDebouncedSize, useReducedMotion, useViewportSize } from "./circuit-field-hooks.js";
 import { useCircuitOccluderDelta, useCircuitOccluderRects } from "./circuit-occluder.js";
 import { type Point, type RoutePoint, cellKey, densify, easeInOutCubic, hashString, pathData, polylineLength, recomputeCorners, snap } from "./grid-math.js";
-import { type Occluder, type Rect, OCCLUDER_FALLOFF_PX, estimateEffectiveArea } from "./occlusion.js";
+import { type Occluder, type Rect, OCCLUDER_AFFECT_MARGIN_PX, estimateEffectiveArea } from "./occlusion.js";
 import {
   buildCellAxisMap,
   buildRoute,
@@ -669,7 +669,7 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
         if (last) tips.push({ id, point: last });
       });
 
-      const candidateIds = findAffectedTraceIds(tips, dirtyRects, OCCLUDER_FALLOFF_PX)
+      const candidateIds = findAffectedTraceIds(tips, dirtyRects, OCCLUDER_AFFECT_MARGIN_PX)
         // A trace already mid-crawl has a `liveBodyRef` entry that's a
         // `sliceWindow(...)` partial window (old body + connector + new
         // body) — retargeting off that would truncate it and abandon its

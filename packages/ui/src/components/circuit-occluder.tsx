@@ -5,18 +5,18 @@ import type { Occluder, Rect } from "./occlusion.js";
 
 export type RegistrantOptions = {
   /**
-   * Caps how much of the registrant's real height counts as occluder. A
-   * scroll-tall container (e.g. an in-flow `<main>` on a window-scrolling
-   * page) has a `getBoundingClientRect()` height equal to its full content,
-   * which for most pages exceeds one viewport — even freshly re-measured on
-   * every scroll frame, an uncapped rect like that blankets the entire
-   * viewport for most of the scroll range (`occlusionWeightAt`'s min-combine
-   * treats "anywhere inside a rect" as one flat floor regardless of depth),
-   * leaving nothing for scroll-driven retargeting to react to. Capping the
-   * registered height keeps the occluder's top edge tracking the real DOM
-   * (still moves with scroll) while letting its bottom edge open up once
-   * you've scrolled past the cap — a deliberate, documented departure from
-   * "occluder rect == literal DOM bounds" for tall scrolling containers.
+   * Caps how much of the registrant's real height counts as occluder. Most
+   * registrants (cards, panels, headers, footers) are already self-bounded
+   * to their own real height and never need this. It exists for a content
+   * panel taller than a viewport (e.g. a long markdown article) — an
+   * uncapped rect like that blankets the entire viewport for most of the
+   * scroll range (`occlusionWeightAt`'s min-combine treats "anywhere inside
+   * a rect" as one flat floor regardless of depth), leaving nothing for
+   * scroll-driven retargeting to react to. Capping the registered height
+   * keeps the occluder's top edge tracking the real DOM (still moves with
+   * scroll) while letting its bottom edge open up once you've scrolled past
+   * the cap — a deliberate, documented departure from "occluder rect ==
+   * literal DOM bounds" for tall panels.
    */
   maxHeightPx?: number;
 };
@@ -41,10 +41,10 @@ type DeltaSubscribe = (listener: DeltaListener) => () => void;
 // materially different occlusion-weight zone.
 const OCCLUDER_SCROLL_DELTA_PX = GRID;
 
-// Suggested `maxHeightPx` for a scroll-tall in-flow container (e.g. an
-// app-shell's `<main>` on a window-scrolling page) — generous vs typical
-// viewport heights; needs a real-browser visual pass to tune further.
-export const MAIN_OCCLUDER_MAX_HEIGHT_PX = 900;
+// Suggested `maxHeightPx` for a content panel taller than a viewport (e.g. a
+// long markdown article) — generous vs typical viewport heights; needs a
+// real-browser visual pass to tune further.
+export const TALL_OCCLUDER_MAX_HEIGHT_PX = 900;
 
 const RegistryContext = React.createContext<OccluderRegistry | null>(null);
 const RectsContext = React.createContext<Occluder[]>([]);
@@ -64,6 +64,18 @@ function measureRegistrants(targets: Map<symbol, Registrant>): Map<symbol, Occlu
   });
 
   return measured;
+}
+
+function measurementsEqual(a: Map<symbol, Occluder>, b: Map<symbol, Occluder>): boolean {
+  if (a.size !== b.size) return false;
+
+  for (const [id, rect] of a) {
+    const other = b.get(id);
+    if (!other) return false;
+    if (rect.x0 !== other.x0 || rect.y0 !== other.y0 || rect.x1 !== other.x1 || rect.y1 !== other.y1) return false;
+  }
+
+  return true;
 }
 
 function rectChanged(a: Rect, b: Rect): boolean {
@@ -136,8 +148,17 @@ export function CircuitOccluderProvider({ children }: { children: React.ReactNod
 
     if (structuralPendingRef.current) {
       structuralPendingRef.current = false;
+      // Skip the commit when this structural pass measured to the same
+      // rects as last time — e.g. a card-dense route with several
+      // independently-async registrants (a per-card live-status badge
+      // resolving at its own time) each trigger their own structural flush,
+      // but most of those passes measure identically to what's already
+      // committed. Suppressing the no-op commit avoids a needless
+      // `targetTraces` recompute (a real spanning-tree rebuild) per
+      // registrant instead of per actual layout change.
+      const unchanged = measurementsEqual(measuredRef.current, next);
       measuredRef.current = next;
-      setRects(Array.from(next.values()));
+      if (!unchanged) setRects(Array.from(next.values()));
       return;
     }
 

@@ -1,9 +1,9 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 import type { AlgorithmCase, AlgorithmSetId } from "@/features/algorithms/types";
 import { LastLayerDiagramView } from "@/features/cube/components/last-layer-diagram-view";
 import { useAlgorithmTrainer } from "@/features/trainer/use-algorithm-trainer";
-import { Card, Kbd } from "@unimatrix/ui/public";
+import { Card, Kbd, useCircuitOccluder } from "@unimatrix/ui/public";
 
 export function TrainerPanel({
   cases,
@@ -15,6 +15,8 @@ export function TrainerPanel({
   setId: AlgorithmSetId;
 }) {
   const { currentCase, diagram, next, setupMoves } = useAlgorithmTrainer(setId, cases);
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  useCircuitOccluder(panelRef);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -30,7 +32,7 @@ export function TrainerPanel({
   }, [next]);
 
   return (
-    <Card className="site-panel site-panel-strong flex min-h-96 flex-col items-center justify-center gap-6 px-6 py-10 text-center">
+    <Card className="site-panel site-panel-strong flex min-h-96 flex-col items-center justify-center gap-6 px-6 py-10 text-center" ref={panelRef}>
       {currentCase && diagram ? (
         <>
           <LastLayerDiagramView

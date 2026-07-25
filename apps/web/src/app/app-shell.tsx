@@ -20,7 +20,6 @@ import { isAuthEnabled, loadWebRuntimeConfig } from "@/lib/config";
 import {
   CircuitField,
   CircuitOccluderProvider,
-  MAIN_OCCLUDER_MAX_HEIGHT_PX,
   cn,
   useCircuitOccluder,
 } from "@unimatrix/ui/public";
@@ -137,7 +136,6 @@ function AuthHeaderAction() {
 // a component can't consume a context it renders as its own descendant.
 function AppShellContent({ children }: AppShellProps) {
   const headerRef = useRef<HTMLElement | null>(null);
-  const mainRef = useRef<HTMLElement | null>(null);
   const condensedHeaderRef = useRef<HTMLDivElement | null>(null);
   const [isCondensed, setIsCondensed] = useState(false);
   const pathname = useRouterState({
@@ -145,11 +143,13 @@ function AppShellContent({ children }: AppShellProps) {
   });
 
   useCircuitOccluder(headerRef);
-  // `main` is scroll-tall (full page content, not just viewport height) —
-  // capped so its registered occluder tracks scroll position without
-  // blanketing the entire viewport for most of the scroll range. See
-  // `MAIN_OCCLUDER_MAX_HEIGHT_PX`'s doc comment.
-  useCircuitOccluder(mainRef, { maxHeightPx: MAIN_OCCLUDER_MAX_HEIGHT_PX });
+  // `main` itself is no longer registered — it's a window-scrolling
+  // container spanning full page content, which would blanket most of the
+  // viewport at a flat weight regardless of what's actually on the page.
+  // Negative-space routing instead comes from registering the real
+  // rectangular content blocks inside it (cards, article panels, the
+  // footer) — see `PublicSiteFooter`/`PublicLinkedSurface` and the
+  // route-level article panels.
   // Only occlude while the condensed bar is actually visible — it's always
   // mounted (opacity-toggled, not conditionally rendered), so an
   // unconditional registration would occlude this strip even when hidden.
@@ -326,7 +326,7 @@ function AppShellContent({ children }: AppShellProps) {
         </div>
       </div>
 
-      <main id="main-content" className="-mt-4 grid flex-1 gap-8 lg:-mt-5 lg:gap-10" ref={mainRef}>
+      <main id="main-content" className="-mt-4 grid flex-1 gap-8 lg:-mt-5 lg:gap-10">
         {children}
       </main>
 

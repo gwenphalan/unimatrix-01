@@ -13,15 +13,12 @@ type AppShellProps = {
  * shell does nothing but center that content on a full-height dark page.
  *
  * Wrapped in `CircuitOccluderProvider` for consistency with the other two
- * shells, but registers zero occluders: the outer div here is near-full-
- * viewport-height even though the visible content is a small centered card,
- * and only 2 of 5 routes (`index`, the 404 boundary) have a local `Card` ref
- * available at all — `sign-in`/`sign-up`/`account` render Clerk's hosted
- * widgets directly with no local wrapper. Registering only the 2 available
- * routes would make trace density visibly differ navigating between routes
- * that look nearly identical, which reads as more broken than uniformly
- * having none. Trace count here still reacts to viewport size, just not to
- * DOM occlusion.
+ * shells. All 5 routes register an occluder for their content: `index` and
+ * the 404 boundary register their local `Card` ref directly, while
+ * `sign-in`/`sign-up`/`account` render Clerk's hosted widgets (which don't
+ * forward a DOM ref) inside a minimal wrapper `div` that shrink-wraps the
+ * widget and carries the ref instead. Route components render below this
+ * provider, so they need no `AppShellContent` split.
  */
 export function AppShell({ children }: AppShellProps) {
   const pathname = useRouterState({

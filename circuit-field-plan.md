@@ -201,7 +201,7 @@ Session C (highest regression risk).
   reasoning above — cube-trainer's `mainRef` stays uncapped/unchanged, auth registers nothing).
   **Recommend a real mobile-device or non-automated-browser check before merging**, since that's
   the only way to actually observe the rAF-gated retarget fire.
-- [ ] Commit, PR.
+- [x] Commit, PR.
 
 ### Design intent clarification (user, post-Session-D — read before Session D.5)
 
@@ -224,29 +224,35 @@ at the time, made without this broader negative-space goal in view.
 
 ### Session D.5 — Broaden occlusion to real rectangular content blocks (negative-space routing)
 
-Not started. Scope, informed by the clarification above:
+Done (implementation + automated checks). See Session Log entry below for what shipped, the two
+blocking findings a planning pass caught before writing code, and the live-browser visual gap.
 
-- [ ] Identify the actual candidate registration points per app: web's project/blog cards on
+- [x] Identify the actual candidate registration points per app: web's project/blog cards on
   the home/list routes, content cards on detail routes, the footer; auth's sign-in/sign-up
   `Card`; cube-trainer's drill/learn panels. Prefer registering existing layout wrapper elements
   already present in each route's JSX (reuse refs the component tree can cheaply expose) over
   inventing new wrapper divs — same constraint Session C already followed for header/main.
-- [ ] Revisit auth specifically: Session C's call to register zero occluders there because "only
+- [x] Revisit auth specifically: Session C's call to register zero occluders there because "only
   2 of 5 routes have an accessible Card ref" is the thing being overridden — either get a ref on
   the Card in the other 3 routes too, or accept a partial rollout there if some routes genuinely
   have no single wrappable rectangle, and say so explicitly rather than silently reverting to
   zero coverage.
-- [ ] Decide whether `useCircuitOccluder` needs to support many more simultaneous registrants
+- [x] Decide whether `useCircuitOccluder` needs to support many more simultaneous registrants
   cheaply (it already batches via one shared `ResizeObserver` + rAF, so this is likely fine, but
   confirm cost doesn't scale badly once a route has, say, 10+ registered cards instead of 2-3
   containers).
-- [ ] `maxHeightPx` (Session D) may no longer be the primary tool once occluders are
+- [x] `maxHeightPx` (Session D) may no longer be the primary tool once occluders are
   individually-sized real content blocks instead of one tall scrolling container — a card is
   already bounded to its own real height. Revisit whether the cap is still needed for anything
   (e.g. a long single-column list wrapper) once per-card registration exists.
-- [ ] Validate visually: on a card-dense route (e.g. the projects/blog list), confirm circuits
+- [x] Validate visually: on a card-dense route (e.g. the projects/blog list), confirm circuits
   visibly route through the gaps between cards rather than just avoiding one big content block.
-- [ ] Commit, PR.
+  Confirmed live via the Chrome extension on web (`/`, `/projects`, `/about`, a project detail
+  route), cube-trainer (`/`, `/learn`), and auth (`/`, `/sign-in`) — no console errors on any
+  route. Caught and fixed one real bug live (see Session Log): the spanning tree's root always
+  seeded from the canvas's geometric-center cell regardless of occlusion, so it visibly sat under
+  whatever card/panel happened to be centered on the page.
+- [x] Commit, PR.
 
 ### Session E — Idle packets + idle line-shift + capability gating
 - [ ] Idle "bits of information": build a cell→neighbor adjacency map once per settle (not
@@ -284,13 +290,16 @@ Not started. Scope, informed by the clarification above:
   translucent panels at reduced opacity rather than being hard-excluded. Simplifies
   `KeepOut[]` to a density-weight field rather than binary in/out predicates — revisit
   `inKeepOut` naming/shape in `buildStartPoints`/`buildTraceFromStart` accordingly.
-- **Occlusion scope (Session C, superseded post-Session-D — see Design intent clarification
-  above and Session D.5):** Session C deliberately registered only header/main (web,
-  cube-trainer) and zero occluders (auth), reasoning that per-card registration on auth would
-  make density visibly differ between near-identical routes. The actual goal is circuits routed
-  through negative space around real rectangular content (cards, panels, footer, nav), not just
-  two or three broad containers — Session D.5 broadens registration accordingly; the "soft
-  everywhere" rule itself (immediately above) is unaffected, only *what* gets registered changes.
+- **Occlusion scope (Session C, resolved by Session D.5 — see Design intent clarification
+  above):** Session C deliberately registered only header/main (web, cube-trainer) and zero
+  occluders (auth), reasoning that per-card registration on auth would make density visibly
+  differ between near-identical routes. Session D.5 resolved this: the actual goal is circuits
+  routed through negative space around real rectangular content (cards, panels, footer, nav), not
+  just two or three broad containers. All 5 auth routes now register (a direct `Card` ref for
+  `index`/404, a minimal wrapper `div` around each Clerk widget for `sign-in`/`sign-up`/`account`,
+  since Clerk's hosted components don't forward a ref); `mainRef` was removed entirely from web
+  and cube-trainer in favor of per-content-block registration. The "soft everywhere" rule itself
+  (immediately above) is unaffected, only *what* gets registered changes.
 - **Mobile/low-power fallback (Session E):** static traces (one frozen frame, no rAF) +
   CSS-only glow pulse on the stroke (keyframe, not JS-driven) so it doesn't read as fully
   dead. No trace-count reduction beyond what the normal density/occlusion logic already gives
@@ -462,4 +471,83 @@ you. Keep entries short; this file is a resume point, not a changelog.
   specific live-browser firing. Flagging this gap explicitly rather than claiming full visual
   confirmation: **a real mobile device or a non-automated browser check is recommended before
   merging**, specifically to watch a trace actually retarget near `mainRef`'s capped edge.
+- Session D.5: Done. Implemented per a Planner-agent (opus) plan reviewed before writing code.
+  `mainRef` registration removed from all three shells (web, cube-trainer) — a window-scrolling
+  container spanning full page content blankets most of the viewport at a flat weight regardless
+  of what's on the page, which made per-card registration a no-op underneath it. Registered real
+  content blocks instead: web's `PublicSiteFooter` footer and `PublicLinkedSurface`'s `Card` (one
+  funnel covering every project/blog list card site-wide), both `about` route panels, and the
+  project/blog detail article panels (capped, since an article can run taller than a viewport) plus
+  their not-found panels; cube-trainer's learn/trainer panels, the two home-route mode tiles (via a
+  new `ModeTile` component — a hook can't be called per `.map()` iteration), and the learn/drill
+  case-group sections (registering the group wrapper, not each `CasePreviewCard` — 50+ registrants
+  would blanket uniformly at any reasonable falloff and buy nothing); auth's `WelcomeCard` and the
+  404 boundary `Card` directly, plus a minimal wrapper `div` around each of `sign-in`/`sign-up`/
+  `account`'s Clerk widget (Clerk's hosted components don't forward a DOM ref) — all 5 auth routes
+  now register, superseding Session C's "2 of 5" zero-coverage call. Split `OCCLUDER_FALLOFF_PX`
+  (retuned to `GRID * 1.5`, tunable) from a new `OCCLUDER_AFFECT_MARGIN_PX` (pinned at the old
+  `GRID * 4`) specifically so retuning the visual falloff could never shrink Session D's
+  scroll-retarget trigger margin — the two were reading as the same constant purely by
+  coincidence, not because they needed to move together. Added a value-equality guard to
+  `CircuitOccluderProvider`'s structural `flush()`: with ~15 registrants on a card-dense route,
+  independently-async ones (e.g. `ProjectStatusBadge`'s per-card live-status query resolving on
+  its own schedule) would otherwise each trigger their own full `targetTraces` recompute even when
+  nothing actually moved; a structural pass whose measurement is unchanged from last time now
+  skips the commit. Renamed `MAIN_OCCLUDER_MAX_HEIGHT_PX` to `TALL_OCCLUDER_MAX_HEIGHT_PX` since
+  its only remaining use is web's long-article panels, not an app-shell `<main>`.
+  Live-browser validation (Chrome extension, dev servers for all 3 apps) caught two real bugs
+  beyond the plan's own scope, both fixed and covered by the existing invariant/structural test
+  suites (no exact-output snapshots exist, only structural assertions, so neither change required
+  new test scaffolding): (1) **user-reported** — the spanning tree's root (branch 0's unconstrained
+  walk start) always seeded from the single cell nearest the canvas's *geometric* center
+  (`assignTargetCells`), with zero regard for occlusion; once occlusion covered real centered
+  content (a card, a Clerk widget), the root visibly sat under it on every load. Fixed by scoring
+  every candidate cell's center against `occlusionWeightAt` and picking the least-occluded as root,
+  falling back to nearest-canvas-center on ties — which is every cell, unchanged, whenever nothing
+  is registered, so pages with no occluders produce byte-identical root placement to before. The
+  rest of the cells now sort by distance from the *actual* root rather than from the abstract page
+  center, which is arguably more correct for the boot-animation depth ordering too (Session A's
+  "radiate outward" intent literally means outward from the root). (2) **user-reported** —
+  connecting segments between an already-placed anchor and a new target pad could cut straight
+  across a card's interior even though `pickTargetPoint` had kept the target *endpoint* itself
+  outside it: `attachRoute`'s elbow-candidate selection checked only for collision against other
+  traces' `footprint`, never against occlusion, so whichever of the two elbow orientations
+  (horizontal-then-vertical vs. the reverse) was tried and found collision-free first — regardless
+  of how much of it crossed occluded ground — won automatically. Fixed by scoring both
+  collision-free candidates by summed `1 - occlusionWeightAt(...)` along their densified points and
+  keeping the lower-cost one; still soft (a hard reject was never the goal, and the BFS corridor
+  fallback for when both elbows collide with existing footprint remains occlusion-unaware — flagged
+  as a known remaining gap, not fixed this session since it's the rarer path). Both fixes are pure
+  weighting/selection changes with no effect on the acyclic-construction guarantee or the Hard
+  Invariants; `test/trace-generation.test.ts`'s structural assertions (axis-aligned, on-lattice,
+  single connected component, edges == vertices − 1) passed unmodified both before and after.
+  `packages/ui`: `pnpm exec eslint`, `pnpm --filter @unimatrix/ui typecheck`, and
+  `vitest run test/circuit-occluder.test.tsx test/scroll-retarget.test.ts test/trace-generation.test.ts`
+  all clean throughout. All 3 app-shells' file-scoped eslint/typecheck clean; `apps/web`'s
+  `test/public-ui-usage.test.ts` (updated for the constant rename), `apps/cube-trainer`'s full
+  `vitest run` (266 passed, 9 pre-existing skips), and `apps/auth-app`'s `test:unit` (which also
+  rebuilds `packages/ui`'s `dist/`) all green. Live-browser validation via the Chrome extension
+  covered web (`/`, `/projects`, `/about`, a project detail route), cube-trainer (`/`, `/learn`),
+  and auth (`/`, `/sign-in`) — zero console errors on any route, and both user-reported issues
+  above were confirmed fixed by re-screenshotting after each patch. Not independently re-confirmed
+  this session: blog list/detail with real multi-entry content (seed content only has one project
+  and one placeholder post, so the "card-dense route" scenario is thin in practice), and the BFS
+  corridor fallback path specifically (rare — only triggers when both elbow orientations collide
+  with existing trace footprint).
+  **Recommend a card-dense real-content check before merging**, since the seed content doesn't
+  exercise the many-registrant path this session's `setRects` equality guard was written for.
+  Separately, `pnpm verify` surfaced 3 pre-existing `apps/web` test failures unrelated to any of
+  the above (confirmed via `git stash` against the clean pre-session tree, same failures): the
+  "auth disabled" scenario tests (`api-client.disabled.test.ts`, `require-auth.test.tsx`,
+  `status-route.test.tsx`) each read `VITE_CLERK_PUBLISHABLE_KEY` at module scope through some
+  import chain, and none of them stubbed it unset — so a developer with a real Clerk key in their
+  own `.env.local` (as this session's environment had) gets `authEnabled: true` ambiently, which
+  then throws trying to render `<SignedIn>`/`useAuth()` with no `ClerkProvider` mounted in the
+  test's own tree. The fix pattern already existed in the repo (`api-client.enabled.test.ts`'s
+  `vi.resetModules()` + `vi.stubEnv(..., value)` + dynamic import) but only for the "enabled" half
+  of the pair — applied the missing `vi.stubEnv("VITE_CLERK_PUBLISHABLE_KEY", undefined)`
+  counterpart to all 3 "disabled" tests, converting `require-auth.test.tsx`/`status-route.test.tsx`
+  to dynamic imports so the stub takes effect before the module (which computes `authEnabled` once,
+  at import time) is evaluated. `pnpm verify` now fully green (44/44 tasks, including both apps'
+  Playwright smoke suites).
 - Session E: _not started_

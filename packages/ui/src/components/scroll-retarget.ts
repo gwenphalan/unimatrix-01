@@ -4,7 +4,7 @@ import { clampToLattice } from "./trace-generation.js";
 
 // A local nudge, not a re-placement — how far from its current tip a
 // retarget candidate is allowed to land. Needs a real-browser visual pass
-// to tune, same caveat as `OCCLUDER_FALLOFF_PX`'s own existing comment.
+// to tune, same caveat as `OCCLUDER_AFFECT_MARGIN_PX`'s own existing comment.
 const RETARGET_SEARCH_RADIUS_CELLS = 3;
 const RETARGET_MAX_ATTEMPTS = 10;
 
