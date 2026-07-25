@@ -74,18 +74,18 @@ Session C (highest regression risk).
 - [x] Validate: `pnpm exec eslint packages/ui/src/components/circuit-field*.ts*`,
   `pnpm --filter @unimatrix/ui exec vitest run <new test files>` (check actual package name),
   visual check on all 3 apps.
-- [ ] Commit, PR.
+- [x] Commit, PR. (PR #48, merged into `main`.)
 
 ### Session B — Per-trace transition engine (foundational, do before scroll/idle-shift)
-- [ ] Replace the single `useLayoutEffect` run (one shared `startTime`/`durations`/
+- [x] Replace the single `useLayoutEffect` run (one shared `startTime`/`durations`/
   `windowBounds`, cancels+restarts ALL traces on any change) with a map of in-flight
   transitions keyed by trace id, one shared rAF running while any transition is live.
-- [ ] Preserve current behavior exactly for the route-change/resize case (regression test:
+- [x] Preserve current behavior exactly for the route-change/resize case (regression test:
   full-field transition still looks/behaves identical) — this session is a refactor of the
   transition mechanism, not a behavior change yet.
-- [ ] `advisor()` once before writing, to sanity-check the transition-map design against the
+- [x] `advisor()` once before writing, to sanity-check the transition-map design against the
   existing ref architecture (`pathElRefs`, `viaElRefs`, `tipElRefs`, `liveBodyRef`).
-- [ ] Validate: manual check — rapid route changes, rapid resize, verify no diagonal jumps,
+- [x] Validate: manual check — rapid route changes, rapid resize, verify no diagonal jumps,
   no stuck traces (regressions from the prior session's bug reports).
 - [ ] Commit, PR.
 
@@ -196,8 +196,35 @@ you. Keep entries short; this file is a resume point, not a changelog.
   of popping together. Lint/typecheck/full `vitest run` clean; visually verified on all 3 apps
   (web, cube-trainer, auth) via a real browser — traces render identically to pre-split,
   console clean apart from an unrelated Clerk dev-key notice. Reduced-motion path untouched by
-  design (verified by inspection, not live-toggled in-browser). Not yet committed/PR'd.
-- Session B: _not started_
+  design (verified by inspection, not live-toggled in-browser). Committed and PR'd — PR #48,
+  merged into `main`.
+- Session B: Done (not yet committed). Replaced the single shared `tick()`
+  (`rafRef`/`startTime`/`durations[]`/`windowBounds[]`, all indexed by array position) with
+  `transitionsRef` (`Map<traceId, TraceTransition>`) and a stable `runTick` callback driven by
+  one `rafActiveRef` handle. Starting/replacing a trace's transition now just
+  `transitionsRef.current.set(id, ...)` — never cancels the shared loop, which is only
+  `requestAnimationFrame`'d if not already running. `ViaItem.traceIndex` became
+  `ViaItem.traceId` since lookups now go through the map instead of a parallel array. Each
+  frame `runTick` walks `traceIds` (not just in-flight ones) to keep the cross-trace
+  `cellAxisMap`/tip/intersection passes covering every trace, not just transitioning ones —
+  advisor flagged that dropping settled traces from those passes would regress tip suppression
+  and via visibility the instant a trace finishes early (since per-trace durations already
+  differ, traces finish at different frames). A finished trace is deleted from the map and its
+  settled via items are folded into `viaItems` immediately (filtering that trace's old entries
+  out of `viaItemIndexRef` and pushing the new ones), independent of any siblings still
+  crawling; the per-frame opacity pass explicitly skips (does not hide) vias whose trace isn't
+  in `windowBounds` that frame, so a fast-finishing trace's vias don't flicker off while slower
+  ones keep animating. Reduced-motion snap path now explicitly clears `transitionsRef` and
+  cancels any active `rafActiveRef` before writing final state synchronously, so a mid-crawl
+  toggle to `prefers-reduced-motion` can't leave a stale frame to clobber it. `advisor()` called
+  once before writing per the session budget; its per-trace-finish opacity/tip-suppression
+  finding is the main thing the naive "just delete from the map" version would have missed.
+  Lint/typecheck/existing `vitest run` clean (no behavior in scope to add new automated tests
+  for — this is the JS-driven crawl mechanism, exercised by manual browser checks per the
+  session's validate step). Visually verified on all 3 apps via rapid route-change clicks
+  (web nav, cube-trainer Learn/Drill, auth sign-in/sign-up) — no diagonal jumps, no stuck
+  traces, no via flicker on early-finishing traces, console clean on all three. Not yet
+  committed/PR'd.
 - Session C: _not started_
 - Session D: _not started_
 - Session E: _not started_
