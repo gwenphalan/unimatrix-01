@@ -7,8 +7,11 @@ export type Occluder = Rect;
 
 // Distance (px) beyond an occluder's edge at which its weight reaches 1
 // (fully open). Tunable — needs a real-browser visual pass, not derivable
-// analytically.
-const OCCLUDER_FALLOFF_PX = GRID * 4;
+// analytically. Exported for reuse as `scroll-retarget.ts`'s affected-tip
+// margin — occlusion's falloff extends visually beyond a rect's literal
+// edge, so a tip within this margin of a moved rect is the same "affected"
+// zone this constant already defines.
+export const OCCLUDER_FALLOFF_PX = GRID * 4;
 // Weight floor at the occluder's own center — never a hard 0, per the
 // soft-everywhere decision: traces may still render (dimmer/rarer) behind
 // any registered panel, never fully excluded.

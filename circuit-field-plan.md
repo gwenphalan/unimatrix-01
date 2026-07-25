@@ -125,8 +125,13 @@ Session C (highest regression risk).
   test-support methods), a direct spanning-tree structural assertion (edges == vertices − 1,
   a guarantee the old generator could never make), depth/adjacency sanity checks, and a
   regression scenario (near-total occlusion still yields `count` traces with zero degenerate
-  stubs — the bug this session set out to fix). New `test/occlusion.test.ts` and
-  `test/circuit-occluder.test.tsx` (manual `ResizeObserver` mock).
+  stubs — the bug this session set out to fix). New `test/circuit-occluder.test.tsx` (manual
+  `ResizeObserver` mock) — **correction (Session D):** this bullet as originally written also
+  claimed a new `test/occlusion.test.ts`; no such file was ever created, `occlusion.ts` had no
+  dedicated test file until Session D added direct coverage via `test/scroll-retarget.test.ts`
+  (which exercises `occlusionWeightAt` as part of testing `retargetTip`). Flagging here since
+  this doc is the cross-session source of truth and the original claim cost a future session
+  time verifying it.
 - [x] Shell wiring, deliberately bounded to existing container refs (no new wrapper divs, no
   chasing every route's `Card`): web registers its existing `headerRef` plus a new `mainRef` on
   `<main id="main-content">`; cube-trainer registers a new `mainRef` on its own `<main>`; auth
@@ -158,15 +163,89 @@ Session C (highest regression risk).
   would run every animation frame for the same reason. Real scroll reactivity needs this
   session's actual design — diff against last-measured rects, retarget only traces whose body
   now intersects a *changed* occluder — not a bare "recompute on every scroll tick."
-- [ ] NOT "regenerate on scroll" — SVG is `position: fixed`, viewport coords. Mechanism:
+- [x] Occluder granularity fix (discovered necessary during planning, not in the original
+  checklist above — see Session Log): `mainRef` on a window-scrolling `<main>` has a real height
+  equal to full page content, which for most pages exceeds one viewport — even freshly
+  re-measured every scroll frame, an uncapped registration blankets the entire viewport for most
+  of the scroll range (`occlusionWeightAt`'s min-combine floors at the same weight anywhere
+  "inside" a rect regardless of depth), leaving nothing for a retarget mechanism to react to.
+  Added `maxHeightPx` to `useCircuitOccluder`'s options (`packages/ui/src/components/
+  circuit-occluder.tsx`); web's `mainRef` registers with `MAIN_OCCLUDER_MAX_HEIGHT_PX` (900px).
+- [x] NOT "regenerate on scroll" — SVG is `position: fixed`, viewport coords. Mechanism:
   recompute occluder rects on scroll (rAF-throttled), diff vs. last, retarget only traces
   whose body now intersects an occluder (via Session B's per-trace transition engine).
-- [ ] Fix mobile URL-bar bug: `useViewportSize` reads `window.innerHeight`, which changes as
-  the mobile URL bar collapses/expands during scroll — with `RESIZE_SETTLE_MS = 200` this
-  fires a full retarget mid-scroll on every phone scroll. Use `window.visualViewport` or
-  ignore height-only deltas under a threshold.
-- [ ] Validate: scroll test on all 3 apps on a real mobile viewport (devtools device
-  emulation or Chrome extension), verify no full re-seed mid-scroll, no jank.
+  `CircuitOccluderProvider` now measures on both `ResizeObserver` (structural — commits
+  `useCircuitOccluderRects()`, unchanged cost) and `scroll` (never commits that — only notifies
+  a separate `useCircuitOccluderDelta` subscription with whatever rects moved beyond one GRID
+  cell). New `scroll-retarget.ts` (pure): `findAffectedTraceIds` (tip-in-dirty-rect test),
+  `retargetTip` (in-line nudge along the tip's own final-segment axis only — see Session Log for
+  why a perpendicular/elbow nudge was rejected), `buildOccupiedFootprint`.
+- [x] Fix mobile URL-bar bug: root cause was in `useDebouncedSize`, not `useViewportSize` —
+  extended with an optional `heightJitterIgnorePx` (`HEIGHT_JITTER_IGNORE_PX = 120`) that ignores
+  a width-unchanged height delta under that threshold entirely, compared against the most
+  recently *accepted* target (not the stale committed value) so a jitter sample mid-flight can't
+  cancel a real pending resize. Kept the threshold approach over switching to
+  `window.visualViewport` — cross-browser URL-bar-collapse semantics aren't reliably confirmable
+  without live devices.
+- [x] Validate: scroll test on web (dev server, real browser via the Chrome extension) —
+  partially confirmed, with a known gap documented in the Session Log: DOM-level wiring (scroll
+  listener attaches and fires, `ResizeObserver`/register/unregister all correct, zero console
+  errors, visually clean rendering — no diagonal seams, no jank — while scrolling a page forced
+  taller than viewport) confirmed live; the actual rAF-gated commit/retarget step could not be
+  observed firing in this automation session because the controlled tab never reports
+  `document.visibilityState !== "hidden"` even when focused, which permanently starves
+  `requestAnimationFrame` in that tab — a harness limitation, not exercised as a real bug (the
+  same rAF-gated diff/notify path already has direct, passing coverage under jsdom in
+  `test/circuit-occluder.test.tsx`, where rAF isn't visibility-gated). cube-trainer/auth not
+  re-checked this session (unaffected by Session D's code paths per the granularity-fix
+  reasoning above — cube-trainer's `mainRef` stays uncapped/unchanged, auth registers nothing).
+  **Recommend a real mobile-device or non-automated-browser check before merging**, since that's
+  the only way to actually observe the rAF-gated retarget fire.
+- [ ] Commit, PR.
+
+### Design intent clarification (user, post-Session-D — read before Session D.5)
+
+Session D's plan-mode agent (and the exploration that fed it) undersold the actual goal. Stated
+plainly, for future sessions: **circuits should read as routed through the negative space around
+real rectangular obstructions on the page** — not just avoiding two or three broad app-shell
+containers. "Obstruction" means any visually distinct rectangular UI block: cards, panels,
+sections, footer, nav — the actual content shapes a user sees, not a coarse header/main split.
+The scroll and page-change *mechanics* built in Session D are correct and are staying as-is:
+- Nudge, don't retrace, on scroll: a trace whose tip sits near an obstruction that just moved
+  gently repositions/reforms — it does not rebuild from scratch.
+- Full reform on page/route change: already existing behavior (`routeKey`-keyed regeneration in
+  `targetTraces`), unaffected by any of this.
+
+What needs to change in a follow-up session is **what counts as a registered obstruction** — see
+Session D.5 below. This also explicitly **supersedes** Session C's "auth registers zero
+occluders" / "only 2 of 5 routes have an accessible Card ref, registering just those would make
+density visibly differ" reasoning (see Decisions below) — that was a deliberate minimalism call
+at the time, made without this broader negative-space goal in view.
+
+### Session D.5 — Broaden occlusion to real rectangular content blocks (negative-space routing)
+
+Not started. Scope, informed by the clarification above:
+
+- [ ] Identify the actual candidate registration points per app: web's project/blog cards on
+  the home/list routes, content cards on detail routes, the footer; auth's sign-in/sign-up
+  `Card`; cube-trainer's drill/learn panels. Prefer registering existing layout wrapper elements
+  already present in each route's JSX (reuse refs the component tree can cheaply expose) over
+  inventing new wrapper divs — same constraint Session C already followed for header/main.
+- [ ] Revisit auth specifically: Session C's call to register zero occluders there because "only
+  2 of 5 routes have an accessible Card ref" is the thing being overridden — either get a ref on
+  the Card in the other 3 routes too, or accept a partial rollout there if some routes genuinely
+  have no single wrappable rectangle, and say so explicitly rather than silently reverting to
+  zero coverage.
+- [ ] Decide whether `useCircuitOccluder` needs to support many more simultaneous registrants
+  cheaply (it already batches via one shared `ResizeObserver` + rAF, so this is likely fine, but
+  confirm cost doesn't scale badly once a route has, say, 10+ registered cards instead of 2-3
+  containers).
+- [ ] `maxHeightPx` (Session D) may no longer be the primary tool once occluders are
+  individually-sized real content blocks instead of one tall scrolling container — a card is
+  already bounded to its own real height. Revisit whether the cap is still needed for anything
+  (e.g. a long single-column list wrapper) once per-card registration exists.
+- [ ] Validate visually: on a card-dense route (e.g. the projects/blog list), confirm circuits
+  visibly route through the gaps between cards rather than just avoiding one big content block.
 - [ ] Commit, PR.
 
 ### Session E — Idle packets + idle line-shift + capability gating
@@ -205,6 +284,13 @@ Session C (highest regression risk).
   translucent panels at reduced opacity rather than being hard-excluded. Simplifies
   `KeepOut[]` to a density-weight field rather than binary in/out predicates — revisit
   `inKeepOut` naming/shape in `buildStartPoints`/`buildTraceFromStart` accordingly.
+- **Occlusion scope (Session C, superseded post-Session-D — see Design intent clarification
+  above and Session D.5):** Session C deliberately registered only header/main (web,
+  cube-trainer) and zero occluders (auth), reasoning that per-card registration on auth would
+  make density visibly differ between near-identical routes. The actual goal is circuits routed
+  through negative space around real rectangular content (cards, panels, footer, nav), not just
+  two or three broad containers — Session D.5 broadens registration accordingly; the "soft
+  everywhere" rule itself (immediately above) is unaffected, only *what* gets registered changes.
 - **Mobile/low-power fallback (Session E):** static traces (one frozen frame, no rAF) +
   CSS-only glow pulse on the stroke (keyframe, not JS-driven) so it doesn't read as fully
   dead. No trace-count reduction beyond what the normal density/occlusion logic already gives
@@ -303,5 +389,77 @@ you. Keep entries short; this file is a resume point, not a changelog.
   settled-state defect. Flagging as unconfirmed rather than closed — if it recurs on a fully
   idle page, worth a closer look with `prefers-reduced-motion` forced on (removes crawl
   interpolation as a variable entirely).
-- Session D: _not started_
+- Session D: Planned on a fresh branch (`feat/circuit-field-scroll-reactivity`, cut from
+  `origin/main` post-PR#50) via Claude Code plan mode, with a Plan subagent doing the first-pass
+  design to keep the planning session's own context small (per user request) — see git history
+  for the full plan content. The subagent's first-pass design for the scroll-retarget mechanism
+  (bullet 1) was caught, before any code was written, as inert-as-scoped: it assumed
+  scroll-fresh occluder rects alone would give the retarget path something to react to, but
+  web's `mainRef` (a window-scrolling `<main>`, full page-content height) blankets the entire
+  viewport at a flat `OCCLUDER_MIN_WEIGHT` for most of any scroll range regardless of how
+  fresh the measurement is — `occlusionWeightAt`'s min-combine doesn't distinguish depth inside a
+  rect. Caught via a static-analysis pass (`advisor()`) before implementation started, confirmed
+  by reading `apps/web/src/app/app-shell.tsx` in full and the arithmetic in `occlusion.ts`. User
+  chose to fix the root cause (occluder granularity — see the new checklist item above) rather
+  than ship dead plumbing or descope to just the URL-bar fix.
+  Implementation: `useCircuitOccluder(ref, { maxHeightPx })` caps a tall registrant's counted
+  height (web's `mainRef` only; `headerRef`/`condensedHeaderRef` stay uncapped, already
+  self-bounded; cube-trainer's `mainRef` left uncapped — confirmed centered non-scrolling layout,
+  not a tall scrolling column). `CircuitOccluderProvider` now tracks measurements per-registrant
+  (`Map<symbol, Occluder>`) and diffs on every pass; a `scroll` listener triggers a measurement
+  but only ever notifies a new `useCircuitOccluderDelta` subscription (never `setRects`) — kept
+  strictly separate from the existing `ResizeObserver`-driven structural path so scrolling can
+  never re-trigger `targetTraces`'s full `generateTraces`/`estimateEffectiveArea` cost, the exact
+  thing an earlier (pre-Session-D) attempt got reverted for. New `scroll-retarget.ts` (pure,
+  zero React): `retargetTip` originally searched a 2D neighborhood via an elbow connector
+  (mirroring `route-engine.ts`'s `buildRoute`), but that was reworked mid-session — an elbow
+  whose leg orientation happened to clear collisions could still produce a diagonal once spliced
+  back into the trace's *sparse* control-point list (only real corners, not every dense-body
+  step), since the safe elbow orientation there is forced by the sparse polyline's existing
+  direction, not free to pick for collision-avoidance. Simplified to an in-line nudge — extend
+  or retract along the tip's own final-segment axis only — which is trivially safe for both the
+  dense body and the reconstructed sparse list, at the cost of a narrower (1D, not 2D) search.
+  `circuit-field.tsx`'s new effect reuses Session B's transition engine exactly
+  (`buildRoute`/`transitionsRef`/`runTick`) for the actual crawl, skips any trace already
+  mid-crawl (its `liveBodyRef` entry is a partial `sliceWindow`, not real geometry to retarget
+  from), and writes `previousTracesRef` with the *sparse* point list (not the densified body) so
+  the next legitimate regeneration's skip-if-unchanged check keeps working for a retargeted
+  trace. `useDebouncedSize` gained `heightJitterIgnorePx`; a first-pass implementation had a real
+  bug caught before it shipped — returning a per-render cleanup that calls `clearTimeout`
+  unconditionally, which React invokes on every dependency change (including a jitter-classified
+  "do nothing" render) before that render's own early-return logic ever runs, silently cancelling
+  a real in-flight resize's pending commit. Fixed by only clearing inline right before
+  rescheduling, plus a separate mount/unmount-only cleanup effect; the exact regression case
+  ("a jitter sample does not cancel a real in-flight resize's pending commit") is now a test.
+  New `test/scroll-retarget.test.ts` (10 cases: affected-tip detection, footprint building,
+  strict-improvement nudge, boxed-in/no-improvement/sole-ownership/self-retrace null cases) and
+  `test/circuit-field-hooks.test.ts` (6 cases for `useDebouncedSize`, including the bug above).
+  `test/circuit-occluder.test.tsx` extended with 5 cases (`maxHeightPx` clamping, scroll-delta
+  fire/no-fire, scroll-never-touches-`useCircuitOccluderRects` regression guard, structural
+  changes not double-firing delta). Also corrected a false claim in the Session C checklist above
+  (`test/occlusion.test.ts` was never created — flagged separately there). `packages/ui`: full
+  `vitest run` (75 assertions across trace-generation/scroll-retarget/circuit-field-hooks/
+  circuit-occluder/ui suites), `eslint`, and `tsc` all clean. Real-browser manual scroll
+  validation (web only, via the Chrome extension against the dev server): discovered mid-check
+  that `apps/web` consumes `packages/ui`'s built `dist/`, but a live Vite dev server actually
+  resolves the workspace package straight from `src/` via `@fs/...` (confirmed by reading the
+  loaded module's URL in a console stack trace) — `dist/` only matters for `apps/web`'s own
+  production build, so the earlier `pnpm run build` step taken out of caution wasn't strictly
+  needed for this dev-server check, but rebuilding at the end so `dist/` isn't left stale is
+  still correct. Confirmed live: scroll listener attaches and fires on real scroll, structural
+  (`ResizeObserver`/register/unregister) and scroll-delta code paths both reachable with no
+  console errors, page renders cleanly through a scroll spanning a forced-tall `<main>` (no
+  diagonal seams, no visual corruption). Could not confirm the rAF-gated commit/retarget step
+  actually firing: this automation session's controlled tab reports
+  `document.visibilityState === "hidden"` permanently (even with `document.hasFocus() === true`
+  after clicking into the page), which throttles `requestAnimationFrame` to zero in Chrome — a
+  property of this specific harness, not something a real user's foregrounded tab would hit, and
+  not something the shipped code does differently for hidden tabs (no visibility-gating was
+  added, deliberately, since that's Session E's "stop the loop on `document.hidden`" scope, not
+  Session D's). The same rAF-gated diff/notify logic this couldn't observe live already has
+  direct passing coverage in `test/circuit-occluder.test.tsx` under jsdom, where
+  `requestAnimationFrame` isn't visibility-gated — so the logic itself is tested, just not this
+  specific live-browser firing. Flagging this gap explicitly rather than claiming full visual
+  confirmation: **a real mobile device or a non-automated browser check is recommended before
+  merging**, specifically to watch a trace actually retarget near `mainRef`'s capped edge.
 - Session E: _not started_
