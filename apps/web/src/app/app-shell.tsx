@@ -132,6 +132,7 @@ function AuthHeaderAction() {
 function AppShellContent({ children }: AppShellProps) {
   const headerRef = useRef<HTMLElement | null>(null);
   const mainRef = useRef<HTMLElement | null>(null);
+  const condensedHeaderRef = useRef<HTMLDivElement | null>(null);
   const [isCondensed, setIsCondensed] = useState(false);
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
@@ -139,6 +140,10 @@ function AppShellContent({ children }: AppShellProps) {
 
   useCircuitOccluder(headerRef);
   useCircuitOccluder(mainRef);
+  // Only occlude while the condensed bar is actually visible — it's always
+  // mounted (opacity-toggled, not conditionally rendered), so an
+  // unconditional registration would occlude this strip even when hidden.
+  useCircuitOccluder(condensedHeaderRef, { enabled: isCondensed });
 
   useEffect(() => {
     const updateCollapsedState = () => {
@@ -261,7 +266,10 @@ function AppShellContent({ children }: AppShellProps) {
         )}
       >
         <div className="mx-auto w-full max-w-[92rem] px-4 sm:px-6 lg:px-8 xl:px-10">
-          <div className="site-panel site-shell overflow-hidden border-primary/45 shadow-[0_0_0_1px_color-mix(in_oklab,var(--primary)_35%,transparent),0_18px_48px_-32px_color-mix(in_oklab,var(--primary)_35%,transparent)] px-3 py-2 lg:px-4 lg:py-2">
+          <div
+            className="site-panel site-shell overflow-hidden border-primary/45 shadow-[0_0_0_1px_color-mix(in_oklab,var(--primary)_35%,transparent),0_18px_48px_-32px_color-mix(in_oklab,var(--primary)_35%,transparent)] px-3 py-2 lg:px-4 lg:py-2"
+            ref={condensedHeaderRef}
+          >
             <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex items-center gap-2.5">
                 <Link aria-label="Unimatrix-01 home" to="/">

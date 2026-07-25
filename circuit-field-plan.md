@@ -135,16 +135,29 @@ Session C (highest regression risk).
   near-identical-looking routes). Confirmed `--card` is opaque (no alpha) in
   `packages/ui/src/styles.css`, so auth/cube-trainer get density reduction only, not visible
   dimming through panels — only web's translucent `.site-panel` header gets the "traces show
-  through, dimmed" effect, for free via existing CSS stacking (no new rendering code).
+  through, dimmed" effect, for free via existing CSS stacking (no new rendering code). PR #50
+  (post-review) added a fourth registration: web's fixed condensed sticky header, gated
+  `enabled: isCondensed` so it only occludes while actually visible.
 - [x] `advisor()` called before writing the spanning-tree algorithm (during the planning
   session, before this implementation session started) with the design already reviewed;
   implementation followed the reviewed design directly.
-- [ ] Validate on all 3 apps, desktop + mobile widths, in a real browser (automated
+- [x] Validate on all 3 apps, desktop + mobile widths, in a real browser (automated
   lint/typecheck/vitest all green across `packages/ui` and all 3 app-shells as of this commit;
-  manual visual check still pending).
-- [ ] Commit, PR.
+  manual visual check done — see Session Log for the two bugs it caught).
+- [x] Commit, PR. — PR #50 (`feat/circuit-field-occlusion-generation`).
 
 ### Session D — Scroll / content reactivity
+- Not started as its own session. PR #50 (Session C's PR, responding to review feedback) landed
+  one small piece — web's condensed sticky header is now registered via `useCircuitOccluder`
+  while visible (`enabled: isCondensed`), so it soft-occludes correctly once it appears —  but
+  deliberately did **not** add scroll-driven rect recomputation. An earlier version of that PR
+  tried a `useCircuitOccluderRecompute()` hook called on every scroll event; reverted before
+  merge because nothing downstream consumes a scroll-fresh rect yet — `targetTraces` regenerating
+  every scroll frame would burn CPU (`generateTraces`, a spanning-tree build) for zero visible
+  benefit without the diff/retarget mechanism below, and `estimateEffectiveArea`'s sampling pass
+  would run every animation frame for the same reason. Real scroll reactivity needs this
+  session's actual design — diff against last-measured rects, retarget only traces whose body
+  now intersects a *changed* occluder — not a bare "recompute on every scroll tick."
 - [ ] NOT "regenerate on scroll" — SVG is `position: fixed`, viewport coords. Mechanism:
   recompute occluder rects on scroll (rAF-throttled), diff vs. last, retarget only traces
   whose body now intersects an occluder (via Session B's per-trace transition engine).

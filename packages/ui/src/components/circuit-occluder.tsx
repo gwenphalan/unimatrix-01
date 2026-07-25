@@ -52,12 +52,23 @@ export function CircuitOccluderProvider({ children }: { children: React.ReactNod
     // One shared ResizeObserver for every registrant, batched through a
     // single rAF so multiple entries from the same layout pass collapse
     // into one measurement pass instead of one per registrant.
-    observerRef.current = new ResizeObserver(() => {
+    const observer = new ResizeObserver(() => {
       scheduleMeasure();
     });
 
+    // Child `useCircuitOccluder` effects run before this parent effect, so
+    // by the time we get here `targetsRef.current` may already hold refs
+    // that `register` couldn't hand to an observer that didn't exist yet.
+    // Catch them up now.
+    targetsRef.current.forEach((ref) => {
+      if (ref.current) observer.observe(ref.current);
+    });
+
+    observerRef.current = observer;
+    scheduleMeasure();
+
     return () => {
-      observerRef.current?.disconnect();
+      observer.disconnect();
       observerRef.current = null;
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
     };

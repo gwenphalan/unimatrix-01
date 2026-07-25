@@ -38,13 +38,16 @@ class MockResizeObserver implements ResizeObserver {
 // of use.
 type MutableRect = { x: number; y: number; width: number; height: number; top: number; left: number; right: number; bottom: number };
 
-function Registrant({ rect }: { rect: MutableRect }) {
+function Registrant({ rect, onElement }: { rect: MutableRect; onElement?: (el: HTMLDivElement) => void }) {
   const ref = React.useRef<HTMLDivElement>(null);
   useCircuitOccluder(ref);
 
   React.useLayoutEffect(() => {
-    if (ref.current) ref.current.getBoundingClientRect = () => ({ ...rect, toJSON: () => ({}) }) as DOMRect;
-  }, [rect]);
+    if (ref.current) {
+      ref.current.getBoundingClientRect = () => ({ ...rect, toJSON: () => ({}) }) as DOMRect;
+      onElement?.(ref.current);
+    }
+  }, [rect, onElement]);
 
   return <div ref={ref} />;
 }
@@ -92,11 +95,12 @@ describe("CircuitOccluderProvider / useCircuitOccluder", () => {
 
   it("re-measures when the shared ResizeObserver fires", async () => {
     let latestRects: readonly { x0: number; y0: number; x1: number; y1: number }[] = [];
+    let registrantEl: HTMLDivElement | undefined;
     const rect = makeRect({ left: 0, top: 0, right: 50, bottom: 50 });
 
     render(
       <CircuitOccluderProvider>
-        <Registrant rect={rect} />
+        <Registrant rect={rect} onElement={(el) => (registrantEl = el)} />
         <RectsProbe onRects={(r) => (latestRects = r)} />
       </CircuitOccluderProvider>,
     );
@@ -108,6 +112,12 @@ describe("CircuitOccluderProvider / useCircuitOccluder", () => {
 
     rect.left = 0;
     rect.right = 200;
+
+    // The registrant's element must actually be under observation — without
+    // this, `MockResizeObserver.trigger()` below invokes the callback
+    // regardless of what was observed and would mask a missing `observe()`.
+    expect(registrantEl).toBeDefined();
+    expect(MockResizeObserver.instances[0]?.observed.has(registrantEl as HTMLDivElement)).toBe(true);
 
     await act(async () => {
       MockResizeObserver.instances.forEach((instance) => {
