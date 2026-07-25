@@ -1,9 +1,10 @@
 import { useEffect, useRef } from "react";
 
+import { Card, Kbd, useCircuitOccluder } from "@unimatrix/ui/public";
+
 import type { AlgorithmCase, AlgorithmSetId } from "@/features/algorithms/types";
 import { LastLayerDiagramView } from "@/features/cube/components/last-layer-diagram-view";
 import { useAlgorithmTrainer } from "@/features/trainer/use-algorithm-trainer";
-import { Card, Kbd, useCircuitOccluder } from "@unimatrix/ui/public";
 
 export function TrainerPanel({
   cases,

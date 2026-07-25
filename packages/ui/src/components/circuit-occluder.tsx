@@ -233,7 +233,6 @@ export function CircuitOccluderProvider({ children }: { children: React.ReactNod
         const entry = targetsRef.current.get(id);
         if (entry?.ref.current) observerRef.current?.unobserve(entry.ref.current);
         targetsRef.current.delete(id);
-        measuredRef.current.delete(id);
         scheduleMeasure("structural");
       },
     }),

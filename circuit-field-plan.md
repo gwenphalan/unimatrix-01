@@ -229,7 +229,8 @@ blocking findings a planning pass caught before writing code, and the live-brows
 
 - [x] Identify the actual candidate registration points per app: web's project/blog cards on
   the home/list routes, content cards on detail routes, the footer; auth's sign-in/sign-up
-  `Card`; cube-trainer's drill/learn panels. Prefer registering existing layout wrapper elements
+  wrapper `div`s around the Clerk widgets; cube-trainer's drill/learn panels. Prefer registering
+  existing layout wrapper elements
   already present in each route's JSX (reuse refs the component tree can cheaply expose) over
   inventing new wrapper divs — same constraint Session C already followed for header/main.
 - [x] Revisit auth specifically: Session C's call to register zero occluders there because "only

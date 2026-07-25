@@ -6,13 +6,14 @@ import {
   RiSendPlaneLine,
 } from "@remixicon/react";
 
+import { Button, useCircuitOccluder } from "@unimatrix/ui/public";
+
 import { homeContent } from "@/features/content/site-content";
 import {
   emailAddress,
   githubProfileUrl,
   projectRepoUrl,
 } from "@/features/public-site/site-links";
-import { Button, useCircuitOccluder } from "@unimatrix/ui/public";
 
 export const Route = createLazyFileRoute("/about")({
   component: AboutRoute,

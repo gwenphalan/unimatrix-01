@@ -1,11 +1,12 @@
 import { useRef } from "react";
 
+import { useCircuitOccluder } from "@unimatrix/ui/public";
+
 import { getAlgorithmSet, groupCasesByGroup } from "@/features/algorithms/algorithm-sets";
 import { CasePreviewCard } from "@/features/algorithms/components/case-preview-card";
 import type { AlgorithmCase, AlgorithmSetId } from "@/features/algorithms/types";
 import type { CaseProgress, CaseStatus } from "@/lib/progress-storage";
 import { useCaseProgress } from "@/features/algorithms/use-case-progress";
-import { useCircuitOccluder } from "@unimatrix/ui/public";
 
 export interface LearnCasesGridProps {
   setId: AlgorithmSetId;
@@ -47,7 +48,7 @@ function LearnGroupSection({
               key={algorithmCase.id}
               learned={learned}
               onClick={() => {
-                updateStatus(algorithmCase.id, learned ? "new" : "known");
+                updateStatus(algorithmCase.id, "known");
               }}
               pressed={learned}
               setId={setId}

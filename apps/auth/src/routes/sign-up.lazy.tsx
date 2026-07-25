@@ -25,7 +25,7 @@ function SignUpRoute() {
      * and why signInForceRedirectUrl mirrors forceRedirectUrl (the symmetric
      * OAuth-transfer case: signing up with a provider that already has an
      * account completes as a sign-in). */
-    <div ref={ref}>
+    <div className="w-fit" ref={ref}>
       <SignUp
         forceRedirectUrl={target}
         routing="hash"

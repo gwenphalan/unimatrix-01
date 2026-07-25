@@ -24,7 +24,7 @@ function SignInRoute() {
   useCircuitOccluder(ref);
 
   return (
-    <div ref={ref}>
+    <div className="w-fit" ref={ref}>
       {/*
        * Clerk's <SignIn /> needs to route its own internal sub-steps
        * (email code entry, MFA, etc). Two options integrate with

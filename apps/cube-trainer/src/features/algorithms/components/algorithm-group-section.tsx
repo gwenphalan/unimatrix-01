@@ -1,11 +1,12 @@
 import { useRef } from "react";
 
+import { useCircuitOccluder } from "@unimatrix/ui/public";
+
 import { CasePreviewCard } from "@/features/algorithms/components/case-preview-card";
 import type { AlgorithmCase, AlgorithmSetId } from "@/features/algorithms/types";
 import type { CaseProgress } from "@/lib/progress-storage";
 import type { CasePool } from "@/lib/pool-storage";
 import { isCaseEnabled } from "@/lib/pool-storage";
-import { useCircuitOccluder } from "@unimatrix/ui/public";
 
 export function AlgorithmGroupSection({
   cases,
