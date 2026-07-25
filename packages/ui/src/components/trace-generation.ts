@@ -48,25 +48,58 @@ function cellsCoveringArea(width: number, height: number, count: number): Cell[]
 
 /**
  * One cell per slot (jittered, grid-snapped), sorted by distance from the
- * canvas center ascending — this both spreads target pads across the canvas
+ * root cell ascending — this both spreads target pads across the canvas
  * (like the old per-cell jitter did) and makes the tree radiate outward
  * naturally once slot index doubles as build order in `generateTraces`: near
  * pads attach to a still-small tree, far pads attach to an already-larger
  * one, which also gives boot depth (see `Trace.depth`) almost for free.
+ *
+ * The root (slot 0, branch 0's unconstrained walk — see `walkFromStart`) is
+ * picked as whichever assigned cell is *least* occluded at its center, not
+ * simply the canvas-geometric-center cell: the page's actual center is
+ * frequently sitting under a registered card/panel now that occlusion covers
+ * real content blocks, and branch 0 has no attach-point constraint pulling it
+ * there. Ties (including the common no-occluders case, where every cell scores
+ * the same open weight) fall back to nearest-canvas-center, preserving the
+ * exact prior placement when nothing is registered.
  */
-function assignTargetCells(width: number, height: number, count: number, rand: () => number): Cell[] {
+function assignTargetCells(
+  width: number,
+  height: number,
+  count: number,
+  occluders: readonly Occluder[],
+  rand: () => number,
+): Cell[] {
   const cells = shuffled(cellsCoveringArea(width, height, count), rand);
   const fallback: Cell = { x0: 0, y0: 0, x1: width, y1: height };
   const assigned = Array.from({ length: count }, (_, i) => cells[i % Math.max(1, cells.length)] ?? fallback);
-  const center = { x: width / 2, y: height / 2 };
+  const canvasCenter = { x: width / 2, y: height / 2 };
   const cellCenter = (cell: Cell) => ({ x: (cell.x0 + cell.x1) / 2, y: (cell.y0 + cell.y1) / 2 });
+
+  let rootIndex = 0;
+  let bestWeight = -Infinity;
+  let bestCenterDistance = Infinity;
+
+  assigned.forEach((cell, i) => {
+    const center = cellCenter(cell);
+    const weight = occlusionWeightAt(center.x, center.y, occluders);
+    const centerDistance = Math.hypot(center.x - canvasCenter.x, center.y - canvasCenter.y);
+
+    if (weight > bestWeight || (weight === bestWeight && centerDistance < bestCenterDistance)) {
+      bestWeight = weight;
+      bestCenterDistance = centerDistance;
+      rootIndex = i;
+    }
+  });
+
+  const rootCenter = cellCenter(assigned[rootIndex] as Cell);
 
   return assigned
     .slice()
     .sort((a, b) => {
       const ac = cellCenter(a);
       const bc = cellCenter(b);
-      return Math.hypot(ac.x - center.x, ac.y - center.y) - Math.hypot(bc.x - center.x, bc.y - center.y);
+      return Math.hypot(ac.x - rootCenter.x, ac.y - rootCenter.y) - Math.hypot(bc.x - rootCenter.x, bc.y - rootCenter.y);
     });
 }
 
@@ -202,6 +235,17 @@ function walkFromStart(start: Point, width: number, height: number, rand: () => 
  * already in the footprint and the route avoids re-entering it except at the
  * anchor and target cells, every branch touches existing structure at
  * exactly one point by construction — no loop-rejection pass is needed.
+ *
+ * `pickTargetPoint` keeps the target *endpoint* out of occluded ground, but
+ * neither elbow orientation was ever scored against occlusion — so the
+ * *connecting* segment between anchor and target could still cut straight
+ * across a registered card even though both endpoints sat outside it. When
+ * both elbow orientations are otherwise valid (collision-free against the
+ * existing footprint), the one that spends less of its length inside
+ * occluded ground wins — still soft (never a hard reject; the BFS corridor
+ * fallback below remains footprint-only, unaware of occlusion), but removes
+ * the common avoidable case where the *other* equally-valid orientation
+ * would have skirted the card entirely.
  */
 function attachRoute(
   target: Point,
@@ -209,6 +253,7 @@ function attachRoute(
   footprintOwner: Map<string, number>,
   width: number,
   height: number,
+  occluders: readonly Occluder[],
 ): { ownerIndex: number; body: Point[] } {
   let anchorKey = "";
   let anchorCx = 0;
@@ -237,8 +282,14 @@ function attachRoute(
     connectorViaElbow(anchor, target, { x: target.x, y: anchor.y }),
     connectorViaElbow(anchor, target, { x: anchor.x, y: target.y }),
   ];
+  const occlusionCost = (points: Point[]) =>
+    points.reduce((sum, point) => sum + (1 - occlusionWeightAt(point.x, point.y, occluders)), 0);
 
-  let interior: Point[] | null = elbowCandidates.find((candidate) => !collides(candidate)) ?? null;
+  const validElbowCandidates = elbowCandidates.filter((candidate) => !collides(candidate));
+  let interior: Point[] | null =
+    validElbowCandidates.length === 0
+      ? null
+      : validElbowCandidates.reduce((best, candidate) => (occlusionCost(candidate) < occlusionCost(best) ? candidate : best));
 
   if (!interior) {
     const maxCx = Math.round(width / GRID);
@@ -302,7 +353,7 @@ export function generateTraces(
   count: number,
 ): CircuitTree {
   const rand = mulberry32(seed);
-  const targetCells = assignTargetCells(width, height, count, rand);
+  const targetCells = assignTargetCells(width, height, count, occluders, rand);
   const footprint = new Set<string>();
   const footprintOwner = new Map<string, number>();
   const adjacency = new Map<string, Set<string>>();
@@ -340,7 +391,7 @@ export function generateTraces(
       continue;
     }
 
-    const { ownerIndex, body } = attachRoute(target, footprint, footprintOwner, width, height);
+    const { ownerIndex, body } = attachRoute(target, footprint, footprintOwner, width, height, occluders);
     const depth = (depths[ownerIndex] as number) + 1;
 
     traces.push({ id: `t${i}`, points: body, length: polylineLength(body), depth });

@@ -283,6 +283,58 @@ describe("CircuitOccluderProvider / useCircuitOccluder", () => {
     expect(latestDelta).toBeUndefined();
   });
 
+  it("many registrants mounting together collapse into one measurement commit", async () => {
+    const rectsSeen: (readonly { x0: number; y0: number; x1: number; y1: number }[])[] = [];
+    const registrants = Array.from({ length: 12 }, (_, i) => makeRect({ left: i * 10, top: 0, right: i * 10 + 5, bottom: 5 }));
+
+    render(
+      <CircuitOccluderProvider>
+        {registrants.map((rect, i) => (
+          <Registrant key={i} rect={rect} />
+        ))}
+        <RectsProbe onRects={(r) => rectsSeen.push(r)} />
+      </CircuitOccluderProvider>,
+    );
+
+    await flushRaf();
+
+    // Mount renders the initial (empty) context value once, then the single
+    // batched flush commits the full set once — never one commit per
+    // registrant, regardless of how many registered in the same pass.
+    expect(rectsSeen.length).toBe(2);
+    expect(rectsSeen[rectsSeen.length - 1]?.length).toBe(12);
+  });
+
+  it("a structural remeasurement that measures identically does not recommit useCircuitOccluderRects()", async () => {
+    const rectsSeen: (readonly { x0: number; y0: number; x1: number; y1: number }[])[] = [];
+    let registrantEl: HTMLDivElement | undefined;
+    const rect = makeRect({ left: 0, top: 0, right: 50, bottom: 50 });
+
+    render(
+      <CircuitOccluderProvider>
+        <Registrant rect={rect} onElement={(el) => (registrantEl = el)} />
+        <RectsProbe onRects={(r) => rectsSeen.push(r)} />
+      </CircuitOccluderProvider>,
+    );
+
+    await flushRaf();
+    expect(registrantEl).toBeDefined();
+    const countAfterMount = rectsSeen.length;
+    const rectsAfterMount = rectsSeen[rectsSeen.length - 1];
+
+    // Rect is unchanged — this simulates one registrant's structural flush
+    // (e.g. an async status badge resolving) not actually moving anything.
+    await act(async () => {
+      MockResizeObserver.instances.forEach((instance) => {
+        instance.trigger();
+      });
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+    });
+
+    expect(rectsSeen.length).toBe(countAfterMount);
+    expect(rectsSeen[rectsSeen.length - 1]).toBe(rectsAfterMount);
+  });
+
   it("useCircuitOccluder outside a Provider warns instead of throwing", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 

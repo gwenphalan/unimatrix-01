@@ -5,10 +5,12 @@ import {
   createRootRouteWithContext,
 } from "@tanstack/react-router";
 import { RiAlertLine } from "@remixicon/react";
+import { useRef } from "react";
+
+import { Badge, Button, Card, useCircuitOccluder } from "@unimatrix/ui/public";
 
 import { AppShell } from "@/app/app-shell";
 import type { AppRouterContext } from "@/app/router";
-import { Badge, Button, Card } from "@unimatrix/ui/public";
 
 export const Route = createRootRouteWithContext<AppRouterContext>()({
   component: RootComponent,
@@ -28,8 +30,11 @@ function RootComponent() {
 }
 
 function RootNotFound() {
+  const ref = useRef<HTMLDivElement | null>(null);
+  useCircuitOccluder(ref);
+
   return (
-    <Card className="w-full max-w-md px-6 py-8">
+    <Card className="w-full max-w-md px-6 py-8" ref={ref}>
       <div className="space-y-5">
         <Badge variant="destructive" className="gap-1.5">
           <RiAlertLine aria-hidden="true" className="size-3.5" />

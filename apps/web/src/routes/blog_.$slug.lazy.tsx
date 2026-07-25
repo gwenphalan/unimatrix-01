@@ -1,9 +1,11 @@
 import { RiArrowLeftLine } from "@remixicon/react";
 import { Link, createLazyFileRoute } from "@tanstack/react-router";
+import { useRef } from "react";
+
+import { Badge, Button, TALL_OCCLUDER_MAX_HEIGHT_PX, useCircuitOccluder } from "@unimatrix/ui/public";
 
 import { LazyPublicMarkdown } from "@/features/content/lazy-public-markdown";
 import { renderPublicMarkdownInternalLink } from "@/features/content/markdown";
-import { Badge, Button } from "@unimatrix/ui/public";
 
 export const Route = createLazyFileRoute("/blog_/$slug")({
   component: BlogDetailRoute,
@@ -12,6 +14,12 @@ export const Route = createLazyFileRoute("/blog_/$slug")({
 
 function BlogDetailRoute() {
   const entry = Route.useLoaderData();
+  const articleRef = useRef<HTMLDivElement | null>(null);
+  // The article body can run taller than a viewport — capped so its
+  // registered occluder tracks scroll position without blanketing the
+  // entire viewport for most of the scroll range. See
+  // `TALL_OCCLUDER_MAX_HEIGHT_PX`'s doc comment.
+  useCircuitOccluder(articleRef, { maxHeightPx: TALL_OCCLUDER_MAX_HEIGHT_PX });
 
   return (
     <div className="space-y-8 lg:space-y-10">
@@ -35,7 +43,7 @@ function BlogDetailRoute() {
         </div>
       </header>
 
-      <div className="site-panel mx-auto max-w-4xl px-5 py-5 lg:px-8 lg:py-8">
+      <div className="site-panel mx-auto max-w-4xl px-5 py-5 lg:px-8 lg:py-8" ref={articleRef}>
         <article className="public-markdown">
           <LazyPublicMarkdown
             markdown={entry.body}
@@ -48,8 +56,11 @@ function BlogDetailRoute() {
 }
 
 function BlogNotFound() {
+  const notFoundRef = useRef<HTMLDivElement | null>(null);
+  useCircuitOccluder(notFoundRef);
+
   return (
-    <div className="site-panel max-w-3xl px-5 py-6 lg:px-8 lg:py-8">
+    <div className="site-panel max-w-3xl px-5 py-6 lg:px-8 lg:py-8" ref={notFoundRef}>
       <div className="space-y-4">
         <Badge variant="destructive">Post unavailable</Badge>
         <div className="space-y-3">
