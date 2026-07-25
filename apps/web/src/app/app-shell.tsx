@@ -17,7 +17,13 @@ import {
 } from "@/features/content/site-content";
 import { PublicPageContainer, PublicSiteFooter } from "@/features/public-site/components";
 import { isAuthEnabled, loadWebRuntimeConfig } from "@/lib/config";
-import { CircuitField, CircuitOccluderProvider, cn, useCircuitOccluder } from "@unimatrix/ui/public";
+import {
+  CircuitField,
+  CircuitOccluderProvider,
+  MAIN_OCCLUDER_MAX_HEIGHT_PX,
+  cn,
+  useCircuitOccluder,
+} from "@unimatrix/ui/public";
 
 const runtimeConfig = loadWebRuntimeConfig({
   VITE_API_BASE_URL: import.meta.env.VITE_API_BASE_URL,
@@ -139,7 +145,11 @@ function AppShellContent({ children }: AppShellProps) {
   });
 
   useCircuitOccluder(headerRef);
-  useCircuitOccluder(mainRef);
+  // `main` is scroll-tall (full page content, not just viewport height) —
+  // capped so its registered occluder tracks scroll position without
+  // blanketing the entire viewport for most of the scroll range. See
+  // `MAIN_OCCLUDER_MAX_HEIGHT_PX`'s doc comment.
+  useCircuitOccluder(mainRef, { maxHeightPx: MAIN_OCCLUDER_MAX_HEIGHT_PX });
   // Only occlude while the condensed bar is actually visible — it's always
   // mounted (opacity-toggled, not conditionally rendered), so an
   // unconditional registration would occlude this strip even when hidden.

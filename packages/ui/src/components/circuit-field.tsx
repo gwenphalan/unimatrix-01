@@ -1,9 +1,9 @@
 import * as React from "react";
 
-import { RESIZE_SETTLE_MS, useDebouncedSize, useReducedMotion, useViewportSize } from "./circuit-field-hooks.js";
-import { useCircuitOccluderRects } from "./circuit-occluder.js";
-import { type Point, type RoutePoint, densify, easeInOutCubic, hashString, pathData, recomputeCorners } from "./grid-math.js";
-import { estimateEffectiveArea } from "./occlusion.js";
+import { HEIGHT_JITTER_IGNORE_PX, RESIZE_SETTLE_MS, useDebouncedSize, useReducedMotion, useViewportSize } from "./circuit-field-hooks.js";
+import { useCircuitOccluderDelta, useCircuitOccluderRects } from "./circuit-occluder.js";
+import { type Point, type RoutePoint, cellKey, densify, easeInOutCubic, hashString, pathData, polylineLength, recomputeCorners, snap } from "./grid-math.js";
+import { type Occluder, type Rect, OCCLUDER_FALLOFF_PX, estimateEffectiveArea } from "./occlusion.js";
 import {
   buildCellAxisMap,
   buildRoute,
@@ -12,6 +12,7 @@ import {
   sliceWindow,
   travelDuration,
 } from "./route-engine.js";
+import { buildOccupiedFootprint, findAffectedTraceIds, retargetTip } from "./scroll-retarget.js";
 import { type Trace, generateTraces } from "./trace-generation.js";
 
 const MIN_TRACE_COUNT = 14;
@@ -32,6 +33,11 @@ const BOOT_STAGGER_MAX_MS = 500;
 // Per-tree-depth-level boot delay step — replaces the old distance-from-
 // keep-out-center proxy now that generation produces a real spanning tree.
 const DEPTH_STAGGER_MS = 60;
+// Secondary guard only — `transitionsRef.current.has(id)` filtering already
+// prevents a same-tick double retarget (a nudge's `travelDuration` floors at
+// 4000ms), this only covers the settle-then-immediately-dirty edge case.
+const RETARGET_COOLDOWN_MS = 600;
+const MAX_SCROLL_RETARGETS_PER_EVENT = 4;
 
 type ViaItem = {
   key: string;
@@ -95,7 +101,7 @@ function pointsEqual(a: readonly Point[], b: readonly Point[]): boolean {
  */
 export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.Element | null {
   const size = useViewportSize();
-  const debouncedSize = useDebouncedSize(size, RESIZE_SETTLE_MS);
+  const debouncedSize = useDebouncedSize(size, RESIZE_SETTLE_MS, { heightJitterIgnorePx: HEIGHT_JITTER_IGNORE_PX });
   const reducedMotion = useReducedMotion();
   const occluders = useCircuitOccluderRects();
 
@@ -132,6 +138,7 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
   const previousTracesRef = React.useRef(new Map<string, Trace>());
   const transitionsRef = React.useRef(new Map<string, TraceTransition>());
   const rafActiveRef = React.useRef<number | null>(null);
+  const lastRetargetAtRef = React.useRef(new Map<string, number>());
 
   const [viaItems, setViaItemsState] = React.useState<ViaItem[]>([]);
 
@@ -640,6 +647,180 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
     // Only the target trace identity should retrigger this effect — the
     // refs and callbacks it closes over are stable across renders.
   }, [applyIntersections, runTick, setTipPosition, setViaItems, targetTraces]);
+
+  // Scroll-driven retarget: nudges a live trace's tip away from an occluder
+  // that just moved under it, using Session B's per-trace transition engine
+  // exactly as the boot/crawl effect above does — never touches
+  // `targetTraces`/`traceCount`/`generateTraces`, only `transitionsRef`/
+  // `liveBodyRef`/`previousTracesRef` for the specific ids affected. Fires
+  // from `useCircuitOccluderDelta`, which — unlike `useCircuitOccluderRects`
+  // above — never causes a re-render on its own; this callback mutates refs
+  // and writes SVG attributes directly, the same "outside the render cycle"
+  // approach `runTick` already uses.
+  const handleOccluderDelta = React.useCallback(
+    (dirtyRects: Rect[], liveOccluders: Occluder[]) => {
+      if (!debouncedSize) return;
+      const now = performance.now();
+
+      const tips: { id: string; point: Point }[] = [];
+      traceIds.forEach((id) => {
+        const body = liveBodyRef.current.get(id);
+        const last = body?.[body.length - 1];
+        if (last) tips.push({ id, point: last });
+      });
+
+      const candidateIds = findAffectedTraceIds(tips, dirtyRects, OCCLUDER_FALLOFF_PX)
+        // A trace already mid-crawl has a `liveBodyRef` entry that's a
+        // `sliceWindow(...)` partial window (old body + connector + new
+        // body) — retargeting off that would truncate it and abandon its
+        // real target, so never interrupt one.
+        .filter((id) => !transitionsRef.current.has(id))
+        .filter((id) => now - (lastRetargetAtRef.current.get(id) ?? 0) >= RETARGET_COOLDOWN_MS)
+        .slice(0, MAX_SCROLL_RETARGETS_PER_EVENT);
+
+      if (candidateIds.length === 0) return;
+
+      const retargets: { id: string; route: RoutePoint[]; lenO: number; lenN: number; toBody: RoutePoint[] }[] = [];
+      // Cells claimed by a candidate already resolved earlier in this same
+      // delta event — `liveBodyRef` for that candidate isn't mutated until
+      // later (the reduced-motion branch below, or `runTick` draining
+      // `transitionsRef` on a future frame), so without this a second
+      // candidate in the same event can't see the first one's new tip and
+      // could pick the same cell.
+      const pendingCells = new Set<string>();
+
+      candidateIds.forEach((id) => {
+        const liveBody = liveBodyRef.current.get(id);
+        const trace = previousTracesRef.current.get(id);
+        if (!liveBody || !trace) return;
+
+        const occupied = buildOccupiedFootprint(liveBodyRef.current, id);
+        pendingCells.forEach((cell) => occupied.add(cell));
+        const newTip = retargetTip(liveBody, occupied, liveOccluders, debouncedSize.width, debouncedSize.height);
+        if (!newTip) return;
+        pendingCells.add(cellKey(newTip));
+
+        const sparsePoints = [...trace.points.slice(0, -1), newTip];
+        const toBody = recomputeCorners(
+          densify(sparsePoints).map((point) => ({ ...point, x: snap(point.x), y: snap(point.y) })),
+        );
+        const route = buildRoute(liveBody, toBody);
+
+        // The sparse point list, not the densified body — writing the dense
+        // body here would make the next legitimate regeneration's
+        // `pointsEqual(previous.points, trace.points)` check permanently
+        // miscompare dense-vs-sparse for this trace, defeating the
+        // skip-if-unchanged optimization for it forever.
+        previousTracesRef.current.set(id, { ...trace, points: sparsePoints, length: polylineLength(sparsePoints) });
+        lastRetargetAtRef.current.set(id, now);
+        retargets.push({ id, route, lenO: liveBody.length, lenN: toBody.length, toBody });
+      });
+
+      if (retargets.length === 0) return;
+
+      if (reducedMotionRef.current) {
+        const cellAxisMap = buildCellAxisMap(retargets.map((r) => ({ id: r.id, points: r.toBody })));
+        const settled: ViaItem[] = [];
+
+        retargets.forEach((r) => {
+          liveBodyRef.current.set(r.id, r.toBody);
+          const el = pathElRefs.current.get(r.id);
+          if (el) el.setAttribute("d", pathData(r.toBody));
+
+          r.toBody.forEach((point, idx) => {
+            if (!point.corner || idx === 0 || idx === r.toBody.length - 1) return;
+            settled.push({
+              key: `${r.id}-${idx}`,
+              traceId: r.id,
+              index: idx,
+              x: point.x,
+              y: point.y,
+              boot: false,
+              delay: 0,
+              initiallyVisible: true,
+            });
+          });
+
+          const first = r.toBody[0];
+          const second = r.toBody[1];
+          const last = r.toBody[r.toBody.length - 1];
+          const beforeLast = r.toBody[r.toBody.length - 2];
+          if (first && second) {
+            const axis: "h" | "v" = first.y === second.y ? "h" : "v";
+            setTipPosition(r.id, "tail", first, !isColinearWithOther(cellAxisMap, r.id, first, axis));
+          }
+          if (last && beforeLast) {
+            const axis: "h" | "v" = beforeLast.y === last.y ? "h" : "v";
+            setTipPosition(r.id, "head", last, !isColinearWithOther(cellAxisMap, r.id, last, axis));
+          }
+        });
+
+        const retargetedIds = new Set(retargets.map((r) => r.id));
+        const untouched = Array.from(viaItemIndexRef.current.values()).filter(
+          (item) => !retargetedIds.has(item.traceId),
+        );
+        setViaItems([...untouched, ...settled]);
+        applyIntersections(findIntersections(cellAxisMap));
+        return;
+      }
+
+      const initialCellAxisMap = buildCellAxisMap(retargets.map((r) => ({ id: r.id, points: r.route.slice(0, r.lenO) })));
+      const crawlItems: ViaItem[] = [];
+
+      retargets.forEach((r) => {
+        r.route.forEach((point, idx) => {
+          if (!point.corner || idx === 0 || idx === r.route.length - 1) return;
+          crawlItems.push({
+            key: `${r.id}-${idx}`,
+            traceId: r.id,
+            index: idx,
+            x: point.x,
+            y: point.y,
+            boot: false,
+            delay: 0,
+            initiallyVisible: idx < r.lenO,
+          });
+        });
+
+        const start = r.route[0];
+        const second = r.route[1];
+        const head = r.route[r.lenO - 1];
+        const beforeHead = r.route[r.lenO - 2];
+        if (start && second) {
+          const axis: "h" | "v" = start.y === second.y ? "h" : "v";
+          setTipPosition(r.id, "tail", start, !isColinearWithOther(initialCellAxisMap, r.id, start, axis));
+        }
+        if (head && beforeHead) {
+          const axis: "h" | "v" = beforeHead.y === head.y ? "h" : "v";
+          setTipPosition(r.id, "head", head, !isColinearWithOther(initialCellAxisMap, r.id, head, axis));
+        }
+      });
+
+      const retargetedIds = new Set(retargets.map((r) => r.id));
+      const untouched = Array.from(viaItemIndexRef.current.values()).filter(
+        (item) => !retargetedIds.has(item.traceId),
+      );
+      setViaItems([...untouched, ...crawlItems]);
+
+      retargets.forEach((r) => {
+        transitionsRef.current.set(r.id, {
+          route: r.route,
+          lenO: r.lenO,
+          lenN: r.lenN,
+          toBody: r.toBody,
+          startTime: now,
+          duration: travelDuration(r.route.length - r.lenO),
+        });
+      });
+
+      if (rafActiveRef.current === null) {
+        rafActiveRef.current = requestAnimationFrame(runTick);
+      }
+    },
+    [applyIntersections, debouncedSize, runTick, setTipPosition, setViaItems, traceIds],
+  );
+
+  useCircuitOccluderDelta(handleOccluderDelta);
 
   React.useEffect(
     () => () => {

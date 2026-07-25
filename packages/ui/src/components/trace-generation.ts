@@ -70,7 +70,7 @@ function assignTargetCells(width: number, height: number, count: number, rand: (
     });
 }
 
-function clampToLattice(point: Point, width: number, height: number): Point {
+export function clampToLattice(point: Point, width: number, height: number): Point {
   return {
     x: snap(Math.max(GRID, Math.min(width - GRID, point.x))),
     y: snap(Math.max(GRID, Math.min(height - GRID, point.y))),
