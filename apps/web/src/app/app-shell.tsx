@@ -17,7 +17,7 @@ import {
 } from "@/features/content/site-content";
 import { PublicPageContainer, PublicSiteFooter } from "@/features/public-site/components";
 import { isAuthEnabled, loadWebRuntimeConfig } from "@/lib/config";
-import { CircuitField, cn } from "@unimatrix/ui/public";
+import { CircuitField, CircuitOccluderProvider, cn, useCircuitOccluder } from "@unimatrix/ui/public";
 
 const runtimeConfig = loadWebRuntimeConfig({
   VITE_API_BASE_URL: import.meta.env.VITE_API_BASE_URL,
@@ -126,12 +126,19 @@ function AuthHeaderAction() {
   );
 }
 
-export function AppShell({ children }: AppShellProps) {
+// `useCircuitOccluder` calls must live in a component rendered *inside*
+// `CircuitOccluderProvider`, not the component that creates the provider —
+// a component can't consume a context it renders as its own descendant.
+function AppShellContent({ children }: AppShellProps) {
   const headerRef = useRef<HTMLElement | null>(null);
+  const mainRef = useRef<HTMLElement | null>(null);
   const [isCondensed, setIsCondensed] = useState(false);
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
   });
+
+  useCircuitOccluder(headerRef);
+  useCircuitOccluder(mainRef);
 
   useEffect(() => {
     const updateCollapsedState = () => {
@@ -301,11 +308,19 @@ export function AppShell({ children }: AppShellProps) {
         </div>
       </div>
 
-      <main id="main-content" className="-mt-4 grid flex-1 gap-8 lg:-mt-5 lg:gap-10">
+      <main id="main-content" className="-mt-4 grid flex-1 gap-8 lg:-mt-5 lg:gap-10" ref={mainRef}>
         {children}
       </main>
 
       <PublicSiteFooter />
     </PublicPageContainer>
+  );
+}
+
+export function AppShell({ children }: AppShellProps) {
+  return (
+    <CircuitOccluderProvider>
+      <AppShellContent>{children}</AppShellContent>
+    </CircuitOccluderProvider>
   );
 }
