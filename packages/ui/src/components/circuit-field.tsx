@@ -24,13 +24,22 @@ const BOOT_STAGGER_MAX_MS = 500;
 
 type ViaItem = {
   key: string;
-  traceIndex: number;
+  traceId: string;
   index: number;
   x: number;
   y: number;
   boot: boolean;
   delay: number;
   initiallyVisible: boolean;
+};
+
+type TraceTransition = {
+  route: RoutePoint[];
+  lenO: number;
+  lenN: number;
+  toBody: RoutePoint[];
+  startTime: number;
+  duration: number;
 };
 
 export type CircuitFieldProps = {
@@ -87,7 +96,8 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
   const viaItemIndexRef = React.useRef(new Map<string, ViaItem>());
   const tipElRefs = React.useRef(new Map<string, SVGRectElement>());
   const liveBodyRef = React.useRef<RoutePoint[][] | null>(null);
-  const rafRef = React.useRef<number | null>(null);
+  const transitionsRef = React.useRef(new Map<string, TraceTransition>());
+  const rafActiveRef = React.useRef<number | null>(null);
 
   const [viaItems, setViaItemsState] = React.useState<ViaItem[]>([]);
 
@@ -144,9 +154,9 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
   // Cross-trace intersection vias: a fixed pool of pre-mounted rects (sized
   // generously, well past any realistic simultaneous-crossing count) that
   // findIntersections' output is assigned into every time bodies change —
-  // including every tick() frame — the same direct-ref approach as the path
-  // `d` and tip positions above, so this never triggers a per-frame React
-  // re-render. Unused pool slots are hidden rather than unmounted.
+  // including every runTick() frame — the same direct-ref approach as the
+  // path `d` and tip positions above, so this never triggers a per-frame
+  // React re-render. Unused pool slots are hidden rather than unmounted.
   const intersectionElRefs = React.useRef(new Map<string, SVGRectElement>());
   const intersectionPoolSizeRef = React.useRef(0);
 
@@ -184,14 +194,15 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
     }
   }, []);
 
-  // `tick()` writes `el.style.opacity` directly on existing via rects every
-  // frame, bypassing React. When a key survives from one `setViaItems` call
-  // to the next with the same computed `initiallyVisible` value (e.g. a
-  // corner within the untouched `from` portion of a route), React's own
-  // prop diffing sees no change between renders and skips reapplying the
-  // style — leaving the DOM stuck at whatever opacity `tick()` last wrote,
-  // even though the settled render means "visible". Force it explicitly so
-  // rendered opacity never depends on React's diff bailing out.
+  // `runTick()` writes `el.style.opacity` directly on existing via rects
+  // every frame, bypassing React. When a key survives from one
+  // `setViaItems` call to the next with the same computed
+  // `initiallyVisible` value (e.g. a corner within the untouched `from`
+  // portion of a route), React's own prop diffing sees no change between
+  // renders and skips reapplying the style — leaving the DOM stuck at
+  // whatever opacity `runTick()` last wrote, even though the settled
+  // render means "visible". Force it explicitly so rendered opacity never
+  // depends on React's diff bailing out.
   React.useLayoutEffect(() => {
     viaItems.forEach((item) => {
       if (item.boot) return;
@@ -213,6 +224,126 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
 
     return { traces: generateTraces(debouncedSize.width, debouncedSize.height, seed, keepOut, traceCount), keepOut };
   }, [routeKey, debouncedSize?.width, debouncedSize?.height, traceCount]);
+
+  // The single shared rAF driving every in-flight transition. Reads
+  // `transitionsRef` fresh each frame instead of closing over a fixed
+  // per-effect-run transition list, so starting/replacing an id's entry
+  // (see the effect below) never needs to cancel and restart this loop —
+  // it just keeps draining whatever's currently in the map. A trace that
+  // finishes is removed from the map immediately (so the per-frame via
+  // opacity pass below stops touching it — see the skip on missing
+  // bounds) and its settled via items are folded into `viaItems` as soon
+  // as it finishes, independent of any siblings still crawling.
+  const runTick = React.useCallback(() => {
+    const bodies = liveBodyRef.current;
+    if (!bodies) {
+      rafActiveRef.current = null;
+      return;
+    }
+
+    const now = performance.now();
+    const currentBodies: { id: string; points: RoutePoint[] }[] = [];
+    const tipInfo: { id: string; end: "tail" | "head"; point: RoutePoint; axis: "h" | "v" }[] = [];
+    const windowBounds = new Map<string, { tail: number; head: number }>();
+    const finished: { id: string; toBody: RoutePoint[] }[] = [];
+
+    traceIds.forEach((id, index) => {
+      const transition = transitionsRef.current.get(id);
+
+      if (!transition) {
+        const points = bodies[index] ?? [];
+        currentBodies.push({ id, points });
+
+        const tail = points[0];
+        const tailNext = points[1];
+        const head = points[points.length - 1];
+        const headPrev = points[points.length - 2];
+        if (tail && tailNext) tipInfo.push({ id, end: "tail", point: tail, axis: tail.y === tailNext.y ? "h" : "v" });
+        if (head && headPrev) tipInfo.push({ id, end: "head", point: head, axis: headPrev.y === head.y ? "h" : "v" });
+        return;
+      }
+
+      const t = Math.min(1, (now - transition.startTime) / transition.duration);
+      const eased = easeInOutCubic(t);
+      const headIndex = transition.lenO - 1 + (transition.route.length - transition.lenO) * eased;
+      const bodySpan = transition.lenO - 1 + (transition.lenN - transition.lenO) * eased;
+      const tailIndex = Math.max(0, headIndex - bodySpan);
+      const window = sliceWindow(transition.route, tailIndex, headIndex);
+
+      bodies[index] = window;
+      currentBodies.push({ id, points: window });
+
+      const el = pathElRefs.current.get(id);
+      if (el) el.setAttribute("d", pathData(window));
+
+      const tail = window[0];
+      const tailNext = window[1];
+      const head = window[window.length - 1];
+      const headPrev = window[window.length - 2];
+      if (tail && tailNext) tipInfo.push({ id, end: "tail", point: tail, axis: tail.y === tailNext.y ? "h" : "v" });
+      if (head && headPrev) tipInfo.push({ id, end: "head", point: head, axis: headPrev.y === head.y ? "h" : "v" });
+
+      if (t >= 1) {
+        bodies[index] = transition.toBody;
+        transitionsRef.current.delete(id);
+        finished.push({ id, toBody: transition.toBody });
+      } else {
+        windowBounds.set(id, { tail: tailIndex, head: headIndex });
+      }
+    });
+
+    const cellAxisMap = buildCellAxisMap(currentBodies);
+    tipInfo.forEach(({ id, end, point, axis }) => {
+      setTipPosition(id, end, point, !isColinearWithOther(cellAxisMap, id, point, axis));
+    });
+    applyIntersections(findIntersections(cellAxisMap));
+
+    // A via whose trace isn't in `windowBounds` this frame is either
+    // settled (never touched here) or just finished (handled by the
+    // settled-items commit below, which the viaItems layout effect then
+    // forces to its final opacity) — leaving it alone rather than treating
+    // "no bounds" as "hidden" is what keeps a fast-finishing trace's vias
+    // from flickering off while slower siblings are still crawling.
+    viaElRefs.current.forEach((el, key) => {
+      const item = viaItemIndexRef.current.get(key);
+      if (!item) return;
+      const bounds = windowBounds.get(item.traceId);
+      if (!bounds) return;
+
+      const visible = item.index >= bounds.tail - 1e-3 && item.index <= bounds.head + 1e-3;
+      el.style.opacity = visible ? "1" : "0";
+    });
+
+    if (finished.length > 0) {
+      const finishedIds = new Set(finished.map((f) => f.id));
+      const carried = Array.from(viaItemIndexRef.current.values()).filter((item) => !finishedIds.has(item.traceId));
+      const settled: ViaItem[] = [];
+
+      finished.forEach(({ id, toBody }) => {
+        toBody.forEach((point, idx) => {
+          if (!point.corner || idx === 0 || idx === toBody.length - 1) return;
+          settled.push({
+            key: `${id}-${idx}`,
+            traceId: id,
+            index: idx,
+            x: point.x,
+            y: point.y,
+            boot: false,
+            delay: 0,
+            initiallyVisible: true,
+          });
+        });
+      });
+
+      setViaItems([...carried, ...settled]);
+    }
+
+    if (transitionsRef.current.size > 0) {
+      rafActiveRef.current = requestAnimationFrame(runTick);
+    } else {
+      rafActiveRef.current = null;
+    }
+  }, [applyIntersections, setTipPosition, setViaItems, traceIds]);
 
   React.useLayoutEffect(() => {
     if (!targetTraces) return;
@@ -257,7 +388,7 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
           const arcFraction = body.length > 1 ? idx / (body.length - 1) : 0;
           items.push({
             key: `${trace.id}-${idx}`,
-            traceIndex: i,
+            traceId: trace.id,
             index: idx,
             x: point.x,
             y: point.y,
@@ -305,11 +436,6 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
       return;
     }
 
-    if (rafRef.current !== null) {
-      cancelAnimationFrame(rafRef.current);
-      rafRef.current = null;
-    }
-
     pathElRefs.current.forEach((el) => {
       el.classList.remove("circuit-field-trace");
       el.style.strokeDasharray = "none";
@@ -326,6 +452,12 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
     });
 
     if (reducedMotionRef.current) {
+      transitionsRef.current.clear();
+      if (rafActiveRef.current !== null) {
+        cancelAnimationFrame(rafActiveRef.current);
+        rafActiveRef.current = null;
+      }
+
       liveBodyRef.current = transitions.map((transition) => transition.toBody);
 
       const cellAxisMap = buildCellAxisMap(
@@ -333,7 +465,7 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
       );
 
       const items: ViaItem[] = [];
-      transitions.forEach((transition, i) => {
+      transitions.forEach((transition) => {
         const el = pathElRefs.current.get(transition.id);
         if (el) el.setAttribute("d", pathData(transition.toBody));
 
@@ -341,7 +473,7 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
           if (!point.corner || idx === 0 || idx === transition.toBody.length - 1) return;
           items.push({
             key: `${transition.id}-${idx}`,
-            traceIndex: i,
+            traceId: transition.id,
             index: idx,
             x: point.x,
             y: point.y,
@@ -375,12 +507,12 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
     );
 
     const items: ViaItem[] = [];
-    transitions.forEach((transition, i) => {
+    transitions.forEach((transition) => {
       transition.route.forEach((point, idx) => {
         if (!point.corner || idx === 0 || idx === transition.route.length - 1) return;
         items.push({
           key: `${transition.id}-${idx}`,
-          traceIndex: i,
+          traceId: transition.id,
           index: idx,
           x: point.x,
           y: point.y,
@@ -415,92 +547,34 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
     });
     setViaItems(items);
 
-    const durations = transitions.map((transition) => travelDuration(transition.route.length - transition.lenO));
+    // Seed/replace each trace's transition in place — an id already mid-crawl
+    // keeps its slot overwritten (retargeting from its live in-flight body,
+    // read back via `liveBodyRef.current[i]` above), everyone else gets a
+    // fresh one. The shared loop below is started only if it isn't already
+    // running; it drains whichever ids are in the map each frame, so this
+    // never needs to cancel/restart transitions for ids that aren't changing.
     const startTime = performance.now();
-    const windowBounds: { tail: number; head: number }[] = [];
-
-    const tick = (now: number) => {
-      const elapsed = now - startTime;
-      let allDone = true;
-      const currentBodies: { id: string; points: RoutePoint[] }[] = [];
-      const tipInfo: { id: string; end: "tail" | "head"; point: RoutePoint; axis: "h" | "v" }[] = [];
-
-      transitions.forEach((transition, i) => {
-        const duration = durations[i] as number;
-        const t = Math.min(1, elapsed / duration);
-        if (t < 1) allDone = false;
-
-        const eased = easeInOutCubic(t);
-        const headIndex = transition.lenO - 1 + (transition.route.length - transition.lenO) * eased;
-        const bodySpan = transition.lenO - 1 + (transition.lenN - transition.lenO) * eased;
-        const tailIndex = Math.max(0, headIndex - bodySpan);
-
-        windowBounds[i] = { tail: tailIndex, head: headIndex };
-
-        const window = sliceWindow(transition.route, tailIndex, headIndex);
-        if (liveBodyRef.current) liveBodyRef.current[i] = window;
-        currentBodies.push({ id: transition.id, points: window });
-
-        const el = pathElRefs.current.get(transition.id);
-        if (el) el.setAttribute("d", pathData(window));
-
-        const tail = window[0];
-        const tailNext = window[1];
-        const head = window[window.length - 1];
-        const headPrev = window[window.length - 2];
-        if (tail && tailNext) tipInfo.push({ id: transition.id, end: "tail", point: tail, axis: tail.y === tailNext.y ? "h" : "v" });
-        if (head && headPrev) tipInfo.push({ id: transition.id, end: "head", point: head, axis: headPrev.y === head.y ? "h" : "v" });
+    transitions.forEach((transition) => {
+      transitionsRef.current.set(transition.id, {
+        route: transition.route,
+        lenO: transition.lenO,
+        lenN: transition.lenN,
+        toBody: transition.toBody,
+        startTime,
+        duration: travelDuration(transition.route.length - transition.lenO),
       });
+    });
 
-      const cellAxisMap = buildCellAxisMap(currentBodies);
-      tipInfo.forEach(({ id, end, point, axis }) => {
-        setTipPosition(id, end, point, !isColinearWithOther(cellAxisMap, id, point, axis));
-      });
-      applyIntersections(findIntersections(cellAxisMap));
-
-      viaElRefs.current.forEach((el, key) => {
-        const item = viaItemIndexRef.current.get(key);
-        const bounds = item ? windowBounds[item.traceIndex] : undefined;
-        const visible = item && bounds ? item.index >= bounds.tail - 1e-3 && item.index <= bounds.head + 1e-3 : false;
-
-        el.style.opacity = visible ? "1" : "0";
-      });
-
-      if (!allDone) {
-        rafRef.current = requestAnimationFrame(tick);
-        return;
-      }
-
-      rafRef.current = null;
-      liveBodyRef.current = transitions.map((transition) => transition.toBody);
-
-      const settled: ViaItem[] = [];
-      transitions.forEach((transition, i) => {
-        transition.toBody.forEach((point, idx) => {
-          if (!point.corner || idx === 0 || idx === transition.toBody.length - 1) return;
-          settled.push({
-            key: `${transition.id}-${idx}`,
-            traceIndex: i,
-            index: idx,
-            x: point.x,
-            y: point.y,
-            boot: false,
-            delay: 0,
-            initiallyVisible: true,
-          });
-        });
-      });
-      setViaItems(settled);
-    };
-
-    rafRef.current = requestAnimationFrame(tick);
+    if (rafActiveRef.current === null) {
+      rafActiveRef.current = requestAnimationFrame(runTick);
+    }
     // Only the target trace identity should retrigger this effect — the
     // refs and callbacks it closes over are stable across renders.
-  }, [targetTraces]);
+  }, [runTick, targetTraces]);
 
   React.useEffect(
     () => () => {
-      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+      if (rafActiveRef.current !== null) cancelAnimationFrame(rafActiveRef.current);
     },
     [],
   );
