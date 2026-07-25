@@ -2,10 +2,12 @@ import type { ApiClientFetch } from "@unimatrix/api-client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderHook } from "@testing-library/react";
 
-// No VITE_CLERK_PUBLISHABLE_KEY is stubbed in this file, so importing
-// `@/lib/api-client` mirrors the default, auth-disabled build: `useApiClient`
-// must resolve to the tokenless singleton and must never call Clerk's
-// `useAuth()` (there is no `AuthProvider` mounted to satisfy it).
+// VITE_CLERK_PUBLISHABLE_KEY is explicitly stubbed unset in this file (not
+// just left alone), so importing `@/lib/api-client` mirrors the default,
+// auth-disabled build regardless of whatever a developer's own local
+// `.env.local` configures for real Clerk testing: `useApiClient` must
+// resolve to the tokenless singleton and must never call Clerk's `useAuth()`
+// (there is no `AuthProvider` mounted to satisfy it).
 //
 // `apiClient` is created once, at module scope, from whatever `fetch` is on
 // `globalThis` at import time — so each test resets modules and stubs
@@ -14,9 +16,11 @@ import { renderHook } from "@testing-library/react";
 describe("useApiClient (auth disabled)", () => {
   beforeEach(() => {
     vi.resetModules();
+    vi.stubEnv("VITE_CLERK_PUBLISHABLE_KEY", undefined);
   });
 
   afterEach(() => {
+    vi.unstubAllEnvs();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });

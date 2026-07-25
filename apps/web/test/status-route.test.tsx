@@ -4,14 +4,30 @@ import {
   createMemoryHistory,
 } from "@tanstack/react-router";
 import { act } from "react";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { Providers } from "@/app/providers";
-import { createAppRouter } from "@/app/router";
-import { createAppQueryClient } from "@/lib/query-client";
-
+// This route test isn't about auth, but `app-shell.tsx` (rendered by every
+// route via the router) reads VITE_CLERK_PUBLISHABLE_KEY at module scope —
+// stubbed explicitly unset here so the test matches the default,
+// auth-disabled build regardless of whatever a developer's own local
+// `.env.local` configures for real Clerk testing. `app-shell.tsx` and its
+// dependents must be freshly (re-)imported after stubbing, not imported
+// statically at file top.
 describe("about route", () => {
+  beforeEach(() => {
+    vi.resetModules();
+    vi.stubEnv("VITE_CLERK_PUBLISHABLE_KEY", undefined);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   it("renders the /about route with contact details and an email draft form", async () => {
+    const { Providers } = await import("@/app/providers");
+    const { createAppRouter } = await import("@/app/router");
+    const { createAppQueryClient } = await import("@/lib/query-client");
+
     const queryClient = createAppQueryClient();
     const router = createAppRouter({
       history: createMemoryHistory({
