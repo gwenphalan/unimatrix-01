@@ -54,6 +54,13 @@ export const TALL_OCCLUDER_MAX_HEIGHT_PX = 900;
 // Two grid cells is the floor a genuine panel/card/footer clears easily.
 export const MIN_OCCLUDER_SIDE_PX = GRID * 2;
 
+// Registration stays explicit opt-in (no DOM-scanning heuristic) — this is
+// a dev-only warn, not a rejection, for the common mistake of registering
+// an interactive element (a link/button) instead of the non-interactive
+// surface around it. Occluders are meant for panels/cards/footers, never
+// for titles, badges, buttons, or other interactive/decorative elements.
+const INTERACTIVE_OCCLUDER_SELECTOR = 'button, a[href], input, select, textarea, [role="button"], [role="link"]';
+
 const RegistryContext = React.createContext<OccluderRegistry | null>(null);
 const RectsContext = React.createContext<Occluder[]>([]);
 const DeltaContext = React.createContext<DeltaSubscribe>(() => () => {});
@@ -319,11 +326,24 @@ export function useCircuitOccluder(
         );
         return;
       }
+
+      if (el.matches(INTERACTIVE_OCCLUDER_SELECTOR)) {
+        console.warn(
+          "[CircuitField] useCircuitOccluder was called with an interactive element (button/link/input) as the ref — register the surrounding non-interactive surface instead.",
+          el,
+        );
+      }
+
+      el.setAttribute("data-circuit-occluder", "surface");
     }
 
     const id = idRef.current;
     registry.register(id, ref, maxHeightPx !== undefined ? { maxHeightPx } : undefined);
     return () => {
+      // `el`, not `ref.current` — React nulls the ref during unmount's
+      // mutation phase before this (passive-effect) cleanup runs, so
+      // reading `ref.current` here would already be `null`.
+      el?.removeAttribute("data-circuit-occluder");
       registry.unregister(id);
     };
   }, [registry, ref, enabled, maxHeightPx]);

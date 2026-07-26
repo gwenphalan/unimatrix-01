@@ -374,6 +374,54 @@ describe("CircuitOccluderProvider / useCircuitOccluder", () => {
     expect(latestRects).toEqual([{ x0: 0, y0: 0, x1: 80, y1: 80 }]);
   });
 
+  it("stamps data-circuit-occluder on register and removes it on unregister", async () => {
+    const rect = makeRect({ left: 0, top: 0, right: 100, bottom: 100 });
+    let registrantEl: HTMLDivElement | undefined;
+
+    const { unmount } = render(
+      <CircuitOccluderProvider>
+        <Registrant onElement={(el) => (registrantEl = el)} rect={rect} />
+      </CircuitOccluderProvider>,
+    );
+
+    await flushRaf();
+    expect(registrantEl?.getAttribute("data-circuit-occluder")).toBe("surface");
+
+    unmount();
+    expect(registrantEl?.getAttribute("data-circuit-occluder")).toBeNull();
+  });
+
+  it("warns (but still registers) when the ref points at an interactive element", async () => {
+    let latestRects: readonly { x0: number; y0: number; x1: number; y1: number }[] = [];
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const rect = makeRect({ left: 0, top: 0, right: 100, bottom: 100 });
+
+    function LinkRegistrant() {
+      const ref = React.useRef<HTMLAnchorElement>(null);
+      useCircuitOccluder(ref);
+
+      React.useLayoutEffect(() => {
+        if (ref.current) ref.current.getBoundingClientRect = () => ({ ...rect, toJSON: () => ({}) }) as DOMRect;
+      }, []);
+
+      return <a href="/somewhere" ref={ref} />;
+    }
+
+    render(
+      <CircuitOccluderProvider>
+        <LinkRegistrant />
+        <RectsProbe onRects={(r) => (latestRects = r)} />
+      </CircuitOccluderProvider>,
+    );
+
+    await flushRaf();
+
+    expect(latestRects).toEqual([{ x0: 0, y0: 0, x1: 100, y1: 100 }]);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("interactive element (button/link/input)"), expect.anything());
+
+    warn.mockRestore();
+  });
+
   it("useCircuitOccluder outside a Provider warns instead of throwing", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 
