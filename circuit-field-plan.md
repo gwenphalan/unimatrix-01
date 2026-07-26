@@ -33,7 +33,9 @@ generation will starve the generator harder, not less. Phases 3 and 4 must land 
 - Every vertex an exact `GRID` (40px) multiple; `snap()` after every clamp.
 - No loops — not a trace looping on itself, not two traces retracing the same stretch, not a
   cycle formed by the combined shape of several traces.
-- Vias only at real bends (`recomputeCorners`), never mid-straight-run.
+- Vias only at real bends of their own trace (`recomputeCorners`), never mid-straight-run — cross-trace
+  intersection nodes (`findIntersections`) are a separate, deliberate exception (see Known issues,
+  vias-mid-straight-line entry, corrected 2026-07-25).
 - Tip vias suppressed when colinear with another trace's segment at that cell
   (`isColinearWithOther`).
 - Fixed per-trace slot count with stable 1:1 identity across regenerations (`traceIds`,
@@ -41,34 +43,97 @@ generation will starve the generator harder, not less. Phases 3 and 4 must land 
 
 Add regression tests for all of these once the generation module is pure (Session A).
 
-## Known issues (reported 2026-07-25, not yet triaged)
+## Known issues (reported 2026-07-25) — triaged and fixed 2026-07-25
 
-User-reported, observed live on the production deploy of `main` (`unimatrix-01.dev` and
-subdomains) — **not** reproduced or investigated yet, and **not** caused by the Session E1 work
-above (E1 was implemented on a branch cut from `origin/main` after these were already present;
-confirmed with the user this doesn't block E1). Four symptoms, likely overlapping with the Hard
-Invariants above and with prior unresolved flags in this doc:
+Investigated read-only against the production deploy (`unimatrix-01.dev`) via the Chrome
+extension, per a Planner-agent (opus) plan reviewed by `advisor()` first — the advisor's review
+flagged that the plan as first drafted only produced verdicts, not fixes, and reordered the work
+ahead of Session E2 (production symptoms outrank a new feature; also cheaper to fix before E2
+lands more producers of the same mutation). Verdicts below.
 
-- Circuit lines disappearing during page changes.
-- Circuit lines appearing during page changes — new lines being created rather than the existing
-  set moving/retargeting. Reported preference: page-change reactivity should always reuse the same
-  fixed set of lines (per-trace slot identity, moved/retargeted in place), not add/remove slots.
-  This may be the reactive-`traceCount` slot re-seed behavior documented as intentional in Session
-  C ("A count change is a full re-seed of the affected slots") reacting more visibly now that D.5
-  broadened occlusion to many per-card registrants (occluded area — and so `traceCount` — can
-  differ more between routes than it did with 2-3 broad containers) — needs verification, not
-  assumed.
-- Circuit loops — a direct Hard Invariant violation if confirmed on settled (non-crawling) geometry.
-- Vias appearing mid-straight-line — **an exact repeat of a report Session C already flagged as
-  unconfirmed** ("did not reproduce in a settled, undisturbed DOM check... Flagging as unconfirmed
-  rather than closed — if it recurs on a fully idle page, worth a closer look with
-  `prefers-reduced-motion` forced on"). This is that recurrence.
+- **Circuit lines disappearing / appearing during page changes — CONFIRMED, FIXED.** Directly
+  reproduced live: a fresh load of `/` mounted 32 traces (`document.querySelectorAll('.circuit
+  -field-glow path').length`), then dropped to 20 within ~1s with no user action — a full
+  add/remove of 12 slots, not a crawl. Root cause: `traceCount`'s desired value was computed from
+  `estimateEffectiveArea(width, height, occluders)`, but `CircuitOccluderProvider` measures
+  registrants asynchronously (rAF-batched `ResizeObserver`), so the very first `traceCount` commit
+  — which bypasses the hysteresis band entirely, since there's no `current` to diff against yet —
+  could land before any occluder had measured, producing an inflated viewport-only count that a
+  moment later got "corrected" downward by more than the band once real per-card occlusion (D.5)
+  arrived. Same race re-fires on every occluder-set change, which is why it read as "during page
+  changes" rather than only at first mount. Fixed by computing `desired` from raw viewport area
+  (`debouncedSize.width * debouncedSize.height`) instead — occlusion still drives *routing* (traces
+  steer around registered occluders via `generateTraces`' weighting, unchanged), this only
+  decouples slot *count* from occluder-registration timing, matching the user's stated preference
+  that page-change reactivity reuse the same fixed set of lines. `estimateEffectiveArea` stays in
+  `occlusion.ts`, intentionally unconsumed in production now — same test-only status this doc
+  already established for `CircuitTree.adjacency` (Session E2 note below). SPA route-to-route
+  navigation (once warm) was independently confirmed stable at a fixed viewport across `/`,
+  `/blog`, `/projects`, `/about` even before this fix, so the cross-route-occlusion-difference
+  half of the original hypothesis wasn't the dominant driver — the mount/occluder-registration race
+  was. `circuit-field.tsx`'s `traceCount` effect and its comment updated; no test existed for this
+  effect (component-level, not covered by any `circuit-field.test.tsx`) and none was added — see
+  Session E2 log for why (jsdom can't observe `CircuitOccluderProvider`'s async registration timing
+  meaningfully without a live rAF/ResizeObserver harness this repo doesn't have for this file).
+- **Circuit loops — not reproduced; hardened as a precaution.** Zero console hits for any of the
+  three existing generation/geometry canaries (`attachRoute found no clear corridor`,
+  `ringSearchUnoccluded exhausted the canvas`, `densify() got a non-axis-aligned segment`) across
+  every route visited this session — rules out a generation-time cycle for now. Found and fixed a
+  real (if narrow) mechanism that could produce one on *settled* geometry: `handleOccluderDelta`'s
+  `buildOccupiedFootprint(liveBodyRef.current, id)` call only saw other traces' *settled*
+  `liveBodyRef` cells — a trace mid-crawl has a `sliceWindow` partial body there, so its real
+  in-flight *target* cells were invisible to a same-tick retarget candidate, which could claim a
+  cell the crawling trace was about to land on. `buildOccupiedFootprint` (`scroll-retarget.ts`)
+  gained an optional third `inFlightToBodies` parameter; `handleOccluderDelta` now passes every
+  `transitionsRef` entry's `toBody` (excluding the candidate's own). New test:
+  `scroll-retarget.test.ts` — "also occupies in-flight target (toBody) cells, excluding the
+  excluded id's own". This was already going to be a Session E2 prerequisite (idle-shift is a
+  second, permanent producer of the same class of mutation) — landing it here fixes today's
+  narrower scroll-only exposure too.
+- **Vias appearing mid-straight-line ("S4") — CONFIRMED, ROOT-CAUSED, FIXED (Session E2).** The two
+  earlier passes at this (Session C: "not reproduced in a settled DOM"; the 2026-07-25 triage:
+  "likely real crossing vias being misread") were both wrong, and the second one's "amended Hard
+  Invariant" rationalisation should be treated as a cautionary example — the invariant text amended
+  there is still accurate on its own terms, but it was not the explanation for this report. The real
+  cause was not in the via code at all. It is the same single defect as the "everything freezes on
+  route change" report, and it is a stale-closure bug in the shared rAF loop:
 
-Next session on this should investigate on `main` directly (not a Session E branch), starting from
-forcing `prefers-reduced-motion` per Session C's own suggestion to rule out crawl-interpolation
-sampling artifacts, and checking whether `traceCount`'s hysteresis band is actually holding across
-D.5's per-card registration set before assuming the appear/disappear complaint is intentional
-behavior working as designed rather than a regression.
+  `runTick` reschedules itself with `requestAnimationFrame(runTick)`, where `runTick` is *that
+  render's* closure instance. `ensureLoop()` only ever installs a newer one when
+  `rafActiveRef.current === null`. Pre-E2 that was harmless — the loop always drained to `null`
+  between crawls, so every crawl got a current closure. E2's `full` mode changed two things at
+  once: `loopShouldRun()` became true with an *empty* `transitionsRef` (via `idleEnabledRef`), and
+  the idle-enable layout effect started the loop **on the first commit** — where `traceCount` is
+  still `null`, so `traceIds` is `[]`. The loop therefore pinned a closure that iterates zero
+  traces, forever, at a healthy 60fps.
+
+  Consequences, all of which were reported as separate symptoms: `runTick` never advanced any
+  transition (`traceIds.forEach` over an empty array), so no crawl ever ran and no trace ever
+  reached its `finished` branch — the rendered `d` stayed at whatever boot last wrote. Meanwhile
+  the boot/crawl layout effect kept doing its half of the work correctly on every route change,
+  committing `crawlItems` positioned at **route** coordinates. So the vias moved to the new
+  geometry and the paths did not. Every "via mid-straight-line" was a correctly-computed via for a
+  crawl that never happened, drawn against a stale path. The `t9-5` instance the previous
+  investigation dug into was a legitimate route-index-5 corner of a crawl route, not a bogus key.
+
+  Reproduced live before the fix on `localhost:5173` (`/` → `/projects`): **0 of 30** path `d`
+  attributes changed at any point up to 4.5s after the route change, and **30 of 50** visible via
+  rects failed a per-via corner-membership check against the rendered paths — matching the earlier
+  session's ~30-of-~54 exactly. After the fix, same repro across six consecutive route changes
+  (`/projects`, `/blog`, `/about`, `/`, `/projects`, `/`): 30 of 30 paths moved within 700ms, all
+  settled, and **0 mismatches** on every one.
+
+  Fixed in `circuit-field.tsx` with a `runTickRef`/`scheduleTick` trampoline — the same `*Ref`
+  indirection idiom the file already used for `watchdogStepRef`. Both self-reschedule sites (the
+  idle fast path *and* the main tail) plus `ensureLoop` now schedule `scheduleTick`, which reads
+  `runTickRef.current` at frame time; a layout effect keeps that ref pointed at the current
+  `runTick`. Side benefit: `ensureLoop` is now referentially stable, so the crawl/idle/retarget
+  effects that depend on it stop re-running every commit. Regression test:
+  `test/circuit-field-idle-loop.test.tsx` — "advances rendered geometry on a routeKey change that
+  lands after mount", which asserts *progress* (path `d` actually changes) rather than that frames
+  get scheduled. Verified it fails against the pre-fix code and passes after. **Every pre-existing
+  test in that file passed while this bug was live**, because they all assert scheduling — that is
+  why this shipped invisibly and why the new test is written the way it is.
 
 ## Token-efficiency session grouping
 
@@ -408,12 +473,22 @@ Covers original bullets 3, 4 (the loop half), 5.
   rAF-stops check (see above) — jsdom test is authoritative.
 - [x] Commit, PR.
 
-#### Session E2 — Idle packets + idle line-shift (separate branch, cut after E1 merges)
+#### Session E2 — Idle packets (separate branch, cut after E1 merges)
 
 Covers original bullets 1, 2. Gated behind `mode === "full"`; on `transitions-only`/`static`
 neither feature mounts or schedules.
 
-- [ ] `idle-packets.ts` (new, pure, zero React): `buildPacketGraph(bodies)` from **live
+**Scope change, mid-session, at the user's explicit request while watching it live: idle
+line-shift is SCRAPPED.** "scrap the idle shifting lines, i just want idle bits moving."
+`idle-shift.ts` and `test/idle-shift.test.ts` were deleted and every call site unwired
+(`maybeScheduleIdleShift`, `lastIdleShiftAtRef`, `idleShiftCursorRef`, `generatedTipCellRef`,
+`occludersRef`, and the `applyRetargetsRef` forward-reference that only existed to let the idle
+scheduler reach `applyRetargets`). The `applyRetargets` extraction itself stays — it is still
+worth having as the single owner of retarget crawl/snap mechanics, now with `handleOccluderDelta`
+(scroll) as its only caller. The two idle-shift checklist items below are struck through rather
+than deleted so a future session can see what was built and why it is gone.
+
+- [x] `idle-packets.ts` (new, pure, zero React): `buildPacketGraph(bodies)` from **live
   `liveBodyRef` bodies at settle, not `CircuitTree.adjacency`** — live geometry includes scroll
   retargets and idle shifts, generation-time adjacency goes stale the first time a tip moves.
   (Note for the record: `CircuitTree.adjacency` therefore stays unconsumed in production,
@@ -423,18 +498,18 @@ neither feature mounts or schedules.
   where `transitionsRef.size === 0 && graphDirtyRef`), not per frame — cost is O(total live
   points), amortized instead of running at 60/s. Packets are suspended and hidden while any
   transition is in flight (a packet walking stale geometry would visibly float off the line).
-- [ ] Pooled packet elements, mirroring the existing `intersectionElRefs` direct-ref pattern
+- [x] Pooled packet elements, mirroring the existing `intersectionElRefs` direct-ref pattern
   exactly: fixed `IDLE_PACKET_POOL_SIZE = 12` (deliberately not scaled by `traceCount` — the pool
   is a perf ceiling, density comes from spawn rate), `freeSlotsRef` stack, direct `x`/`y`/`opacity`
   writes per idle frame, never a React re-render.
-- [ ] Walk semantics: `PACKET_STEP_MS = 110` per grid cell, linear (not eased) interpolation.
+- [x] Walk semantics: `PACKET_STEP_MS = 110` per grid cell, linear (not eased) interpolation.
   Junction split: continue down one option, fork down a second **only if a free slot exists**
   (pool exhaustion = no fork, never queued/preempting) — max one fork per junction. Retire on
   dead end or `PACKET_MAX_HOPS = 40`. Spawn from graph leaves on jittered
   `PACKET_SPAWN_INTERVAL_MS = 900` while under `IDLE_PACKET_MAX_CONCURRENT = 8` (4 slots headroom
   for splits). No per-packet occlusion query — traces already route through negative space, so
   packets inherit it for free.
-- [ ] `idle-shift.ts` (new, pure, zero React): `pickIdleShiftIds` — **round-robin cursor over
+- [~] ~~SCRAPPED~~ `idle-shift.ts` (new, pure, zero React): `pickIdleShiftIds` — **round-robin cursor over
   `traceIds`, not random** (even coverage, no starvation, deterministic/testable), batch of 2,
   eligibility = not mid-crawl and past a cooldown on the existing `lastRetargetAtRef` map (shared
   with scroll-retarget, so the two mechanisms can never double-move the same trace within a
@@ -457,22 +532,22 @@ neither feature mounts or schedules.
   Scheduled from the idle branch of `runTick` on a jittered ~9s interval (`now -
   lastIdleShiftAtRef.current > IDLE_SHIFT_INTERVAL_MS`) — no `setInterval`, which would keep
   firing while hidden and defeat E1's visibility gate.
-- [ ] Handoff into Session B's engine, no second crawl implementation: extract the existing
+- [x] Handoff into Session B's engine, no second crawl implementation: extract the existing
   delta-retarget handler's post-`candidateIds` logic into a shared `applyRetargets(entries, now)`
   — same `buildRoute` → sparse-points write → `lastRetargetAtRef` stamp →
   `transitionsRef.set` → `ensureLoop()` chain, same static-mode snap branch — called by both the
   scroll-delta handler and the idle scheduler. Idle-shift scores against a ref mirror of
   `useCircuitOccluderRects()` (no fresher delta snapshot to use, unlike the scroll path).
-- [ ] Hard Invariants idle line-shift must not violate (all inherited via the shared
+- [~] ~~SCRAPPED~~ Hard Invariants idle line-shift must not violate (all inherited via the shared
   `applyRetargets` path, not re-derived): axis-aligned (in-line nudge only, same reason Session D
   reworked away from a 2D elbow search); exact GRID multiples (`clampToLattice` + the existing
   re-`snap()` on the densified body); no loops (`occupied` + `ownCells` collision check per
   candidate cell); vias only at real bends (`recomputeCorners`, unchanged); stable slot identity
   (idle-shift only ever mutates `liveBodyRef`/`previousTracesRef`/`transitionsRef` for ids that
   already exist — never touches `traceIds`/`traceCount`/`targetTraces`).
-- [ ] CSS: `.circuit-field-packet` fill at 85% primary (brighter than the 60% strokes/vias, reads
+- [x] CSS: `.circuit-field-packet` fill at 85% primary (brighter than the 60% strokes/vias, reads
   as moving current) — no keyframe, motion is JS-driven.
-- [ ] Tests: new `test/idle-packets.test.ts` (`buildPacketGraph` neighbor symmetry/leaf/junction
+- [x] Tests: new `test/idle-packets.test.ts` (`buildPacketGraph` neighbor symmetry/leaf/junction
   detection, plus a cross-module check that it stays a single connected component over real
   `generateTraces` output; `chooseNextCell` never returns `cameFrom`, forks only at junctions with
   a free slot; `packetPosition` stays axis-aligned between cell centers; pool-cap never exceeded).
@@ -483,13 +558,13 @@ neither feature mounts or schedules.
   `test/scroll-retarget.test.ts` re-run unchanged to confirm the `applyRetargets` extraction is
   behavior-preserving; `trace-generation.test.ts`/`circuit-occluder.test.tsx` need no new cases
   (generation and the occluder provider are untouched by E2).
-- [ ] Validate: file-scoped eslint/typecheck, full `pnpm --filter @unimatrix/ui exec vitest run`,
+- [x] Validate: file-scoped eslint/typecheck, full `pnpm --filter @unimatrix/ui exec vitest run`,
   `pnpm check`. Live on all 3 apps at desktop width (packets/idle-shift only exist in `full`
   mode — a coarse-pointer/mobile pass correctly shows neither; don't read that as a bug). Watch
   for: a packet floating off a line mid-crawl (suspend flag wrong), a packet stuck visible after
   retiring (slot-return bug), idle drift producing a diagonal (would mean `idleShiftTip` diverged
   from the axis constraint), and unbounded drift on a long-idle tab (leash bug).
-- [ ] Commit, PR.
+- [x] Commit, PR.
 
 ## Decisions (confirmed with user)
 
@@ -831,4 +906,56 @@ you. Keep entries short; this file is a resume point, not a changelog.
   coarse-pointer-overrides-high-concurrency, one-way ratchet) — but an actual visual check of a
   throttled/coarse/reduced-motion device rendering `.circuit-field-static`'s glow-pulse fallback
   has not happened on a real device or emulator.
-- Session E2: _not started_ — separate branch, cut fresh from `origin/main` after E1 merges.
+- Session E2: Done, on `feat/circuit-field-idle-behaviors` (cut from `origin/main` post-PR#52/E1).
+  Shipped: `idle-packets.ts` (pure, zero React — `buildPacketGraph` over live `liveBodyRef` cells,
+  `chooseNextCell`, `packetPosition`, `advancePacket`), a fixed 12-slot pooled packet layer in
+  `circuit-field.tsx` written by direct ref/attribute mutation per idle frame (never a React
+  re-render, mirroring `intersectionElRefs`), and the `applyRetargets` extraction. `pnpm check`
+  green; `packages/ui` 132/132.
+  **Idle line-shift was scrapped mid-session at the user's request** (see the E2 checklist above);
+  `idle-shift.ts` and its test are deleted, not disabled.
+  Three real bugs found and fixed, all confirmed live against the dev server rather than by
+  inspection — worth reading in order, because the first one is the interesting one:
+  (1) **The shared rAF loop pinned a stale `runTick` closure forever.** Full write-up in the
+  "Known issues" S4 entry above, since it turned out to be the root cause of *both* outstanding
+  production reports ("everything freezes on route change, same lines on every page" and "vias
+  mid-straight-line"), which had been triaged as two unrelated issues across two prior sessions.
+  Short version: `requestAnimationFrame(runTick)` reschedules the render-instance it was called
+  on; `ensureLoop` only installs a fresh one when `rafActiveRef` is `null`; E2's permanently-running
+  idle loop starts on the first commit, where `traceIds` is still `[]`, and never yields. Fixed
+  with a `runTickRef`/`scheduleTick` trampoline. **This is the second time in this line of work
+  that E-session "keep the loop alive" plumbing has produced a bug that every existing test passed
+  through** (E1's watchdog rAF ignoring `documentHiddenRef` was the first) — the shared-loop
+  lifecycle is the part of this component that most deserves progress-asserting tests, not
+  scheduling-asserting ones.
+  (2) **Packets froze on screen for the duration of every crawl** (user-reported live: "the bits
+  freeze mid transition and dont disappear until the traces are done crawling"). `advanceIdlePackets`
+  only runs on `runTick`'s idle fast path, so once a transition existed the pool stopped being
+  written to at all — and nothing hid it, so every packet sat stranded at its last position while
+  the lines moved out from under it. The plan text above always said packets are "suspended **and
+  hidden**" during a transition; only the suspend half had been implemented. Added
+  `retireAllPackets()` (which also de-duplicates the two identical copies of that block that
+  already existed in the trace-count-prune effect and the `visibilitychange` handler) and called it
+  from `runTick` the frame a crawl starts. Confirmed live: 8 visible packets → 0 within one frame
+  of a route change, staying 0 for the whole crawl.
+  (3) **Packets could vanish mid-line** (user-reported: "i dont want bits dissapearing mid line
+  (except for transitions)"). `advancePacket` retired on `PACKET_MAX_HOPS = 40` wherever the packet
+  happened to be. Removed that as the routine retirement path: the only normal way out is now a
+  dead end, which by construction is a degree-1 leaf cell — i.e. the visible end of a line. That
+  terminates on its own without a cap, since the walk never immediately backtracks and the
+  generator produces a tree, so a no-backtrack walk is a simple path that must reach a leaf.
+  `PACKET_MAX_HOPS` is kept at 400 purely as a cycle escape hatch (cross-trace crossings make the
+  live graph slightly non-tree). Confirmed live by tracking every pooled slot's last visible
+  position across 200 samples: 27 retirement events, 27 at a leaf, 0 mid-line.
+  Also per user request: packets are brighter and glowier — group `fill` went from
+  `color-mix(..., --primary 85%, --background)` to full `var(--primary)` (strokes/vias stay mixed
+  down to 60%, so packets read as bright current on a dim board), plus two stacked `drop-shadow`s
+  (3px core, 7px halo) on `.circuit-field-packet` layered over the group's existing 2px shadow.
+  Deliberately a `filter` and not an `opacity`, so overlapping packets can never composite brighter
+  than a lone one — the exact artifact Session C removed the group `opacity` for.
+  Live validation (Chrome extension, `apps/web` dev server, real browser, `full` mode): six
+  consecutive route changes each moved 30/30 paths within 700ms, each settled, each with 0 via
+  mismatches on a per-via corner-membership check; zero console errors/warnings throughout.
+  Not re-checked live this session: cube-trainer and auth (untouched by E2's code paths beyond the
+  shared component), and mobile/coarse-pointer (correctly shows no packets at all in `static`
+  mode — not a bug).

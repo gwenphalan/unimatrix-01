@@ -13,12 +13,28 @@ export type TraceTip = { id: string; point: Point };
 /**
  * Union of every trace's live body cells except `excludeId`'s own — the
  * footprint a retarget candidate must avoid to not collide with another
- * live trace.
+ * live trace. `inFlightToBodies`, when passed, adds each in-flight
+ * transition's *target* body too (again excluding `excludeId`): a trace
+ * mid-crawl only has a partial `sliceWindow` in `liveBodies`, so without this
+ * a retarget candidate can't see where a crawling trace is about to land and
+ * can claim that cell — a real settled-geometry overlap once the crawl
+ * finishes, not just a mid-flight visual artifact. Every caller that can
+ * produce a settled overlap (scroll retarget today, idle-shift in Session
+ * E2) must pass this.
  */
-export function buildOccupiedFootprint(liveBodies: ReadonlyMap<string, readonly RoutePoint[]>, excludeId: string): Set<string> {
+export function buildOccupiedFootprint(
+  liveBodies: ReadonlyMap<string, readonly RoutePoint[]>,
+  excludeId: string,
+  inFlightToBodies?: ReadonlyMap<string, readonly RoutePoint[]>,
+): Set<string> {
   const occupied = new Set<string>();
 
   liveBodies.forEach((body, id) => {
+    if (id === excludeId) return;
+    body.forEach((point) => occupied.add(cellKey(point)));
+  });
+
+  inFlightToBodies?.forEach((body, id) => {
     if (id === excludeId) return;
     body.forEach((point) => occupied.add(cellKey(point)));
   });

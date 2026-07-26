@@ -212,6 +212,27 @@
     animation: circuit-via-in 250ms ease-out forwards;
   }
 
+  /*
+   * Session E2 idle packets: full-strength `--primary` (the strokes/vias are
+   * mixed down to 60% against the background, so packets read as brighter
+   * moving current on a dimmer board), fill supplied by the pooled group's
+   * own `fill` attribute in circuit-field.tsx (same pattern the tip/
+   * intersection pools already use, no per-element class needed for color).
+   * The two stacked drop-shadows are a tight core plus a wide halo, layered
+   * on top of the group's own 2px shadow — deliberately a `filter`, not an
+   * `opacity`, so overlapping packets never composite brighter than a lone
+   * one (the exact artifact Session C removed the group `opacity` for). No
+   * keyframe here — position and opacity are written directly per idle frame
+   * (`advanceIdlePackets`), never CSS-animated. Only ever mounted/written to
+   * in `full` motion mode; every other mode's pool sits at its initial
+   * `opacity: 0` forever, so no `prefers-reduced-motion` override is needed.
+   */
+  .circuit-field-packet {
+    animation: none;
+    filter: drop-shadow(0 0 3px var(--primary))
+      drop-shadow(0 0 7px color-mix(in oklab, var(--primary) 70%, transparent));
+  }
+
   @keyframes circuit-draw {
     to {
       stroke-dashoffset: 0;
