@@ -41,6 +41,35 @@ generation will starve the generator harder, not less. Phases 3 and 4 must land 
 
 Add regression tests for all of these once the generation module is pure (Session A).
 
+## Known issues (reported 2026-07-25, not yet triaged)
+
+User-reported, observed live on the production deploy of `main` (`unimatrix-01.dev` and
+subdomains) — **not** reproduced or investigated yet, and **not** caused by the Session E1 work
+above (E1 was implemented on a branch cut from `origin/main` after these were already present;
+confirmed with the user this doesn't block E1). Four symptoms, likely overlapping with the Hard
+Invariants above and with prior unresolved flags in this doc:
+
+- Circuit lines disappearing during page changes.
+- Circuit lines appearing during page changes — new lines being created rather than the existing
+  set moving/retargeting. Reported preference: page-change reactivity should always reuse the same
+  fixed set of lines (per-trace slot identity, moved/retargeted in place), not add/remove slots.
+  This may be the reactive-`traceCount` slot re-seed behavior documented as intentional in Session
+  C ("A count change is a full re-seed of the affected slots") reacting more visibly now that D.5
+  broadened occlusion to many per-card registrants (occluded area — and so `traceCount` — can
+  differ more between routes than it did with 2-3 broad containers) — needs verification, not
+  assumed.
+- Circuit loops — a direct Hard Invariant violation if confirmed on settled (non-crawling) geometry.
+- Vias appearing mid-straight-line — **an exact repeat of a report Session C already flagged as
+  unconfirmed** ("did not reproduce in a settled, undisturbed DOM check... Flagging as unconfirmed
+  rather than closed — if it recurs on a fully idle page, worth a closer look with
+  `prefers-reduced-motion` forced on"). This is that recurrence.
+
+Next session on this should investigate on `main` directly (not a Session E branch), starting from
+forcing `prefers-reduced-motion` per Session C's own suggestion to rule out crawl-interpolation
+sampling artifacts, and checking whether `traceCount`'s hysteresis band is actually holding across
+D.5's per-card registration set before assuming the appear/disappear complaint is intentional
+behavior working as designed rather than a regression.
+
 ## Token-efficiency session grouping
 
 Each session below is meant to fit inside one usage window. `/clear` between sessions.
@@ -255,28 +284,211 @@ blocking findings a planning pass caught before writing code, and the live-brows
   whatever card/panel happened to be centered on the page.
 - [x] Commit, PR.
 
-### Session E — Idle packets + idle line-shift + capability gating
-- [ ] Idle "bits of information": build a cell→neighbor adjacency map once per settle (not
-  per-frame — current `buildCellAxisMap` + `findIntersections` already run every tick and are
-  already the hottest thing in the loop; revisit that cost here too). Walk the graph, animate
-  packets via a pooled fixed set of elements (same direct-ref pooling pattern as
-  `intersectionElRefs`), cap the pool, split visually at junctions.
-- [ ] Idle line-shift: periodically retarget a few trace ids (not all) using Session B's
-  per-trace transition engine — reuse the existing crawl mechanism, do not build a second one.
-- [ ] Capability gating (measure, don't sniff): `prefers-reduced-motion` (already present),
-  `(pointer: coarse)`, `(update: slow)`, `prefers-reduced-data`, `navigator.hardwareConcurrency`.
-  Skip `navigator.deviceMemory` alone — Chromium-only, non-standard. Add a frame-budget
-  watchdog during boot: downgrade to static/motionless if the first N frames blow budget;
-  downgrade must be one-way (never oscillate back to animated).
-- [ ] Idle packets require a permanently-running rAF (currently rAF only runs during
-  transitions) — this is a direct perf cliff. Must gate behind the capability check above,
-  and stop the loop on `document.hidden` / `visibilitychange`.
-- [ ] Mobile/low-power appearance (decided): static traces (freeze one generated frame, no
-  rAF at all) + CSS-only stroke glow pulse (keyframe, not JS-driven) so it doesn't read as
-  fully dead. No separate trace-count reduction beyond whatever the normal density/occlusion
-  logic already yields at that viewport size.
-- [ ] Validate: low-end device emulation (CPU throttling in devtools), background-tab check
-  (rAF actually stops), all 3 apps.
+### Session E — split into E1 (motion modes + loop lifecycle) and E2 (idle behaviors)
+
+Planned via a Planner-agent (opus) pass, reviewed by `advisor()` before writing code — see Session
+Log for what the advisor pass caught. Split because the original single checklist spans two new
+pure modules, a new hook, a rewrite of the rAF lifecycle, a new pooled DOM layer, and a new CSS
+mode — too large for one usage window per this doc's own grouping goal. **E1 must land and merge
+(its own branch/PR, cut fresh from `origin/main` after E1 merges) before E2 starts** — E2's
+permanently-running idle rAF is only affordable because of E1's loop gate, and is gated behind
+E1's mode enum. This branch (`feat/circuit-field-idle-capability`) covers **E1 only**.
+
+#### Session E1 — Capability gating, motion modes, loop lifecycle
+
+Covers original bullets 3, 4 (the loop half), 5.
+
+- [x] `capability.ts` (new, pure, zero React) — `MotionMode = "full" | "transitions-only" |
+  "static"`, `CapabilitySignals`, `readCapabilitySignals()`, `decideMotionMode(signals)`,
+  `mostRestrictive(a, b)`. `transitions-only` is exactly today's behavior (crawl on change only).
+  `full` adds the permanently-running idle rAF (E2). `static` snaps everything, never schedules a
+  frame. Decision order, first match wins: `prefers-reduced-motion: reduce` → static;
+  `(update: slow)` → static; `prefers-reduced-data: reduce` → static; `(pointer: coarse)` →
+  static (the confirmed mobile/low-power fallback below — deliberately `pointer` not
+  `any-pointer`, so a touchscreen laptop with a trackpad, whose *primary* pointer is fine, is
+  unaffected); `hardwareConcurrency <= 2` → static; `<= 4` → transitions-only; `undefined` →
+  neutral, falls through (Safari doesn't expose it; absence must never demote on its own); else
+  → full. `navigator.deviceMemory` deliberately not read — Chromium-only, non-standard.
+- [x] `useMotionMode()` in `circuit-field-hooks.ts` — lazy synchronous initial state
+  (`useState(() => decideMotionMode(readCapabilitySignals()))`, not an effect-based pattern like
+  `useReducedMotion`'s — these are SPAs with no SSR, and an effect would mount a phone in `full`
+  for one frame before demoting). `change` listeners on all four media queries. One-way rule:
+  internal `preferenceMode` (recomputed live, free to move both ways) + `runtimeFloorRef` (starts
+  `full`, only ratchets down via `demoteToStatic()`); exposed `mode = mostRestrictive(preferenceMode,
+  runtimeFloor)`. Compose the existing `useReducedMotion`, don't duplicate its `change` handling.
+- [x] `staticModeRef` generalization (highest-leverage, lowest-risk item): replace
+  `reducedMotionRef` with `staticModeRef` (`mode === "static"`) at all existing read sites in
+  `circuit-field.tsx` (boot via-item flag, boot dasharray branch, crawl snap branch, retarget snap
+  branch, the ref-sync effect). Static mode inherits the whole already-tested snap path for free.
+  **`static` ≠ "generate once"**: `routeKey` change / settled resize / occlusion commit still
+  regenerate and snap (Sessions C/D reactivity fully preserved) — only per-frame interpolation is
+  removed, not reactivity.
+- [x] Single-loop unification, scoped to what E1 actually needs: `documentHiddenRef` +
+  `loopShouldRun() = !documentHiddenRef.current && transitionsRef.current.size > 0` +
+  `ensureLoop()`. Replace all existing `if (rafActiveRef.current === null) rafActiveRef.current =
+  requestAnimationFrame(runTick)` call sites (crawl effect, retarget handler, `runTick`'s own
+  tail) with `ensureLoop()` — centralizes the documentHidden guard E1's visibilitychange bullet
+  needs across all three, without adding an `idleEnabledRef` E1 has no producer for yet.
+  **`idleEnabledRef` and the `hasTransitions` gate are deferred to E2, not implemented here**
+  (corrected from the planner's original pass, which had the watchdog feeding samples through
+  `runTick` — since the watchdog below is a standalone probe loop instead, nothing in E1 ever
+  runs the shared loop while `transitionsRef` is empty, so gating dead code this session would be
+  premature; E2 adds both together when its idle producer actually needs them, same "land
+  together" reasoning, just one session later than the original pass assumed).
+- [x] `visibilitychange` wiring: one effect attaching to `document` on mount, detaching on
+  unmount alongside the existing rAF cancel. On hide: `documentHiddenRef.current = true`, record
+  `hiddenAtRef`, cancel the rAF, null the handle; in-flight transitions stay in the map untouched.
+  On show: **rebase every in-flight transition's `startTime` by the hidden duration** before
+  resuming — without this, wall-clock elapsed while hidden makes `t >= 1` on the first frame back
+  and every in-flight trace teleports. This is a **latent bug today** (browsers already starve
+  rAF in hidden tabs; a route change followed by a tab switch already produces the jump on
+  return), not new-code hygiene.
+- [x] `frame-budget.ts` (new, pure, zero React): `FrameBudgetVerdict = "pending" | "ok" |
+  "over"`, `createFrameBudgetProbe({ samples = 40, warmupSamples = 3 }).record(timestampMs)`.
+  Verdict needs both arms: `baseline = min(deltas)` (so a real 30Hz panel isn't punished), `over`
+  if `dropped/samples > 0.4` where `dropped = count(delta > 1.75 * baseline)`, **or** `over` if
+  `baseline > 40` (a device whose *best* frame is under 25fps has zero "dropped" frames by the
+  relative test but is uniformly slow). A ratio, not one bad frame, so a single GC pause can't
+  permanently demote. **Corrected post-review:** a delta past `GAP_OUTLIER_MS` (250ms) is treated
+  as a tab-switch/gap artifact and discarded rather than counted — but left unbounded, a device
+  rendering below ~4fps produces such a delta on *every* frame, so `deltas` would never fill and
+  the verdict would stay `pending` forever on precisely the worst-performing devices. Bounded via a
+  consecutive-outlier counter: 5 in a row resolves straight to `over`, while an isolated one (a
+  genuine hide/show gap) still doesn't trip it.
+- [x] **Watchdog wiring — corrected during advisor review, do not implement the original
+  "feed the probe from `runTick`" idea:** boot does not populate `transitionsRef` (it's a pure
+  CSS stagger — verified by grepping `transitionsRef.current.set` call sites, both of which are
+  the crawl and delta-retarget effects, neither of which fires at mount), so in
+  `transitions-only` mode `loopShouldRun()` is false at boot and `runTick` never runs — a probe
+  fed from it would silently collect zero samples and never reach a verdict. Instead: a
+  **standalone, self-cancelling boot-time sampling loop**, independent of `ensureLoop`/
+  `loopShouldRun`, started on mount whenever the mount-time mode is `full` or `transitions-only`
+  (nothing to measure/demote-from if already `static`). It calls its own
+  `requestAnimationFrame` chain, feeds `createFrameBudgetProbe()`, and stops itself the frame it
+  gets a non-`"pending"` verdict. On `"over"`: call `demoteToStatic()`, then run the existing
+  reduced-motion-style snap (for each `transitionsRef` entry, if any exist by then, write final
+  body/via state, clear the map, cancel any loop) — factor that snap block (it already exists in
+  two places) into a shared `snapTransitionsToTarget()` and reuse it here as the third caller,
+  rather than adding a fourth copy. **Corrected post-review:** the loop also re-checks the *live*
+  mode (`staticModeRef`, kept current every commit) on every step, not only at mount — a later OS
+  preference change flipping the live mode to `static` mid-sampling now stops the loop instead of
+  continuing to sample despite static mode's "never schedules a frame" invariant.
+- [x] CSS in `styles.css`, same block as `circuit-draw`/`circuit-via-in`: a `circuit-idle-glow`
+  keyframe (opacity pulse, ease-in-out alternate, ~3.2s) applied to the **root `<svg>`**, never to
+  either inner `.circuit-field-glow` group — a root-level opacity contains both groups and
+  rasterizes them together once before alpha applies, which is structurally different from
+  Session C's removed group-level `opacity: 0.55` (two independently filtered siblings compositing
+  over each other) and does not reintroduce that bug. **Corrected post-review:** the animation
+  lives on a separate `.circuit-field-idle-glow` class, JS-applied (`capability.ts`'s
+  `canShowIdleGlow`) only when `static` came from a touch/pointer signal — `(update: slow)`,
+  reduced-data, low `hardwareConcurrency`, and frame-budget-watchdog demotion all leave
+  `.circuit-field-static` without it, so a permanent compositor animation never lands on a device
+  that's in static mode *because* it can't afford motion. `.circuit-field-idle-glow { animation:
+  none }` still sits in the `prefers-reduced-motion` block as defense in depth, even though
+  `canShowIdleGlow` already excludes reduced-motion from ever getting the class. Boot draw-in is
+  already skipped in static mode via `staticModeRef` reusing the existing snap branch — no extra
+  CSS needed for that part.
+- [x] Tests: new `test/capability.test.ts` (full `decideMotionMode` matrix, including
+  `coarsePointer + hardwareConcurrency: 8` → static — the case a naive concurrency-only rule
+  gets wrong — and `hardwareConcurrency: undefined` not demoting); new `test/frame-budget.test.ts`
+  (steady 33.3ms deltas → ok, steady 50ms deltas → over, mixed baseline+dropped-ratio → over,
+  `pending` under 40 samples, warmup samples excluded); extend
+  `test/circuit-field-hooks.test.ts` for `useMotionMode` (synchronous mount-time decision, one-way
+  ratchet survives a preference flipping back); new jsdom `visibilitychange` test (stubbed
+  `document.visibilityState` + counting `requestAnimationFrame`: zero further scheduling after
+  hide, `startTime` rebased on show). **This jsdom test is the real coverage for "background-tab
+  check (rAF actually stops)"** — the Chrome-extension harness cannot validate it live (Session
+  D's log: the controlled tab reports `visibilityState === "hidden"` permanently), so live
+  validation is "no console errors, resumes cleanly" only, not a rAF-stops assertion.
+- [x] Validate: file-scoped eslint/typecheck, full `pnpm --filter @unimatrix/ui exec vitest run`,
+  `pnpm check`. Live on all 3 apps: DevTools CPU throttling to trip the watchdog and confirm
+  demotion snaps in-flight crawls (not freezes them mid-draw); reduced-motion/reduced-data
+  emulation; mobile-width + touch emulation on a card-dense route (`/projects`) to confirm the
+  coarse-pointer → static path and glow pulse read correctly. Do not attempt a live hidden-tab
+  rAF-stops check (see above) — jsdom test is authoritative.
+- [x] Commit, PR.
+
+#### Session E2 — Idle packets + idle line-shift (separate branch, cut after E1 merges)
+
+Covers original bullets 1, 2. Gated behind `mode === "full"`; on `transitions-only`/`static`
+neither feature mounts or schedules.
+
+- [ ] `idle-packets.ts` (new, pure, zero React): `buildPacketGraph(bodies)` from **live
+  `liveBodyRef` bodies at settle, not `CircuitTree.adjacency`** — live geometry includes scroll
+  retargets and idle shifts, generation-time adjacency goes stale the first time a tip moves.
+  (Note for the record: `CircuitTree.adjacency` therefore stays unconsumed in production,
+  exercised only by `test/trace-generation.test.ts` — stating this explicitly since a stale
+  positive claim in this doc already cost a session, per Session C's correction note above.)
+  Built once per settle (`packetGraphRef` + `graphDirtyRef`, rebuilt on the first idle frame
+  where `transitionsRef.size === 0 && graphDirtyRef`), not per frame — cost is O(total live
+  points), amortized instead of running at 60/s. Packets are suspended and hidden while any
+  transition is in flight (a packet walking stale geometry would visibly float off the line).
+- [ ] Pooled packet elements, mirroring the existing `intersectionElRefs` direct-ref pattern
+  exactly: fixed `IDLE_PACKET_POOL_SIZE = 12` (deliberately not scaled by `traceCount` — the pool
+  is a perf ceiling, density comes from spawn rate), `freeSlotsRef` stack, direct `x`/`y`/`opacity`
+  writes per idle frame, never a React re-render.
+- [ ] Walk semantics: `PACKET_STEP_MS = 110` per grid cell, linear (not eased) interpolation.
+  Junction split: continue down one option, fork down a second **only if a free slot exists**
+  (pool exhaustion = no fork, never queued/preempting) — max one fork per junction. Retire on
+  dead end or `PACKET_MAX_HOPS = 40`. Spawn from graph leaves on jittered
+  `PACKET_SPAWN_INTERVAL_MS = 900` while under `IDLE_PACKET_MAX_CONCURRENT = 8` (4 slots headroom
+  for splits). No per-packet occlusion query — traces already route through negative space, so
+  packets inherit it for free.
+- [ ] `idle-shift.ts` (new, pure, zero React): `pickIdleShiftIds` — **round-robin cursor over
+  `traceIds`, not random** (even coverage, no starvation, deterministic/testable), batch of 2,
+  eligibility = not mid-crawl and past a cooldown on the existing `lastRetargetAtRef` map (shared
+  with scroll-retarget, so the two mechanisms can never double-move the same trace within a
+  cooldown window). `idleShiftTip` is a **sibling of `retargetTip`, not a caller of it** — this
+  was caught during advisor review: `retargetTip` requires `weight > currentWeight`, which is
+  `null` for nearly every trace on an unoccluded page (flat weight 1 everywhere) and for most
+  tips even on occluded pages (the generator already avoids occlusion, so tips already sit near
+  weight 1). Reusing it verbatim would make idle line-shift a near-total no-op, contradicting
+  "periodically retarget a few trace ids" actually being visible. `idleShiftTip` keeps the same
+  in-line-axis constraint and occupied/own-cell collision checks, but accepts `weight >=
+  currentWeight - IDLE_SHIFT_WEIGHT_TOLERANCE` (~0.05), choosing uniformly among valid ±1–2-cell
+  candidates — visible ambient drift on any page, never drifting *into* an occluder.
+  **Leash against unbounded wander (caught during advisor review):** a single-step
+  `lastIdleTipRef` only blocks A→B→A, not a A→B→C→D... random walk drifting a tip 10+ cells from
+  its generated position on a long-lived open tab. Add a `generatedTipCellRef: Map<id, string>`
+  captured once at settle (not touched by subsequent shifts); reject any idle-shift candidate more
+  than `IDLE_SHIFT_MAX_DRIFT_CELLS = 3` (Chebyshev/grid distance) from that anchor. Scroll-retarget
+  is unaffected (it's occlusion-driven, not drift-driven, and already tends to move a tip back
+  toward the anchor rather than away from it).
+  Scheduled from the idle branch of `runTick` on a jittered ~9s interval (`now -
+  lastIdleShiftAtRef.current > IDLE_SHIFT_INTERVAL_MS`) — no `setInterval`, which would keep
+  firing while hidden and defeat E1's visibility gate.
+- [ ] Handoff into Session B's engine, no second crawl implementation: extract the existing
+  delta-retarget handler's post-`candidateIds` logic into a shared `applyRetargets(entries, now)`
+  — same `buildRoute` → sparse-points write → `lastRetargetAtRef` stamp →
+  `transitionsRef.set` → `ensureLoop()` chain, same static-mode snap branch — called by both the
+  scroll-delta handler and the idle scheduler. Idle-shift scores against a ref mirror of
+  `useCircuitOccluderRects()` (no fresher delta snapshot to use, unlike the scroll path).
+- [ ] Hard Invariants idle line-shift must not violate (all inherited via the shared
+  `applyRetargets` path, not re-derived): axis-aligned (in-line nudge only, same reason Session D
+  reworked away from a 2D elbow search); exact GRID multiples (`clampToLattice` + the existing
+  re-`snap()` on the densified body); no loops (`occupied` + `ownCells` collision check per
+  candidate cell); vias only at real bends (`recomputeCorners`, unchanged); stable slot identity
+  (idle-shift only ever mutates `liveBodyRef`/`previousTracesRef`/`transitionsRef` for ids that
+  already exist — never touches `traceIds`/`traceCount`/`targetTraces`).
+- [ ] CSS: `.circuit-field-packet` fill at 85% primary (brighter than the 60% strokes/vias, reads
+  as moving current) — no keyframe, motion is JS-driven.
+- [ ] Tests: new `test/idle-packets.test.ts` (`buildPacketGraph` neighbor symmetry/leaf/junction
+  detection, plus a cross-module check that it stays a single connected component over real
+  `generateTraces` output; `chooseNextCell` never returns `cameFrom`, forks only at junctions with
+  a free slot; `packetPosition` stays axis-aligned between cell centers; pool-cap never exceeded).
+  New `test/idle-shift.test.ts` (`pickIdleShiftIds` round-robin fairness/cooldown/wraparound;
+  `idleShiftTip` returns a candidate with zero occluders present — the regression guard against a
+  future refactor collapsing this back into `retargetTip` — stays on-lattice, final-segment-axis
+  only, never occupied/own-cell, never the drift anchor beyond `IDLE_SHIFT_MAX_DRIFT_CELLS`).
+  `test/scroll-retarget.test.ts` re-run unchanged to confirm the `applyRetargets` extraction is
+  behavior-preserving; `trace-generation.test.ts`/`circuit-occluder.test.tsx` need no new cases
+  (generation and the occluder provider are untouched by E2).
+- [ ] Validate: file-scoped eslint/typecheck, full `pnpm --filter @unimatrix/ui exec vitest run`,
+  `pnpm check`. Live on all 3 apps at desktop width (packets/idle-shift only exist in `full`
+  mode — a coarse-pointer/mobile pass correctly shows neither; don't read that as a bug). Watch
+  for: a packet floating off a line mid-crawl (suspend flag wrong), a packet stuck visible after
+  retiring (slot-return bug), idle drift producing a diagonal (would mean `idleShiftTip` diverged
+  from the axis constraint), and unbounded drift on a long-idle tab (leash bug).
 - [ ] Commit, PR.
 
 ## Decisions (confirmed with user)
@@ -551,4 +763,72 @@ you. Keep entries short; this file is a resume point, not a changelog.
   to dynamic imports so the stub takes effect before the module (which computes `authEnabled` once,
   at import time) is evaluated. `pnpm verify` now fully green (44/44 tasks, including both apps'
   Playwright smoke suites).
-- Session E: _not started_
+- Session E1: Planned via a Planner-agent (opus) pass, then `advisor()` reviewed before writing
+  code. Advisor caught one inertness-class issue before implementation, same shape as Session D's
+  "inert-as-scoped" catch: the planner's watchdog design fed the frame-budget probe from `runTick`
+  itself, but `runTick` only runs while `transitionsRef` is non-empty, and boot (verified by
+  grepping `transitionsRef.current.set` call sites in `circuit-field.tsx`) is a pure CSS stagger
+  that never populates it — so in `transitions-only` mode the probe would silently collect zero
+  samples and never demote. Fixed in the plan doc (see Session E1 checklist above) with a
+  standalone self-cancelling boot-time sampling loop instead. Advisor also flagged two of the
+  planner's five open questions as already-settled by this doc's own "Decisions" section
+  (coarse-pointer→static and reduced-data→static) rather than new questions for the user, and
+  deferred the other two (idle line-shift's near-inertness via `retargetTip`, packet visual
+  constants) to E2 as that session's own call. Implementation done, on
+  `feat/circuit-field-idle-capability` (cut from `origin/main`, already past PR #52/D.5).
+  `capability.ts` (`MotionMode`, `decideMotionMode`, `mostRestrictive`) and `frame-budget.ts`
+  (`createFrameBudgetProbe`) new, zero-React, per plan. `useMotionMode()` added to
+  `circuit-field-hooks.ts` — lazy-synchronous initial state (no effect-based flash of the wrong
+  mode), one-way ratchet via a `runtimeFloorRef` separate from the live-recomputed OS-preference
+  state. `circuit-field.tsx`: `reducedMotionRef` replaced by `staticModeRef` at all 5 sites;
+  `ensureLoop`/`loopShouldRun` centralize the 3 previously-separate `requestAnimationFrame(runTick)`
+  call sites behind a `documentHiddenRef` guard; `snapTransitionsToTarget`/
+  `snapAllInFlightTransitions` extracted from the two duplicated "skip the crawl, write final
+  state" branches (crawl-pass static-mode branch, retarget static-mode branch) and reused a third
+  time by the watchdog's demotion path — net code reduction despite the new watchdog/visibility
+  logic. `idleEnabledRef` and the `hasTransitions` gate from the planner's original pass were
+  **not** implemented this session (correction made before writing code, not after): the
+  corrected watchdog design uses a standalone probe loop rather than piggybacking on `runTick`, so
+  nothing in E1 ever runs the shared loop while `transitionsRef` is empty — gating dead code would
+  have been premature. Both are deferred to E2, which actually needs them once idle producers
+  exist.
+  A real bug surfaced by the new `circuit-field-visibility.test.tsx` (written to cover the
+  "background-tab check (rAF actually stops)" validation step, since the Chrome-extension harness
+  can't observe it live — see Session D's log for why): the frame-budget watchdog's own probe rAF
+  loop was a second, independent `requestAnimationFrame` consumer that **wasn't gated by
+  `documentHiddenRef` at all** — the test caught real frame counts still climbing during a
+  simulated hide. Fixed by giving the watchdog its own `watchdogFrameRef`/`watchdogStepRef` pair
+  that the same `visibilitychange` handler pauses/resumes alongside the main loop; a large
+  resume-gap delta reads as a single discarded outlier in `frame-budget.ts` (bounded post-review to
+  a run of 5 consecutive before it resolves `over` on its own — see that session's fix above), so
+  an isolated hide/show cycle mid-sampling still can't wrongly trip the verdict. This is exactly
+  the class of bug the "write the test the plan already committed to" step exists to catch — worth
+  noting since it would have shipped invisibly otherwise (real hidden tabs throttle rAF at the
+  browser level regardless, so it's not user-visible in production, but it defeats the point of
+  building explicit visibility-awareness at all).
+  One test-file fix along the way: `ReturnType<typeof vi.spyOn>` doesn't type-check cleanly against
+  a specific overload (`vi.spyOn(window, "requestAnimationFrame")`) on this vitest/TS version;
+  replaced with a plain call-counting wrapper around the real `requestAnimationFrame` instead of
+  fighting the generic — simpler and avoids the same class of type gymnastics recurring elsewhere.
+  Validation: `pnpm --filter @unimatrix/ui typecheck`/`eslint`/`vitest run` (102/102, up from 77 —
+  25 new: 13 capability + 7 frame-budget + 4 useMotionMode + 1 visibility, net of the pre-existing
+  suite) all clean; `pnpm check` fully green (38/38 tasks) across every workspace. Live-browser
+  validation via the Chrome extension on all 3 apps (dev servers, real browser): zero console
+  errors on any route (web `/`, `/projects`; cube-trainer `/`; auth `/`), confirmed live that a
+  12-core/fine-pointer/no-reduced-motion environment correctly resolves to `full` mode (plain
+  `circuit-field` class, not `-static`) by reading the mounted DOM directly, and confirmed a live
+  `document.hidden`/`visibilitychange` toggle cycle (faked via `Object.defineProperty` +
+  dispatched event, same technique as the jsdom test) doesn't throw or leave console errors.
+  **Not confirmed live** (recommend before merging): CPU throttling to trip the frame-budget
+  watchdog's demotion path, and `(pointer: coarse)`/`prefers-reduced-motion`/
+  `prefers-reduced-data` media-query emulation — the sandboxed devtools-protocol plugin available
+  in this environment has no standalone Chrome binary to launch, and the Chrome-extension
+  integration used for the rest of this session's live checks doesn't expose CPU/media emulation.
+  The `static`-mode CSS/rendering path itself has strong non-live coverage instead: the
+  `staticModeRef` branches are the same code paths `prefers-reduced-motion` already exercised
+  pre-E1 (renamed, not rewritten), and `decideMotionMode`/`useMotionMode`/the frame-budget ratio
+  math all have direct unit coverage of the exact boundary conditions (baseline+ratio arms,
+  coarse-pointer-overrides-high-concurrency, one-way ratchet) — but an actual visual check of a
+  throttled/coarse/reduced-motion device rendering `.circuit-field-static`'s glow-pulse fallback
+  has not happened on a real device or emulator.
+- Session E2: _not started_ — separate branch, cut fresh from `origin/main` after E1 merges.

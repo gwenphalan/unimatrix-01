@@ -1,5 +1,14 @@
 import * as React from "react";
 
+import {
+  type CapabilitySignals,
+  type MotionMode,
+  canShowIdleGlow,
+  decideMotionMode,
+  mostRestrictive,
+  readCapabilitySignals,
+} from "./capability.js";
+
 export const RESIZE_SETTLE_MS = 200;
 // A mobile URL bar collapsing/expanding mid-scroll changes `innerHeight` by
 // up to roughly this much without any real layout change — generous vs.
@@ -25,6 +34,66 @@ export function useReducedMotion(): boolean {
   }, []);
 
   return reduced;
+}
+
+const MOTION_MEDIA_QUERIES = [
+  "(prefers-reduced-motion: reduce)",
+  "(prefers-reduced-data: reduce)",
+  "(pointer: coarse)",
+  "(update: slow)",
+] as const;
+
+/**
+ * CircuitField's overall motion mode, folding capability signals (see
+ * `capability.ts`) together with a one-way runtime demotion. Initialized
+ * synchronously (not via an effect, unlike `useReducedMotion` above) so a
+ * `static`-mode device never mounts a frame of `full`-mode content before
+ * demoting — these are client-only SPAs with no SSR, so a lazy `useState`
+ * initializer can read `matchMedia`/`navigator` directly on first render.
+ *
+ * `demoteToStatic()` is the one-way ratchet: an OS-level preference (e.g.
+ * reduced-motion) can flip back and forth freely and `mode` follows it, but
+ * once something demotes at runtime (the frame-budget watchdog), `mode` can
+ * never rise above `static` again for the rest of the mount, per this
+ * session's "downgrade must be one-way" requirement.
+ */
+export function useMotionMode(): { mode: MotionMode; demoteToStatic: () => void; idleGlowEligible: boolean } {
+  const [signals, setSignals] = React.useState<CapabilitySignals>(() => readCapabilitySignals());
+  const preferenceMode = React.useMemo(() => decideMotionMode(signals), [signals]);
+  const runtimeFloorRef = React.useRef<MotionMode>("full");
+  const [, forceRerender] = React.useState(0);
+
+  React.useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return;
+
+    const medias = MOTION_MEDIA_QUERIES.map((query) => window.matchMedia(query));
+    const update = () => {
+      setSignals(readCapabilitySignals());
+    };
+
+    medias.forEach((media) => {
+      media.addEventListener("change", update);
+    });
+    return () => {
+      medias.forEach((media) => {
+        media.removeEventListener("change", update);
+      });
+    };
+  }, []);
+
+  const demoteToStatic = React.useCallback(() => {
+    if (runtimeFloorRef.current === "static") return;
+    runtimeFloorRef.current = "static";
+    forceRerender((n) => n + 1);
+  }, []);
+
+  const mode = mostRestrictive(preferenceMode, runtimeFloorRef.current);
+  // The frame-budget watchdog's runtime demotion is always performance-
+  // motivated, regardless of what the live preference signals say — a
+  // device it demoted must never get the idle glow.
+  const idleGlowEligible = mode === "static" && runtimeFloorRef.current !== "static" && canShowIdleGlow(signals);
+
+  return { mode, demoteToStatic, idleGlowEligible };
 }
 
 export function useViewportSize(): { width: number; height: number } | null {
