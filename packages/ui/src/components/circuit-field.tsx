@@ -252,7 +252,7 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
           : [];
         const forkTarget = forkCandidates[Math.floor(Math.random() * forkCandidates.length)];
 
-        if (forkTarget && freeSlotsRef.current.length > 0 && packetsRef.current.size < IDLE_PACKET_MAX_CONCURRENT) {
+        if (forkTarget && freeSlotsRef.current.length > 0 && packetsRef.current.size < IDLE_PACKET_POOL_SIZE) {
           const forkSlot = freeSlotsRef.current.pop() as number;
           packetsRef.current.set(forkSlot, {
             slot: forkSlot,
@@ -627,10 +627,17 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
     if (!wasEnabled && idleEnabledRef.current) {
       idleReadyAtRef.current = performance.now() + IDLE_READY_DELAY_MS;
     }
+    if (wasEnabled && !idleEnabledRef.current) {
+      // Runtime demotion away from `full` (watchdog, or a live OS preference
+      // change) stops `advanceIdlePackets` from ever running again — without
+      // this, packets on screen at the flip stay frozen at their last
+      // position forever.
+      retireAllPackets();
+    }
     if (idleEnabledRef.current) {
       ensureLoop();
     }
-  }, [motionMode, ensureLoop]);
+  }, [motionMode, ensureLoop, retireAllPackets]);
 
   // Shared by every "skip the crawl, write final state directly" path —
   // static mode's transitions-effect branch, static mode's retarget branch,
