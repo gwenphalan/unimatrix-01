@@ -1,7 +1,8 @@
 import * as React from "react";
 
-import { HEIGHT_JITTER_IGNORE_PX, RESIZE_SETTLE_MS, useDebouncedSize, useReducedMotion, useViewportSize } from "./circuit-field-hooks.js";
+import { HEIGHT_JITTER_IGNORE_PX, RESIZE_SETTLE_MS, useDebouncedSize, useMotionMode, useViewportSize } from "./circuit-field-hooks.js";
 import { useCircuitOccluderDelta, useCircuitOccluderRects } from "./circuit-occluder.js";
+import { createFrameBudgetProbe } from "./frame-budget.js";
 import { type Point, type RoutePoint, cellKey, densify, easeInOutCubic, hashString, pathData, polylineLength, recomputeCorners, snap } from "./grid-math.js";
 import { type Occluder, type Rect, OCCLUDER_AFFECT_MARGIN_PX, estimateEffectiveArea } from "./occlusion.js";
 import {
@@ -102,13 +103,14 @@ function pointsEqual(a: readonly Point[], b: readonly Point[]): boolean {
 export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.Element | null {
   const size = useViewportSize();
   const debouncedSize = useDebouncedSize(size, RESIZE_SETTLE_MS, { heightJitterIgnorePx: HEIGHT_JITTER_IGNORE_PX });
-  const reducedMotion = useReducedMotion();
+  const { mode: motionMode, demoteToStatic } = useMotionMode();
   const occluders = useCircuitOccluderRects();
 
-  const reducedMotionRef = React.useRef(reducedMotion);
+  const staticMode = motionMode === "static";
+  const staticModeRef = React.useRef(staticMode);
   React.useEffect(() => {
-    reducedMotionRef.current = reducedMotion;
-  }, [reducedMotion]);
+    staticModeRef.current = staticMode;
+  }, [staticMode]);
 
   const [traceCount, setTraceCount] = React.useState<number | null>(null);
 
@@ -139,6 +141,20 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
   const transitionsRef = React.useRef(new Map<string, TraceTransition>());
   const rafActiveRef = React.useRef<number | null>(null);
   const lastRetargetAtRef = React.useRef(new Map<string, number>());
+  // Set on `visibilitychange` hide, cleared on show — every rAF-start call
+  // site below goes through `ensureLoop()` so none of them can restart the
+  // shared loop while the tab is hidden.
+  const documentHiddenRef = React.useRef(false);
+  const hiddenAtRef = React.useRef<number | null>(null);
+  // The watchdog probe below is a second, independent rAF consumer — these
+  // let the single `visibilitychange` handler pause/resume it too, the same
+  // way it pauses/resumes the shared transition loop.
+  const watchdogFrameRef = React.useRef<number | null>(null);
+  const watchdogStepRef = React.useRef<((timestamp: number) => void) | null>(null);
+
+  const loopShouldRun = React.useCallback(() => {
+    return !documentHiddenRef.current && transitionsRef.current.size > 0;
+  }, []);
 
   const [viaItems, setViaItemsState] = React.useState<ViaItem[]>([]);
 
@@ -369,12 +385,96 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
       setViaItems([...carried, ...settled]);
     }
 
-    if (transitionsRef.current.size > 0) {
+    rafActiveRef.current = loopShouldRun() ? requestAnimationFrame(runTick) : null;
+  }, [applyIntersections, loopShouldRun, setTipPosition, setViaItems, traceIds]);
+
+  // Every other rAF-start call site below goes through this instead of a
+  // direct `requestAnimationFrame(runTick)` — centralizes the
+  // `documentHiddenRef` guard so a delta/crawl effect firing while the tab
+  // is hidden can never restart the shared loop out from under the
+  // `visibilitychange` handler.
+  const ensureLoop = React.useCallback(() => {
+    if (rafActiveRef.current === null && loopShouldRun()) {
       rafActiveRef.current = requestAnimationFrame(runTick);
-    } else {
-      rafActiveRef.current = null;
     }
-  }, [applyIntersections, setTipPosition, setViaItems, traceIds]);
+  }, [loopShouldRun, runTick]);
+
+  // Shared by every "skip the crawl, write final state directly" path —
+  // static mode's transitions-effect branch, static mode's retarget branch,
+  // and the frame-budget watchdog's demotion (below). Removes each item's id
+  // from `transitionsRef` (a no-op if it was never in flight — the retarget
+  // path never adds one before calling this), stops the loop if nothing's
+  // left transitioning, then writes the same final path/via/tip state a
+  // completed crawl would have settled into.
+  const snapTransitionsToTarget = React.useCallback(
+    (items: { id: string; toBody: RoutePoint[] }[]) => {
+      if (items.length === 0) return;
+
+      items.forEach((item) => {
+        transitionsRef.current.delete(item.id);
+        liveBodyRef.current.set(item.id, item.toBody);
+      });
+
+      if (rafActiveRef.current !== null && transitionsRef.current.size === 0) {
+        cancelAnimationFrame(rafActiveRef.current);
+        rafActiveRef.current = null;
+      }
+
+      const cellAxisMap = buildCellAxisMap(items.map((item) => ({ id: item.id, points: item.toBody })));
+      const settled: ViaItem[] = [];
+
+      items.forEach(({ id, toBody }) => {
+        const el = pathElRefs.current.get(id);
+        if (el) el.setAttribute("d", pathData(toBody));
+
+        toBody.forEach((point, idx) => {
+          if (!point.corner || idx === 0 || idx === toBody.length - 1) return;
+          settled.push({
+            key: `${id}-${idx}`,
+            traceId: id,
+            index: idx,
+            x: point.x,
+            y: point.y,
+            boot: false,
+            delay: 0,
+            initiallyVisible: true,
+          });
+        });
+
+        const first = toBody[0];
+        const second = toBody[1];
+        const last = toBody[toBody.length - 1];
+        const beforeLast = toBody[toBody.length - 2];
+        if (first && second) {
+          const axis: "h" | "v" = first.y === second.y ? "h" : "v";
+          setTipPosition(id, "tail", first, !isColinearWithOther(cellAxisMap, id, first, axis));
+        }
+        if (last && beforeLast) {
+          const axis: "h" | "v" = beforeLast.y === last.y ? "h" : "v";
+          setTipPosition(id, "head", last, !isColinearWithOther(cellAxisMap, id, last, axis));
+        }
+      });
+
+      const snappedIds = new Set(items.map((item) => item.id));
+      const untouched = Array.from(viaItemIndexRef.current.values()).filter((item) => !snappedIds.has(item.traceId));
+      setViaItems([...untouched, ...settled]);
+      applyIntersections(findIntersections(cellAxisMap));
+    },
+    [applyIntersections, setTipPosition, setViaItems],
+  );
+
+  // Used only by the frame-budget watchdog: snaps whatever is currently
+  // in-flight (of any origin — boot crawl, occlusion regeneration, scroll
+  // retarget) straight to its target, same as a runtime static-mode demotion
+  // should look like. Reads `transitionsRef` fresh rather than closing over
+  // a stale list, since the watchdog can fire on any frame.
+  const snapAllInFlightTransitions = React.useCallback(() => {
+    const items = Array.from(transitionsRef.current.entries()).map(([id, transition]) => ({
+      id,
+      toBody: transition.toBody,
+    }));
+    snapTransitionsToTarget(items);
+  }, [snapTransitionsToTarget]);
 
   // Handles a trace-count *shrink*: prunes stale entries for ids no longer
   // in `traceIds` from every id-keyed structure, and stops the shared rAF
@@ -457,7 +557,7 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
             index: idx,
             x: point.x,
             y: point.y,
-            boot: !reducedMotionRef.current,
+            boot: !staticModeRef.current,
             delay: traceDelay + arcFraction * TRACE_DRAW_MS,
             initiallyVisible: true,
           });
@@ -481,7 +581,7 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
 
         el.setAttribute("d", pathData(body));
 
-        if (reducedMotionRef.current) {
+        if (staticModeRef.current) {
           el.style.strokeDasharray = "none";
           el.style.strokeDashoffset = "0";
         } else {
@@ -517,60 +617,8 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
       return { id: trace.id, route, lenO: from.length, lenN: to.length, toBody: to };
     });
 
-    if (reducedMotionRef.current) {
-      transitions.forEach((transition) => {
-        transitionsRef.current.delete(transition.id);
-        liveBodies.set(transition.id, transition.toBody);
-      });
-
-      if (rafActiveRef.current !== null && transitionsRef.current.size === 0) {
-        cancelAnimationFrame(rafActiveRef.current);
-        rafActiveRef.current = null;
-      }
-
-      const cellAxisMap = buildCellAxisMap(
-        transitions.map((transition) => ({ id: transition.id, points: transition.toBody })),
-      );
-
-      const items: ViaItem[] = [];
-      transitions.forEach((transition) => {
-        const el = pathElRefs.current.get(transition.id);
-        if (el) el.setAttribute("d", pathData(transition.toBody));
-
-        transition.toBody.forEach((point, idx) => {
-          if (!point.corner || idx === 0 || idx === transition.toBody.length - 1) return;
-          items.push({
-            key: `${transition.id}-${idx}`,
-            traceId: transition.id,
-            index: idx,
-            x: point.x,
-            y: point.y,
-            boot: false,
-            delay: 0,
-            initiallyVisible: true,
-          });
-        });
-
-        const first = transition.toBody[0];
-        const second = transition.toBody[1];
-        const last = transition.toBody[transition.toBody.length - 1];
-        const beforeLast = transition.toBody[transition.toBody.length - 2];
-        if (first && second) {
-          const axis: "h" | "v" = first.y === second.y ? "h" : "v";
-          setTipPosition(transition.id, "tail", first, !isColinearWithOther(cellAxisMap, transition.id, first, axis));
-        }
-        if (last && beforeLast) {
-          const axis: "h" | "v" = beforeLast.y === last.y ? "h" : "v";
-          setTipPosition(transition.id, "head", last, !isColinearWithOther(cellAxisMap, transition.id, last, axis));
-        }
-      });
-
-      const untouched = Array.from(viaItemIndexRef.current.values()).filter(
-        (item) => !existingTraces.some((trace) => trace.id === item.traceId),
-      );
-      setViaItems([...untouched, ...items]);
-      applyIntersections(findIntersections(cellAxisMap));
-
+    if (staticModeRef.current) {
+      snapTransitionsToTarget(transitions.map((transition) => ({ id: transition.id, toBody: transition.toBody })));
       return;
     }
 
@@ -641,12 +689,10 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
       });
     });
 
-    if (rafActiveRef.current === null) {
-      rafActiveRef.current = requestAnimationFrame(runTick);
-    }
+    ensureLoop();
     // Only the target trace identity should retrigger this effect — the
     // refs and callbacks it closes over are stable across renders.
-  }, [applyIntersections, runTick, setTipPosition, setViaItems, targetTraces]);
+  }, [applyIntersections, ensureLoop, setTipPosition, setViaItems, snapTransitionsToTarget, targetTraces]);
 
   // Scroll-driven retarget: nudges a live trace's tip away from an occluder
   // that just moved under it, using Session B's per-trace transition engine
@@ -718,49 +764,8 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
 
       if (retargets.length === 0) return;
 
-      if (reducedMotionRef.current) {
-        const cellAxisMap = buildCellAxisMap(retargets.map((r) => ({ id: r.id, points: r.toBody })));
-        const settled: ViaItem[] = [];
-
-        retargets.forEach((r) => {
-          liveBodyRef.current.set(r.id, r.toBody);
-          const el = pathElRefs.current.get(r.id);
-          if (el) el.setAttribute("d", pathData(r.toBody));
-
-          r.toBody.forEach((point, idx) => {
-            if (!point.corner || idx === 0 || idx === r.toBody.length - 1) return;
-            settled.push({
-              key: `${r.id}-${idx}`,
-              traceId: r.id,
-              index: idx,
-              x: point.x,
-              y: point.y,
-              boot: false,
-              delay: 0,
-              initiallyVisible: true,
-            });
-          });
-
-          const first = r.toBody[0];
-          const second = r.toBody[1];
-          const last = r.toBody[r.toBody.length - 1];
-          const beforeLast = r.toBody[r.toBody.length - 2];
-          if (first && second) {
-            const axis: "h" | "v" = first.y === second.y ? "h" : "v";
-            setTipPosition(r.id, "tail", first, !isColinearWithOther(cellAxisMap, r.id, first, axis));
-          }
-          if (last && beforeLast) {
-            const axis: "h" | "v" = beforeLast.y === last.y ? "h" : "v";
-            setTipPosition(r.id, "head", last, !isColinearWithOther(cellAxisMap, r.id, last, axis));
-          }
-        });
-
-        const retargetedIds = new Set(retargets.map((r) => r.id));
-        const untouched = Array.from(viaItemIndexRef.current.values()).filter(
-          (item) => !retargetedIds.has(item.traceId),
-        );
-        setViaItems([...untouched, ...settled]);
-        applyIntersections(findIntersections(cellAxisMap));
+      if (staticModeRef.current) {
+        snapTransitionsToTarget(retargets.map((r) => ({ id: r.id, toBody: r.toBody })));
         return;
       }
 
@@ -813,18 +818,117 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
         });
       });
 
-      if (rafActiveRef.current === null) {
-        rafActiveRef.current = requestAnimationFrame(runTick);
-      }
+      ensureLoop();
     },
-    [applyIntersections, debouncedSize, runTick, setTipPosition, setViaItems, traceIds],
+    [applyIntersections, debouncedSize, ensureLoop, setTipPosition, setViaItems, snapTransitionsToTarget, traceIds],
   );
 
   useCircuitOccluderDelta(handleOccluderDelta);
 
+  // Browsers already starve rAF in hidden tabs; without this, an in-flight
+  // transition's `startTime` (a wall-clock timestamp) means the first frame
+  // after returning sees `t >= 1` and every crawling trace teleports to its
+  // target instead of resuming mid-crawl. Rebasing `startTime` by the hidden
+  // duration on show is what makes a route change followed by a tab switch
+  // resume smoothly instead. Idle-flight state (Session E2) is not rebased
+  // here — that session's producers are expected to clear and reseed on
+  // show rather than carry elapsed time across a hide.
+  React.useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        documentHiddenRef.current = true;
+        hiddenAtRef.current = performance.now();
+        if (rafActiveRef.current !== null) {
+          cancelAnimationFrame(rafActiveRef.current);
+          rafActiveRef.current = null;
+        }
+        // The watchdog is a second, independent rAF consumer (below) — pause
+        // it too rather than letting it keep sampling (misleadingly huge or
+        // throttled) frame deltas from a hidden tab.
+        if (watchdogFrameRef.current !== null) {
+          cancelAnimationFrame(watchdogFrameRef.current);
+          watchdogFrameRef.current = null;
+        }
+        return;
+      }
+
+      const hiddenSince = hiddenAtRef.current;
+      hiddenAtRef.current = null;
+      documentHiddenRef.current = false;
+
+      if (hiddenSince !== null) {
+        const hiddenDuration = performance.now() - hiddenSince;
+        transitionsRef.current.forEach((transition) => {
+          transition.startTime += hiddenDuration;
+        });
+      }
+
+      ensureLoop();
+
+      // Resume the watchdog only if it hasn't already reached a verdict
+      // (its `step` clears this ref to `null` once resolved) and isn't
+      // already scheduled.
+      if (watchdogStepRef.current && watchdogFrameRef.current === null) {
+        watchdogFrameRef.current = requestAnimationFrame(watchdogStepRef.current);
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [ensureLoop]);
+
+  // Standalone, self-cancelling boot-time sampling loop — deliberately not
+  // routed through `runTick`/`ensureLoop`. Boot itself never populates
+  // `transitionsRef` (it's a pure CSS stagger, not a JS crawl), so a probe
+  // fed from the shared loop would silently collect zero samples in
+  // `transitions-only` mode and never reach a verdict. Skipped entirely when
+  // the mount-time mode is already `static` — nothing to measure, no rAF to
+  // watch, no demotion possible below the floor. Runs once per mount; a
+  // later OS-level preference change is `useMotionMode`'s own concern, not
+  // this probe's. Paused/resumed by the `visibilitychange` handler above via
+  // `watchdogFrameRef`/`watchdogStepRef` — a large gap on resume reads as a
+  // single discarded outlier delta (see `frame-budget.ts`), not a dropped
+  // frame, so a hide/show cycle mid-sampling can't wrongly trip the verdict.
+  React.useEffect(() => {
+    if (staticModeRef.current) return undefined;
+
+    const probe = createFrameBudgetProbe();
+
+    const step = (timestamp: number) => {
+      const verdict = probe.record(timestamp);
+      if (verdict === "pending") {
+        watchdogFrameRef.current = requestAnimationFrame(step);
+        return;
+      }
+
+      watchdogFrameRef.current = null;
+      watchdogStepRef.current = null;
+      if (verdict === "over") {
+        demoteToStatic();
+        snapAllInFlightTransitions();
+      }
+    };
+
+    watchdogStepRef.current = step;
+    if (!documentHiddenRef.current) {
+      watchdogFrameRef.current = requestAnimationFrame(step);
+    }
+
+    return () => {
+      watchdogStepRef.current = null;
+      if (watchdogFrameRef.current !== null) {
+        cancelAnimationFrame(watchdogFrameRef.current);
+        watchdogFrameRef.current = null;
+      }
+    };
+  }, [demoteToStatic, snapAllInFlightTransitions]);
+
   React.useEffect(
     () => () => {
       if (rafActiveRef.current !== null) cancelAnimationFrame(rafActiveRef.current);
+      if (watchdogFrameRef.current !== null) cancelAnimationFrame(watchdogFrameRef.current);
     },
     [],
   );
@@ -836,7 +940,7 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
   return (
     <svg
       aria-hidden="true"
-      className="circuit-field"
+      className={staticMode ? "circuit-field circuit-field-static" : "circuit-field"}
       height={size.height}
       style={{ position: "fixed", inset: 0, zIndex: -1, pointerEvents: "none" }}
       width={size.width}

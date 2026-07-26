@@ -1,7 +1,47 @@
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { useDebouncedSize } from "../src/components/circuit-field-hooks.js";
+import { useDebouncedSize, useMotionMode } from "../src/components/circuit-field-hooks.js";
+
+class FakeMediaQueryList {
+  matches: boolean;
+  private readonly listeners = new Set<() => void>();
+
+  constructor(public readonly media: string, matches: boolean) {
+    this.matches = matches;
+  }
+
+  addEventListener(type: string, listener: () => void): void {
+    if (type === "change") this.listeners.add(listener);
+  }
+
+  removeEventListener(type: string, listener: () => void): void {
+    if (type === "change") this.listeners.delete(listener);
+  }
+
+  setMatches(value: boolean): void {
+    this.matches = value;
+    this.listeners.forEach((listener) => {
+      listener();
+    });
+  }
+}
+
+function stubMatchMedia(initial: Record<string, boolean>): Map<string, FakeMediaQueryList> {
+  const registry = new Map<string, FakeMediaQueryList>();
+  Object.entries(initial).forEach(([query, matches]) => registry.set(query, new FakeMediaQueryList(query, matches)));
+
+  window.matchMedia = ((query: string) => {
+    let mql = registry.get(query);
+    if (!mql) {
+      mql = new FakeMediaQueryList(query, false);
+      registry.set(query, mql);
+    }
+    return mql;
+  }) as unknown as typeof window.matchMedia;
+
+  return registry;
+}
 
 describe("useDebouncedSize", () => {
   beforeEach(() => {
@@ -101,5 +141,74 @@ describe("useDebouncedSize", () => {
     });
 
     expect(result.current).toEqual({ width: 800, height: 620 });
+  });
+});
+
+describe("useMotionMode", () => {
+  let registry: Map<string, FakeMediaQueryList>;
+  const originalMatchMedia = window.matchMedia;
+  const originalConcurrency = Object.getOwnPropertyDescriptor(window.navigator, "hardwareConcurrency");
+
+  beforeEach(() => {
+    registry = stubMatchMedia({
+      "(prefers-reduced-motion: reduce)": false,
+      "(prefers-reduced-data: reduce)": false,
+      "(pointer: coarse)": false,
+      "(update: slow)": false,
+    });
+    Object.defineProperty(window.navigator, "hardwareConcurrency", { value: 8, configurable: true });
+  });
+
+  afterEach(() => {
+    window.matchMedia = originalMatchMedia;
+    if (originalConcurrency) {
+      Object.defineProperty(window.navigator, "hardwareConcurrency", originalConcurrency);
+    }
+  });
+
+  it("decides synchronously on mount — no frame of the wrong mode before an effect runs", () => {
+    registry.get("(pointer: coarse)")!.matches = true;
+    const { result } = renderHook(() => useMotionMode());
+    expect(result.current.mode).toBe("static");
+  });
+
+  it("mounts to full when every signal is neutral and concurrency is high", () => {
+    const { result } = renderHook(() => useMotionMode());
+    expect(result.current.mode).toBe("full");
+  });
+
+  it("demoteToStatic ratchets down and never rises back, even once the preference recomputes to full", () => {
+    const { result } = renderHook(() => useMotionMode());
+    expect(result.current.mode).toBe("full");
+
+    act(() => {
+      result.current.demoteToStatic();
+    });
+    expect(result.current.mode).toBe("static");
+
+    act(() => {
+      registry.get("(prefers-reduced-motion: reduce)")!.setMatches(true);
+    });
+    expect(result.current.mode).toBe("static");
+
+    act(() => {
+      registry.get("(prefers-reduced-motion: reduce)")!.setMatches(false);
+    });
+    expect(result.current.mode).toBe("static");
+  });
+
+  it("an OS-level preference change is honored live when not floored by a runtime demotion", () => {
+    const { result } = renderHook(() => useMotionMode());
+    expect(result.current.mode).toBe("full");
+
+    act(() => {
+      registry.get("(pointer: coarse)")!.setMatches(true);
+    });
+    expect(result.current.mode).toBe("static");
+
+    act(() => {
+      registry.get("(pointer: coarse)")!.setMatches(false);
+    });
+    expect(result.current.mode).toBe("full");
   });
 });

@@ -224,9 +224,33 @@
     }
   }
 
+  /*
+   * Static motion mode (see capability.ts): traces render one frozen frame,
+   * no rAF at all. Applied to the root <svg>, never to either inner
+   * `.circuit-field-glow` group — a root-level opacity pulse rasterizes both
+   * groups together once before alpha applies, so it doesn't reintroduce the
+   * overlap-brightening artifact a *group*-level opacity would (two
+   * independently drop-shadow-filtered siblings compositing over each
+   * other). Reads as faint current still flowing rather than fully dead.
+   */
+  .circuit-field-static {
+    animation: circuit-idle-glow 3200ms ease-in-out infinite alternate;
+  }
+
+  @keyframes circuit-idle-glow {
+    to {
+      opacity: 0.75;
+    }
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .circuit-field-trace,
     .circuit-field-via {
+      animation: none;
+    }
+
+    /* Reduced-motion resolves to static mode too, and a pulsing glow is motion. */
+    .circuit-field-static {
       animation: none;
     }
 
