@@ -86,6 +86,7 @@ Package names: `apps/web`→`@unimatrix/web`, `apps/api`→`@unimatrix/api`, `ap
 - Deeper checks (web, cube-trainer): `pnpm --filter <package> test:unit`, `pnpm --filter <package> test:smoke`
 - Auth app deeper checks: `pnpm --filter @unimatrix/auth-app test` (unit only), `pnpm --filter @unimatrix/auth-app build`
 - Auth / user-data package checks: `pnpm --filter @unimatrix/auth test`, `pnpm --filter @unimatrix/user-data test`
+- Any change to a web component or live site (`apps/web`, `apps/cube-trainer`, `apps/auth`, `packages/ui`) must be live-tested in a real browser before being reported as done — automated tests verify correctness, not that the feature actually works on screen. If no Chromium instance is running, launch one to run this check.
 
 ## Git And PR Rules
 - Keep PRs small and issue-aligned; avoid unrelated scaffolding or setup churn
