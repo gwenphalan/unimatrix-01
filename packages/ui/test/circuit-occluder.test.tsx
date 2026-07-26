@@ -117,7 +117,7 @@ describe("CircuitOccluderProvider / useCircuitOccluder", () => {
   it("re-measures when the shared ResizeObserver fires", async () => {
     let latestRects: readonly { x0: number; y0: number; x1: number; y1: number }[] = [];
     let registrantEl: HTMLDivElement | undefined;
-    const rect = makeRect({ left: 0, top: 0, right: 50, bottom: 50 });
+    const rect = makeRect({ left: 0, top: 0, right: 100, bottom: 100 });
 
     render(
       <CircuitOccluderProvider>
@@ -129,7 +129,7 @@ describe("CircuitOccluderProvider / useCircuitOccluder", () => {
     await act(async () => {
       await new Promise((resolve) => requestAnimationFrame(resolve));
     });
-    expect(latestRects).toEqual([{ x0: 0, y0: 0, x1: 50, y1: 50 }]);
+    expect(latestRects).toEqual([{ x0: 0, y0: 0, x1: 100, y1: 100 }]);
 
     rect.left = 0;
     rect.right = 200;
@@ -147,7 +147,7 @@ describe("CircuitOccluderProvider / useCircuitOccluder", () => {
       await new Promise((resolve) => requestAnimationFrame(resolve));
     });
 
-    expect(latestRects).toEqual([{ x0: 0, y0: 0, x1: 200, y1: 50 }]);
+    expect(latestRects).toEqual([{ x0: 0, y0: 0, x1: 200, y1: 100 }]);
   });
 
   it("clamps a registrant's measured height to maxHeightPx", async () => {
@@ -180,7 +180,7 @@ describe("CircuitOccluderProvider / useCircuitOccluder", () => {
   it("a scroll event beyond the delta threshold notifies useCircuitOccluderDelta with the moved rect", async () => {
     let latestDelta: Rect[] | undefined;
     let registrantEl: HTMLDivElement | undefined;
-    const rect = makeRect({ left: 0, top: 0, right: 50, bottom: 50 });
+    const rect = makeRect({ left: 0, top: 0, right: 100, bottom: 100 });
 
     render(
       <CircuitOccluderProvider>
@@ -201,14 +201,14 @@ describe("CircuitOccluderProvider / useCircuitOccluder", () => {
     });
 
     expect(latestDelta).toEqual([
-      { x0: 0, y0: 0, x1: 50, y1: 50 },
-      { x0: 0, y0: 200, x1: 50, y1: 250 },
+      { x0: 0, y0: 0, x1: 100, y1: 100 },
+      { x0: 0, y0: 200, x1: 100, y1: 250 },
     ]);
   });
 
   it("a sub-threshold scroll move does not notify useCircuitOccluderDelta", async () => {
     let latestDelta: Rect[] | undefined;
-    const rect = makeRect({ left: 0, top: 0, right: 50, bottom: 50 });
+    const rect = makeRect({ left: 0, top: 0, right: 100, bottom: 100 });
 
     render(
       <CircuitOccluderProvider>
@@ -220,7 +220,7 @@ describe("CircuitOccluderProvider / useCircuitOccluder", () => {
     await flushRaf();
 
     rect.top = 5;
-    rect.bottom = 55;
+    rect.bottom = 105;
 
     await act(async () => {
       scroll();
@@ -232,7 +232,7 @@ describe("CircuitOccluderProvider / useCircuitOccluder", () => {
 
   it("a scroll-triggered measurement never changes useCircuitOccluderRects()'s value", async () => {
     const rectsSeen: (readonly { x0: number; y0: number; x1: number; y1: number }[])[] = [];
-    const rect = makeRect({ left: 0, top: 0, right: 50, bottom: 50 });
+    const rect = makeRect({ left: 0, top: 0, right: 100, bottom: 100 });
 
     render(
       <CircuitOccluderProvider>
@@ -253,13 +253,13 @@ describe("CircuitOccluderProvider / useCircuitOccluder", () => {
     });
 
     expect(rectsSeen.length).toBe(countBeforeScroll);
-    expect(rectsSeen[rectsSeen.length - 1]).toEqual([{ x0: 0, y0: 0, x1: 50, y1: 50 }]);
+    expect(rectsSeen[rectsSeen.length - 1]).toEqual([{ x0: 0, y0: 0, x1: 100, y1: 100 }]);
   });
 
   it("a structural ResizeObserver change does not also notify useCircuitOccluderDelta", async () => {
     let latestDelta: Rect[] | undefined;
     let registrantEl: HTMLDivElement | undefined;
-    const rect = makeRect({ left: 0, top: 0, right: 50, bottom: 50 });
+    const rect = makeRect({ left: 0, top: 0, right: 100, bottom: 100 });
 
     render(
       <CircuitOccluderProvider>
@@ -285,7 +285,7 @@ describe("CircuitOccluderProvider / useCircuitOccluder", () => {
 
   it("many registrants mounting together collapse into one measurement commit", async () => {
     const rectsSeen: (readonly { x0: number; y0: number; x1: number; y1: number }[])[] = [];
-    const registrants = Array.from({ length: 12 }, (_, i) => makeRect({ left: i * 10, top: 0, right: i * 10 + 5, bottom: 5 }));
+    const registrants = Array.from({ length: 12 }, (_, i) => makeRect({ left: i * 200, top: 0, right: i * 200 + 100, bottom: 100 }));
 
     render(
       <CircuitOccluderProvider>
@@ -308,7 +308,7 @@ describe("CircuitOccluderProvider / useCircuitOccluder", () => {
   it("a structural remeasurement that measures identically does not recommit useCircuitOccluderRects()", async () => {
     const rectsSeen: (readonly { x0: number; y0: number; x1: number; y1: number }[])[] = [];
     let registrantEl: HTMLDivElement | undefined;
-    const rect = makeRect({ left: 0, top: 0, right: 50, bottom: 50 });
+    const rect = makeRect({ left: 0, top: 0, right: 100, bottom: 100 });
 
     render(
       <CircuitOccluderProvider>
@@ -333,6 +333,45 @@ describe("CircuitOccluderProvider / useCircuitOccluder", () => {
 
     expect(rectsSeen.length).toBe(countAfterMount);
     expect(rectsSeen[rectsSeen.length - 1]).toBe(rectsAfterMount);
+  });
+
+  it("skips registering an element narrower than MIN_OCCLUDER_SIDE_PX and warns", async () => {
+    let latestRects: readonly { x0: number; y0: number; x1: number; y1: number }[] = [];
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const rect = makeRect({ left: 0, top: 0, right: 50, bottom: 100 }); // 50px wide, under the 80px floor
+
+    render(
+      <CircuitOccluderProvider>
+        <Registrant rect={rect} />
+        <RectsProbe onRects={(r) => (latestRects = r)} />
+      </CircuitOccluderProvider>,
+    );
+
+    await flushRaf();
+
+    expect(latestRects).toEqual([]);
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining("skipped a registrant smaller than MIN_OCCLUDER_SIDE_PX"),
+      expect.anything(),
+    );
+
+    warn.mockRestore();
+  });
+
+  it("registers an element at exactly MIN_OCCLUDER_SIDE_PX on both sides", async () => {
+    let latestRects: readonly { x0: number; y0: number; x1: number; y1: number }[] = [];
+    const rect = makeRect({ left: 0, top: 0, right: 80, bottom: 80 });
+
+    render(
+      <CircuitOccluderProvider>
+        <Registrant rect={rect} />
+        <RectsProbe onRects={(r) => (latestRects = r)} />
+      </CircuitOccluderProvider>,
+    );
+
+    await flushRaf();
+
+    expect(latestRects).toEqual([{ x0: 0, y0: 0, x1: 80, y1: 80 }]);
   });
 
   it("useCircuitOccluder outside a Provider warns instead of throwing", () => {

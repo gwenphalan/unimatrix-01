@@ -1,79 +1,142 @@
-import { GRID } from "./grid-math.js";
+import { GRID, type Point, cellKey } from "./grid-math.js";
 
 export type Rect = { x0: number; y0: number; x1: number; y1: number };
 
 /** A DOM-measured registrant rect, in viewport coordinates. */
 export type Occluder = Rect;
 
-// Distance (px) beyond an occluder's edge at which its weight reaches 1
-// (fully open). Tunable — needs a real-browser visual pass, not derivable
-// analytically. Kept deliberately separate from `OCCLUDER_AFFECT_MARGIN_PX`
-// below: tuning the visual falloff must never shrink the scroll-retarget
-// trigger zone.
-export const OCCLUDER_FALLOFF_PX = GRID * 1.5;
 // Margin (px) beyond a moved occluder's edge within which a trace tip counts
 // as "affected" for scroll-retarget purposes (`findAffectedTraceIds` in
-// `scroll-retarget.ts`). Pinned independently of `OCCLUDER_FALLOFF_PX` so
-// retuning the visual falloff can't silently narrow this trigger zone.
+// `scroll-retarget.ts`). Independent of the hard-barrier buffer below —
+// retuning one must never resize the other.
 export const OCCLUDER_AFFECT_MARGIN_PX = GRID * 4;
-// Weight floor at the occluder's own center — never a hard 0, per the
-// soft-everywhere decision: traces may still render (dimmer/rarer) behind
-// any registered panel, never fully excluded.
-const OCCLUDER_MIN_WEIGHT = 0.12;
-// Sampling grid for estimateEffectiveArea, independent of and finer than
-// cellsCoveringArea's trace-count-driven coarse tiling — a small occluder
-// (e.g. a ~60px header) can fall entirely between coarse cell centers and
-// register as contributing ~0 effective-area reduction despite still
-// suppressing pad placement locally.
-const EFFECTIVE_AREA_SAMPLE_STEP = GRID * 2;
+// Hard-barrier clearance (px) beyond an occluder's own edge. Cell blocking
+// uses the "inside" rounding rule (ceil the min edge, floor the max edge)
+// so effective clearance lands in [OCCLUDER_BUFFER_PX, OCCLUDER_BUFFER_PX +
+// GRID) rather than snapping outward to the next full cell on both sides —
+// the outward-snap alternative was measured to turn an 8px buffer into
+// 48-88px of real clearance, several times the stated 5-10px ask. A rect
+// whose inflated span contains no lattice point on an axis (thinner than one
+// grid cell, or straddling a cell boundary) falls back to blocking the
+// single nearest cell on that axis instead of blocking nothing.
+export const OCCLUDER_BUFFER_PX = 8;
 
-/**
- * Openness (0..1) at a point given all registered occluders — 1 is fully
- * open, `OCCLUDER_MIN_WEIGHT` is the floor at the center of the strongest
- * overlapping occluder. Overlapping occluders combine via `min()` (the
- * strongest single occluder wins) rather than compounding multiplicatively,
- * which would drive weight toward zero as more panels overlap and be harder
- * to reason about visually.
- */
-export function occlusionWeightAt(x: number, y: number, occluders: readonly Occluder[]): number {
-  let weight = 1;
+export function inflateRect(rect: Rect, buffer: number): Rect {
+  return { x0: rect.x0 - buffer, y0: rect.y0 - buffer, x1: rect.x1 + buffer, y1: rect.y1 + buffer };
+}
 
-  for (const rect of occluders) {
-    const dx = Math.max(rect.x0 - x, 0, x - rect.x1);
-    const dy = Math.max(rect.y0 - y, 0, y - rect.y1);
-    const distance = Math.hypot(dx, dy);
-    const local = OCCLUDER_MIN_WEIGHT + (1 - OCCLUDER_MIN_WEIGHT) * Math.min(1, distance / OCCLUDER_FALLOFF_PX);
+export type BarrierField = {
+  /** Buffer-inflated occluder rects, for exact (non-lattice-snapped) segment tests. */
+  readonly buffered: readonly Rect[];
+  /** Lattice cells blocked by any inflated occluder — the cheap point/BFS test. */
+  readonly cells: ReadonlySet<string>;
+};
 
-    weight = Math.min(weight, local);
-  }
+function axisRange(min: number, max: number): [number, number] {
+  const cMin = Math.ceil(min / GRID);
+  const cMax = Math.floor(max / GRID);
+  if (cMin <= cMax) return [cMin, cMax];
 
-  return weight;
+  // No lattice point falls inside this axis's inflated span — block the
+  // single nearest cell instead of leaving the axis unblocked.
+  const nearest = Math.round((min + max) / 2 / GRID);
+  return [nearest, nearest];
 }
 
 /**
- * Openness-weighted usable area of the canvas, for deriving trace count from
- * *available* area instead of raw viewport area. Samples on a fixed grid
- * finer than the trace-count-driven cell tiling (see
- * `EFFECTIVE_AREA_SAMPLE_STEP` above) so small occluders aren't invisible to
- * the estimate.
+ * Builds the hard-barrier field for the current occluder set: every
+ * registered rect inflated by `buffer`, plus the lattice cells that fall
+ * inside any inflated rect. `buffered` is the source of truth for exact
+ * segment tests (`segmentCrossesBarrier`) and the debug overlay; `cells` is
+ * the cheap point/BFS-occupancy test derived from it.
  */
-export function estimateEffectiveArea(width: number, height: number, occluders: readonly Occluder[]): number {
-  if (occluders.length === 0) return width * height;
+export function buildBarrierField(
+  occluders: readonly Occluder[],
+  buffer: number = OCCLUDER_BUFFER_PX,
+): BarrierField {
+  const buffered = occluders.map((rect) => inflateRect(rect, buffer));
+  const cells = new Set<string>();
 
-  const cols = Math.max(1, Math.round(width / EFFECTIVE_AREA_SAMPLE_STEP));
-  const rows = Math.max(1, Math.round(height / EFFECTIVE_AREA_SAMPLE_STEP));
-  const cellWidth = width / cols;
-  const cellHeight = height / rows;
-  let total = 0;
+  buffered.forEach((rect) => {
+    const [cxMin, cxMax] = axisRange(rect.x0, rect.x1);
+    const [cyMin, cyMax] = axisRange(rect.y0, rect.y1);
 
-  for (let row = 0; row < rows; row += 1) {
-    for (let col = 0; col < cols; col += 1) {
-      const cx = (col + 0.5) * cellWidth;
-      const cy = (row + 0.5) * cellHeight;
+    for (let cx = cxMin; cx <= cxMax; cx += 1) {
+      for (let cy = cyMin; cy <= cyMax; cy += 1) {
+        cells.add(`${cx},${cy}`);
+      }
+    }
+  });
 
-      total += cellWidth * cellHeight * occlusionWeightAt(cx, cy, occluders);
+  return { buffered, cells };
+}
+
+export function isCellBlocked(field: BarrierField, point: Point): boolean {
+  return field.cells.has(cellKey(point));
+}
+
+export function isPointInBarrier(field: BarrierField, point: Point): boolean {
+  return field.buffered.some(
+    (rect) => point.x >= rect.x0 && point.x <= rect.x1 && point.y >= rect.y0 && point.y <= rect.y1,
+  );
+}
+
+/**
+ * Exact (non-lattice-snapped) segment-vs-barrier test via Liang-Barsky
+ * clipping against each inflated rect — the enforcement primitive for "a
+ * trace must not enter the buffered region," independent of the coarser
+ * per-cell blocking used for pad placement and BFS occupancy. Also correct
+ * for a zero-length segment (a point test) and for a rect thinner than one
+ * grid cell, neither of which the cell-based test alone can guarantee.
+ */
+export function segmentCrossesBarrier(field: BarrierField, a: Point, b: Point): boolean {
+  return field.buffered.some((rect) => segmentIntersectsRect(a, b, rect));
+}
+
+function segmentIntersectsRect(a: Point, b: Point, rect: Rect): boolean {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const p = [-dx, dx, -dy, dy];
+  const q = [a.x - rect.x0, rect.x1 - a.x, a.y - rect.y0, rect.y1 - a.y];
+  let t0 = 0;
+  let t1 = 1;
+
+  for (let i = 0; i < 4; i += 1) {
+    const pi = p[i] as number;
+    const qi = q[i] as number;
+
+    if (pi === 0) {
+      if (qi < 0) return false;
+      continue;
+    }
+
+    const r = qi / pi;
+    if (pi < 0) {
+      if (r > t1) return false;
+      if (r > t0) t0 = r;
+    } else {
+      if (r < t0) return false;
+      if (r < t1) t1 = r;
     }
   }
 
-  return total;
+  return t0 <= t1;
+}
+
+/** Count of lattice cells (within the same 1-cell-inset bounds
+ * `clampToLattice` uses) not blocked by `field` — the barrier-aware
+ * replacement for the old openness-weighted area estimate, consumed only by
+ * trace generation's free-space partitioning. */
+export function countFreeCells(field: BarrierField, width: number, height: number): number {
+  const maxCx = Math.max(1, Math.round(width / GRID) - 1);
+  const maxCy = Math.max(1, Math.round(height / GRID) - 1);
+  let free = 0;
+
+  for (let cx = 1; cx <= maxCx; cx += 1) {
+    for (let cy = 1; cy <= maxCy; cy += 1) {
+      if (!field.cells.has(`${cx},${cy}`)) free += 1;
+    }
+  }
+
+  return free;
 }

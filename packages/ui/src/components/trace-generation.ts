@@ -1,14 +1,20 @@
 import { GRID, type Point, cellKey, densify, mulberry32, polylineLength, snap } from "./grid-math.js";
-import { type Occluder, occlusionWeightAt } from "./occlusion.js";
+import { type FreeComponent, allocateSlots, cellKeyToPoint, findFreeComponents } from "./free-space.js";
+import { type BarrierField, isCellBlocked, segmentCrossesBarrier } from "./occlusion.js";
 import { bfsConnectorCells, cellOf, connectorViaElbow } from "./route-engine.js";
 
-export type Trace = { id: string; points: Point[]; length: number; depth: number };
-export type CircuitTree = { traces: Trace[]; adjacency: Map<string, Set<string>> };
+export type Trace = { id: string; points: Point[]; length: number; depth: number; treeIndex: number };
+export type CircuitTree = { traces: Trace[]; adjacency: Map<string, Set<string>>; roots: number[] };
 
-// A grid-division cell used only to spread target pads across the canvas —
-// distinct from `Occluder`, a DOM-measured registrant rect (the old `KeepOut`
-// name was confusingly reused for both).
+// A grid-division cell used only to spread target pads within a free
+// component — distinct from `Occluder`/`Rect`, a DOM-measured registrant
+// rect.
 type Cell = { x0: number; y0: number; x1: number; y1: number };
+
+// Below this many free cells, a component is too small for its own
+// meaningful branch — its slot(s) fold into the largest component instead
+// (see `allocateSlots` in `free-space.ts`).
+const MIN_CELLS_PER_TREE = 8;
 
 function shuffled<T>(items: T[], rand: () => number): T[] {
   const result = items.slice();
@@ -24,7 +30,7 @@ function shuffled<T>(items: T[], rand: () => number): T[] {
   return result;
 }
 
-function cellsCoveringArea(width: number, height: number, count: number): Cell[] {
+function cellsCoveringArea(width: number, height: number, count: number, offsetX = 0, offsetY = 0): Cell[] {
   const cellSize = Math.max(GRID * 3, Math.sqrt((width * height) / Math.max(1, count)));
   const cols = Math.max(1, Math.round(width / cellSize));
   const rows = Math.max(1, Math.round(height / cellSize));
@@ -35,10 +41,10 @@ function cellsCoveringArea(width: number, height: number, count: number): Cell[]
   for (let row = 0; row < rows; row += 1) {
     for (let col = 0; col < cols; col += 1) {
       cells.push({
-        x0: col * cellWidth,
-        y0: row * cellHeight,
-        x1: (col + 1) * cellWidth,
-        y1: (row + 1) * cellHeight,
+        x0: offsetX + col * cellWidth,
+        y0: offsetY + row * cellHeight,
+        x1: offsetX + (col + 1) * cellWidth,
+        y1: offsetY + (row + 1) * cellHeight,
       });
     }
   }
@@ -47,60 +53,32 @@ function cellsCoveringArea(width: number, height: number, count: number): Cell[]
 }
 
 /**
- * One cell per slot (jittered, grid-snapped), sorted by distance from the
- * root cell ascending — this both spreads target pads across the canvas
- * (like the old per-cell jitter did) and makes the tree radiate outward
- * naturally once slot index doubles as build order in `generateTraces`: near
- * pads attach to a still-small tree, far pads attach to an already-larger
- * one, which also gives boot depth (see `Trace.depth`) almost for free.
- *
- * The root (slot 0, branch 0's unconstrained walk — see `walkFromStart`) is
- * picked as whichever assigned cell is *least* occluded at its center, not
- * simply the canvas-geometric-center cell: the page's actual center is
- * frequently sitting under a registered card/panel now that occlusion covers
- * real content blocks, and branch 0 has no attach-point constraint pulling it
- * there. Ties (including the common no-occluders case, where every cell scores
- * the same open weight) fall back to nearest-canvas-center, preserving the
- * exact prior placement when nothing is registered.
+ * One cell per slot (jittered), sorted by distance from the component's own
+ * center cell ascending — same "radiate outward, slot index doubles as
+ * build order" role `generateTraces` relies on, now scoped to a single free
+ * component's bounding box instead of the whole canvas. No occlusion-based
+ * root scoring: under hard barriers the root is simply the component's
+ * pre-computed interior-most cell (`FreeComponent.centerCell`, from
+ * `free-space.ts`'s own distance-transform pick), since branch 0 can only
+ * ever grow inside this component anyway.
  */
-function assignTargetCells(
-  width: number,
-  height: number,
-  count: number,
-  occluders: readonly Occluder[],
-  rand: () => number,
-): Cell[] {
-  const cells = shuffled(cellsCoveringArea(width, height, count), rand);
-  const fallback: Cell = { x0: 0, y0: 0, x1: width, y1: height };
+function assignTargetCellsForComponent(component: FreeComponent, count: number, rand: () => number): Cell[] {
+  const { minCx, maxCx, minCy, maxCy } = component.bounds;
+  const x0 = minCx * GRID;
+  const y0 = minCy * GRID;
+  const w = Math.max(GRID, (maxCx - minCx + 1) * GRID);
+  const h = Math.max(GRID, (maxCy - minCy + 1) * GRID);
+  const cells = shuffled(cellsCoveringArea(w, h, count, x0, y0), rand);
+  const fallback: Cell = { x0, y0, x1: x0 + w, y1: y0 + h };
   const assigned = Array.from({ length: count }, (_, i) => cells[i % Math.max(1, cells.length)] ?? fallback);
-  const canvasCenter = { x: width / 2, y: height / 2 };
+  const rootPoint = cellKeyToPoint(component.centerCell);
   const cellCenter = (cell: Cell) => ({ x: (cell.x0 + cell.x1) / 2, y: (cell.y0 + cell.y1) / 2 });
 
-  let rootIndex = 0;
-  let bestWeight = -Infinity;
-  let bestCenterDistance = Infinity;
-
-  assigned.forEach((cell, i) => {
-    const center = cellCenter(cell);
-    const weight = occlusionWeightAt(center.x, center.y, occluders);
-    const centerDistance = Math.hypot(center.x - canvasCenter.x, center.y - canvasCenter.y);
-
-    if (weight > bestWeight || (weight === bestWeight && centerDistance < bestCenterDistance)) {
-      bestWeight = weight;
-      bestCenterDistance = centerDistance;
-      rootIndex = i;
-    }
+  return assigned.slice().sort((a, b) => {
+    const ac = cellCenter(a);
+    const bc = cellCenter(b);
+    return Math.hypot(ac.x - rootPoint.x, ac.y - rootPoint.y) - Math.hypot(bc.x - rootPoint.x, bc.y - rootPoint.y);
   });
-
-  const rootCenter = cellCenter(assigned[rootIndex] as Cell);
-
-  return assigned
-    .slice()
-    .sort((a, b) => {
-      const ac = cellCenter(a);
-      const bc = cellCenter(b);
-      return Math.hypot(ac.x - rootCenter.x, ac.y - rootCenter.y) - Math.hypot(bc.x - rootCenter.x, bc.y - rootCenter.y);
-    });
 }
 
 export function clampToLattice(point: Point, width: number, height: number): Point {
@@ -110,26 +88,24 @@ export function clampToLattice(point: Point, width: number, height: number): Poi
   };
 }
 
-function jitterInCell(cell: Cell, width: number, height: number, rand: () => number): Point {
-  return clampToLattice({ x: cell.x0 + rand() * (cell.x1 - cell.x0), y: cell.y0 + rand() * (cell.y1 - cell.y0) }, width, height);
+function jitterInCell(cell: Cell, rand: () => number): Point {
+  return { x: cell.x0 + rand() * (cell.x1 - cell.x0), y: cell.y0 + rand() * (cell.y1 - cell.y0) };
 }
 
 /**
- * Expanding ring search over lattice cells for the nearest cell not already
- * claimed by the tree — the last-resort fallback when a jittered target
- * keeps landing on already-occupied ground. Bounded by the canvas's own
- * cell count (`maxRadius`), so it always terminates; at realistic trace
- * counts the footprint is a tiny fraction of the lattice, so this resolves
- * within the first few rings almost always. The `console.warn` path is a
- * canary for a case that should be geometrically impossible outside a
- * pathological (near-fully-occupied) canvas.
+ * Expanding ring search over `component`'s own cells for the nearest
+ * unclaimed one — the last-resort fallback when a jittered target keeps
+ * landing outside the component or on already-claimed ground. Bounded by
+ * the component's own cell span, so it always terminates. Falls back to the
+ * component's center cell (always free by construction) rather than an
+ * arbitrary clamped point, so this can never hand back a point sitting
+ * inside a barrier even in the pathological exhausted case.
  */
-function ringSearchUnoccupied(point: Point, width: number, height: number, footprint: Set<string>): Point {
+function ringSearchInComponent(point: Point, component: FreeComponent, footprint: ReadonlySet<string>): Point {
   const baseCx = Math.round(point.x / GRID);
   const baseCy = Math.round(point.y / GRID);
-  const maxCx = Math.max(1, Math.round(width / GRID) - 1);
-  const maxCy = Math.max(1, Math.round(height / GRID) - 1);
-  const maxRadius = maxCx + maxCy;
+  const { minCx, maxCx, minCy, maxCy } = component.bounds;
+  const maxRadius = maxCx - minCx + (maxCy - minCy) + 2;
 
   for (let radius = 0; radius <= maxRadius; radius += 1) {
     for (let dx = -radius; dx <= radius; dx += 1) {
@@ -139,59 +115,59 @@ function ringSearchUnoccupied(point: Point, width: number, height: number, footp
       for (const dy of dys) {
         const cx = baseCx + dx;
         const cy = baseCy + dy;
-        if (cx < 1 || cx > maxCx || cy < 1 || cy > maxCy) continue;
-
         const key = `${cx},${cy}`;
+        if (!component.cells.has(key)) continue;
         if (!footprint.has(key)) return { x: cx * GRID, y: cy * GRID };
       }
     }
   }
 
-  console.warn("[CircuitField] ringSearchUnoccupied exhausted the canvas — reusing an occupied point", point);
-  return clampToLattice(point, width, height);
+  console.warn("[CircuitField] ringSearchInComponent exhausted its component — reusing the component center", point);
+  return cellKeyToPoint(component.centerCell);
 }
 
 /**
- * Picks a target pad within `cell`: soft-accepts against `occlusionWeightAt`
- * (never a hard reject — "soft everywhere"), retried up to 8 times like the
- * old `buildStartPoints`, then unconditionally accepted on the last attempt
- * regardless of weight. Separately, a pad landing on an already-claimed
- * lattice cell (possible by chance — target sampling doesn't otherwise know
- * about the tree) is re-jittered too, falling back to `ringSearchUnoccupied`
- * rather than ever emitting a target the tree can't route to cleanly.
+ * Picks a target pad within `cell`, hard-confined to `component`'s own free
+ * cells (never a soft accept — a candidate outside the component, whether
+ * because it's barrier-blocked or because it belongs to a different
+ * disconnected free region, is always rejected and re-jittered), retried up
+ * to 8 times, then falling back to `ringSearchInComponent` rather than ever
+ * emitting a target the tree can't route to cleanly.
  */
-function pickTargetPoint(
+function pickTargetPointInComponent(
   cell: Cell,
-  width: number,
-  height: number,
-  occluders: readonly Occluder[],
-  footprint: Set<string>,
+  component: FreeComponent,
+  footprint: ReadonlySet<string>,
   rand: () => number,
 ): Point {
-  let point = jitterInCell(cell, width, height, rand);
+  let point = jitterInCell(cell, rand);
 
   for (let attempt = 0; attempt < 8; attempt += 1) {
-    const weight = occlusionWeightAt(point.x, point.y, occluders);
-    if (rand() <= weight && !footprint.has(cellKey(point))) return point;
-    point = jitterInCell(cell, width, height, rand);
+    const snapped = { x: snap(point.x), y: snap(point.y) };
+    const key = cellKey(snapped);
+    if (component.cells.has(key) && !footprint.has(key)) return snapped;
+    point = jitterInCell(cell, rand);
   }
 
-  if (!footprint.has(cellKey(point))) return point;
+  const snapped = { x: snap(point.x), y: snap(point.y) };
+  const key = cellKey(snapped);
+  if (component.cells.has(key) && !footprint.has(key)) return snapped;
 
-  return ringSearchUnoccupied(point, width, height, footprint);
+  return ringSearchInComponent(snapped, component, footprint);
 }
 
 /**
- * Branch 0 has nothing else to attach to yet, so it walks unconstrained —
- * the same per-segment random walk `buildTraceFromStart` used to do before
- * every later trace was validated against it. Unlike later branches, it
- * still has to avoid retracing *itself*: two segments can cancel out (e.g.
- * right 40 then left 40) with nothing else around to reject that, so this
- * tracks its own visited cells and retries a colliding segment with a
- * different direction/magnitude, stopping the walk early (fewer than the
- * intended segment count) rather than ever forcing a self-collision.
+ * Branch 0 has nothing else to attach to yet, so it walks unconstrained
+ * within its component — the same per-segment random walk `buildTraceFromStart`
+ * used to do before every later trace was validated against it, now also
+ * hard-rejecting any segment that would step onto a barrier-blocked cell or
+ * leave the free component (the two are mostly the same check: a component
+ * boundary is always a barrier cell or the canvas edge, by construction of
+ * `findFreeComponents`). Still tracks its own visited cells to avoid
+ * self-collision, stopping the walk early (fewer than the intended segment
+ * count) rather than ever forcing a collision or a barrier crossing.
  */
-function walkFromStart(start: Point, width: number, height: number, rand: () => number): Point[] {
+function walkFromStart(start: Point, width: number, height: number, component: FreeComponent, rand: () => number): Point[] {
   const points: Point[] = [start];
   const visited = new Set<string>([cellKey(start)]);
   const segments = 2 + Math.floor(rand() * 4);
@@ -213,8 +189,9 @@ function walkFromStart(start: Point, width: number, height: number, rand: () => 
 
       const segmentCells = densify([prev, next]).map((point) => cellKey(point));
       const revisits = segmentCells.some((key, idx) => idx > 0 && visited.has(key));
+      const leavesComponent = segmentCells.some((key) => !component.cells.has(key));
 
-      if (revisits) continue;
+      if (revisits || leavesComponent) continue;
 
       segmentCells.forEach((key) => visited.add(key));
       points.push(next);
@@ -228,24 +205,17 @@ function walkFromStart(start: Point, width: number, height: number, rand: () => 
 }
 
 /**
- * Connects `target` to the nearest lattice point already in the tree's
- * footprint, reusing `route-engine.ts`'s own elbow/BFS-corridor machinery
- * (the same primitives `buildRoute` uses for live crawl retargeting) rather
- * than a second pathfinding implementation. Because the anchor is always
- * already in the footprint and the route avoids re-entering it except at the
- * anchor and target cells, every branch touches existing structure at
- * exactly one point by construction — no loop-rejection pass is needed.
- *
- * `pickTargetPoint` keeps the target *endpoint* out of occluded ground, but
- * neither elbow orientation was ever scored against occlusion — so the
- * *connecting* segment between anchor and target could still cut straight
- * across a registered card even though both endpoints sat outside it. When
- * both elbow orientations are otherwise valid (collision-free against the
- * existing footprint), the one that spends less of its length inside
- * occluded ground wins — still soft (never a hard reject; the BFS corridor
- * fallback below remains footprint-only, unaware of occlusion), but removes
- * the common avoidable case where the *other* equally-valid orientation
- * would have skirted the card entirely.
+ * Connects `target` to the nearest lattice point already in this
+ * component's tree footprint, reusing `route-engine.ts`'s own elbow/BFS-
+ * corridor machinery — the same primitives `buildRoute` uses for live crawl
+ * retargeting. Both the anchor search and the BFS corridor fallback are
+ * confined to `footprint` (this component's own claimed cells only —
+ * components never share adjacent free cells, so there is never a need to
+ * search beyond it), and every candidate segment is now a hard reject
+ * against `barriers`, not a soft occlusion-cost tiebreak: an elbow that
+ * clips a buffered occluder rect is disqualified outright rather than
+ * merely disfavored, and the BFS corridor treats every barrier-blocked cell
+ * as occupied.
  */
 function attachRoute(
   target: Point,
@@ -253,7 +223,7 @@ function attachRoute(
   footprintOwner: Map<string, number>,
   width: number,
   height: number,
-  occluders: readonly Occluder[],
+  barriers: BarrierField,
 ): { ownerIndex: number; body: Point[] } {
   let anchorKey = "";
   let anchorCx = 0;
@@ -276,20 +246,33 @@ function attachRoute(
   const ownerIndex = footprintOwner.get(anchorKey) as number;
   const targetKey = cellKey(target);
   const allowed = new Set([anchorKey, targetKey]);
-  const collides = (points: Point[]) => points.some((point) => footprint.has(cellKey(point)) && !allowed.has(cellKey(point)));
+
+  const collides = (points: Point[]) =>
+    points.some((point) => {
+      const key = cellKey(point);
+      if (allowed.has(key)) return false;
+      return footprint.has(key) || isCellBlocked(barriers, point);
+    });
+
+  const crossesBarrier = (points: Point[]) => {
+    let prev = anchor;
+    for (const point of points) {
+      if (segmentCrossesBarrier(barriers, prev, point)) return true;
+      prev = point;
+    }
+    return segmentCrossesBarrier(barriers, prev, target);
+  };
 
   const elbowCandidates = [
     connectorViaElbow(anchor, target, { x: target.x, y: anchor.y }),
     connectorViaElbow(anchor, target, { x: anchor.x, y: target.y }),
   ];
-  const occlusionCost = (points: Point[]) =>
-    points.reduce((sum, point) => sum + (1 - occlusionWeightAt(point.x, point.y, occluders)), 0);
 
-  const validElbowCandidates = elbowCandidates.filter((candidate) => !collides(candidate));
+  const validElbowCandidates = elbowCandidates.filter((candidate) => !collides(candidate) && !crossesBarrier(candidate));
   let interior: Point[] | null =
     validElbowCandidates.length === 0
       ? null
-      : validElbowCandidates.reduce((best, candidate) => (occlusionCost(candidate) < occlusionCost(best) ? candidate : best));
+      : validElbowCandidates.reduce((best, candidate) => (candidate.length < best.length ? candidate : best));
 
   if (!interior) {
     const maxCx = Math.round(width / GRID);
@@ -297,6 +280,7 @@ function attachRoute(
     const corridorOccupied = new Set(footprint);
     corridorOccupied.delete(anchorKey);
     corridorOccupied.delete(targetKey);
+    barriers.cells.forEach((key) => corridorOccupied.add(key));
 
     const corridor = bfsConnectorCells(
       { cx: anchorCx, cy: anchorCy },
@@ -309,95 +293,108 @@ function attachRoute(
   }
 
   if (!interior) {
-    // Should essentially never happen on a finite lattice at realistic trace
-    // counts — a canary, not an expected path. A rare double-line seam is a
-    // much smaller regression than dropping the branch to a stub.
-    console.warn("[CircuitField] attachRoute found no clear corridor — falling back to a direct elbow", { anchor, target });
+    // Should essentially never happen: a component's own claimed footprint
+    // is always reachable from itself under BFS by construction. A canary,
+    // not an expected path — the direct elbow fallback here may cross a
+    // barrier, which the warning flags for investigation.
+    console.warn("[CircuitField] attachRoute found no barrier-clear corridor — falling back to a direct elbow", {
+      anchor,
+      target,
+    });
     interior = elbowCandidates[0] as Point[];
   }
 
   // `connectorViaElbow`/`bfsConnectorCells` route through `densify`, whose
   // `prev + dx * (s / steps)` interpolation can drift a fractional epsilon
-  // off an exact GRID multiple (e.g. dx=120, steps=3 hits 1/3 in binary
-  // floating point) — invisible for live-crawl rendering (its only use
-  // before this rewrite) but not exact enough for generation output, which
-  // the "every vertex on the lattice" invariant checks precisely.
+  // off an exact GRID multiple — invisible for live-crawl rendering but not
+  // exact enough for generation output, which the "every vertex on the
+  // lattice" invariant checks precisely.
   const body = [anchor, ...interior, target].map((point) => ({ x: snap(point.x), y: snap(point.y) }));
 
   return { ownerIndex, body };
 }
 
 /**
- * Deterministic procedural PCB-trace layout: a single rectilinear spanning
- * tree grown as exactly `count` branches — each branch *is* one tree edge
- * from birth, rather than being cut out of a separately-built tree after the
- * fact. That avoids the two-phase "build then decompose" approach's own
- * hazard: cutting an arbitrary tree into an exact count of non-retracing
- * simple paths isn't generally possible (minimum path cover of a tree is
- * `ceil(leaves/2)`, not freely dialable to `count`), and a naive Euler-tour
- * cut can walk out to a leaf and back over the same edge — a trace retracing
- * its own stretch, which the "no loops" invariant forbids.
+ * Deterministic procedural PCB-trace layout: a forest of rectilinear
+ * spanning trees, one per connected free component of the canvas under
+ * `barriers` (see `findFreeComponents`), together holding exactly `count`
+ * branches (see `allocateSlots`). A single hard-barrier occluder spanning
+ * the canvas (e.g. a full-width footer) used to leave nothing for a
+ * single-tree generator to grow into on one side; growing one tree per free
+ * region instead means every disconnected pocket of space still fills with
+ * trace geometry rather than sitting empty.
  *
- * Every branch after the first attaches to the existing structure at exactly
- * one point (see `attachRoute`), so this is acyclic by construction — no
- * rejection, no starvation, no fallback-to-stub. This structurally
- * guarantees connectedness, minimum edge length between any two attached
- * points, real junction topology, and the `adjacency` map Session E's idle
- * packets will walk.
+ * Within a component, every branch after its own first attaches to the
+ * existing structure at exactly one point (see `attachRoute`), so each tree
+ * is acyclic by construction — no rejection, no starvation, no
+ * fallback-to-stub. `roots` records the trace index of each tree's first
+ * branch (`Trace.depth === 0`), and `Trace.treeIndex` ties every branch back
+ * to the component it grew in.
  */
-export function generateTraces(
-  width: number,
-  height: number,
-  seed: number,
-  occluders: readonly Occluder[],
-  count: number,
-): CircuitTree {
+export function generateTraces(width: number, height: number, seed: number, barriers: BarrierField, count: number): CircuitTree {
   const rand = mulberry32(seed);
-  const targetCells = assignTargetCells(width, height, count, occluders, rand);
-  const footprint = new Set<string>();
-  const footprintOwner = new Map<string, number>();
+  const components = findFreeComponents(barriers, width, height);
   const adjacency = new Map<string, Set<string>>();
-  const depths: number[] = [];
   const traces: Trace[] = [];
+  const roots: number[] = [];
 
-  const claim = (points: Point[], ownerIndex: number) => {
-    const dense = densify(points);
-
-    dense.forEach((point, idx) => {
-      const key = cellKey(point);
-      if (!footprintOwner.has(key)) footprintOwner.set(key, ownerIndex);
-      footprint.add(key);
-
-      if (idx === 0) return;
-
-      const prevKey = cellKey(dense[idx - 1] as Point);
-      const forward = adjacency.get(prevKey) ?? new Set<string>();
-      forward.add(key);
-      adjacency.set(prevKey, forward);
-      const backward = adjacency.get(key) ?? new Set<string>();
-      backward.add(prevKey);
-      adjacency.set(key, backward);
-    });
-  };
-
-  for (let i = 0; i < count; i += 1) {
-    const target = pickTargetPoint(targetCells[i] as Cell, width, height, occluders, footprint, rand);
-
-    if (i === 0) {
-      const points = walkFromStart(target, width, height, rand);
-      traces.push({ id: `t${i}`, points, length: polylineLength(points), depth: 0 });
-      depths.push(0);
-      claim(points, i);
-      continue;
-    }
-
-    const { ownerIndex, body } = attachRoute(target, footprint, footprintOwner, width, height, occluders);
-    const depth = (depths[ownerIndex] as number) + 1;
-
-    traces.push({ id: `t${i}`, points: body, length: polylineLength(body), depth });
-    depths.push(depth);
-    claim(body, i);
+  if (components.length === 0) {
+    console.warn("[CircuitField] generateTraces found no free space under the current barrier set");
+    return { traces, adjacency, roots };
   }
 
-  return { traces, adjacency };
+  const slots = allocateSlots(components, count, MIN_CELLS_PER_TREE);
+
+  components.forEach((component, componentIdx) => {
+    const slotCount = slots[componentIdx] ?? 0;
+    if (slotCount <= 0) return;
+
+    const targetCells = assignTargetCellsForComponent(component, slotCount, rand);
+    const localFootprint = new Set<string>();
+    const localFootprintOwner = new Map<string, number>();
+    const depths = new Map<number, number>();
+
+    const claim = (points: Point[], ownerIndex: number) => {
+      const dense = densify(points);
+
+      dense.forEach((point, idx) => {
+        const key = cellKey(point);
+        if (!localFootprintOwner.has(key)) localFootprintOwner.set(key, ownerIndex);
+        localFootprint.add(key);
+
+        if (idx === 0) return;
+
+        const prevKey = cellKey(dense[idx - 1] as Point);
+        const forward = adjacency.get(prevKey) ?? new Set<string>();
+        forward.add(key);
+        adjacency.set(prevKey, forward);
+        const backward = adjacency.get(key) ?? new Set<string>();
+        backward.add(prevKey);
+        adjacency.set(key, backward);
+      });
+    };
+
+    for (let j = 0; j < slotCount; j += 1) {
+      const traceIndex = traces.length;
+      const target = pickTargetPointInComponent(targetCells[j] as Cell, component, localFootprint, rand);
+
+      if (j === 0) {
+        const points = walkFromStart(target, width, height, component, rand);
+        traces.push({ id: `t${traceIndex}`, points, length: polylineLength(points), depth: 0, treeIndex: componentIdx });
+        depths.set(traceIndex, 0);
+        roots.push(traceIndex);
+        claim(points, traceIndex);
+        continue;
+      }
+
+      const { ownerIndex, body } = attachRoute(target, localFootprint, localFootprintOwner, width, height, barriers);
+      const depth = (depths.get(ownerIndex) ?? 0) + 1;
+
+      traces.push({ id: `t${traceIndex}`, points: body, length: polylineLength(body), depth, treeIndex: componentIdx });
+      depths.set(traceIndex, depth);
+      claim(body, traceIndex);
+    }
+  });
+
+  return { traces, adjacency, roots };
 }

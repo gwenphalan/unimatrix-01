@@ -9,10 +9,10 @@ export type RegistrantOptions = {
    * registrants (cards, panels, headers, footers) are already self-bounded
    * to their own real height and never need this. It exists for a content
    * panel taller than a viewport (e.g. a long markdown article) — an
-   * uncapped rect like that blankets the entire viewport for most of the
-   * scroll range (`occlusionWeightAt`'s min-combine treats "anywhere inside
-   * a rect" as one flat floor regardless of depth), leaving nothing for
-   * scroll-driven retargeting to react to. Capping the registered height
+   * uncapped rect like that would barricade the entire viewport for most of
+   * the scroll range as one hard barrier regardless of depth, leaving
+   * nothing but the panel's own edges for scroll-driven retargeting to
+   * react to. Capping the registered height
    * keeps the occluder's top edge tracking the real DOM (still moves with
    * scroll) while letting its bottom edge open up once you've scrolled past
    * the cap — a deliberate, documented departure from "occluder rect ==
@@ -45,6 +45,14 @@ const OCCLUDER_SCROLL_DELTA_PX = GRID;
 // long markdown article) — generous vs typical viewport heights; needs a
 // real-browser visual pass to tune further.
 export const TALL_OCCLUDER_MAX_HEIGHT_PX = 900;
+
+// A registrant narrower or shorter than this on either side never registers
+// as a hard-barrier occluder. Hard barriers snap outward to whole lattice
+// cells (see `occlusion.ts`'s `buildBarrierField`), so even a small
+// registrant blocks a multi-cell span — a stray badge-sized element would
+// otherwise carve a hole in the trace field several times its own size.
+// Two grid cells is the floor a genuine panel/card/footer clears easily.
+export const MIN_OCCLUDER_SIDE_PX = GRID * 2;
 
 const RegistryContext = React.createContext<OccluderRegistry | null>(null);
 const RectsContext = React.createContext<Occluder[]>([]);
@@ -259,13 +267,20 @@ export function CircuitOccluderProvider({ children }: { children: React.ReactNod
 }
 
 /**
- * Registers `ref`'s element as a soft occluder for any `CircuitField`
- * beneath the nearest `CircuitOccluderProvider`. Takes an existing ref
- * rather than owning one, so a consumer that already has a ref for other
- * purposes (e.g. web's `headerRef`, used for scroll-condense detection)
- * reuses it instead of duplicating it.
+ * Registers `ref`'s element as a hard-barrier occluder for any
+ * `CircuitField` beneath the nearest `CircuitOccluderProvider` — traces and
+ * packets are kept out of its (buffered) bounds entirely, not merely
+ * steered around it. Takes an existing ref rather than owning one, so a
+ * consumer that already has a ref for other purposes (e.g. web's
+ * `headerRef`, used for scroll-condense detection) reuses it instead of
+ * duplicating it.
  *
- * Occlusion is a soft visual enhancement, not a correctness requirement —
+ * Intended only for genuine surfaces — panels, cards, footers, and other
+ * solid rectangular containers — never for titles, badges, buttons, or
+ * other interactive/decorative elements; register the surrounding
+ * non-interactive surface instead of the interactive element itself.
+ *
+ * Occlusion is a visual enhancement, not a correctness requirement —
  * calling this outside a `CircuitOccluderProvider` no-ops (with a dev-mode
  * warning) rather than throwing, so a missing provider degrades to "no
  * occlusion" instead of crashing the app.
@@ -286,6 +301,24 @@ export function useCircuitOccluder(
     if (!registry) {
       console.warn("[CircuitField] useCircuitOccluder called outside a CircuitOccluderProvider — ignoring.");
       return;
+    }
+
+    const el = ref.current;
+    if (el) {
+      // `right - left` / `bottom - top`, not `.width`/`.height` — matches
+      // how `measureRegistrants` below derives an occluder's bounds from
+      // the same rect, and is robust to a `getBoundingClientRect` stub
+      // (e.g. in tests) that sets the edges but not the derived size.
+      const rect = el.getBoundingClientRect();
+      const width = rect.right - rect.left;
+      const height = rect.bottom - rect.top;
+      if (width < MIN_OCCLUDER_SIDE_PX || height < MIN_OCCLUDER_SIDE_PX) {
+        console.warn(
+          "[CircuitField] useCircuitOccluder skipped a registrant smaller than MIN_OCCLUDER_SIDE_PX on one side — register the surrounding surface instead.",
+          { width, height },
+        );
+        return;
+      }
     }
 
     const id = idRef.current;

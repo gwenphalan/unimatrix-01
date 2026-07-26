@@ -11,6 +11,7 @@ import {
   packetPosition,
   type Packet,
 } from "../src/components/idle-packets.js";
+import { buildBarrierField } from "../src/components/occlusion.js";
 import { generateTraces } from "../src/components/trace-generation.js";
 import { recomputeCorners, densify } from "../src/components/grid-math.js";
 
@@ -47,7 +48,7 @@ describe("buildPacketGraph", () => {
   });
 
   it("stays a single connected component over real generateTraces output", () => {
-    const { traces } = generateTraces(1200, 900, 42, [], 14);
+    const { traces } = generateTraces(1200, 900, 42, buildBarrierField([]), 14);
     const bodies = new Map(traces.map((t) => [t.id, recomputeCorners(densify(t.points))]));
     const graph = buildPacketGraph(bodies);
 

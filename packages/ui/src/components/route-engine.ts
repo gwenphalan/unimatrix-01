@@ -1,4 +1,5 @@
 import { GRID, type Point, type RoutePoint, cellKey, densify, pointAtIndex, recomputeCorners, snap } from "./grid-math.js";
+import { type BarrierField, segmentCrossesBarrier } from "./occlusion.js";
 
 const MS_PER_STEP = 150;
 const MIN_TRAVEL_MS = 4000;
@@ -195,8 +196,19 @@ export function countRouteCollisions(points: Point[]): number {
  * (at most half a cell, rendered as part of the same continuous motion),
  * and the rest of the connector is built from that now grid-exact point —
  * smooth at the retarget instant, grid-exact for everything after it.
+ *
+ * `barriers`, when passed, makes every candidate — both elbows and the BFS
+ * corridor fallback — a hard reject against buffered occluder geometry, not
+ * just a collision-count tiebreak: a candidate that clips a barrier is
+ * disqualified outright rather than merely disfavored. Barrier-blocked
+ * cells are excluded from the BFS search except cells already present in
+ * `from`'s own footprint — a trace an occluder appeared on top of can still
+ * crawl *out* of the barrier it's standing in, but nothing can crawl *in*.
+ * Optional (not required) so existing non-barrier-aware callers/tests keep
+ * compiling; omitting it reproduces the pre-barrier collision-only
+ * behavior exactly.
  */
-export function buildRoute(from: RoutePoint[], to: RoutePoint[]): RoutePoint[] {
+export function buildRoute(from: RoutePoint[], to: RoutePoint[], barriers?: BarrierField): RoutePoint[] {
   const fromEnd = from[from.length - 1] as RoutePoint;
   const toStart = to[0] as RoutePoint;
 
@@ -211,12 +223,21 @@ export function buildRoute(from: RoutePoint[], to: RoutePoint[]): RoutePoint[] {
   const fullRouteCollisions = (connector: RoutePoint[]) =>
     countRouteCollisions([...from, ...leadIn, ...connector, ...to]);
 
+  const crossesBarrier = (connector: RoutePoint[]) => {
+    if (!barriers) return false;
+    const full = [...from, ...leadIn, ...connector, ...to];
+    for (let i = 1; i < full.length; i += 1) {
+      if (segmentCrossesBarrier(barriers, full[i - 1] as Point, full[i] as Point)) return true;
+    }
+    return false;
+  };
+
   const elbowCandidates = [
     connectorViaElbow(snappedFromEnd, toStart, { x: toStart.x, y: snappedFromEnd.y }),
     connectorViaElbow(snappedFromEnd, toStart, { x: snappedFromEnd.x, y: toStart.y }),
-  ];
+  ].filter((candidate) => !crossesBarrier(candidate));
 
-  let best = elbowCandidates[0] as RoutePoint[];
+  let best: RoutePoint[] | null = elbowCandidates[0] ?? null;
   let bestCollisions = Infinity;
 
   for (const candidate of elbowCandidates) {
@@ -230,7 +251,7 @@ export function buildRoute(from: RoutePoint[], to: RoutePoint[]): RoutePoint[] {
     if (bestCollisions === 0) break;
   }
 
-  if (bestCollisions > 0) {
+  if (best === null || bestCollisions > 0) {
     const fromCell = cellOf(snappedFromEnd);
     const toCell = cellOf(toStart);
     const margin = 6;
@@ -244,17 +265,40 @@ export function buildRoute(from: RoutePoint[], to: RoutePoint[]): RoutePoint[] {
     corridorOccupied.delete(cellKey(snappedFromEnd));
     corridorOccupied.delete(cellKey(toStart));
 
+    if (barriers) {
+      // Escape rule: a cell already inside `from`'s own footprint stays
+      // passable even if it's now barrier-blocked (an occluder can appear
+      // on top of a trace that's already there), but no barrier-blocked
+      // cell outside that footprint is ever entered.
+      const fromFootprint = new Set(from.map((point) => cellKey(point)));
+      barriers.cells.forEach((key) => {
+        if (!fromFootprint.has(key)) corridorOccupied.add(key);
+      });
+    }
+
     const corridor = bfsConnectorCells(fromCell, toCell, corridorOccupied, bounds);
 
     if (corridor) {
       const candidate = densify([snappedFromEnd, ...corridor, toStart]).slice(1, -1);
       const collisions = fullRouteCollisions(candidate);
 
-      if (collisions < bestCollisions) {
+      if (best === null || collisions < bestCollisions) {
         best = candidate;
         bestCollisions = collisions;
       }
     }
+  }
+
+  if (best === null) {
+    // Every candidate crossed a barrier and no BFS corridor was found — a
+    // canary, not an expected path. Fall back to the first raw elbow
+    // (unfiltered) so a route is always produced; it may visually clip a
+    // barrier in this pathological case.
+    console.warn("[CircuitField] buildRoute found no barrier-clear connector — falling back to a direct elbow", {
+      from: snappedFromEnd,
+      to: toStart,
+    });
+    best = connectorViaElbow(snappedFromEnd, toStart, { x: toStart.x, y: snappedFromEnd.y });
   }
 
   return recomputeCorners([...from, ...leadIn, ...best, ...to]);

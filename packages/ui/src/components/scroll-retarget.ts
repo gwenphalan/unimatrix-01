@@ -1,5 +1,5 @@
 import { GRID, type Point, type RoutePoint, cellKey } from "./grid-math.js";
-import { type Occluder, type Rect, occlusionWeightAt } from "./occlusion.js";
+import { type BarrierField, type Rect, isCellBlocked, segmentCrossesBarrier } from "./occlusion.js";
 import { clampToLattice } from "./trace-generation.js";
 
 // A local nudge, not a re-placement — how far from its current tip a
@@ -65,34 +65,35 @@ export function findAffectedTraceIds(tips: readonly TraceTip[], dirtyRects: read
 }
 
 /**
- * Finds a point along the tip's own final segment line that scores
- * strictly better than its current position under `occlusionWeightAt`,
- * without colliding with any other live trace's footprint or the trace's
- * own body. Movement is constrained to extending/retracting along the
- * existing final segment's own axis (never perpendicular) — the tip's
- * immediate predecessor (`pivot`) is colinear with the trace's real sparse
- * control point one segment back (dense subdivision preserves the
- * original segment's line), so any point on that same line keeps both the
- * dense body *and* the sparse point list the caller reconstructs from it
- * axis-aligned; a perpendicular nudge would need a second leg (an elbow)
- * whose orientation must match the *sparse* polyline's existing direction
- * to stay axis-aligned there too, which this module has no visibility
- * into — an in-line nudge sidesteps that requirement entirely.
+ * Finds a point along the tip's own final segment line that clears a
+ * barrier currently swallowing the tip, without colliding with any other
+ * live trace's footprint or the trace's own body. Movement is constrained
+ * to extending/retracting along the existing final segment's own axis
+ * (never perpendicular) — the tip's immediate predecessor (`pivot`) is
+ * colinear with the trace's real sparse control point one segment back
+ * (dense subdivision preserves the original segment's line), so any point
+ * on that same line keeps both the dense body *and* the sparse point list
+ * the caller reconstructs from it axis-aligned; a perpendicular nudge
+ * would need a second leg (an elbow) whose orientation must match the
+ * *sparse* polyline's existing direction to stay axis-aligned there too,
+ * which this module has no visibility into — an in-line nudge sidesteps
+ * that requirement entirely.
  *
  * Returns `null` — an intentional "leave it alone", not a bug — when the
- * tip's own cell is already claimed by another trace's anchor
+ * tip isn't currently inside a barrier (under hard barriers there is
+ * nothing to fix: a free tip has no "better" position, only a different
+ * one, so this only ever fires as a genuine escape, not an ambient nudge),
+ * when the tip's own cell is already claimed by another trace's anchor
  * (sole-ownership guard: per `attachRoute`'s "nearest footprint point, any
  * cell, not just endpoints" semantics, a shared cell means some other
  * trace depends on this exact point, so it must never move), or when no
- * candidate along the line clears both the collision checks and the
- * strict-improvement bar. Soft-occlusion is "never hard-excluded" by
- * design — a trace staying under a moving occluder with no better local
- * option on its own line is an acceptable degrade.
+ * candidate along the line both clears the barrier and the collision
+ * checks.
  */
 export function retargetTip(
   body: readonly RoutePoint[],
   occupied: ReadonlySet<string>,
-  occluders: readonly Occluder[],
+  barriers: BarrierField,
   width: number,
   height: number,
   rand: () => number = Math.random,
@@ -103,6 +104,7 @@ export function retargetTip(
   const pivot = body[body.length - 2] as RoutePoint;
 
   if (occupied.has(cellKey(tip))) return null;
+  if (!isCellBlocked(barriers, tip)) return null;
 
   const axis: "x" | "y" | null = pivot.y === tip.y ? "x" : pivot.x === tip.x ? "y" : null;
   if (!axis) return null; // guards against a malformed (non-axis-aligned) body rather than assuming
@@ -112,9 +114,8 @@ export function retargetTip(
     ownCells.add(cellKey(body[i] as RoutePoint));
   }
 
-  const currentWeight = occlusionWeightAt(tip.x, tip.y, occluders);
   let best: Point | null = null;
-  let bestWeight = currentWeight;
+  let bestDistance = Infinity;
 
   for (let attempt = 0; attempt < RETARGET_MAX_ATTEMPTS; attempt += 1) {
     const steps = Math.round((rand() * 2 - 1) * RETARGET_SEARCH_RADIUS_CELLS);
@@ -124,6 +125,8 @@ export function retargetTip(
     const candidate = clampToLattice(raw, width, height);
     if (candidate.x === pivot.x && candidate.y === pivot.y) continue;
     if (candidate.x === tip.x && candidate.y === tip.y) continue;
+    if (isCellBlocked(barriers, candidate)) continue;
+    if (segmentCrossesBarrier(barriers, pivot, candidate)) continue;
 
     const candidateSteps = Math.round(
       (axis === "x" ? candidate.x - pivot.x : candidate.y - pivot.y) / GRID,
@@ -146,10 +149,10 @@ export function retargetTip(
     if (blocked) continue;
     if (occupied.has(cellKey(candidate)) || ownCells.has(cellKey(candidate))) continue;
 
-    const weight = occlusionWeightAt(candidate.x, candidate.y, occluders);
-    if (weight > bestWeight) {
+    const distance = Math.abs(candidateSteps);
+    if (distance < bestDistance) {
       best = candidate;
-      bestWeight = weight;
+      bestDistance = distance;
     }
   }
 

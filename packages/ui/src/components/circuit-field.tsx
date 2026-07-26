@@ -13,7 +13,7 @@ import {
   advancePacket,
   buildPacketGraph,
 } from "./idle-packets.js";
-import { type Occluder, type Rect, OCCLUDER_AFFECT_MARGIN_PX } from "./occlusion.js";
+import { type BarrierField, type Occluder, type Rect, OCCLUDER_AFFECT_MARGIN_PX, buildBarrierField } from "./occlusion.js";
 import {
   buildCellAxisMap,
   buildRoute,
@@ -96,9 +96,12 @@ function pointsEqual(a: readonly Point[], b: readonly Point[]): boolean {
  * Renders above the static CSS grid and below page content (fixed,
  * `z-index: -1`, so any unpositioned in-flow content still paints on top).
  *
- * Trace count reacts to *available* area (viewport size minus soft DOM
- * occlusion, registered via `useCircuitOccluder`/`CircuitOccluderProvider`)
- * rather than being frozen at mount. On the very first mount, traces draw in
+ * Trace count reacts to raw viewport area (see the `traceCount` effect's own
+ * comment for why occluder-adjusted area was reverted) rather than being
+ * frozen at mount; barrier geometry from `useCircuitOccluder`/
+ * `CircuitOccluderProvider`-registered rects still drives where each trace
+ * *routes*, as a hard keep-out with a small buffer, never where its count
+ * lands. On the very first mount, traces draw in
  * with a staggered stroke animation (the "boot" moment, ordered by each
  * trace's depth in the generated spanning tree — see `trace-generation.ts`).
  * The same boot treatment applies to any slot added later by a trace-count
@@ -136,24 +139,25 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
 
   const [traceCount, setTraceCount] = React.useState<number | null>(null);
 
-  // Deliberately raw viewport area, not `estimateEffectiveArea(..., occluders)`
-  // (Session C/D.5's original design) — occluders register asynchronously
-  // (CircuitOccluderProvider measures via rAF-batched ResizeObserver), so
-  // computing `desired` from post-occlusion area raced that registration: the
-  // very first commit (which bypasses the hysteresis band below, since there
-  // is no `current` to compare against yet) could land before any occluder
-  // had measured, producing an inflated slot count that a moment later
-  // "corrected" downward by more than the band once real occlusion arrived —
-  // a real, reproduced-on-production add/remove of a dozen-plus slots at
-  // mount, and the same race on every route's occluder set re-registering.
-  // Confirmed live: `unimatrix-01.dev` mounted 32 traces, then dropped to 20
-  // within ~1s with no user action. Occlusion still drives routing (traces
-  // steer around registered occluders via `generateTraces`' weighting) — this
-  // only decouples slot *count* from occluder timing, matching the stated
-  // user preference that page-change reactivity reuse the same fixed set of
-  // lines rather than add/remove slots. `estimateEffectiveArea` stays in
-  // `occlusion.ts`, intentionally unconsumed in production now (same
-  // test-only status as `CircuitTree.adjacency`).
+  // Deliberately raw viewport area, not barrier-adjusted free area —
+  // occluders register asynchronously (CircuitOccluderProvider measures via
+  // rAF-batched ResizeObserver), so computing `desired` from post-occlusion
+  // area raced that registration: the very first commit (which bypasses the
+  // hysteresis band below, since there is no `current` to compare against
+  // yet) could land before any occluder had measured, producing an inflated
+  // slot count that a moment later "corrected" downward by more than the
+  // band once real occlusion arrived — a real, reproduced-on-production
+  // add/remove of a dozen-plus slots at mount, and the same race on every
+  // route's occluder set re-registering. Confirmed live: `unimatrix-01.dev`
+  // mounted 32 traces, then dropped to 20 within ~1s with no user action.
+  // Hard barriers still drive routing/placement (traces route around
+  // registered occluders' buffered rects via `generateTraces`'
+  // `barriers` argument) — this only decouples slot *count* from occluder
+  // timing, matching the stated user preference that page-change
+  // reactivity reuse the same fixed set of lines rather than add/remove
+  // slots. `CircuitTree.adjacency` stays intentionally unconsumed in
+  // production, test-only (see `idle-packets.ts`'s own doc comment on why
+  // it builds from live bodies instead).
   React.useEffect(() => {
     if (!debouncedSize) return;
 
@@ -432,14 +436,22 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
     });
   }, [viaItems]);
 
+  // Hard-barrier field derived from the structurally-committed occluder set
+  // (`useCircuitOccluderRects()`). The scroll-delta path never commits this
+  // context (see `circuit-occluder.tsx`'s provider doc comment), so
+  // `handleOccluderDelta` below builds its own barrier field from the
+  // scroll-fresh `liveOccluders` it receives instead of reading this memo.
+  const barriers: BarrierField = React.useMemo(() => buildBarrierField(occluders), [occluders]);
+
   const targetTraces = React.useMemo(() => {
     if (!debouncedSize || traceCount === null) return null;
 
-    // Occluder rects feed weighting only, never the seed — a panel resize
-    // must not re-seed the whole field and blow away an in-flight crawl.
+    // Occluder rects feed barrier geometry only, never the seed — a panel
+    // resize must not re-seed the whole field and blow away an in-flight
+    // crawl.
     const seed = hashString(`${routeKey}:${debouncedSize.width}x${debouncedSize.height}`);
-    return generateTraces(debouncedSize.width, debouncedSize.height, seed, occluders, traceCount);
-  }, [routeKey, debouncedSize?.width, debouncedSize?.height, traceCount, occluders]);
+    return generateTraces(debouncedSize.width, debouncedSize.height, seed, barriers, traceCount);
+  }, [routeKey, debouncedSize?.width, debouncedSize?.height, traceCount, barriers]);
 
   // The single shared rAF driving every in-flight transition. Reads
   // `transitionsRef` fresh each frame instead of closing over a fixed
@@ -939,7 +951,7 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
     const transitions = existingTraces.map((trace) => {
       const from = liveBodies.get(trace.id) ?? recomputeCorners(densify(trace.points));
       const to = recomputeCorners(densify(trace.points));
-      const route = buildRoute(from, to);
+      const route = buildRoute(from, to, barriers);
 
       return { id: trace.id, route, lenO: from.length, lenN: to.length, toBody: to };
     });
@@ -1026,7 +1038,7 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
     ensureLoop();
     // Only the target trace identity should retrigger this effect — the
     // refs and callbacks it closes over are stable across renders.
-  }, [applyIntersections, ensureLoop, retireAllPackets, setTipPosition, setViaItems, snapTransitionsToTarget, targetTraces]);
+  }, [applyIntersections, barriers, ensureLoop, retireAllPackets, setTipPosition, setViaItems, snapTransitionsToTarget, targetTraces]);
 
   // Scroll-driven retarget: nudges a live trace's tip away from an occluder
   // that just moved under it, using Session B's per-trace transition engine
@@ -1060,6 +1072,11 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
 
       if (candidateIds.length === 0) return;
 
+      // Built from `liveOccluders` (the scroll-fresh full set this delta
+      // callback receives), not the `barriers` memo above — that memo only
+      // updates on a structural commit, which the scroll path deliberately
+      // never triggers (see `circuit-occluder.tsx`'s provider doc comment).
+      const liveBarriers = buildBarrierField(liveOccluders);
       const retargets: RetargetEntry[] = [];
       // Cells claimed by a candidate already resolved earlier in this same
       // delta event — `liveBodyRef` for that candidate isn't mutated until
@@ -1079,7 +1096,7 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
         );
         const occupied = buildOccupiedFootprint(liveBodyRef.current, id, inFlightToBodies);
         pendingCells.forEach((cell) => occupied.add(cell));
-        const newTip = retargetTip(liveBody, occupied, liveOccluders, debouncedSize.width, debouncedSize.height);
+        const newTip = retargetTip(liveBody, occupied, liveBarriers, debouncedSize.width, debouncedSize.height);
         if (!newTip) return;
         pendingCells.add(cellKey(newTip));
 
@@ -1087,7 +1104,7 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
         const toBody = recomputeCorners(
           densify(sparsePoints).map((point) => ({ ...point, x: snap(point.x), y: snap(point.y) })),
         );
-        const route = buildRoute(liveBody, toBody);
+        const route = buildRoute(liveBody, toBody, liveBarriers);
 
         // The sparse point list, not the densified body — writing the dense
         // body here would make the next legitimate regeneration's
