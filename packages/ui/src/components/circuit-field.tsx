@@ -722,6 +722,12 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
         return;
       }
 
+      // See the boot/crawl effect's identical call: retire synchronously as
+      // this crawl is seeded rather than waiting on runTick's next-frame
+      // check, so packets never stand frozen on geometry that's about to
+      // retarget out from under them.
+      if (packetsRef.current.size > 0) retireAllPackets();
+
       const initialCellAxisMap = buildCellAxisMap(entries.map((r) => ({ id: r.id, points: r.route.slice(0, r.lenO) })));
       const crawlItems: ViaItem[] = [];
 
@@ -773,7 +779,7 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
 
       ensureLoop();
     },
-    [ensureLoop, setTipPosition, setViaItems, snapTransitionsToTarget],
+    [ensureLoop, retireAllPackets, setTipPosition, setViaItems, snapTransitionsToTarget],
   );
 
   // Used only by the frame-budget watchdog: snaps whatever is currently
@@ -943,6 +949,13 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
       return;
     }
 
+    // Retire idle packets here, synchronously as this crawl is seeded,
+    // rather than only relying on runTick's next-frame check — that check
+    // still runs (defense in depth), but waiting for it left a one-frame
+    // window (occasionally more, under load) where packets stood frozen on
+    // geometry that was about to move out from under them.
+    if (packetsRef.current.size > 0) retireAllPackets();
+
     const initialCellAxisMap = buildCellAxisMap(
       transitions.map((transition) => ({ id: transition.id, points: transition.route.slice(0, transition.lenO) })),
     );
@@ -1013,7 +1026,7 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
     ensureLoop();
     // Only the target trace identity should retrigger this effect — the
     // refs and callbacks it closes over are stable across renders.
-  }, [applyIntersections, ensureLoop, setTipPosition, setViaItems, snapTransitionsToTarget, targetTraces]);
+  }, [applyIntersections, ensureLoop, retireAllPackets, setTipPosition, setViaItems, snapTransitionsToTarget, targetTraces]);
 
   // Scroll-driven retarget: nudges a live trace's tip away from an occluder
   // that just moved under it, using Session B's per-trace transition engine
