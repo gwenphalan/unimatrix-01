@@ -14,6 +14,7 @@ import {
   type PacketGraph,
   advancePacket,
   buildPacketGraph,
+  packetsOffLiveGeometry,
 } from "./idle-packets.js";
 import { type BarrierField, type Occluder, type Rect, OCCLUDER_AFFECT_MARGIN_PX, buildBarrierField } from "./occlusion.js";
 import {
@@ -228,70 +229,100 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
     freeSlotsRef.current = Array.from({ length: IDLE_PACKET_POOL_SIZE }, (_, i) => i);
   }, []);
 
-  const advanceIdlePackets = React.useCallback((now: number) => {
-    if (graphDirtyRef.current) {
-      packetGraphRef.current = buildPacketGraph(liveBodyRef.current);
-      graphDirtyRef.current = false;
-    }
-    const graph = packetGraphRef.current;
-    if (!graph || graph.leaves.length === 0) return;
+  // `allowRebuild` gates the graph rebuild on nothing currently crawling —
+  // during a transition, `liveBodyRef` holds mid-crawl `sliceWindow`
+  // partial bodies, which must never become the packet graph; surviving
+  // packets keep walking whatever graph was frozen before the crawl
+  // started. `allowSpawn` similarly stops new packets/forks from appearing
+  // mid-crawl (existing ones just keep running). `isCellLive`, when
+  // supplied, culls any packet whose next (or current) cell just stopped
+  // being rendered — see `packetsOffLiveGeometry` — which is what lets a
+  // packet disappear exactly when the trace it's on is crawled past,
+  // instead of at the moment the crawl starts.
+  const advanceIdlePackets = React.useCallback(
+    (now: number, options: { isCellLive?: (cell: string) => boolean; allowSpawn: boolean; allowRebuild: boolean }) => {
+      if (graphDirtyRef.current && options.allowRebuild) {
+        packetGraphRef.current = buildPacketGraph(liveBodyRef.current);
+        graphDirtyRef.current = false;
+      }
+      const graph = packetGraphRef.current;
+      if (!graph || graph.leaves.length === 0) return;
 
-    packetsRef.current.forEach((packet, slot) => {
-      const result = advancePacket(packet, graph, now);
-      const el = packetElRefs.current.get(`p${slot}`);
-
-      if (!result) {
-        packetsRef.current.delete(slot);
-        freeSlotsRef.current.push(slot);
-        if (el) el.style.opacity = "0";
-        return;
+      if (options.isCellLive) {
+        const isCellLive = options.isCellLive;
+        packetsOffLiveGeometry(packetsRef.current, isCellLive).forEach((slot) => {
+          const el = packetElRefs.current.get(`p${slot}`);
+          if (el) el.style.opacity = "0";
+          packetsRef.current.delete(slot);
+          freeSlotsRef.current.push(slot);
+        });
       }
 
-      // A hop just completed this frame (arrived at a new cell): fork down a
-      // second branch if that cell is a real junction and a slot is free —
-      // max one fork per junction visit, never queued/preempting on pool
-      // exhaustion.
-      if (result.packet.hops === packet.hops + 1 && graph.junctions.includes(result.packet.at)) {
-        const neighborSet = graph.neighbors.get(result.packet.at);
-        const forkCandidates = neighborSet
-          ? Array.from(neighborSet).filter((n) => n !== result.packet.cameFrom && n !== result.packet.next)
-          : [];
-        const forkTarget = forkCandidates[Math.floor(Math.random() * forkCandidates.length)];
+      packetsRef.current.forEach((packet, slot) => {
+        const result = advancePacket(packet, graph, now);
+        const el = packetElRefs.current.get(`p${slot}`);
 
-        if (forkTarget && freeSlotsRef.current.length > 0 && packetsRef.current.size < IDLE_PACKET_POOL_SIZE) {
-          const forkSlot = freeSlotsRef.current.pop() as number;
-          packetsRef.current.set(forkSlot, {
-            slot: forkSlot,
-            at: result.packet.at,
-            cameFrom: result.packet.cameFrom,
-            next: forkTarget,
-            stepStart: now,
-            hops: result.packet.hops,
-          });
+        if (!result) {
+          packetsRef.current.delete(slot);
+          freeSlotsRef.current.push(slot);
+          if (el) el.style.opacity = "0";
+          return;
+        }
+
+        // A hop just completed this frame (arrived at a new cell): fork down
+        // a second branch if that cell is a real junction and a slot is free
+        // — max one fork per junction visit, never queued/preempting on pool
+        // exhaustion. Gated on `allowSpawn` same as the leaf-spawn below —
+        // forking mid-crawl could land a fresh packet on a cell that's about
+        // to vanish, retiring it the very next frame.
+        if (
+          options.allowSpawn &&
+          result.packet.hops === packet.hops + 1 &&
+          graph.junctions.includes(result.packet.at)
+        ) {
+          const neighborSet = graph.neighbors.get(result.packet.at);
+          const forkCandidates = neighborSet
+            ? Array.from(neighborSet).filter((n) => n !== result.packet.cameFrom && n !== result.packet.next)
+            : [];
+          const forkTarget = forkCandidates[Math.floor(Math.random() * forkCandidates.length)];
+
+          if (forkTarget && freeSlotsRef.current.length > 0 && packetsRef.current.size < IDLE_PACKET_POOL_SIZE) {
+            const forkSlot = freeSlotsRef.current.pop() as number;
+            packetsRef.current.set(forkSlot, {
+              slot: forkSlot,
+              at: result.packet.at,
+              cameFrom: result.packet.cameFrom,
+              next: forkTarget,
+              stepStart: now,
+              hops: result.packet.hops,
+            });
+          }
+        }
+
+        packetsRef.current.set(slot, result.packet);
+        if (el) {
+          el.setAttribute("x", String(result.point.x - 3));
+          el.setAttribute("y", String(result.point.y - 3));
+          el.style.opacity = "1";
+        }
+      });
+
+      if (
+        options.allowSpawn &&
+        packetsRef.current.size < IDLE_PACKET_MAX_CONCURRENT &&
+        freeSlotsRef.current.length > 0 &&
+        now - lastPacketSpawnAtRef.current > PACKET_SPAWN_INTERVAL_MS + Math.random() * 400
+      ) {
+        const leaf = graph.leaves[Math.floor(Math.random() * graph.leaves.length)];
+        if (leaf) {
+          const slot = freeSlotsRef.current.pop() as number;
+          packetsRef.current.set(slot, { slot, at: leaf, cameFrom: null, next: null, stepStart: now, hops: 0 });
+          lastPacketSpawnAtRef.current = now;
         }
       }
-
-      packetsRef.current.set(slot, result.packet);
-      if (el) {
-        el.setAttribute("x", String(result.point.x - 3));
-        el.setAttribute("y", String(result.point.y - 3));
-        el.style.opacity = "1";
-      }
-    });
-
-    if (
-      packetsRef.current.size < IDLE_PACKET_MAX_CONCURRENT &&
-      freeSlotsRef.current.length > 0 &&
-      now - lastPacketSpawnAtRef.current > PACKET_SPAWN_INTERVAL_MS + Math.random() * 400
-    ) {
-      const leaf = graph.leaves[Math.floor(Math.random() * graph.leaves.length)];
-      if (leaf) {
-        const slot = freeSlotsRef.current.pop() as number;
-        packetsRef.current.set(slot, { slot, at: leaf, cameFrom: null, next: null, stepStart: now, hops: 0 });
-        lastPacketSpawnAtRef.current = now;
-      }
-    }
-  }, []);
+    },
+    [],
+  );
 
   // The shared loop reschedules itself through this indirection rather than
   // through `runTick` directly. `runTick` closes over per-render values
@@ -474,21 +505,11 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
     // gating was built to avoid. Only idle producers run here.
     if (transitionsRef.current.size === 0) {
       if (idleEnabledRef.current && !staticModeRef.current && now >= idleReadyAtRef.current) {
-        advanceIdlePackets(now);
+        advanceIdlePackets(now, { allowSpawn: true, allowRebuild: true });
       }
       rafActiveRef.current = loopShouldRun() ? requestAnimationFrame(scheduleTick) : null;
       return;
     }
-
-    // A crawl is in flight, so every packet on screen is standing on geometry
-    // that is about to stop existing — `liveBodyRef` is mid-crawl
-    // `sliceWindow` output from here on. `advanceIdlePackets` is skipped for
-    // the whole crawl (idle producers only run on the fast path above), so
-    // without this the pool would sit frozen at its last position, visibly
-    // stranded off the moving lines until the last trace settles. Retire the
-    // pool once, the frame the crawl starts, and let idle respawn it fresh
-    // against the settled graph.
-    if (packetsRef.current.size > 0) retireAllPackets();
 
     const bodies = liveBodyRef.current;
     const currentBodies: { id: string; points: RoutePoint[] }[] = [];
@@ -547,6 +568,21 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
     });
     applyIntersections(findIntersections(cellAxisMap));
 
+    // A crawl is in flight, but existing packets keep running on their
+    // current route rather than being retired wholesale — they only
+    // disappear once the trace they're on is crawled past (see
+    // `packetsOffLiveGeometry`, driven by `cellAxisMap` above: exactly the
+    // cells currently drawn on screen this frame). No rebuild, no spawning,
+    // no forking while a crawl is in flight — surviving packets walk the
+    // graph frozen from before the crawl started.
+    if (idleEnabledRef.current && !staticModeRef.current && now >= idleReadyAtRef.current) {
+      advanceIdlePackets(now, {
+        isCellLive: (cell) => cellAxisMap.has(cell),
+        allowSpawn: false,
+        allowRebuild: false,
+      });
+    }
+
     // A via whose trace isn't in `windowBounds` this frame is either
     // settled (never touched here) or just finished (handled by the
     // settled-items commit below, which the viaItems layout effect then
@@ -585,19 +621,17 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
       });
 
       setViaItems([...carried, ...settled]);
+
+      // The last transition just settled this frame — mark the packet graph
+      // dirty so the next idle frame rebuilds it against the now-fully-
+      // settled geometry, culling any survivor left standing on a cell that
+      // no longer exists post-settle (the frozen pre-crawl graph it was
+      // walking may not exactly match the new one).
+      if (transitionsRef.current.size === 0) graphDirtyRef.current = true;
     }
 
     rafActiveRef.current = loopShouldRun() ? requestAnimationFrame(scheduleTick) : null;
-  }, [
-    advanceIdlePackets,
-    applyIntersections,
-    loopShouldRun,
-    retireAllPackets,
-    scheduleTick,
-    setTipPosition,
-    setViaItems,
-    traceIds,
-  ]);
+  }, [advanceIdlePackets, applyIntersections, loopShouldRun, scheduleTick, setTipPosition, setViaItems, traceIds]);
 
   // Layout effect, not passive: a passive effect would leave the frame
   // scheduled by this same commit's crawl/idle layout effects running the
@@ -736,12 +770,6 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
         return;
       }
 
-      // See the boot/crawl effect's identical call: retire synchronously as
-      // this crawl is seeded rather than waiting on runTick's next-frame
-      // check, so packets never stand frozen on geometry that's about to
-      // retarget out from under them.
-      if (packetsRef.current.size > 0) retireAllPackets();
-
       const initialCellAxisMap = buildCellAxisMap(entries.map((r) => ({ id: r.id, points: r.route.slice(0, r.lenO) })));
       const crawlItems: ViaItem[] = [];
 
@@ -793,7 +821,7 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
 
       ensureLoop();
     },
-    [ensureLoop, retireAllPackets, setTipPosition, setViaItems, snapTransitionsToTarget],
+    [ensureLoop, setTipPosition, setViaItems, snapTransitionsToTarget],
   );
 
   // Used only by the frame-budget watchdog: snaps whatever is currently
@@ -963,12 +991,11 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
       return;
     }
 
-    // Retire idle packets here, synchronously as this crawl is seeded,
-    // rather than only relying on runTick's next-frame check — that check
-    // still runs (defense in depth), but waiting for it left a one-frame
-    // window (occasionally more, under load) where packets stood frozen on
-    // geometry that was about to move out from under them.
-    if (packetsRef.current.size > 0) retireAllPackets();
+    // Packets already running keep running through this crawl — see
+    // `runTick`'s own `advanceIdlePackets(..., { isCellLive, allowSpawn:
+    // false, allowRebuild: false })` call, which culls them individually as
+    // the trace each one is on gets crawled past, rather than retiring the
+    // whole pool the instant a crawl is seeded.
 
     const initialCellAxisMap = buildCellAxisMap(
       transitions.map((transition) => ({ id: transition.id, points: transition.route.slice(0, transition.lenO) })),
@@ -1040,7 +1067,7 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
     ensureLoop();
     // Only the target trace identity should retrigger this effect — the
     // refs and callbacks it closes over are stable across renders.
-  }, [applyIntersections, barriers, ensureLoop, retireAllPackets, setTipPosition, setViaItems, snapTransitionsToTarget, targetTraces]);
+  }, [applyIntersections, barriers, ensureLoop, setTipPosition, setViaItems, snapTransitionsToTarget, targetTraces]);
 
   // Scroll-driven retarget: nudges a live trace's tip away from an occluder
   // that just moved under it, using Session B's per-trace transition engine

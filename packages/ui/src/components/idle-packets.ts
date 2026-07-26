@@ -103,6 +103,30 @@ export type Packet = {
 };
 
 /**
+ * Slots to retire because the cell a packet is walking toward (or, absent a
+ * `next`, standing on) no longer exists on screen — the cull that lets a
+ * packet keep running through a page transition instead of being retired
+ * wholesale the instant a crawl starts: it disappears exactly when the
+ * trace it's on is crawled past, not on the transition event itself.
+ * Checks `next` before `at` deliberately — a packet mid-hop toward a cell
+ * that's about to vanish should retire at that vanishing edge rather than
+ * visibly interpolating one more hop toward cells that no longer render.
+ */
+export function packetsOffLiveGeometry(
+  packets: ReadonlyMap<number, Packet>,
+  isCellLive: (cell: string) => boolean,
+): number[] {
+  const stale: number[] = [];
+
+  packets.forEach((packet, slot) => {
+    const cell = packet.next ?? packet.at;
+    if (!isCellLive(cell)) stale.push(slot);
+  });
+
+  return stale;
+}
+
+/**
  * One frame's worth of packet advancement. Returns the packet's current
  * render position, or `null` if it just retired — the caller is responsible
  * for freeing the slot back to its pool. Retirement happens at a dead end

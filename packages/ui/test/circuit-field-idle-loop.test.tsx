@@ -145,6 +145,62 @@ describe("CircuitField idle loop (full mode)", () => {
    * is what actually caught and confirmed the bug, not this file. Left in
    * only as basic "loop starts under StrictMode" coverage.
    */
+  /**
+   * Regression guard for the page-transition packet lifecycle: packets
+   * already running when a route change starts a crawl must keep running
+   * on their current route until the trace they're on is crawled past,
+   * not be retired outright the instant the transition is seeded. Prior
+   * behavior retired the whole pool synchronously inside the same layout
+   * effect that seeds the crawl — this test fails against that behavior,
+   * since it asserts survivors immediately after the route change, before
+   * any further frame has a chance to run.
+   */
+  it("keeps packets running immediately after a route change instead of retiring them at the transition", async () => {
+    const { container, rerender } = render(<CircuitField routeKey="route-transition-a" />);
+
+    const visiblePacketCount = () =>
+      Array.from(container.querySelectorAll(".circuit-field-packet")).filter(
+        (el) => (el as SVGRectElement).style.opacity === "1",
+      ).length;
+
+    // Idle packets only become eligible after IDLE_READY_DELAY_MS
+    // (BOOT_STAGGER_MAX_MS + TRACE_DRAW_MS) and spawn on their own
+    // PACKET_SPAWN_INTERVAL_MS cadence — both wall-clock, not frame-count,
+    // so this polls real elapsed time rather than a fixed frame count.
+    let waitedMs = 0;
+    while (visiblePacketCount() === 0 && waitedMs < 6000) {
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        await nextFrame();
+      });
+      waitedMs += 100;
+    }
+
+    const visibleBeforeTransition = visiblePacketCount();
+    expect(visibleBeforeTransition).toBeGreaterThan(0);
+
+    rerender(<CircuitField routeKey="route-transition-b" />);
+
+    // No additional frame yet — this is exactly the instant the old
+    // synchronous `retireAllPackets()` call used to wipe the pool.
+    expect(visiblePacketCount()).toBe(visibleBeforeTransition);
+
+    // Across the next several frames of the crawl, the visible count must
+    // never increase (allowSpawn: false while transitionsRef is non-empty)
+    // — it only ever holds steady or drops as traces get crawled past.
+    const counts: number[] = [visiblePacketCount()];
+    await act(async () => {
+      for (let i = 0; i < 10; i += 1) {
+        await nextFrame();
+        counts.push(visiblePacketCount());
+      }
+    });
+
+    for (let i = 1; i < counts.length; i += 1) {
+      expect(counts[i]).toBeLessThanOrEqual(counts[i - 1] as number);
+    }
+  }, 10000);
+
   it("still starts the idle loop under React.StrictMode's double-invoke mount", async () => {
     render(
       <React.StrictMode>
