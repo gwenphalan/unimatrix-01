@@ -4,7 +4,7 @@ import { HEIGHT_JITTER_IGNORE_PX, RESIZE_SETTLE_MS, useDebouncedSize, useMotionM
 import { useCircuitOccluderDelta, useCircuitOccluderRects } from "./circuit-occluder.js";
 import { createFrameBudgetProbe } from "./frame-budget.js";
 import { type Point, type RoutePoint, cellKey, densify, easeInOutCubic, hashString, pathData, polylineLength, recomputeCorners, snap } from "./grid-math.js";
-import { type Occluder, type Rect, OCCLUDER_AFFECT_MARGIN_PX, estimateEffectiveArea } from "./occlusion.js";
+import { type Occluder, type Rect, OCCLUDER_AFFECT_MARGIN_PX } from "./occlusion.js";
 import {
   buildCellAxisMap,
   buildRoute,
@@ -119,18 +119,36 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
 
   const [traceCount, setTraceCount] = React.useState<number | null>(null);
 
+  // Deliberately raw viewport area, not `estimateEffectiveArea(..., occluders)`
+  // (Session C/D.5's original design) — occluders register asynchronously
+  // (CircuitOccluderProvider measures via rAF-batched ResizeObserver), so
+  // computing `desired` from post-occlusion area raced that registration: the
+  // very first commit (which bypasses the hysteresis band below, since there
+  // is no `current` to compare against yet) could land before any occluder
+  // had measured, producing an inflated slot count that a moment later
+  // "corrected" downward by more than the band once real occlusion arrived —
+  // a real, reproduced-on-production add/remove of a dozen-plus slots at
+  // mount, and the same race on every route's occluder set re-registering.
+  // Confirmed live: `unimatrix-01.dev` mounted 32 traces, then dropped to 20
+  // within ~1s with no user action. Occlusion still drives routing (traces
+  // steer around registered occluders via `generateTraces`' weighting) — this
+  // only decouples slot *count* from occluder timing, matching the stated
+  // user preference that page-change reactivity reuse the same fixed set of
+  // lines rather than add/remove slots. `estimateEffectiveArea` stays in
+  // `occlusion.ts`, intentionally unconsumed in production now (same
+  // test-only status as `CircuitTree.adjacency`).
   React.useEffect(() => {
     if (!debouncedSize) return;
 
-    const effectiveArea = estimateEffectiveArea(debouncedSize.width, debouncedSize.height, occluders);
-    const desired = Math.max(MIN_TRACE_COUNT, Math.round(effectiveArea / MIN_TRACE_COUNT_AREA_DIVISOR));
+    const area = debouncedSize.width * debouncedSize.height;
+    const desired = Math.max(MIN_TRACE_COUNT, Math.round(area / MIN_TRACE_COUNT_AREA_DIVISOR));
 
     setTraceCount((current) => {
       if (current === null) return desired;
       const band = Math.max(TRACE_COUNT_HYSTERESIS_MIN_STEP, Math.round(current * TRACE_COUNT_HYSTERESIS_RATIO));
       return Math.abs(desired - current) > band ? desired : current;
     });
-  }, [debouncedSize?.width, debouncedSize?.height, occluders]);
+  }, [debouncedSize?.width, debouncedSize?.height]);
 
   const traceIds = React.useMemo(
     () => (traceCount === null ? [] : Array.from({ length: traceCount }, (_, i) => `t${i}`)),
@@ -751,7 +769,10 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
         const trace = previousTracesRef.current.get(id);
         if (!liveBody || !trace) return;
 
-        const occupied = buildOccupiedFootprint(liveBodyRef.current, id);
+        const inFlightToBodies = new Map(
+          Array.from(transitionsRef.current.entries()).map(([tid, t]) => [tid, t.toBody] as const),
+        );
+        const occupied = buildOccupiedFootprint(liveBodyRef.current, id, inFlightToBodies);
         pendingCells.forEach((cell) => occupied.add(cell));
         const newTip = retargetTip(liveBody, occupied, liveOccluders, debouncedSize.width, debouncedSize.height);
         if (!newTip) return;
@@ -831,7 +852,7 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
 
       ensureLoop();
     },
-    [applyIntersections, debouncedSize, ensureLoop, setTipPosition, setViaItems, snapTransitionsToTarget, traceIds],
+    [debouncedSize, ensureLoop, setTipPosition, setViaItems, snapTransitionsToTarget, traceIds],
   );
 
   useCircuitOccluderDelta(handleOccluderDelta);

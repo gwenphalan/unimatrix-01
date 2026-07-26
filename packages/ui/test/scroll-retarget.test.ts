@@ -43,6 +43,23 @@ describe("buildOccupiedFootprint", () => {
     expect(occupied.has("0,1")).toBe(true);
     expect(occupied.has("1,1")).toBe(true);
   });
+
+  it("also occupies in-flight target (toBody) cells, excluding the excluded id's own", () => {
+    const bodies = new Map<string, RoutePoint[]>([["t0", [rp(0, 0), rp(GRID, 0)]]]);
+    const inFlight = new Map<string, RoutePoint[]>([
+      ["t1", [rp(0, GRID), rp(GRID, GRID)]],
+      ["t0", [rp(2 * GRID, 0)]],
+    ]);
+
+    const occupied = buildOccupiedFootprint(bodies, "t0", inFlight);
+
+    // t1's in-flight target cell is occupied even though t1 has no settled
+    // liveBodyRef entry yet (it's mid-crawl).
+    expect(occupied.has("0,1")).toBe(true);
+    expect(occupied.has("1,1")).toBe(true);
+    // t0's own in-flight target is excluded, same as its settled body.
+    expect(occupied.has("2,0")).toBe(false);
+  });
 });
 
 describe("retargetTip", () => {

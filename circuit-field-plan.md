@@ -33,7 +33,9 @@ generation will starve the generator harder, not less. Phases 3 and 4 must land 
 - Every vertex an exact `GRID` (40px) multiple; `snap()` after every clamp.
 - No loops — not a trace looping on itself, not two traces retracing the same stretch, not a
   cycle formed by the combined shape of several traces.
-- Vias only at real bends (`recomputeCorners`), never mid-straight-run.
+- Vias only at real bends of their own trace (`recomputeCorners`), never mid-straight-run — cross-trace
+  intersection nodes (`findIntersections`) are a separate, deliberate exception (see Known issues,
+  vias-mid-straight-line entry, corrected 2026-07-25).
 - Tip vias suppressed when colinear with another trace's segment at that cell
   (`isColinearWithOther`).
 - Fixed per-trace slot count with stable 1:1 identity across regenerations (`traceIds`,
@@ -41,34 +43,74 @@ generation will starve the generator harder, not less. Phases 3 and 4 must land 
 
 Add regression tests for all of these once the generation module is pure (Session A).
 
-## Known issues (reported 2026-07-25, not yet triaged)
+## Known issues (reported 2026-07-25) — triaged and fixed 2026-07-25
 
-User-reported, observed live on the production deploy of `main` (`unimatrix-01.dev` and
-subdomains) — **not** reproduced or investigated yet, and **not** caused by the Session E1 work
-above (E1 was implemented on a branch cut from `origin/main` after these were already present;
-confirmed with the user this doesn't block E1). Four symptoms, likely overlapping with the Hard
-Invariants above and with prior unresolved flags in this doc:
+Investigated read-only against the production deploy (`unimatrix-01.dev`) via the Chrome
+extension, per a Planner-agent (opus) plan reviewed by `advisor()` first — the advisor's review
+flagged that the plan as first drafted only produced verdicts, not fixes, and reordered the work
+ahead of Session E2 (production symptoms outrank a new feature; also cheaper to fix before E2
+lands more producers of the same mutation). Verdicts below.
 
-- Circuit lines disappearing during page changes.
-- Circuit lines appearing during page changes — new lines being created rather than the existing
-  set moving/retargeting. Reported preference: page-change reactivity should always reuse the same
-  fixed set of lines (per-trace slot identity, moved/retargeted in place), not add/remove slots.
-  This may be the reactive-`traceCount` slot re-seed behavior documented as intentional in Session
-  C ("A count change is a full re-seed of the affected slots") reacting more visibly now that D.5
-  broadened occlusion to many per-card registrants (occluded area — and so `traceCount` — can
-  differ more between routes than it did with 2-3 broad containers) — needs verification, not
-  assumed.
-- Circuit loops — a direct Hard Invariant violation if confirmed on settled (non-crawling) geometry.
-- Vias appearing mid-straight-line — **an exact repeat of a report Session C already flagged as
-  unconfirmed** ("did not reproduce in a settled, undisturbed DOM check... Flagging as unconfirmed
-  rather than closed — if it recurs on a fully idle page, worth a closer look with
-  `prefers-reduced-motion` forced on"). This is that recurrence.
-
-Next session on this should investigate on `main` directly (not a Session E branch), starting from
-forcing `prefers-reduced-motion` per Session C's own suggestion to rule out crawl-interpolation
-sampling artifacts, and checking whether `traceCount`'s hysteresis band is actually holding across
-D.5's per-card registration set before assuming the appear/disappear complaint is intentional
-behavior working as designed rather than a regression.
+- **Circuit lines disappearing / appearing during page changes — CONFIRMED, FIXED.** Directly
+  reproduced live: a fresh load of `/` mounted 32 traces (`document.querySelectorAll('.circuit
+  -field-glow path').length`), then dropped to 20 within ~1s with no user action — a full
+  add/remove of 12 slots, not a crawl. Root cause: `traceCount`'s desired value was computed from
+  `estimateEffectiveArea(width, height, occluders)`, but `CircuitOccluderProvider` measures
+  registrants asynchronously (rAF-batched `ResizeObserver`), so the very first `traceCount` commit
+  — which bypasses the hysteresis band entirely, since there's no `current` to diff against yet —
+  could land before any occluder had measured, producing an inflated viewport-only count that a
+  moment later got "corrected" downward by more than the band once real per-card occlusion (D.5)
+  arrived. Same race re-fires on every occluder-set change, which is why it read as "during page
+  changes" rather than only at first mount. Fixed by computing `desired` from raw viewport area
+  (`debouncedSize.width * debouncedSize.height`) instead — occlusion still drives *routing* (traces
+  steer around registered occluders via `generateTraces`' weighting, unchanged), this only
+  decouples slot *count* from occluder-registration timing, matching the user's stated preference
+  that page-change reactivity reuse the same fixed set of lines. `estimateEffectiveArea` stays in
+  `occlusion.ts`, intentionally unconsumed in production now — same test-only status this doc
+  already established for `CircuitTree.adjacency` (Session E2 note below). SPA route-to-route
+  navigation (once warm) was independently confirmed stable at a fixed viewport across `/`,
+  `/blog`, `/projects`, `/about` even before this fix, so the cross-route-occlusion-difference
+  half of the original hypothesis wasn't the dominant driver — the mount/occluder-registration race
+  was. `circuit-field.tsx`'s `traceCount` effect and its comment updated; no test existed for this
+  effect (component-level, not covered by any `circuit-field.test.tsx`) and none was added — see
+  Session E2 log for why (jsdom can't observe `CircuitOccluderProvider`'s async registration timing
+  meaningfully without a live rAF/ResizeObserver harness this repo doesn't have for this file).
+- **Circuit loops — not reproduced; hardened as a precaution.** Zero console hits for any of the
+  three existing generation/geometry canaries (`attachRoute found no clear corridor`,
+  `ringSearchUnoccluded exhausted the canvas`, `densify() got a non-axis-aligned segment`) across
+  every route visited this session — rules out a generation-time cycle for now. Found and fixed a
+  real (if narrow) mechanism that could produce one on *settled* geometry: `handleOccluderDelta`'s
+  `buildOccupiedFootprint(liveBodyRef.current, id)` call only saw other traces' *settled*
+  `liveBodyRef` cells — a trace mid-crawl has a `sliceWindow` partial body there, so its real
+  in-flight *target* cells were invisible to a same-tick retarget candidate, which could claim a
+  cell the crawling trace was about to land on. `buildOccupiedFootprint` (`scroll-retarget.ts`)
+  gained an optional third `inFlightToBodies` parameter; `handleOccluderDelta` now passes every
+  `transitionsRef` entry's `toBody` (excluding the candidate's own). New test:
+  `scroll-retarget.test.ts` — "also occupies in-flight target (toBody) cells, excluding the
+  excluded id's own". This was already going to be a Session E2 prerequisite (idle-shift is a
+  second, permanent producer of the same class of mutation) — landing it here fixes today's
+  narrower scroll-only exposure too.
+- **Vias appearing mid-straight-line — not re-confirmed; Hard Invariant text amended.** Could not
+  re-run Session C's exact settled-DOM corner check live this session: this harness's controlled
+  tab has the same rAF/animation-timing limitation Sessions D/E1 already documented (CSS
+  `animation-fill-mode: forwards` on `.circuit-field-via` never reached its resolved `opacity: 1`
+  state in a live query here, well past its `250ms` duration + delay, on a page that visually
+  rendered its dots correctly in a screenshot at the same moment) — not trustworthy as evidence
+  either way, so not chased further. Falling back to Session C's own prior finding (0 mismatches
+  across 92 checked via rects in a real, working browser) plus a re-read of the render code:
+  cross-trace intersection vias (`findIntersections` → the `x${i}` pool) are *deliberately* placed
+  at any h/v crossing between two different traces' paths, which is not necessarily a "bend" of
+  either individual trace — the Hard Invariants text above (line ~37) predates Session C's
+  spanning-tree generator, which is what made T-junctions/crossings routine. Likely explanation for
+  the recurrence report: real crossing/junction vias, working as designed, being read as "mid-line"
+  because they belong to a *different* trace than the line they visually sit on. Amended the Hard
+  Invariant above to "vias only at real bends *of their own trace* (`recomputeCorners`), never
+  mid-straight-run — cross-trace intersection nodes (`findIntersections`) are a separate, deliberate
+  exception". If this recurs with a live, working browser check available, re-run Session C's exact
+  per-via corner-membership check (now scriptable — see the mismatch-detection approach attempted
+  this session, corrected to slice `.circuit-field-glow`'s second `<g>`'s children by
+  `[0, viaItems.length)` rather than checking every rect in the group, since tip and intersection
+  rects are legitimately not "corners" of anything).
 
 ## Token-efficiency session grouping
 
