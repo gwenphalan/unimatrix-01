@@ -1,6 +1,8 @@
 import * as React from "react";
 
 import { HEIGHT_JITTER_IGNORE_PX, RESIZE_SETTLE_MS, useDebouncedSize, useMotionMode, useViewportSize } from "./circuit-field-hooks.js";
+import { CircuitDebugOverlay } from "./circuit-debug-overlay.js";
+import { installCircuitDebugConsoleApi } from "./circuit-debug.js";
 import { useCircuitOccluderDelta, useCircuitOccluderRects } from "./circuit-occluder.js";
 import { createFrameBudgetProbe } from "./frame-budget.js";
 import { type Point, type RoutePoint, cellKey, densify, easeInOutCubic, hashString, pathData, polylineLength, recomputeCorners, snap } from "./grid-math.js";
@@ -1267,92 +1269,102 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
     [],
   );
 
+  // Installs `window.__circuitField.debug(...)` once per app (idempotent
+  // across every `CircuitField` mount) — the only way to toggle the barrier
+  // debug overlay below. Never a UI control; see `circuit-debug.ts`.
+  React.useEffect(() => {
+    installCircuitDebugConsoleApi();
+  }, []);
+
   if (!size) {
     return null;
   }
 
   return (
-    <svg
-      aria-hidden="true"
-      className={
-        staticMode
-          ? `circuit-field circuit-field-static${idleGlowEligible ? " circuit-field-idle-glow" : ""}`
-          : "circuit-field"
-      }
-      height={size.height}
-      style={{ position: "fixed", inset: 0, zIndex: -1, pointerEvents: "none" }}
-      width={size.width}
-    >
-      <g
-        className="circuit-field-glow"
-        fill="none"
-        stroke="color-mix(in oklab, var(--primary) 60%, var(--background))"
-        strokeLinecap="square"
-        strokeWidth={1.5}
+    <>
+      <svg
+        aria-hidden="true"
+        className={
+          staticMode
+            ? `circuit-field circuit-field-static${idleGlowEligible ? " circuit-field-idle-glow" : ""}`
+            : "circuit-field"
+        }
+        height={size.height}
+        style={{ position: "fixed", inset: 0, zIndex: -1, pointerEvents: "none" }}
+        width={size.width}
       >
-        {traceIds.map((id) => (
-          <path key={id} ref={pathRefCallbacks.get(id)} />
-        ))}
-      </g>
-      <g className="circuit-field-glow" fill="color-mix(in oklab, var(--primary) 60%, var(--background))">
-        {viaItems.map((item) => (
-          <rect
-            className={item.boot ? "circuit-field-via" : undefined}
-            height={6}
-            key={item.key}
-            ref={viaRefCallback(item.key)}
-            style={item.boot ? { animationDelay: `${item.delay}ms` } : { opacity: item.initiallyVisible ? 1 : 0 }}
-            width={6}
-            x={item.x - 3}
-            y={item.y - 3}
-          />
-        ))}
-        {traceIds.flatMap((id) => [
-          <rect
-            height={6}
-            key={`${id}-tail`}
-            ref={tipRefCallback(`${id}-tail`)}
-            style={{ opacity: 0 }}
-            width={6}
-            x={-3}
-            y={-3}
-          />,
-          <rect
-            height={6}
-            key={`${id}-head`}
-            ref={tipRefCallback(`${id}-head`)}
-            style={{ opacity: 0 }}
-            width={6}
-            x={-3}
-            y={-3}
-          />,
-        ])}
-        {intersectionSlotIds.map((key) => (
-          <rect
-            height={6}
-            key={key}
-            ref={intersectionRefCallback(key)}
-            style={{ opacity: 0 }}
-            width={6}
-            x={-3}
-            y={-3}
-          />
-        ))}
-      </g>
-      <g className="circuit-field-glow" fill="var(--primary)">
-        {packetSlotIds.map((key) => (
-          <rect
-            className="circuit-field-packet"
-            height={6}
-            key={key}
-            ref={packetRefCallback(key)}
-            style={{ opacity: 0 }}
-            width={6}
-            x={-3}
-            y={-3}
-          />
-        ))}
-      </g>
-    </svg>
+        <g
+          className="circuit-field-glow"
+          fill="none"
+          stroke="color-mix(in oklab, var(--primary) 60%, var(--background))"
+          strokeLinecap="square"
+          strokeWidth={1.5}
+        >
+          {traceIds.map((id) => (
+            <path key={id} ref={pathRefCallbacks.get(id)} />
+          ))}
+        </g>
+        <g className="circuit-field-glow" fill="color-mix(in oklab, var(--primary) 60%, var(--background))">
+          {viaItems.map((item) => (
+            <rect
+              className={item.boot ? "circuit-field-via" : undefined}
+              height={6}
+              key={item.key}
+              ref={viaRefCallback(item.key)}
+              style={item.boot ? { animationDelay: `${item.delay}ms` } : { opacity: item.initiallyVisible ? 1 : 0 }}
+              width={6}
+              x={item.x - 3}
+              y={item.y - 3}
+            />
+          ))}
+          {traceIds.flatMap((id) => [
+            <rect
+              height={6}
+              key={`${id}-tail`}
+              ref={tipRefCallback(`${id}-tail`)}
+              style={{ opacity: 0 }}
+              width={6}
+              x={-3}
+              y={-3}
+            />,
+            <rect
+              height={6}
+              key={`${id}-head`}
+              ref={tipRefCallback(`${id}-head`)}
+              style={{ opacity: 0 }}
+              width={6}
+              x={-3}
+              y={-3}
+            />,
+          ])}
+          {intersectionSlotIds.map((key) => (
+            <rect
+              height={6}
+              key={key}
+              ref={intersectionRefCallback(key)}
+              style={{ opacity: 0 }}
+              width={6}
+              x={-3}
+              y={-3}
+            />
+          ))}
+        </g>
+        <g className="circuit-field-glow" fill="var(--primary)">
+          {packetSlotIds.map((key) => (
+            <rect
+              className="circuit-field-packet"
+              height={6}
+              key={key}
+              ref={packetRefCallback(key)}
+              style={{ opacity: 0 }}
+              width={6}
+              x={-3}
+              y={-3}
+            />
+          ))}
+        </g>
+      </svg>
+      <CircuitDebugOverlay occluders={occluders} />
+    </>
   );
 }
