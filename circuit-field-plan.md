@@ -393,7 +393,7 @@ Covers original bullets 3, 4 (the loop half), 5.
   emulation; mobile-width + touch emulation on a card-dense route (`/projects`) to confirm the
   coarse-pointer → static path and glow pulse read correctly. Do not attempt a live hidden-tab
   rAF-stops check (see above) — jsdom test is authoritative.
-- [ ] Commit, PR.
+- [x] Commit, PR.
 
 #### Session E2 — Idle packets + idle line-shift (separate branch, cut after E1 merges)
 
