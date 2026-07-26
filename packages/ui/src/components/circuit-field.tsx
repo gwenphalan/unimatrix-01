@@ -4,6 +4,15 @@ import { HEIGHT_JITTER_IGNORE_PX, RESIZE_SETTLE_MS, useDebouncedSize, useMotionM
 import { useCircuitOccluderDelta, useCircuitOccluderRects } from "./circuit-occluder.js";
 import { createFrameBudgetProbe } from "./frame-budget.js";
 import { type Point, type RoutePoint, cellKey, densify, easeInOutCubic, hashString, pathData, polylineLength, recomputeCorners, snap } from "./grid-math.js";
+import {
+  IDLE_PACKET_MAX_CONCURRENT,
+  IDLE_PACKET_POOL_SIZE,
+  PACKET_SPAWN_INTERVAL_MS,
+  type Packet,
+  type PacketGraph,
+  advancePacket,
+  buildPacketGraph,
+} from "./idle-packets.js";
 import { type Occluder, type Rect, OCCLUDER_AFFECT_MARGIN_PX } from "./occlusion.js";
 import {
   buildCellAxisMap,
@@ -39,6 +48,10 @@ const DEPTH_STAGGER_MS = 60;
 // 4000ms), this only covers the settle-then-immediately-dirty edge case.
 const RETARGET_COOLDOWN_MS = 600;
 const MAX_SCROLL_RETARGETS_PER_EVENT = 4;
+// Idle packets must not start before boot's CSS stagger has actually finished
+// drawing — a packet walking an undrawn stroke would visibly misbehave.
+// Mirrors the same two constants boot's own delay math already uses.
+const IDLE_READY_DELAY_MS = BOOT_STAGGER_MAX_MS + TRACE_DRAW_MS;
 
 type ViaItem = {
   key: string;
@@ -59,6 +72,10 @@ type TraceTransition = {
   startTime: number;
   duration: number;
 };
+
+// Input shape for an in-place tip retarget (scroll delta) — see
+// `applyRetargets` below.
+type RetargetEntry = { id: string; route: RoutePoint[]; lenO: number; lenN: number; toBody: RoutePoint[] };
 
 export type CircuitFieldProps = {
   /**
@@ -175,8 +192,117 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
   const watchdogFrameRef = React.useRef<number | null>(null);
   const watchdogStepRef = React.useRef<((timestamp: number) => void) | null>(null);
 
+  // Session E2 (idle packets) state — all gated behind
+  // `motionMode === "full"` via `idleEnabledRef`.
+  const idleEnabledRef = React.useRef(false);
+  const idleReadyAtRef = React.useRef(0);
+  const packetGraphRef = React.useRef<PacketGraph | null>(null);
+  const graphDirtyRef = React.useRef(true);
+  const packetsRef = React.useRef(new Map<number, Packet>());
+  const freeSlotsRef = React.useRef(Array.from({ length: IDLE_PACKET_POOL_SIZE }, (_, i) => i));
+  const lastPacketSpawnAtRef = React.useRef(0);
+  const packetElRefs = React.useRef(new Map<string, SVGRectElement>());
+
   const loopShouldRun = React.useCallback(() => {
-    return !documentHiddenRef.current && transitionsRef.current.size > 0;
+    return !documentHiddenRef.current && (transitionsRef.current.size > 0 || idleEnabledRef.current);
+  }, []);
+
+  // Hides every pooled packet rect and returns its slot. Used wherever the
+  // geometry packets are walking stops being valid: a trace-count prune, a
+  // tab hide/show, and — the frame any crawl starts — `runTick` itself.
+  // Retiring rather than trying to salvage in-flight packets is deliberate:
+  // the graph is rebuilt from live bodies on the next idle frame anyway.
+  const retireAllPackets = React.useCallback(() => {
+    graphDirtyRef.current = true;
+    packetsRef.current.forEach((_packet, slot) => {
+      const el = packetElRefs.current.get(`p${slot}`);
+      if (el) el.style.opacity = "0";
+    });
+    packetsRef.current.clear();
+    freeSlotsRef.current = Array.from({ length: IDLE_PACKET_POOL_SIZE }, (_, i) => i);
+  }, []);
+
+  const advanceIdlePackets = React.useCallback((now: number) => {
+    if (graphDirtyRef.current) {
+      packetGraphRef.current = buildPacketGraph(liveBodyRef.current);
+      graphDirtyRef.current = false;
+    }
+    const graph = packetGraphRef.current;
+    if (!graph || graph.leaves.length === 0) return;
+
+    packetsRef.current.forEach((packet, slot) => {
+      const result = advancePacket(packet, graph, now);
+      const el = packetElRefs.current.get(`p${slot}`);
+
+      if (!result) {
+        packetsRef.current.delete(slot);
+        freeSlotsRef.current.push(slot);
+        if (el) el.style.opacity = "0";
+        return;
+      }
+
+      // A hop just completed this frame (arrived at a new cell): fork down a
+      // second branch if that cell is a real junction and a slot is free —
+      // max one fork per junction visit, never queued/preempting on pool
+      // exhaustion.
+      if (result.packet.hops === packet.hops + 1 && graph.junctions.includes(result.packet.at)) {
+        const neighborSet = graph.neighbors.get(result.packet.at);
+        const forkCandidates = neighborSet
+          ? Array.from(neighborSet).filter((n) => n !== result.packet.cameFrom && n !== result.packet.next)
+          : [];
+        const forkTarget = forkCandidates[Math.floor(Math.random() * forkCandidates.length)];
+
+        if (forkTarget && freeSlotsRef.current.length > 0 && packetsRef.current.size < IDLE_PACKET_MAX_CONCURRENT) {
+          const forkSlot = freeSlotsRef.current.pop() as number;
+          packetsRef.current.set(forkSlot, {
+            slot: forkSlot,
+            at: result.packet.at,
+            cameFrom: result.packet.cameFrom,
+            next: forkTarget,
+            stepStart: now,
+            hops: result.packet.hops,
+          });
+        }
+      }
+
+      packetsRef.current.set(slot, result.packet);
+      if (el) {
+        el.setAttribute("x", String(result.point.x - 3));
+        el.setAttribute("y", String(result.point.y - 3));
+        el.style.opacity = "1";
+      }
+    });
+
+    if (
+      packetsRef.current.size < IDLE_PACKET_MAX_CONCURRENT &&
+      freeSlotsRef.current.length > 0 &&
+      now - lastPacketSpawnAtRef.current > PACKET_SPAWN_INTERVAL_MS + Math.random() * 400
+    ) {
+      const leaf = graph.leaves[Math.floor(Math.random() * graph.leaves.length)];
+      if (leaf) {
+        const slot = freeSlotsRef.current.pop() as number;
+        packetsRef.current.set(slot, { slot, at: leaf, cameFrom: null, next: null, stepStart: now, hops: 0 });
+        lastPacketSpawnAtRef.current = now;
+      }
+    }
+  }, []);
+
+  // The shared loop reschedules itself through this indirection rather than
+  // through `runTick` directly. `runTick` closes over per-render values
+  // (`traceIds`, and the per-frame via/tip/intersection passes keyed off it),
+  // and a
+  // self-rescheduling `requestAnimationFrame(runTick)` pins whichever closure
+  // instance started the loop for as long as the loop stays alive — `ensureLoop`
+  // only ever installs a fresh one when `rafActiveRef.current === null`. That was
+  // harmless while the loop always drained to `null` between crawls, but `full`
+  // mode's idle producers keep it running permanently *and* start it from the
+  // idle layout effect on the first commit, where `traceCount` is still `null`
+  // (so `traceIds` is `[]`) — pinning a closure that iterates zero traces for
+  // the rest of the component's life. Same `*Ref` trampoline idiom as
+  // `watchdogStepRef` above.
+  const runTickRef = React.useRef<() => void>(() => {});
+  const scheduleTick = React.useCallback(() => {
+    runTickRef.current();
   }, []);
 
   const [viaItems, setViaItemsState] = React.useState<ViaItem[]>([]);
@@ -256,6 +382,21 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
     };
   }, []);
 
+  // Idle-packet pool: a fixed `IDLE_PACKET_POOL_SIZE` slots (a perf ceiling,
+  // not scaled by `traceCount` — density comes from spawn rate), mirroring
+  // the intersection pool's direct-ref/opacity-toggle pattern exactly. Only
+  // ever written to by `advanceIdlePackets`, itself only invoked while
+  // `idleEnabledRef.current` (`full` mode) — in every other mode these stay
+  // at their initial `opacity: 0` forever.
+  const packetSlotIds = React.useMemo(() => Array.from({ length: IDLE_PACKET_POOL_SIZE }, (_, i) => `p${i}`), []);
+
+  const packetRefCallback = React.useCallback((key: string) => {
+    return (el: SVGRectElement | null) => {
+      if (el) packetElRefs.current.set(key, el);
+      else packetElRefs.current.delete(key);
+    };
+  }, []);
+
   const applyIntersections = React.useCallback((points: Point[]) => {
     const poolSize = intersectionPoolSizeRef.current;
 
@@ -310,8 +451,32 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
   // bounds) and its settled via items are folded into `viaItems` as soon
   // as it finishes, independent of any siblings still crawling.
   const runTick = React.useCallback(() => {
-    const bodies = liveBodyRef.current;
     const now = performance.now();
+
+    // Idle fast path: nothing is crawling, so none of the cross-trace state
+    // below (cellAxisMap, intersections, tip colinearity, via opacity) has
+    // changed since it was last committed — recomputing it every frame
+    // forever on settled geometry is exactly the per-frame cost E1's loop
+    // gating was built to avoid. Only idle producers run here.
+    if (transitionsRef.current.size === 0) {
+      if (idleEnabledRef.current && !staticModeRef.current && now >= idleReadyAtRef.current) {
+        advanceIdlePackets(now);
+      }
+      rafActiveRef.current = loopShouldRun() ? requestAnimationFrame(scheduleTick) : null;
+      return;
+    }
+
+    // A crawl is in flight, so every packet on screen is standing on geometry
+    // that is about to stop existing — `liveBodyRef` is mid-crawl
+    // `sliceWindow` output from here on. `advanceIdlePackets` is skipped for
+    // the whole crawl (idle producers only run on the fast path above), so
+    // without this the pool would sit frozen at its last position, visibly
+    // stranded off the moving lines until the last trace settles. Retire the
+    // pool once, the frame the crawl starts, and let idle respawn it fresh
+    // against the settled graph.
+    if (packetsRef.current.size > 0) retireAllPackets();
+
+    const bodies = liveBodyRef.current;
     const currentBodies: { id: string; points: RoutePoint[] }[] = [];
     const tipInfo: { id: string; end: "tail" | "head"; point: RoutePoint; axis: "h" | "v" }[] = [];
     const windowBounds = new Map<string, { tail: number; head: number }>();
@@ -408,19 +573,64 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
       setViaItems([...carried, ...settled]);
     }
 
-    rafActiveRef.current = loopShouldRun() ? requestAnimationFrame(runTick) : null;
-  }, [applyIntersections, loopShouldRun, setTipPosition, setViaItems, traceIds]);
+    rafActiveRef.current = loopShouldRun() ? requestAnimationFrame(scheduleTick) : null;
+  }, [
+    advanceIdlePackets,
+    applyIntersections,
+    loopShouldRun,
+    retireAllPackets,
+    scheduleTick,
+    setTipPosition,
+    setViaItems,
+    traceIds,
+  ]);
+
+  // Layout effect, not passive: a passive effect would leave the frame
+  // scheduled by this same commit's crawl/idle layout effects running the
+  // *previous* commit's `runTick` — exactly the staleness this trampoline
+  // exists to remove.
+  React.useLayoutEffect(() => {
+    runTickRef.current = runTick;
+  }, [runTick]);
 
   // Every other rAF-start call site below goes through this instead of a
   // direct `requestAnimationFrame(runTick)` — centralizes the
   // `documentHiddenRef` guard so a delta/crawl effect firing while the tab
   // is hidden can never restart the shared loop out from under the
   // `visibilitychange` handler.
+  // Schedules the trampoline, not `runTick` itself, so this callback stays
+  // referentially stable across renders — every effect that depends on it
+  // (crawl/boot, idle enable, retarget, visibilitychange) would otherwise
+  // re-run on every commit just because `runTick`'s identity changed.
   const ensureLoop = React.useCallback(() => {
     if (rafActiveRef.current === null && loopShouldRun()) {
-      rafActiveRef.current = requestAnimationFrame(runTick);
+      rafActiveRef.current = requestAnimationFrame(scheduleTick);
     }
-  }, [loopShouldRun, runTick]);
+  }, [loopShouldRun, scheduleTick]);
+
+  // `full` mode's idle producers need the shared loop running permanently,
+  // not just while a transition is in flight — nothing else starts it with
+  // an empty `transitionsRef`, so this effect does, the moment idle becomes
+  // eligible (mount already in `full`, or a runtime mode change). Calling
+  // `ensureLoop()` unconditionally whenever enabled (not only on the
+  // false→true edge) is defense in depth on top of the real fix (see the
+  // unmount-cleanup effect below, which now resets `rafActiveRef`/
+  // `watchdogFrameRef` to `null` after cancelling, not just cancels): an
+  // edge-only guard here relies on nothing else ever leaving `rafActiveRef`
+  // non-null-but-dead, which held until that reset was added. `ensureLoop()`
+  // is idempotent (checks `rafActiveRef.current === null` before
+  // scheduling), so calling it every time this effect runs while enabled
+  // costs nothing.
+  React.useLayoutEffect(() => {
+    const wasEnabled = idleEnabledRef.current;
+    idleEnabledRef.current = motionMode === "full";
+    if (!wasEnabled && idleEnabledRef.current) {
+      idleReadyAtRef.current = performance.now() + IDLE_READY_DELAY_MS;
+    }
+    if (idleEnabledRef.current) {
+      ensureLoop();
+    }
+  }, [motionMode, ensureLoop]);
 
   // Shared by every "skip the crawl, write final state directly" path —
   // static mode's transitions-effect branch, static mode's retarget branch,
@@ -492,6 +702,73 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
     [applyIntersections, setTipPosition, setViaItems],
   );
 
+  // Owns the crawl/snap mechanics for an in-place tip retarget. Each entry's
+  // `previousTracesRef`/`lastRetargetAtRef` bookkeeping already happened at
+  // the caller (`handleOccluderDelta`, the scroll-delta producer).
+  const applyRetargets = React.useCallback(
+    (entries: RetargetEntry[], now: number) => {
+      if (entries.length === 0) return;
+      graphDirtyRef.current = true;
+
+      if (staticModeRef.current) {
+        snapTransitionsToTarget(entries.map((r) => ({ id: r.id, toBody: r.toBody })));
+        return;
+      }
+
+      const initialCellAxisMap = buildCellAxisMap(entries.map((r) => ({ id: r.id, points: r.route.slice(0, r.lenO) })));
+      const crawlItems: ViaItem[] = [];
+
+      entries.forEach((r) => {
+        r.route.forEach((point, idx) => {
+          if (!point.corner || idx === 0 || idx === r.route.length - 1) return;
+          crawlItems.push({
+            key: `${r.id}-${idx}`,
+            traceId: r.id,
+            index: idx,
+            x: point.x,
+            y: point.y,
+            boot: false,
+            delay: 0,
+            initiallyVisible: idx < r.lenO,
+          });
+        });
+
+        const start = r.route[0];
+        const second = r.route[1];
+        const head = r.route[r.lenO - 1];
+        const beforeHead = r.route[r.lenO - 2];
+        if (start && second) {
+          const axis: "h" | "v" = start.y === second.y ? "h" : "v";
+          setTipPosition(r.id, "tail", start, !isColinearWithOther(initialCellAxisMap, r.id, start, axis));
+        }
+        if (head && beforeHead) {
+          const axis: "h" | "v" = beforeHead.y === head.y ? "h" : "v";
+          setTipPosition(r.id, "head", head, !isColinearWithOther(initialCellAxisMap, r.id, head, axis));
+        }
+      });
+
+      const retargetedIds = new Set(entries.map((r) => r.id));
+      const untouched = Array.from(viaItemIndexRef.current.values()).filter(
+        (item) => !retargetedIds.has(item.traceId),
+      );
+      setViaItems([...untouched, ...crawlItems]);
+
+      entries.forEach((r) => {
+        transitionsRef.current.set(r.id, {
+          route: r.route,
+          lenO: r.lenO,
+          lenN: r.lenN,
+          toBody: r.toBody,
+          startTime: now,
+          duration: travelDuration(r.route.length - r.lenO),
+        });
+      });
+
+      ensureLoop();
+    },
+    [ensureLoop, setTipPosition, setViaItems, snapTransitionsToTarget],
+  );
+
   // Used only by the frame-budget watchdog: snaps whatever is currently
   // in-flight (of any origin — boot crawl, occlusion regeneration, scroll
   // retarget) straight to its target, same as a runtime static-mode demotion
@@ -522,6 +799,12 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
       if (!validIds.has(id)) previousTracesRef.current.delete(id);
     });
 
+    // A trace-count change invalidates the packet graph (it's built from
+    // live bodies) and any packet currently walking a pruned trace's cells —
+    // simplest correct response is to retire every packet and let idle rebuild
+    // fresh next idle frame, rather than trying to salvage in-flight ones.
+    retireAllPackets();
+
     let removedInFlight = false;
     transitionsRef.current.forEach((_transition, id) => {
       if (!validIds.has(id)) {
@@ -539,7 +822,7 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
     if (stale) {
       setViaItems(Array.from(viaItemIndexRef.current.values()).filter((item) => validIds.has(item.traceId)));
     }
-  }, [traceIds, setViaItems]);
+  }, [retireAllPackets, traceIds, setViaItems]);
 
   React.useLayoutEffect(() => {
     if (!targetTraces) return;
@@ -559,6 +842,9 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
     });
 
     previousTracesRef.current = new Map(targetTraces.traces.map((trace) => [trace.id, trace]));
+    // Idle packets walk live geometry -- any real regeneration invalidates
+    // the graph built from it.
+    if (newTraces.length > 0 || existingTraces.length > 0) graphDirtyRef.current = true;
 
     // --- Boot pass: brand-new slots (first mount, or growth from a
     // reactive trace-count increase) draw in with the staggered stroke
@@ -576,7 +862,6 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
       newTraces.forEach((trace) => {
         const body = newBodies.get(trace.id) as RoutePoint[];
         const traceDelay = Math.min(trace.depth * DEPTH_STAGGER_MS, BOOT_STAGGER_MAX_MS);
-
         body.forEach((point, idx) => {
           if (!point.corner || idx === 0 || idx === body.length - 1) return;
           const arcFraction = body.length > 1 ? idx / (body.length - 1) : 0;
@@ -755,7 +1040,7 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
 
       if (candidateIds.length === 0) return;
 
-      const retargets: { id: string; route: RoutePoint[]; lenO: number; lenN: number; toBody: RoutePoint[] }[] = [];
+      const retargets: RetargetEntry[] = [];
       // Cells claimed by a candidate already resolved earlier in this same
       // delta event — `liveBodyRef` for that candidate isn't mutated until
       // later (the reduced-motion branch below, or `runTick` draining
@@ -794,65 +1079,9 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
         retargets.push({ id, route, lenO: liveBody.length, lenN: toBody.length, toBody });
       });
 
-      if (retargets.length === 0) return;
-
-      if (staticModeRef.current) {
-        snapTransitionsToTarget(retargets.map((r) => ({ id: r.id, toBody: r.toBody })));
-        return;
-      }
-
-      const initialCellAxisMap = buildCellAxisMap(retargets.map((r) => ({ id: r.id, points: r.route.slice(0, r.lenO) })));
-      const crawlItems: ViaItem[] = [];
-
-      retargets.forEach((r) => {
-        r.route.forEach((point, idx) => {
-          if (!point.corner || idx === 0 || idx === r.route.length - 1) return;
-          crawlItems.push({
-            key: `${r.id}-${idx}`,
-            traceId: r.id,
-            index: idx,
-            x: point.x,
-            y: point.y,
-            boot: false,
-            delay: 0,
-            initiallyVisible: idx < r.lenO,
-          });
-        });
-
-        const start = r.route[0];
-        const second = r.route[1];
-        const head = r.route[r.lenO - 1];
-        const beforeHead = r.route[r.lenO - 2];
-        if (start && second) {
-          const axis: "h" | "v" = start.y === second.y ? "h" : "v";
-          setTipPosition(r.id, "tail", start, !isColinearWithOther(initialCellAxisMap, r.id, start, axis));
-        }
-        if (head && beforeHead) {
-          const axis: "h" | "v" = beforeHead.y === head.y ? "h" : "v";
-          setTipPosition(r.id, "head", head, !isColinearWithOther(initialCellAxisMap, r.id, head, axis));
-        }
-      });
-
-      const retargetedIds = new Set(retargets.map((r) => r.id));
-      const untouched = Array.from(viaItemIndexRef.current.values()).filter(
-        (item) => !retargetedIds.has(item.traceId),
-      );
-      setViaItems([...untouched, ...crawlItems]);
-
-      retargets.forEach((r) => {
-        transitionsRef.current.set(r.id, {
-          route: r.route,
-          lenO: r.lenO,
-          lenN: r.lenN,
-          toBody: r.toBody,
-          startTime: now,
-          duration: travelDuration(r.route.length - r.lenO),
-        });
-      });
-
-      ensureLoop();
+      applyRetargets(retargets, now);
     },
-    [debouncedSize, ensureLoop, setTipPosition, setViaItems, snapTransitionsToTarget, traceIds],
+    [applyRetargets, debouncedSize, traceIds],
   );
 
   useCircuitOccluderDelta(handleOccluderDelta);
@@ -893,6 +1122,14 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
         transitionsRef.current.forEach((transition) => {
           transition.startTime += hiddenDuration;
         });
+
+        // Idle state, unlike transitions above, is not rebased -- retire
+        // every packet and reset the idle timers instead, so the tab doesn't
+        // come back to a burst of packets/shifts covering the entire hidden
+        // duration in one frame.
+        retireAllPackets();
+        const now = performance.now();
+        lastPacketSpawnAtRef.current = now;
       }
 
       ensureLoop();
@@ -909,7 +1146,7 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [ensureLoop]);
+  }, [ensureLoop, retireAllPackets]);
 
   // Standalone, self-cancelling boot-time sampling loop — deliberately not
   // routed through `runTick`/`ensureLoop`. Boot itself never populates
@@ -968,8 +1205,27 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
 
   React.useEffect(
     () => () => {
-      if (rafActiveRef.current !== null) cancelAnimationFrame(rafActiveRef.current);
-      if (watchdogFrameRef.current !== null) cancelAnimationFrame(watchdogFrameRef.current);
+      // Reset both refs to `null` after cancelling, not just cancel — a
+      // dead (already-cancelled) id left sitting in `rafActiveRef.current`
+      // reads as "a frame is still pending" to every future `ensureLoop()`
+      // call (`rafActiveRef.current === null` is its only signal to
+      // reschedule), permanently wedging the shared loop. This was a
+      // pre-existing bug that predates Session E2 -- confirmed live: React
+      // 18 StrictMode's simulated mount->unmount->remount (all three
+      // app-shells mount under it) runs this exact cleanup on the very
+      // first mount, cancelling the frame the first pass's `ensureLoop()`
+      // scheduled; without resetting the ref here, no crawl (route change,
+      // occlusion regen, scroll/idle retarget) ever animates again for the
+      // rest of the component's lifetime -- it silently "generates once and
+      // stays that way," which is exactly how it was reported live.
+      if (rafActiveRef.current !== null) {
+        cancelAnimationFrame(rafActiveRef.current);
+        rafActiveRef.current = null;
+      }
+      if (watchdogFrameRef.current !== null) {
+        cancelAnimationFrame(watchdogFrameRef.current);
+        watchdogFrameRef.current = null;
+      }
     },
     [],
   );
@@ -1039,6 +1295,20 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
             height={6}
             key={key}
             ref={intersectionRefCallback(key)}
+            style={{ opacity: 0 }}
+            width={6}
+            x={-3}
+            y={-3}
+          />
+        ))}
+      </g>
+      <g className="circuit-field-glow" fill="var(--primary)">
+        {packetSlotIds.map((key) => (
+          <rect
+            className="circuit-field-packet"
+            height={6}
+            key={key}
+            ref={packetRefCallback(key)}
             style={{ opacity: 0 }}
             width={6}
             x={-3}
