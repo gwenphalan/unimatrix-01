@@ -74,3 +74,20 @@ export function decideMotionMode(signals: CapabilitySignals): MotionMode {
 
   return "full";
 }
+
+/**
+ * Whether static mode's idle glow (a permanent ~3.2s compositor animation)
+ * is safe to run given these signals — independent of *which* signal put
+ * the device in `static`, since more than one can be true at once. `false`
+ * whenever any accessibility- or performance-motivated signal is present
+ * (reduced-motion, an e-ink-style slow panel, data-saver mode, or low
+ * concurrency) — those devices are in `static` because animating is
+ * expensive or unwanted, and the glow would be exactly that. `coarsePointer`
+ * alone (a touch device with no other restrictive signal) is the one path
+ * left eligible: it demotes for input-model reasons, not because the device
+ * can't afford motion.
+ */
+export function canShowIdleGlow(signals: CapabilitySignals): boolean {
+  if (signals.reducedMotion || signals.slowUpdate || signals.reducedData) return false;
+  return signals.hardwareConcurrency === undefined || signals.hardwareConcurrency > 2;
+}

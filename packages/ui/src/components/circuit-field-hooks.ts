@@ -1,6 +1,13 @@
 import * as React from "react";
 
-import { type MotionMode, decideMotionMode, mostRestrictive, readCapabilitySignals } from "./capability.js";
+import {
+  type CapabilitySignals,
+  type MotionMode,
+  canShowIdleGlow,
+  decideMotionMode,
+  mostRestrictive,
+  readCapabilitySignals,
+} from "./capability.js";
 
 export const RESIZE_SETTLE_MS = 200;
 // A mobile URL bar collapsing/expanding mid-scroll changes `innerHeight` by
@@ -50,8 +57,9 @@ const MOTION_MEDIA_QUERIES = [
  * never rise above `static` again for the rest of the mount, per this
  * session's "downgrade must be one-way" requirement.
  */
-export function useMotionMode(): { mode: MotionMode; demoteToStatic: () => void } {
-  const [preferenceMode, setPreferenceMode] = React.useState<MotionMode>(() => decideMotionMode(readCapabilitySignals()));
+export function useMotionMode(): { mode: MotionMode; demoteToStatic: () => void; idleGlowEligible: boolean } {
+  const [signals, setSignals] = React.useState<CapabilitySignals>(() => readCapabilitySignals());
+  const preferenceMode = React.useMemo(() => decideMotionMode(signals), [signals]);
   const runtimeFloorRef = React.useRef<MotionMode>("full");
   const [, forceRerender] = React.useState(0);
 
@@ -60,7 +68,7 @@ export function useMotionMode(): { mode: MotionMode; demoteToStatic: () => void 
 
     const medias = MOTION_MEDIA_QUERIES.map((query) => window.matchMedia(query));
     const update = () => {
-      setPreferenceMode(decideMotionMode(readCapabilitySignals()));
+      setSignals(readCapabilitySignals());
     };
 
     medias.forEach((media) => {
@@ -79,7 +87,13 @@ export function useMotionMode(): { mode: MotionMode; demoteToStatic: () => void 
     forceRerender((n) => n + 1);
   }, []);
 
-  return { mode: mostRestrictive(preferenceMode, runtimeFloorRef.current), demoteToStatic };
+  const mode = mostRestrictive(preferenceMode, runtimeFloorRef.current);
+  // The frame-budget watchdog's runtime demotion is always performance-
+  // motivated, regardless of what the live preference signals say — a
+  // device it demoted must never get the idle glow.
+  const idleGlowEligible = mode === "static" && runtimeFloorRef.current !== "static" && canShowIdleGlow(signals);
+
+  return { mode, demoteToStatic, idleGlowEligible };
 }
 
 export function useViewportSize(): { width: number; height: number } | null {

@@ -349,7 +349,12 @@ Covers original bullets 3, 4 (the loop half), 5.
   if `dropped/samples > 0.4` where `dropped = count(delta > 1.75 * baseline)`, **or** `over` if
   `baseline > 40` (a device whose *best* frame is under 25fps has zero "dropped" frames by the
   relative test but is uniformly slow). A ratio, not one bad frame, so a single GC pause can't
-  permanently demote.
+  permanently demote. **Corrected post-review:** a delta past `GAP_OUTLIER_MS` (250ms) is treated
+  as a tab-switch/gap artifact and discarded rather than counted — but left unbounded, a device
+  rendering below ~4fps produces such a delta on *every* frame, so `deltas` would never fill and
+  the verdict would stay `pending` forever on precisely the worst-performing devices. Bounded via a
+  consecutive-outlier counter: 5 in a row resolves straight to `over`, while an isolated one (a
+  genuine hide/show gap) still doesn't trip it.
 - [x] **Watchdog wiring — corrected during advisor review, do not implement the original
   "feed the probe from `runTick`" idea:** boot does not populate `transitionsRef` (it's a pure
   CSS stagger — verified by grepping `transitionsRef.current.set` call sites, both of which are
@@ -364,15 +369,23 @@ Covers original bullets 3, 4 (the loop half), 5.
   reduced-motion-style snap (for each `transitionsRef` entry, if any exist by then, write final
   body/via state, clear the map, cancel any loop) — factor that snap block (it already exists in
   two places) into a shared `snapTransitionsToTarget()` and reuse it here as the third caller,
-  rather than adding a fourth copy.
-- [x] CSS in `styles.css`, same block as `circuit-draw`/`circuit-via-in`: `.circuit-field-static`
-  with a `circuit-idle-glow` keyframe (opacity pulse, ease-in-out alternate, ~3.2s), applied to
-  the **root `<svg>`**, never to either inner `.circuit-field-glow` group — a root-level opacity
-  contains both groups and rasterizes them together once before alpha applies, which is
-  structurally different from Session C's removed group-level `opacity: 0.55` (two independently
-  filtered siblings compositing over each other) and does not reintroduce that bug. Add
-  `.circuit-field-static { animation: none }` to the existing `prefers-reduced-motion` block
-  (reduced-motion resolves to `static` too, and a pulsing glow is motion). Boot draw-in is
+  rather than adding a fourth copy. **Corrected post-review:** the loop also re-checks the *live*
+  mode (`staticModeRef`, kept current every commit) on every step, not only at mount — a later OS
+  preference change flipping the live mode to `static` mid-sampling now stops the loop instead of
+  continuing to sample despite static mode's "never schedules a frame" invariant.
+- [x] CSS in `styles.css`, same block as `circuit-draw`/`circuit-via-in`: a `circuit-idle-glow`
+  keyframe (opacity pulse, ease-in-out alternate, ~3.2s) applied to the **root `<svg>`**, never to
+  either inner `.circuit-field-glow` group — a root-level opacity contains both groups and
+  rasterizes them together once before alpha applies, which is structurally different from
+  Session C's removed group-level `opacity: 0.55` (two independently filtered siblings compositing
+  over each other) and does not reintroduce that bug. **Corrected post-review:** the animation
+  lives on a separate `.circuit-field-idle-glow` class, JS-applied (`capability.ts`'s
+  `canShowIdleGlow`) only when `static` came from a touch/pointer signal — `(update: slow)`,
+  reduced-data, low `hardwareConcurrency`, and frame-budget-watchdog demotion all leave
+  `.circuit-field-static` without it, so a permanent compositor animation never lands on a device
+  that's in static mode *because* it can't afford motion. `.circuit-field-idle-glow { animation:
+  none }` still sits in the `prefers-reduced-motion` block as defense in depth, even though
+  `canShowIdleGlow` already excludes reduced-motion from ever getting the class. Boot draw-in is
   already skipped in static mode via `staticModeRef` reusing the existing snap branch — no extra
   CSS needed for that part.
 - [x] Tests: new `test/capability.test.ts` (full `decideMotionMode` matrix, including
@@ -786,8 +799,9 @@ you. Keep entries short; this file is a resume point, not a changelog.
   `documentHiddenRef` at all** — the test caught real frame counts still climbing during a
   simulated hide. Fixed by giving the watchdog its own `watchdogFrameRef`/`watchdogStepRef` pair
   that the same `visibilitychange` handler pauses/resumes alongside the main loop; a large
-  resume-gap delta already reads as a single discarded outlier in `frame-budget.ts` rather than a
-  dropped frame, so a hide/show cycle mid-sampling can't wrongly trip the verdict. This is exactly
+  resume-gap delta reads as a single discarded outlier in `frame-budget.ts` (bounded post-review to
+  a run of 5 consecutive before it resolves `over` on its own — see that session's fix above), so
+  an isolated hide/show cycle mid-sampling still can't wrongly trip the verdict. This is exactly
   the class of bug the "write the test the plan already committed to" step exists to catch — worth
   noting since it would have shipped invisibly otherwise (real hidden tabs throttle rAF at the
   browser level regardless, so it's not user-visible in production, but it defeats the point of
@@ -796,8 +810,8 @@ you. Keep entries short; this file is a resume point, not a changelog.
   a specific overload (`vi.spyOn(window, "requestAnimationFrame")`) on this vitest/TS version;
   replaced with a plain call-counting wrapper around the real `requestAnimationFrame` instead of
   fighting the generic — simpler and avoids the same class of type gymnastics recurring elsewhere.
-  Validation: `pnpm --filter @unimatrix/ui typecheck`/`eslint`/`vitest run` (102/102, up from 92 —
-  10 new: 13 capability + 7 frame-budget + 4 useMotionMode + 1 visibility, net of the pre-existing
+  Validation: `pnpm --filter @unimatrix/ui typecheck`/`eslint`/`vitest run` (102/102, up from 77 —
+  25 new: 13 capability + 7 frame-budget + 4 useMotionMode + 1 visibility, net of the pre-existing
   suite) all clean; `pnpm check` fully green (38/38 tasks) across every workspace. Live-browser
   validation via the Chrome extension on all 3 apps (dev servers, real browser): zero console
   errors on any route (web `/`, `/projects`; cube-trainer `/`; auth `/`), confirmed live that a

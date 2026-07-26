@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { type CapabilitySignals, decideMotionMode, mostRestrictive } from "../src/components/capability.js";
+import { type CapabilitySignals, canShowIdleGlow, decideMotionMode, mostRestrictive } from "../src/components/capability.js";
 
 const NEUTRAL: CapabilitySignals = {
   reducedMotion: false,
@@ -51,6 +51,32 @@ describe("decideMotionMode", () => {
 
   it("undefined hardwareConcurrency still yields static/transitions-only when another signal demotes", () => {
     expect(decideMotionMode({ ...NEUTRAL, hardwareConcurrency: undefined, reducedMotion: true })).toBe("static");
+  });
+});
+
+describe("canShowIdleGlow", () => {
+  it("a coarse-pointer-only static device (touch, otherwise capable) is eligible", () => {
+    expect(canShowIdleGlow({ ...NEUTRAL, coarsePointer: true, hardwareConcurrency: 8 })).toBe(true);
+  });
+
+  it("undefined hardwareConcurrency (Safari) does not disqualify it on its own", () => {
+    expect(canShowIdleGlow({ ...NEUTRAL, coarsePointer: true, hardwareConcurrency: undefined })).toBe(true);
+  });
+
+  it("reduced-motion disqualifies it", () => {
+    expect(canShowIdleGlow({ ...NEUTRAL, reducedMotion: true })).toBe(false);
+  });
+
+  it("(update: slow) disqualifies it", () => {
+    expect(canShowIdleGlow({ ...NEUTRAL, slowUpdate: true })).toBe(false);
+  });
+
+  it("prefers-reduced-data disqualifies it", () => {
+    expect(canShowIdleGlow({ ...NEUTRAL, reducedData: true })).toBe(false);
+  });
+
+  it("low hardwareConcurrency (<=2) disqualifies it, even alongside coarsePointer", () => {
+    expect(canShowIdleGlow({ ...NEUTRAL, coarsePointer: true, hardwareConcurrency: 2 })).toBe(false);
   });
 });
 

@@ -15,10 +15,15 @@ export type FrameBudgetProbeOptions = {
 
 const DEFAULT_SAMPLES = 40;
 const DEFAULT_WARMUP_SAMPLES = 3;
-// A delta this large is a tab-switch/gap artifact, not a slow frame — the
-// dedicated probe loop is expected to run gap-free, so this only guards
-// against an unexpected pause rather than being load-bearing day to day.
+// A delta this large is treated as a tab-switch/gap artifact, not a slow
+// frame, so an isolated one (a genuine hide/show cycle mid-sampling) can't
+// wrongly trip the verdict. But a device rendering below ~4fps produces
+// deltas past this on *every* frame — left unbounded, `deltas` would never
+// fill and the verdict would stay `pending` forever on precisely the
+// worst-performing devices. `MAX_CONSECUTIVE_OUTLIERS` bounds that: enough
+// consecutive over-threshold deltas resolves straight to `over` instead.
 const GAP_OUTLIER_MS = 250;
+const MAX_CONSECUTIVE_OUTLIERS = 5;
 // Ratio of frames whose delta exceeds 1.75x the observed best frame.
 const DROPPED_FRAME_RATIO_THRESHOLD = 0.4;
 const DROPPED_FRAME_MULTIPLIER = 1.75;
@@ -34,6 +39,7 @@ export function createFrameBudgetProbe(options: FrameBudgetProbeOptions = {}): {
 
   let prevTimestamp: number | null = null;
   let seen = 0;
+  let consecutiveOutliers = 0;
   const deltas: number[] = [];
   let verdict: FrameBudgetVerdict = "pending";
 
@@ -49,7 +55,15 @@ export function createFrameBudgetProbe(options: FrameBudgetProbeOptions = {}): {
       const delta = timestampMs - prevTimestamp;
       prevTimestamp = timestampMs;
 
-      if (delta > GAP_OUTLIER_MS) return "pending";
+      if (delta > GAP_OUTLIER_MS) {
+        consecutiveOutliers += 1;
+        if (consecutiveOutliers >= MAX_CONSECUTIVE_OUTLIERS) {
+          verdict = "over";
+          return verdict;
+        }
+        return "pending";
+      }
+      consecutiveOutliers = 0;
 
       seen += 1;
       if (seen <= warmupSamples) return "pending";

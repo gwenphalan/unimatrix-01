@@ -103,12 +103,17 @@ function pointsEqual(a: readonly Point[], b: readonly Point[]): boolean {
 export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.Element | null {
   const size = useViewportSize();
   const debouncedSize = useDebouncedSize(size, RESIZE_SETTLE_MS, { heightJitterIgnorePx: HEIGHT_JITTER_IGNORE_PX });
-  const { mode: motionMode, demoteToStatic } = useMotionMode();
+  const { mode: motionMode, demoteToStatic, idleGlowEligible } = useMotionMode();
   const occluders = useCircuitOccluderRects();
 
   const staticMode = motionMode === "static";
   const staticModeRef = React.useRef(staticMode);
-  React.useEffect(() => {
+  // Layout effect, not passive: the crawl/boot layout effects below read this
+  // ref, and layout effects run in declaration order within the same commit —
+  // a passive effect here would leave them reading the prior commit's value
+  // on the frame `staticMode` actually flips (runtime demotion or an OS
+  // preference change).
+  React.useLayoutEffect(() => {
     staticModeRef.current = staticMode;
   }, [staticMode]);
 
@@ -420,7 +425,13 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
         rafActiveRef.current = null;
       }
 
-      const cellAxisMap = buildCellAxisMap(items.map((item) => ({ id: item.id, points: item.toBody })));
+      // Every live body, not just the snapped subset — intersections and tip
+      // colinearity are cross-trace properties, and `applyIntersections`
+      // rewrites its whole pool from this map's output each call, so a
+      // subset-only map would hide every untouched trace's crossings.
+      const cellAxisMap = buildCellAxisMap(
+        Array.from(liveBodyRef.current.entries()).map(([id, points]) => ({ id, points })),
+      );
       const settled: ViaItem[] = [];
 
       items.forEach(({ id, toBody }) => {
@@ -885,9 +896,12 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
   // fed from the shared loop would silently collect zero samples in
   // `transitions-only` mode and never reach a verdict. Skipped entirely when
   // the mount-time mode is already `static` — nothing to measure, no rAF to
-  // watch, no demotion possible below the floor. Runs once per mount; a
-  // later OS-level preference change is `useMotionMode`'s own concern, not
-  // this probe's. Paused/resumed by the `visibilitychange` handler above via
+  // watch, no demotion possible below the floor. Also stops itself if a
+  // *later* OS-level preference change (`staticModeRef` is kept current by
+  // the layout effect above) flips the live mode to `static` mid-sampling —
+  // otherwise this independent rAF consumer would keep sampling forever
+  // despite static mode's "never schedules a frame" invariant. Paused/
+  // resumed by the `visibilitychange` handler above via
   // `watchdogFrameRef`/`watchdogStepRef` — a large gap on resume reads as a
   // single discarded outlier delta (see `frame-budget.ts`), not a dropped
   // frame, so a hide/show cycle mid-sampling can't wrongly trip the verdict.
@@ -897,6 +911,12 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
     const probe = createFrameBudgetProbe();
 
     const step = (timestamp: number) => {
+      if (staticModeRef.current) {
+        watchdogFrameRef.current = null;
+        watchdogStepRef.current = null;
+        return;
+      }
+
       const verdict = probe.record(timestamp);
       if (verdict === "pending") {
         watchdogFrameRef.current = requestAnimationFrame(step);
@@ -940,7 +960,11 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
   return (
     <svg
       aria-hidden="true"
-      className={staticMode ? "circuit-field circuit-field-static" : "circuit-field"}
+      className={
+        staticMode
+          ? `circuit-field circuit-field-static${idleGlowEligible ? " circuit-field-idle-glow" : ""}`
+          : "circuit-field"
+      }
       height={size.height}
       style={{ position: "fixed", inset: 0, zIndex: -1, pointerEvents: "none" }}
       width={size.width}

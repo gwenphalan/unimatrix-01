@@ -197,6 +197,43 @@ describe("useMotionMode", () => {
     expect(result.current.mode).toBe("static");
   });
 
+  it("idleGlowEligible is true for a coarse-pointer-only static device", () => {
+    const { result } = renderHook(() => useMotionMode());
+
+    act(() => {
+      registry.get("(pointer: coarse)")!.setMatches(true);
+    });
+
+    expect(result.current.mode).toBe("static");
+    expect(result.current.idleGlowEligible).toBe(true);
+  });
+
+  it("idleGlowEligible is false for reduced-motion static, even though the device may otherwise be capable", () => {
+    const { result } = renderHook(() => useMotionMode());
+
+    act(() => {
+      registry.get("(prefers-reduced-motion: reduce)")!.setMatches(true);
+    });
+
+    expect(result.current.mode).toBe("static");
+    expect(result.current.idleGlowEligible).toBe(false);
+  });
+
+  it("idleGlowEligible is false once the frame-budget watchdog demotes at runtime, regardless of live preferences", () => {
+    const { result } = renderHook(() => useMotionMode());
+
+    act(() => {
+      registry.get("(pointer: coarse)")!.setMatches(true);
+    });
+    expect(result.current.idleGlowEligible).toBe(true);
+
+    act(() => {
+      result.current.demoteToStatic();
+    });
+    expect(result.current.mode).toBe("static");
+    expect(result.current.idleGlowEligible).toBe(false);
+  });
+
   it("an OS-level preference change is honored live when not floored by a runtime demotion", () => {
     const { result } = renderHook(() => useMotionMode());
     expect(result.current.mode).toBe("full");

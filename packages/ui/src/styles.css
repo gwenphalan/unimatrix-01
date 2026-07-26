@@ -226,14 +226,21 @@
 
   /*
    * Static motion mode (see capability.ts): traces render one frozen frame,
-   * no rAF at all. Applied to the root <svg>, never to either inner
-   * `.circuit-field-glow` group — a root-level opacity pulse rasterizes both
-   * groups together once before alpha applies, so it doesn't reintroduce the
-   * overlap-brightening artifact a *group*-level opacity would (two
-   * independently drop-shadow-filtered siblings compositing over each
-   * other). Reads as faint current still flowing rather than fully dead.
+   * no rAF at all. `.circuit-field-idle-glow` (see capability.ts's
+   * `canShowIdleGlow`) is a second, JS-applied class layered on top only
+   * when static mode came from a touch/pointer signal, not an accessibility
+   * or performance one — `(update: slow)`, reduced-data, low
+   * `hardwareConcurrency`, and frame-budget-watchdog demotion all leave a
+   * device in `.circuit-field-static` without it, since a permanent 3.2s
+   * compositor animation is exactly what those devices can't afford.
+   * Applied to the root <svg>, never to either inner `.circuit-field-glow`
+   * group — a root-level opacity pulse rasterizes both groups together once
+   * before alpha applies, so it doesn't reintroduce the overlap-brightening
+   * artifact a *group*-level opacity would (two independently
+   * drop-shadow-filtered siblings compositing over each other). Reads as
+   * faint current still flowing rather than fully dead.
    */
-  .circuit-field-static {
+  .circuit-field-idle-glow {
     animation: circuit-idle-glow 3200ms ease-in-out infinite alternate;
   }
 
@@ -249,8 +256,13 @@
       animation: none;
     }
 
-    /* Reduced-motion resolves to static mode too, and a pulsing glow is motion. */
-    .circuit-field-static {
+    /*
+     * Defense in depth: `canShowIdleGlow` already excludes reduced-motion
+     * from ever getting this class, but the reduced-motion block is the
+     * canonical place every motion override in this file lives, so a future
+     * change to that gating still can't ship a glow under this preference.
+     */
+    .circuit-field-idle-glow {
       animation: none;
     }
 

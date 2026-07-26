@@ -61,6 +61,21 @@ describe("createFrameBudgetProbe", () => {
     expect(verdicts.at(-1)).toBe("ok");
   });
 
+  it("sustained sub-4fps deltas (past every gap-outlier check) resolve to over instead of pending forever", () => {
+    const probe = createFrameBudgetProbe({ samples: 40, warmupSamples: 3 });
+    const deltas = Array.from({ length: 10 }, () => 300); // > GAP_OUTLIER_MS on every frame
+    const verdicts = feed(probe, deltas);
+    expect(verdicts.at(-1)).toBe("over");
+  });
+
+  it("a single hide/show-style gap delta does not trip the outlier bound", () => {
+    const probe = createFrameBudgetProbe({ samples: 40, warmupSamples: 3 });
+    const warmup = [16.7, 16.7, 16.7];
+    const clean = Array.from({ length: 40 }, () => 16.7);
+    const verdicts = feed(probe, [...warmup, 500, ...clean]);
+    expect(verdicts.at(-1)).toBe("ok");
+  });
+
   it("returns a cached verdict once resolved instead of re-evaluating", () => {
     const probe = createFrameBudgetProbe({ samples: 5, warmupSamples: 0 });
     const deltas = Array.from({ length: 5 }, () => 16.7);
