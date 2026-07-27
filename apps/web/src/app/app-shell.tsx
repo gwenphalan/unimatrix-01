@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
   RiArticleLine,
@@ -17,6 +17,7 @@ import {
 } from "@/features/content/site-content";
 import { PublicPageContainer, PublicSiteFooter } from "@/features/public-site/components";
 import { isAuthEnabled, loadWebRuntimeConfig } from "@/lib/config";
+import { useIsNarrowViewport } from "@/lib/use-media-query";
 import {
   CircuitField,
   CircuitOccluderProvider,
@@ -73,6 +74,14 @@ function isNavItemActive(pathname: string, exact: boolean, to: (typeof navItems)
   return exact ? pathname === to : pathname.startsWith(to);
 }
 
+/**
+ * Below `sm` only the leading crumb survives, so the narrow header reads as
+ * the site name beside the logo rather than a trail — the nav tabs already
+ * carry which page is current. Every segment stays in the DOM and is hidden
+ * with a responsive class so this stays a pure CSS breakpoint rather than a
+ * JS-measured one; hiding a whole segment takes its leading separator with
+ * it, which is why no separator is left dangling on mobile.
+ */
 function Breadcrumbs({ items }: { items: BreadcrumbItem[] }) {
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-1 text-sm text-muted-foreground">
@@ -80,8 +89,13 @@ function Breadcrumbs({ items }: { items: BreadcrumbItem[] }) {
         const isLast = index === items.length - 1;
 
         return (
-          <Fragment key={`${item.to ?? "current"}:${item.label}:${index}`}>
-            {index > 0 ? <RiArrowRightSLine aria-hidden="true" className="size-3.5 shrink-0" /> : null}
+          <span
+            className={cn("flex min-w-0 items-center gap-1", index === 0 ? undefined : "hidden sm:flex")}
+            key={`${item.to ?? "current"}:${item.label}:${index}`}
+          >
+            {index > 0 ? (
+              <RiArrowRightSLine aria-hidden="true" className="size-3.5 shrink-0" />
+            ) : null}
             {isLast || !item.to ? (
               <span className="truncate font-medium text-foreground">{item.label}</span>
             ) : (
@@ -89,7 +103,7 @@ function Breadcrumbs({ items }: { items: BreadcrumbItem[] }) {
                 {item.label}
               </Link>
             )}
-          </Fragment>
+          </span>
         );
       })}
     </div>
@@ -120,7 +134,7 @@ function AuthHeaderAction() {
       </SignedIn>
       <SignedOut>
         <a
-          className="inline-flex items-center gap-2 border border-border bg-secondary/60 px-3 py-1.5 text-sm font-medium text-foreground/75 transition-colors hover:border-primary/35 hover:bg-secondary hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary/45 focus-visible:outline-none"
+          className="inline-flex items-center gap-2 border border-border bg-secondary/60 px-3 py-1.5 text-sm font-medium whitespace-nowrap text-foreground/75 transition-colors hover:border-primary/35 hover:bg-secondary hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary/45 focus-visible:outline-none"
           href={buildSignInHref()}
         >
           <RiLoginBoxLine aria-hidden="true" className="size-3.5" />
@@ -141,6 +155,9 @@ function AppShellContent({ children }: AppShellProps) {
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
   });
+  // Narrow viewports skip the circuit field entirely — unmounted, not
+  // CSS-hidden, so no traces are generated and no animation loop runs.
+  const isNarrowViewport = useIsNarrowViewport();
 
   useCircuitOccluder(headerRef);
   // `main` itself is no longer registered — it's a window-scrolling
@@ -216,7 +233,7 @@ function AppShellContent({ children }: AppShellProps) {
 
   return (
     <PublicPageContainer>
-      <CircuitField routeKey={pathname} />
+      {isNarrowViewport ? null : <CircuitField routeKey={pathname} />}
 
       <a
         className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:border focus:border-primary/45 focus:bg-background focus:px-3 focus:py-2 focus:text-sm"
@@ -226,44 +243,50 @@ function AppShellContent({ children }: AppShellProps) {
       </a>
 
       <header className="site-panel site-shell overflow-hidden" ref={headerRef}>
-        <div className="flex flex-col gap-4 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6 lg:px-8 lg:py-5">
-          <div className="flex items-center gap-2.5">
+        {/* One flex line that wraps instead of two nested clusters: below
+            `sm` the nav is pushed to its own row by `w-full` + `order-last`,
+            which leaves the title row free for the auth action. DOM order
+            stays title → nav → auth so desktop tab order matches what's on
+            screen. */}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-3 px-5 py-4 sm:flex-nowrap lg:px-8 lg:py-5">
+          <div className="flex min-w-0 flex-1 items-center gap-2.5">
             <Link aria-label="Unimatrix-01 home" to="/">
               <img alt="" className="size-6 shrink-0" src="/logo.png" />
             </Link>
             <Breadcrumbs items={breadcrumbItems} />
           </div>
 
-          <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center sm:gap-4">
-            <nav aria-label="Primary" className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:justify-end">
-              {navItems.map(({ icon: Icon, label, to, exact }) => {
-                const active = isNavItemActive(pathname, exact, to);
+          <nav
+            aria-label="Primary"
+            className="order-last grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:justify-end sm:order-none"
+          >
+            {navItems.map(({ icon: Icon, label, to, exact }) => {
+              const active = isNavItemActive(pathname, exact, to);
 
-                return (
-                  <Link
-                    aria-current={active ? "page" : undefined}
-                    className={cn(
-                      "inline-flex w-full items-center justify-center gap-2 border px-3 py-1.5 text-sm font-medium transition-[border-color,background-color,color] duration-200 outline-none focus-visible:ring-2 focus-visible:ring-primary/45 sm:w-auto",
-                      active
-                        ? "border-primary/45 bg-primary/12 text-foreground"
-                        : "border-border bg-secondary/60 text-foreground/75 hover:border-primary/35 hover:bg-secondary hover:text-foreground",
-                    )}
-                    key={to}
-                    to={to}
-                  >
-                    <Icon aria-hidden="true" className="size-3.5" />
-                    <span>{label}</span>
-                  </Link>
-                );
-              })}
-            </nav>
+              return (
+                <Link
+                  aria-current={active ? "page" : undefined}
+                  className={cn(
+                    "inline-flex w-full items-center justify-center gap-2 border px-3 py-1.5 text-sm font-medium transition-[border-color,background-color,color] duration-200 outline-none focus-visible:ring-2 focus-visible:ring-primary/45 sm:w-auto",
+                    active
+                      ? "border-primary/45 bg-primary/12 text-foreground"
+                      : "border-border bg-secondary/60 text-foreground/75 hover:border-primary/35 hover:bg-secondary hover:text-foreground",
+                  )}
+                  key={to}
+                  to={to}
+                >
+                  <Icon aria-hidden="true" className="size-3.5" />
+                  <span>{label}</span>
+                </Link>
+              );
+            })}
+          </nav>
 
-            {authEnabled ? (
-              <div className="flex items-center justify-end gap-2">
-                <AuthHeaderAction />
-              </div>
-            ) : null}
-          </div>
+          {authEnabled ? (
+            <div className="flex shrink-0 items-center justify-end gap-2">
+              <AuthHeaderAction />
+            </div>
+          ) : null}
         </div>
       </header>
 
@@ -280,47 +303,45 @@ function AppShellContent({ children }: AppShellProps) {
             className="site-panel site-shell overflow-hidden border-primary/45 shadow-[0_0_0_1px_color-mix(in_oklab,var(--primary)_35%,transparent),0_18px_48px_-32px_color-mix(in_oklab,var(--primary)_35%,transparent)] px-3 py-2 lg:px-4 lg:py-2"
             ref={condensedHeaderRef}
           >
-            <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-              <div className="flex items-center gap-2.5">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2 lg:flex-nowrap">
+              <div className="flex min-w-0 flex-1 items-center gap-2.5">
                 <Link aria-label="Unimatrix-01 home" to="/">
                   <img alt="" className="size-5 shrink-0" src="/logo.png" />
                 </Link>
                 <Breadcrumbs items={breadcrumbItems} />
               </div>
 
-              <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:gap-4">
-                <nav
-                  aria-label="Primary"
-                  className="grid grid-cols-2 gap-2 lg:flex lg:flex-wrap lg:justify-end"
-                >
-                  {navItems.map(({ icon: Icon, label, to, exact }) => {
-                    const active = isNavItemActive(pathname, exact, to);
+              <nav
+                aria-label="Primary"
+                className="order-last grid w-full grid-cols-2 gap-2 lg:flex lg:w-auto lg:flex-wrap lg:justify-end lg:order-none"
+              >
+                {navItems.map(({ icon: Icon, label, to, exact }) => {
+                  const active = isNavItemActive(pathname, exact, to);
 
-                    return (
-                      <Link
-                        aria-current={active ? "page" : undefined}
-                        className={cn(
-                          "inline-flex w-full items-center justify-center gap-2 border px-3 py-1 text-sm font-medium transition-[border-color,background-color,color] duration-200 outline-none focus-visible:ring-2 focus-visible:ring-primary/45 lg:w-auto",
-                          active
-                            ? "border-primary/45 bg-primary/12 text-foreground"
-                            : "border-border/70 bg-background/72 text-muted-foreground hover:border-primary/35 hover:text-foreground",
-                        )}
-                        key={to}
-                        to={to}
-                      >
-                        <Icon aria-hidden="true" className="size-4" />
-                        <span>{label}</span>
-                      </Link>
-                    );
-                  })}
-                </nav>
+                  return (
+                    <Link
+                      aria-current={active ? "page" : undefined}
+                      className={cn(
+                        "inline-flex w-full items-center justify-center gap-2 border px-3 py-1 text-sm font-medium transition-[border-color,background-color,color] duration-200 outline-none focus-visible:ring-2 focus-visible:ring-primary/45 lg:w-auto",
+                        active
+                          ? "border-primary/45 bg-primary/12 text-foreground"
+                          : "border-border/70 bg-background/72 text-muted-foreground hover:border-primary/35 hover:text-foreground",
+                      )}
+                      key={to}
+                      to={to}
+                    >
+                      <Icon aria-hidden="true" className="size-4" />
+                      <span>{label}</span>
+                    </Link>
+                  );
+                })}
+              </nav>
 
-                {authEnabled ? (
-                  <div className="flex items-center justify-end gap-2">
-                    <AuthHeaderAction />
-                  </div>
-                ) : null}
-              </div>
+              {authEnabled ? (
+                <div className="flex shrink-0 items-center justify-end gap-2">
+                  <AuthHeaderAction />
+                </div>
+              ) : null}
             </div>
           </div>
         </div>
