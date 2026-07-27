@@ -1,0 +1,98 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema-jsonc.json",
+
+  // Knip auto-detects most entry points from each workspace's plugins (Vite,
+  // Vitest, Playwright, Drizzle, ESLint). Only the cases it cannot infer are
+  // spelled out below — everything else is left to the plugins so this file
+  // does not drift as the workspaces grow.
+  "workspaces": {
+    ".": {
+      "entry": ["infra/scripts/*.mjs"],
+      "project": ["infra/scripts/**/*.mjs"],
+
+      // Shared test/lint toolchain declared once at the root and consumed by
+      // every workspace through pnpm's hoisting. The root has no source files
+      // importing them, so knip cannot see the usage.
+      "ignoreDependencies": [
+        "@testing-library/jest-dom",
+        "@testing-library/react",
+        "eslint",
+        "jsdom",
+        "vitest"
+      ]
+    },
+
+    "apps/api": {
+      "entry": ["test/**/*.test.ts"],
+      "project": ["src/**/*.ts", "test/**/*.ts"],
+
+      // Resolved by pino at runtime from the string `transport.target`, never
+      // imported. See src/lib/http/logging.ts.
+      "ignoreDependencies": ["pino-pretty"]
+    },
+
+    // The three Vite apps share a shape: `src/main.tsx` is found by the Vite
+    // plugin via index.html, so only the test entries are declared here. Each
+    // one also carries a generated TanStack Router tree that must never be
+    // reported, and declares Tailwind per app while reaching it only through
+    // `@import` in packages/ui/src/styles.css — a CSS edge knip cannot follow.
+    "apps/auth": {
+      "entry": ["test/**/*.test.{ts,tsx}"],
+      "project": ["src/**/*.{ts,tsx}", "test/**/*.{ts,tsx}"],
+      "ignore": ["src/routes/routeTree.gen.ts"],
+      "ignoreDependencies": ["tailwindcss", "tw-animate-css"]
+    },
+    "apps/cube-trainer": {
+      "entry": ["test/**/*.test.{ts,tsx}", "e2e/**/*.spec.ts"],
+      "project": ["src/**/*.{ts,tsx}", "test/**/*.{ts,tsx}", "e2e/**/*.ts"],
+      "ignore": ["src/routes/routeTree.gen.ts"],
+      "ignoreDependencies": ["tailwindcss", "tw-animate-css"]
+    },
+    "apps/web": {
+      "entry": ["test/**/*.test.{ts,tsx}", "e2e/**/*.spec.ts"],
+      "project": ["src/**/*.{ts,tsx}", "test/**/*.{ts,tsx}", "e2e/**/*.ts"],
+      "ignore": ["src/routes/routeTree.gen.ts"],
+      "ignoreDependencies": ["tailwindcss", "tw-animate-css"]
+    },
+
+    // Library workspaces publish from `dist`, so their `exports` map points at
+    // build output knip cannot trace back to source. Each entry below mirrors
+    // one subpath export — keep them in sync when an export is added.
+    "packages/api-client": {
+      "entry": ["src/index.ts", "test/**/*.test.ts"],
+      "project": ["src/**/*.ts", "test/**/*.ts"]
+    },
+    "packages/auth": {
+      "entry": ["src/index.ts", "src/server.ts", "src/react.tsx", "test/**/*.test.{ts,tsx}"],
+      "project": ["src/**/*.{ts,tsx}", "test/**/*.{ts,tsx}"]
+    },
+    "packages/config-eslint": {
+      "project": ["**/*.mjs"]
+    },
+    // Ships only tsconfig JSON presets — no code for knip to analyze.
+    "packages/config-typescript": {
+      "entry": [],
+      "project": []
+    },
+    "packages/content": {
+      "entry": ["src/index.ts", "src/node.ts", "test/**/*.test.ts"],
+      "project": ["src/**/*.ts", "test/**/*.ts"]
+    },
+    "packages/db": {
+      "entry": ["src/index.ts", "src/migrate.ts", "test/**/*.test.ts"],
+      "project": ["src/**/*.ts", "test/**/*.ts"]
+    },
+    "packages/shared": {
+      "entry": ["src/index.ts", "test/**/*.test.ts"],
+      "project": ["src/**/*.ts", "test/**/*.ts"]
+    },
+    "packages/ui": {
+      "entry": ["src/index.ts", "src/public.ts", "test/**/*.test.{ts,tsx}"],
+      "project": ["src/**/*.{ts,tsx}", "test/**/*.{ts,tsx}"]
+    },
+    "packages/user-data": {
+      "entry": ["src/index.ts", "src/react.tsx", "test/**/*.test.{ts,tsx}"],
+      "project": ["src/**/*.{ts,tsx}", "test/**/*.{ts,tsx}"]
+    }
+  }
+}
