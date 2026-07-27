@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
 
 import { GridGraph } from "../src/components/grid-graph.js";
 import { cellKey, densify, recomputeCorners } from "../src/components/grid-math.js";
@@ -214,7 +214,10 @@ describe("regression: heavy (but not total) occlusion no longer produces degener
 });
 
 describe("regression: a fully barricaded canvas degrades gracefully", () => {
-  let warnSpy: ReturnType<typeof vi.spyOn>;
+  // `ReturnType<typeof vi.spyOn>` degraded to `any` under vitest 4, which the
+  // no-unsafe-* rules correctly rejected. `MockInstance` names the type directly
+  // and keeps `console.warn`'s signature attached.
+  let warnSpy: MockInstance<typeof console.warn>;
 
   beforeEach(() => {
     warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});

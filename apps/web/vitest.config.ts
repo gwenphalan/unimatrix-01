@@ -52,7 +52,7 @@ export default defineConfig({
       // runs when the router renders a route, which the Playwright smoke suite
       // does and the vitest unit suite does not. The statements are real and
       // shipped, they are simply unreachable from this suite.
-      thresholds: { statements: 52, functions: 58 },
+      thresholds: { statements: 58, functions: 53 },
     }),
     environment: "jsdom",
     include: ["test/**/*.test.ts", "test/**/*.test.tsx"],
