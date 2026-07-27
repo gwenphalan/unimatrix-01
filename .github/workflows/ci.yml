@@ -66,3 +66,22 @@ jobs:
 
       - name: Test
         run: pnpm test
+
+      # Last, because it is the slowest step: a real Chrome run against every
+      # previewable route. `pnpm test` has already built both apps, and the
+      # script resolves Playwright's Chromium itself rather than needing a
+      # system Chrome or a CHROME_PATH set here.
+      #
+      # Reports stay on the runner. They are uploaded as a build artifact
+      # below, never to an external service.
+      - name: Lighthouse budgets
+        run: pnpm lighthouse
+
+      - name: Upload Lighthouse reports
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        with:
+          name: lighthouse-reports
+          path: apps/*/.lighthouse/
+          retention-days: 7
+          if-no-files-found: ignore
