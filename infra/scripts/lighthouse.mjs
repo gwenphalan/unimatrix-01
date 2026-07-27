@@ -69,20 +69,57 @@ const CATEGORIES = ["performance", "accessibility", "best-practices", "seo"];
 async function resolveChromePath() {
   if (process.env.CHROME_PATH) return process.env.CHROME_PATH;
 
-  const cacheDir = path.join(os.homedir(), ".cache", "ms-playwright");
-  if (!existsSync(cacheDir)) return undefined;
+  // `PLAYWRIGHT_BROWSERS_PATH` wins when set; otherwise Playwright's per-OS
+  // default. Only the Linux default is spelled out because CI and the dev
+  // machine are both Linux — on anything else, set CHROME_PATH.
+  const roots = [
+    process.env.PLAYWRIGHT_BROWSERS_PATH,
+    path.join(os.homedir(), ".cache", "ms-playwright"),
+  ].filter(Boolean);
 
-  const entries = (await readdir(cacheDir))
-    .filter((name) => /^chromium-\d+$/u.test(name))
-    .sort()
-    .reverse();
+  // Playwright has shipped both layouts; which one appears depends on the
+  // browser build, not the platform.
+  const layouts = [
+    ["chrome-linux64", "chrome"],
+    ["chrome-linux", "chrome"],
+  ];
+  const searched = [];
 
-  for (const entry of entries) {
-    const candidate = path.join(cacheDir, entry, "chrome-linux64", "chrome");
-    if (existsSync(candidate)) return candidate;
+  for (const root of roots) {
+    if (!existsSync(root)) {
+      searched.push(`${root} (missing)`);
+      continue;
+    }
+
+    const builds = (await readdir(root))
+      .filter((name) => /^chromium-\d+$/u.test(name))
+      .sort()
+      .reverse();
+
+    if (builds.length === 0) searched.push(`${root} (no chromium-* build)`);
+
+    for (const build of builds) {
+      for (const layout of layouts) {
+        const candidate = path.join(root, build, ...layout);
+        if (existsSync(candidate)) return candidate;
+        searched.push(candidate);
+      }
+    }
   }
 
-  return undefined;
+  // Deliberately fatal rather than falling through to `chrome-launcher`'s
+  // system-Chrome search. That search fails with a launcher error that reads
+  // like a broken page rather than a missing browser, which is exactly the
+  // silent-failure shape this repo tries to avoid.
+  throw new Error(
+    [
+      "Could not find Playwright's Chromium, and no CHROME_PATH was set.",
+      "Lighthouse needs full Chrome (not chromium_headless_shell).",
+      "Searched:",
+      ...searched.map((entry) => `  ${entry}`),
+      "Fix: `pnpm exec playwright install chromium`, or set CHROME_PATH.",
+    ].join("\n"),
+  );
 }
 
 function findFreePort() {
