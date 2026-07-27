@@ -1,0 +1,8 @@
+# Without this file nginx's SPA fallback (`try_files $uri $uri/ /index.html`)
+# answers /robots.txt with the app's index.html, so crawlers receive HTML where
+# they expect a robots file. A real file makes `$uri` match before the fallback.
+#
+# No Sitemap: line — this site does not publish a sitemap, and pointing at one
+# that does not exist is worse than omitting the directive.
+User-agent: *
+Allow: /

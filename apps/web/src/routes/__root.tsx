@@ -8,7 +8,14 @@ import { Badge, Button, Card } from "@unimatrix/ui/public";
 export const Route = createRootRouteWithContext<AppRouterContext>()({
   component: RootComponent,
   head: () => ({
-    meta: [{ title: "Unimatrix-01" }],
+    meta: [
+      { title: "Unimatrix-01" },
+      {
+        name: "description",
+        content:
+          "A collection of projects, experiments, and the occasional blog post from Gwenny, a developer working mostly in TypeScript and Node.js.",
+      },
+    ],
   }),
   notFoundComponent: RootNotFound,
 });

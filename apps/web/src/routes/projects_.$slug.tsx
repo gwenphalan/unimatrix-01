@@ -13,7 +13,13 @@ export const Route = createFileRoute("/projects_/$slug")({
     return project;
   },
   head: ({ loaderData }) => ({
-    meta: [{ title: `Unimatrix-01 - ${loaderData?.frontmatter.title ?? "Project"}` }],
+    meta: [
+      { title: `Unimatrix-01 - ${loaderData?.frontmatter.title ?? "Project"}` },
+      {
+        name: "description",
+        content: loaderData?.frontmatter.summary ?? "A project on Unimatrix-01.",
+      },
+    ],
   }),
 });
 

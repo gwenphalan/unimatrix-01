@@ -9,6 +9,13 @@ export const Route = createFileRoute("/")({
     projects: featuredProjects,
   }),
   head: () => ({
-    meta: [{ title: "Unimatrix-01 - Home" }],
+    meta: [
+      { title: "Unimatrix-01 - Home" },
+      {
+        name: "description",
+        content:
+          "A collection of projects, experiments, and the occasional blog post from Gwenny, a developer working mostly in TypeScript and Node.js.",
+      },
+    ],
   }),
 });
