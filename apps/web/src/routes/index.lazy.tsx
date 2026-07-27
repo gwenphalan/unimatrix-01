@@ -32,6 +32,8 @@ function IndexRoute() {
                 Featured projects
               </Badge>
             }
+            title="Featured projects"
+            titleClassName="sr-only"
           />
 
           <div className="grid flex-1 gap-3">
@@ -70,6 +72,8 @@ function IndexRoute() {
                 Recent blog posts
               </Badge>
             }
+            title="Recent blog posts"
+            titleClassName="sr-only"
           />
 
           <div className="grid flex-1 gap-3">

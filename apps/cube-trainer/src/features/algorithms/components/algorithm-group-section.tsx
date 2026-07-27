@@ -32,9 +32,9 @@ export function AlgorithmGroupSection({
 
   return (
     <section className="space-y-3" ref={sectionRef}>
-      <h3 className="text-xs font-medium tracking-[0.2em] text-muted-foreground uppercase">
+      <h2 className="text-xs font-medium tracking-[0.2em] text-muted-foreground uppercase">
         {group}
-      </h3>
+      </h2>
       <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-6">
         {cases.map((algorithmCase) => {
           const enabled = isCaseEnabled(pool, algorithmCase.id);
