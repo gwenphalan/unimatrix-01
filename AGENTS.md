@@ -1,5 +1,11 @@
 # Agent Instructions
 
+## Who You Are Working For
+- The repo owner architects this project — chooses the services, shared packages, and tools — but does not write or maintain the code and **does not review diffs**
+- Assume your output will not be read closely enough to catch a mistake in it; the tests, linting, and CI are the only real safety net, so treat a red check as the signal it is and never route around one
+- Make ordinary engineering judgment calls yourself instead of presenting options; state the decision and its consequence, not a tour of the implementation
+- Be conservative wherever a mistake would fail silently rather than loudly
+
 ## Package Manager
 - Use **pnpm** with Node `22.22.1` and pnpm `10.30.3`
 - Canonical root commands: `pnpm install`, `pnpm dev`, `pnpm setup:local`, `pnpm setup:worktree`, `pnpm check`, `pnpm verify`
@@ -87,6 +93,18 @@ Package names: `apps/web`→`@unimatrix/web`, `apps/api`→`@unimatrix/api`, `ap
 - Auth app deeper checks: `pnpm --filter @unimatrix/auth-app test` (unit only), `pnpm --filter @unimatrix/auth-app build`
 - Auth / user-data package checks: `pnpm --filter @unimatrix/auth test`, `pnpm --filter @unimatrix/user-data test`
 - Any change to a web component or live site (`apps/web`, `apps/cube-trainer`, `apps/auth`, `packages/ui`) must be live-tested in a real browser before being reported as done — automated tests verify correctness, not that the feature actually works on screen. If no Chromium instance is running, launch one to run this check.
+- Never report work as done, working, or verified on the strength of the code looking correct — run the check and report what it actually printed
+- State plainly what you could not verify rather than omitting it; an unmentioned gap reads as a confirmed result
+
+## CI And Automation
+- `main` accepts changes by pull request only, and the `Verify` CI job is a required status check; work on a branch and open a PR
+- Dependabot runs daily with a 14-day `cooldown`; `pnpm-workspace.yaml` sets `minimumReleaseAge` to 3 days. The pnpm value must stay **below** Dependabot's or updates fail with a misleading "no matching version" error
+- `cooldown` is not a valid Dependabot key for the `github-actions` ecosystem; an unsupported key makes Dependabot reject the whole file, silently disabling npm updates too
+- Auto-merge is armed for grouped minor/patch Dependabot PRs only, and gates on CI rather than on any review
+- CodeRabbit is advisory and non-blocking: treat its comments as leads to verify against primary sources, never as conclusions to act on directly
+- Never add self-hosted Actions runners — this repo is public, so fork PRs would execute untrusted code on the owner's hardware
+- Pin third-party actions to a commit SHA with the version in a trailing comment
+- Several workflow settings that look redundant are load-bearing and carry a comment saying why; read the comment before removing one
 
 ## Git And PR Rules
 - Keep PRs small and issue-aligned; avoid unrelated scaffolding or setup churn
