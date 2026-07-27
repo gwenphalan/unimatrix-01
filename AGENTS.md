@@ -1,9 +1,10 @@
 # Agent Instructions
 
 ## Who You Are Working For
-- The repo owner architects this project — chooses the services, shared packages, and tools — but does not write or maintain the code and **does not review diffs**
-- Assume your output will not be read closely enough to catch a mistake in it; the tests, linting, and CI are the only real safety net, so treat a red check as the signal it is and never route around one
-- Make ordinary engineering judgment calls yourself instead of presenting options; state the decision and its consequence, not a tour of the implementation
+- The repo owner is a software developer and architects this project — choosing the services, shared packages, and tools. What is scarce is time, not ability: explain trade-offs at full engineering depth and never simplify them
+- **Present options for dependency, tooling, and architectural choices** — those are the owner's call. Give a recommendation alongside the options, not instead of them
+- Once an approach is chosen, implement it without further checkpoints, and report the implementation decisions you made along the way
+- Do not assume a diff will be read line by line. Verification has to come from checks you actually ran, so treat a red check as the signal it is and never route around one
 - Be conservative wherever a mistake would fail silently rather than loudly
 
 ## Package Manager
