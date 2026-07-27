@@ -218,6 +218,7 @@ export function CircuitOccluderProvider({ children }: { children: React.ReactNod
   const observerRef = React.useRef<ResizeObserver | null>(null);
   const rafRef = React.useRef<number | null>(null);
   const scrollSettleTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const resizeSettleTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const structuralPendingRef = React.useRef(true); // first measurement pass is always a commit
   const measuredRef = React.useRef(new Map<symbol, Occluder>());
   const committedRef = React.useRef(new Map<symbol, Occluder>());
@@ -315,10 +316,35 @@ export function CircuitOccluderProvider({ children }: { children: React.ReactNod
     };
     window.addEventListener("scroll", onScroll, { passive: true, capture: true });
 
+    // A viewport resize routinely *moves* a registrant without changing its
+    // own box — a `max-w-*` panel keeps the same width and height while the
+    // centering margins around it shift — and `ResizeObserver` never fires on
+    // a position-only change. Without this the committed rects stay pinned to
+    // pre-resize geometry, and since `CircuitField` regenerates on its own
+    // resize handler, it rebuilds against those stale barriers and lays
+    // traces straight across the surface. Same immediate-plus-settle shape as
+    // the scroll path: resize arrives as a burst, and the last event is the
+    // one whose geometry has to be committed.
+    const onResize = () => {
+      scheduleMeasure("structural");
+
+      if (resizeSettleTimerRef.current !== null) clearTimeout(resizeSettleTimerRef.current);
+      resizeSettleTimerRef.current = setTimeout(() => {
+        resizeSettleTimerRef.current = null;
+        scheduleMeasure("structural");
+      }, SCROLL_SETTLE_MS);
+    };
+    window.addEventListener("resize", onResize, { passive: true });
+
     return () => {
       observer.disconnect();
       observerRef.current = null;
       window.removeEventListener("scroll", onScroll, { capture: true });
+      window.removeEventListener("resize", onResize);
+      if (resizeSettleTimerRef.current !== null) {
+        clearTimeout(resizeSettleTimerRef.current);
+        resizeSettleTimerRef.current = null;
+      }
       if (scrollSettleTimerRef.current !== null) {
         clearTimeout(scrollSettleTimerRef.current);
         scrollSettleTimerRef.current = null;

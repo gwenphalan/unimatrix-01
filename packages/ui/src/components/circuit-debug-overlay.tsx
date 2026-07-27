@@ -50,6 +50,16 @@ export function CircuitDebugOverlay({ gridPhase, occluders }: CircuitDebugOverla
     }, []),
   );
 
+  // A structural commit is the authoritative fresh measurement, so drop the
+  // scroll-time snapshot whenever one lands. Without this, the first scroll
+  // pins `liveOccluders` forever and every later layout change (resize, route
+  // change, a panel appearing) draws the overlay at geometry that no longer
+  // exists — which reads as the barrier field being detached from the surface
+  // it belongs to.
+  React.useEffect(() => {
+    setLiveOccluders(null);
+  }, [occluders]);
+
   if (!debugState.enabled) return null;
   if (typeof document === "undefined") return null;
 
