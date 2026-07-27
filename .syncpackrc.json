@@ -1,0 +1,10 @@
+{
+  "$schema": "https://unpkg.com/syncpack@15.3.2/dist/schema.json",
+  "versionGroups": [
+    {
+      "label": "Peer ranges are deliberately wider than the version we install, so they are exempt from the one-version rule.",
+      "dependencyTypes": ["peer"],
+      "isIgnored": true
+    }
+  ]
+}

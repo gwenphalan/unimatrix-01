@@ -48,6 +48,13 @@ jobs:
       - name: Format
         run: pnpm format:check
 
+      # Also cheap, and it catches a class of problem the rest of the pipeline
+      # cannot: one workspace drifting to a different version of a shared
+      # dependency builds and tests green in isolation, then behaves differently
+      # from its siblings at runtime.
+      - name: Dependency versions
+        run: pnpm deps:check
+
       - name: Build
         run: pnpm build
 
