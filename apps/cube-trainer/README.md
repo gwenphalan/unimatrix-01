@@ -27,3 +27,8 @@ When adding a workspace dependency or another build input, add its path here
 and to the Dokploy service's watch-path configuration. See
 [`infra/deployment/README.md`](../../infra/deployment/README.md) for the
 repository-wide convention.
+
+Watch paths apply to `push` events only. Dokploy's pull request handler does
+not filter by them, so if preview deployments are enabled, every PR against
+`main` rebuilds this app regardless of what it touched — including a
+docs-only PR.

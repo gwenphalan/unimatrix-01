@@ -230,6 +230,112 @@ input, update its README and Dokploy configuration in the same change.
 Traefik continues to route to the latest healthy service revision managed by
 Dokploy.
 
+## Pull request preview deployments
+
+Previews are entirely Dokploy-side. **Nothing in this repository is required**
+— no workflow, no secret, no token, no permission change. The Dokploy GitHub
+App's installation token drives the webhook, the build, the PR comment, and
+the teardown.
+
+Nothing here has been verified against the live Dokploy instance; every claim
+below is read from Dokploy's schema and handlers, and the current values of
+these settings live in Dokploy's database rather than in this repo.
+
+### Previews need Application services, not the existing Compose apps
+
+The four `infra/docker/*-compose.yaml` files run as Dokploy **Compose** apps,
+and Dokploy has no preview support for that service type: all thirteen
+`preview*` columns live on `applications`, and `compose` has none of them.
+This is not a configuration gap that can be filled in — the fields do not
+exist on the record.
+
+So a previewable app needs a **second** Dokploy service alongside its
+production Compose app, of type Application, reusing the same Dockerfile
+unchanged:
+
+- Build type: `Dockerfile`
+- Dockerfile path: `apps/web/Dockerfile` / `apps/cube-trainer/Dockerfile`
+- Docker context path: `.` — the repo root, matching the build rule in
+  `infra/docker/README.md`
+- Preview port: **8080**
+
+### Settings whose defaults are wrong for this repo
+
+| Setting | Dokploy default | Needs to be | Why |
+| --- | --- | --- | --- |
+| `previewPort` | `3000` | `8080` | Both previewable images serve on 8080. Leaving the default produces a domain that resolves and then dead-ends. |
+| `previewHttps` | `false` | `true` | An `http://` preview origin is rejected by the API's CORS rule, and `safe-redirect.ts` requires `protocol === "https:"`. With HTTPS on, the existing `https://*.unimatrix-01.dev` CORS entry already matches preview hosts, so no repo change is needed. |
+| `previewCertificateType` | `"none"` | issue certs | TLS is not automatic. Needs either per-host Let's Encrypt or a wildcard cert covering the preview domain. |
+| `isPreviewDeploymentsActive` | `false` | `true` | Off until switched on per application. |
+
+### Two behaviours that are invisible from the UI
+
+- **Watch paths do not apply to pull requests.** The `push` handler filters by
+  watch path; the `pull_request` handler does not. Every PR against `main`
+  rebuilds every previewable app — a docs-only PR triggers two full repo-root
+  `pnpm install --frozen-lockfile` plus workspace builds and posts two bot
+  comments. If that is too much load, the throttle is the preview **label**
+  gate. Note its sharp edge: labels gate creation and rebuild only. Removing
+  the label does **not** tear an existing preview down, so it is not a kill
+  switch.
+- **`previewLimit` (default 3) fails silently.** Exceeding it skips the
+  deployment with no PR comment and no error, so a missing preview is not
+  evidence that something broke.
+
+Preview target-branch matching uses `pull_request.base.ref`, so only PRs
+targeting `main` produce previews. Teardown is automatic on PR `closed`, which
+covers merges.
+
+### Fork PRs
+
+Two independent barriers, which matters because this repo is public:
+
+1. `previewRequireCollaboratorPermissions` defaults to `true`, so only
+   write/maintain/admin actors pass.
+2. The clone runs `git clone --branch <pull_request.head.ref>` against the
+   **base** repo, where a fork's head branch does not exist — so a fork
+   preview would fail at clone even with the gate disabled.
+
+Dokploy's own documentation still recommends against preview deployments on
+public repositories, on the grounds that external contributors can trigger
+builds on your server. The gate above is what makes that recommendation
+survivable here, so do not disable it.
+
+### Which apps to preview
+
+- **`apps/cube-trainer`** — the clean case. No build args, no backend, no env;
+  progress lives in `localStorage`.
+- **`apps/web`** — point previews at the production API and leave
+  `VITE_CLERK_PUBLISHABLE_KEY` unset so previews stay anonymous.
+- **`apps/auth`** — **do not preview.** Not for secret exposure:
+  `VITE_CLERK_PUBLISHABLE_KEY` is public by design and `CLERK_SECRET_KEY`
+  never enters the auth image (it is API-only). The real reason is that
+  previewing auth means adding ephemeral hostnames to the production Clerk
+  instance's allowed origins and redirect URLs — and any HTTPS preview host
+  under `unimatrix-01.dev` then becomes a valid post-authentication redirect
+  target for real user sessions.
+
+### What to click in Dokploy
+
+1. Install the Dokploy GitHub App on the `unimatrixcore` org and grant it
+   access to `unimatrix-01`.
+2. Create a new **Application** service for `apps/web` (alongside, not
+   replacing, the existing Compose app). Set build type Dockerfile, Dockerfile
+   path `apps/web/Dockerfile`, context path `.`.
+3. Repeat for `apps/cube-trainer` with `apps/cube-trainer/Dockerfile`.
+4. On each, open Preview Settings and enable preview deployments.
+5. Set Preview Port to `8080` on both — the default of 3000 is wrong here.
+6. Enable Preview HTTPS and choose a certificate type. This is required, not
+   cosmetic: an `http://` preview origin fails the API's CORS check.
+7. Set the preview wildcard domain, and confirm DNS resolves it to the server
+   (a wildcard `A`/`CNAME` under `unimatrix-01.dev`).
+8. Leave "require collaborator permissions" enabled.
+9. Set `previewLimit` deliberately — the default of 3 skips silently once
+   exceeded.
+10. For `apps/web`, set preview build args to the production
+    `VITE_API_BASE_URL` and leave `VITE_CLERK_PUBLISHABLE_KEY` unset.
+11. Optionally add a `preview` label gate if per-PR build load is a problem.
+
 ## Verification after deploy
 
 Verify these URLs after each production rollout:
