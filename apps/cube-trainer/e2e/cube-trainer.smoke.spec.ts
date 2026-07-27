@@ -43,7 +43,7 @@ test("Drill flow: drill and case picker", async ({ page }) => {
   await expect(main.getByRole("heading", { name: "Drilling" })).toBeVisible();
   await expect(main.getByText("Next case")).toBeVisible();
 
-  await main.getByRole("group").getByRole("radio", { name: "PLL" }).click();
+  await main.getByRole("radiogroup").getByRole("radio", { name: "PLL" }).click();
 
   await main.getByRole("button", { name: "Choose cases" }).click();
   await expect(main.getByRole("heading", { name: "Choose cases" })).toBeVisible();
@@ -61,7 +61,7 @@ test("Learn flow: guided session and case picker", async ({ page }) => {
   await expect(main.getByRole("heading", { name: "Learning" })).toBeVisible();
   await expect(main.getByText("Mark learned")).toBeVisible();
 
-  await main.getByRole("group").getByRole("radio", { name: "PLL" }).click();
+  await main.getByRole("radiogroup").getByRole("radio", { name: "PLL" }).click();
 
   await main.getByRole("button", { name: "Choose cases" }).click();
   await expect(main.getByRole("heading", { name: "Choose cases" })).toBeVisible();

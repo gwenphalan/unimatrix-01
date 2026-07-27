@@ -99,7 +99,7 @@ function readPermissionsMetadata(publicMetadata: unknown): UserPermissionsMetada
     return {};
   }
 
-  return permissions as UserPermissionsMetadata["permissions"];
+  return permissions;
 }
 
 /**

@@ -134,7 +134,7 @@ export function getSessionPermissionsClaim(request: FastifyRequest): SessionPerm
     return {};
   }
 
-  return { permissions: rawPermissions as Partial<Record<string, string[]>> };
+  return { permissions: rawPermissions };
 }
 
 /**

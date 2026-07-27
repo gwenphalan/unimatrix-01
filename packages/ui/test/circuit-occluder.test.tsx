@@ -65,7 +65,7 @@ function Registrant({
 
   React.useLayoutEffect(() => {
     if (ref.current) {
-      ref.current.getBoundingClientRect = () => ({ ...rect, toJSON: () => ({}) }) as DOMRect;
+      ref.current.getBoundingClientRect = () => ({ ...rect, toJSON: () => ({}) });
       onElement?.(ref.current);
     }
   }, [rect, onElement]);
@@ -181,7 +181,7 @@ describe("CircuitOccluderProvider / useCircuitOccluder", () => {
 
       React.useLayoutEffect(() => {
         if (ref.current)
-          ref.current.getBoundingClientRect = () => ({ ...rect, toJSON: () => ({}) }) as DOMRect;
+          ref.current.getBoundingClientRect = () => ({ ...rect, toJSON: () => ({}) });
       }, []);
 
       return <div ref={ref} />;
@@ -549,7 +549,7 @@ describe("CircuitOccluderProvider / useCircuitOccluder", () => {
 
       React.useLayoutEffect(() => {
         if (ref.current)
-          ref.current.getBoundingClientRect = () => ({ ...rect, toJSON: () => ({}) }) as DOMRect;
+          ref.current.getBoundingClientRect = () => ({ ...rect, toJSON: () => ({}) });
       }, []);
 
       return <a href="/somewhere" ref={ref} />;

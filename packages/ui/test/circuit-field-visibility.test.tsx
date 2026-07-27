@@ -31,10 +31,10 @@ describe("CircuitField visibilitychange", () => {
 
   beforeEach(() => {
     rafCallCount = 0;
-    window.requestAnimationFrame = ((callback: FrameRequestCallback) => {
+    window.requestAnimationFrame = (callback: FrameRequestCallback) => {
       rafCallCount += 1;
       return originalRAF(callback);
-    }) as typeof window.requestAnimationFrame;
+    };
   });
 
   afterEach(() => {

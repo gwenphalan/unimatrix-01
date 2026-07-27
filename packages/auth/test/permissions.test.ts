@@ -27,7 +27,7 @@ describe("hasPermission", () => {
   });
 
   it("returns false when permissions is missing", () => {
-    expect(hasPermission({} as never, "web", "viewer")).toBe(false);
+    expect(hasPermission({}, "web", "viewer")).toBe(false);
   });
 
   it("returns false when permissions is malformed (not an object)", () => {
@@ -42,11 +42,7 @@ describe("hasPermission", () => {
 
   it("ignores unknown role strings in an otherwise valid role list", () => {
     expect(
-      hasPermission(
-        { permissions: { web: ["viewer", "superuser"] } } as never,
-        "web",
-        "superuser" as never,
-      ),
+      hasPermission({ permissions: { web: ["viewer", "superuser"] } }, "web", "superuser" as never),
     ).toBe(false);
   });
 
