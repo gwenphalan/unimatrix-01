@@ -47,9 +47,6 @@ import { type Trace, generateTraces } from "./trace-generation.js";
 // knows about the bold tier.
 const BOLD_GRID = GRID * 6;
 
-// Opacity of the trail slice nearest the packet; the rest fade linearly to
-// nothing at the tail. Deliberately below the packet's own so the head still
-// reads as the brightest thing on the trace.
 /**
  * Offset that puts a line of a `tile`-sized lattice exactly on `extent`'s
  * midpoint: `background-position: P` on a tile of size T puts lines at
@@ -67,6 +64,9 @@ function measureGridPhase(): Point {
   return { x: latticePhase(root.clientWidth, GRID), y: latticePhase(root.clientHeight, GRID) };
 }
 
+// Opacity of the trail slice nearest the packet; the rest fade linearly to
+// nothing at the tail. Deliberately below the packet's own so the head still
+// reads as the brightest thing on the trace.
 const TRAIL_HEAD_OPACITY = 0.3;
 
 // Stroke width (px) of the trail slice nearest the packet. Slices narrow
@@ -323,11 +323,6 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
     return !documentHiddenRef.current && (transitionsRef.current.size > 0 || idleEnabledRef.current);
   }, []);
 
-  // Hides every pooled packet rect and returns its slot. Used wherever the
-  // geometry packets are walking stops being valid: a trace-count prune, a
-  // tab hide/show, and — the frame any crawl starts — `runTick` itself.
-  // Retiring rather than trying to salvage in-flight packets is deliberate:
-  // the graph is rebuilt from live bodies on the next idle frame anyway.
   // Hides a slot's packet rect and every one of its trail sub-paths, and
   // drops its history. Every path that frees a slot goes through this, so a
   // recycled slot always starts from an empty trail.
@@ -343,6 +338,11 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
     packetTrailsRef.current.delete(slot);
   }, []);
 
+  // Hides every pooled packet rect and returns its slot. Used wherever the
+  // geometry packets are walking stops being valid: a trace-count prune, a
+  // tab hide/show, and — the frame any crawl starts — `runTick` itself.
+  // Retiring rather than trying to salvage in-flight packets is deliberate:
+  // the graph is rebuilt from live bodies on the next idle frame anyway.
   const retireAllPackets = React.useCallback(() => {
     graphDirtyRef.current = true;
     packetsRef.current.forEach((_packet, slot) => {
@@ -647,7 +647,7 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
   // shifts cancel.
   const barriers: BarrierField = React.useMemo(
     () => buildBarrierField(occluders.map((rect) => translateRect(rect, -gridPhase.x, -gridPhase.y))),
-    [occluders, gridPhase],
+    [occluders, gridPhase.x, gridPhase.y],
   );
 
   // The viewport box as generation sees it: shrunk by the phase the rendered
@@ -655,12 +655,16 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
   // bounds, so without the shrink the `+gridPhase` translate pushes the
   // right/bottom-most traces past the real viewport edge, where the SVG
   // clips them mid-run — they read as running off the page.
+  // Keyed on primitives, never the `debouncedSize`/`gridPhase` objects:
+  // `targetTraces` below depends on this, and a new object carrying identical
+  // numbers would regenerate the whole field and start a pointless crawl —
+  // exactly what that memo's own primitive deps exist to prevent.
   const latticeSize = React.useMemo(
     () =>
       debouncedSize
         ? { width: debouncedSize.width - gridPhase.x, height: debouncedSize.height - gridPhase.y }
         : null,
-    [debouncedSize, gridPhase],
+    [debouncedSize?.width, debouncedSize?.height, gridPhase.x, gridPhase.y],
   );
 
   const targetTraces = React.useMemo(() => {
