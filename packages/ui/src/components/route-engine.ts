@@ -310,9 +310,10 @@ export function buildRoute(
       const candidate = densify([snappedFromEnd, ...corridor, toStart]).slice(1, -1);
       const collisions = fullRouteCollisions(candidate);
 
+      // No write-back to `bestCollisions`: this branch runs once, not in a
+      // loop, and nothing below reads the count again — only `best`.
       if (best === null || collisions < bestCollisions) {
         best = candidate;
-        bestCollisions = collisions;
       }
     }
   }
