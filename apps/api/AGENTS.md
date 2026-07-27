@@ -10,7 +10,17 @@
 - `src/plugins`: cross-cutting Fastify setup for validation, observability, security, and CORS.
 - `src/modules`: route modules grouped by feature (`health`, `user-data`); `index.ts` registers the active modules.
 - `src/lib/http`: shared HTTP-layer helpers such as logging, validation, and error normalization.
-- `test`: Node test runner coverage for app construction, config, and env loading.
+- `test`: Node test runner coverage for app construction, config, env loading, and the user-data store.
+
+## 2a. Coverage Floor
+`pnpm test` here runs under `--experimental-test-coverage` with `--test-coverage-lines=81` and `--test-coverage-functions=89`, the numbers this workspace measures today rounded down. This is the same ratchet policy `@unimatrix/config-vitest` applies to the vitest workspaces — `apps/api` runs the Node test runner instead, so it expresses the policy through flags rather than that shared config. Branch coverage is reported but not gated, matching the shared config's reasoning.
+
+Three details are load-bearing:
+- `--test-coverage-include='src/**'` is required. Without it the report also counts `test/` and the `packages/*` sources the tests pull in, which inflated the aggregate from 81.61% to 89.44% and made the floor measure other workspaces' testing.
+- Node reports **line %** where vitest reports **statements %**. The two numbers are not directly comparable.
+- `test/module-graph.test.ts` imports every `src/` module and is what keeps the denominator honest — Node only reports files the run loaded, so without it an untested new module is absent from the report entirely and the percentage rises as coverage falls. Read the comment in that file before changing it.
+
+Raising a threshold after genuinely improving coverage is the intended workflow. Lowering one should be a deliberate, explained edit, not a quiet fix for a red build.
 
 ## 3. Core Behaviors & Patterns
 - **App wiring**: `buildApp()` in `src/app.ts` creates the Fastify instance, decorates `runtimeConfig`, installs core plugins, and centralizes error and not-found handling before modules are registered.
