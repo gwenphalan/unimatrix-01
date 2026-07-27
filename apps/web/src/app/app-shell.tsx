@@ -101,7 +101,13 @@ function Breadcrumbs({
   return (
     <nav
       aria-label={label}
-      className="flex min-w-0 flex-1 flex-wrap items-center gap-2.5 text-sm text-muted-foreground"
+      // `flex-nowrap` is load-bearing. The logo and the trail live in one flex
+      // line; letting that line wrap drops the logo onto a row of its own at
+      // 640-768px, where the trail is long enough to need the space. Measured:
+      // with `flex-wrap` here the header's breadcrumb grew from 24px to 102px
+      // tall at 640px and the trail broke across three lines. Wrapping belongs
+      // on the inner trail span, which already has it, so only the crumbs move.
+      className="flex min-w-0 flex-1 flex-nowrap items-center gap-2.5 text-sm text-muted-foreground"
     >
       <Link aria-label="Unimatrix-01 home" to="/">
         <img alt="" className={logoClassName} src="/logo.png" />
