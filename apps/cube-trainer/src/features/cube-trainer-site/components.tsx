@@ -1,6 +1,27 @@
 import type * as React from "react";
+import { useRef } from "react";
 
-import { cn } from "@unimatrix/ui/public";
+import { cn, useCircuitOccluder } from "@unimatrix/ui/public";
+
+/**
+ * Wraps a cluster of controls in a non-interactive box registered as a
+ * circuit-field occluder, so the background traces route around the cluster
+ * instead of running under its buttons. The ref deliberately goes on this
+ * wrapper rather than the controls: occluders are meant for non-interactive
+ * surfaces, and registering a `Button`/`Link` directly warns.
+ *
+ * `-m-1 p-1` is load bearing in both directions. A bare 36px control row is
+ * under `MIN_OCCLUDER_SIDE_PX` (one grid cell) on its short side and would be
+ * rejected as too small to be a real surface, so the box needs the padding to
+ * clear the floor — and the matching negative margin keeps the outer margin
+ * box identical to the original content box, so nothing on screen moves.
+ */
+export function OccludingCluster({ className, ...props }: React.ComponentProps<"div">) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  useCircuitOccluder(ref);
+
+  return <div className={cn("-m-1 flex items-center gap-3 p-1", className)} ref={ref} {...props} />;
+}
 
 export function AppPageContainer({
   className,

@@ -52,12 +52,22 @@ describe("CircuitField idle loop (full mode)", () => {
    *
    * Everything that reads time — `performance.now()` and the timestamp handed
    * to rAF callbacks (which is what the boot frame-budget probe samples) —
-   * comes from this one counter, so a frame always looks exactly `FRAME_MS`
-   * long no matter how long the machine actually took. Without that, a loaded
-   * CI runner produces >250ms jsdom frame deltas, the probe's consecutive-
-   * outlier arm reaches an `over` verdict, `demoteToStatic()` fires, and idle
-   * packets are retired and never spawn again — the exact flake this test hit
-   * in CI (reproducible locally by feeding rAF timestamps 300ms apart).
+   * comes from this one counter, so every consumer sees a strictly
+   * increasing, exactly-`FRAME_MS` delta no matter how long the machine
+   * actually took or how jsdom batched the callbacks. That uniformity is the
+   * whole point: on a loaded CI runner real jsdom deltas blow past the
+   * probe's outlier threshold, it reaches an `over` verdict, `demoteToStatic`
+   * fires, and idle packets are retired and never spawn again — which is
+   * exactly how this test failed in CI (reproducible locally by feeding rAF
+   * timestamps 300ms apart).
+   *
+   * The counter advances once per *callback*, not once per real frame:
+   * `CircuitField`'s loop, the watchdog probe, and this file's own frame pump
+   * are three independent rAF consumers, and whether two of them land in the
+   * same jsdom frame is exactly the load-dependent detail being designed out.
+   * Per-callback stepping means no consumer can ever observe a zero delta —
+   * one zero poisons the probe's `Math.min` baseline and makes every later
+   * frame score as dropped.
    *
    * Starts well past zero so `lastPacketSpawnAtRef`'s initial `0` is already
    * more than `PACKET_SPAWN_INTERVAL_MS` in the past: the first spawn is then
@@ -71,13 +81,13 @@ describe("CircuitField idle loop (full mode)", () => {
     window.requestAnimationFrame = ((callback: FrameRequestCallback) => {
       rafCallCount += 1;
       return originalRAF(() => {
+        clock += FRAME_MS;
         callback(clock);
       });
     }) as typeof window.requestAnimationFrame;
 
     return async (frames: number) => {
       for (let i = 0; i < frames; i += 1) {
-        clock += FRAME_MS;
         await act(async () => {
           await nextFrame();
         });
@@ -210,10 +220,15 @@ describe("CircuitField idle loop (full mode)", () => {
       ).length;
 
     // Idle packets only become eligible after IDLE_READY_DELAY_MS
-    // (BOOT_STAGGER_MAX_MS + TRACE_DRAW_MS = 1150ms), so step the virtual
-    // clock comfortably past that at 16ms/frame and let the first packet
-    // spawn and take a few hops.
-    await advanceFrames(100);
+    // (BOOT_STAGGER_MAX_MS + TRACE_DRAW_MS = 1150ms), and then spawn on their
+    // own PACKET_SPAWN_INTERVAL_MS cadence. Bounded by frame count, not by
+    // elapsed wall time — with the virtual clock those frames are the only
+    // thing that moves time forward, so this stays deterministic while not
+    // depending on exactly how many ticks the field's loop wins per frame.
+    for (let i = 0; i < 400 && visiblePacketCount() === 0; i += 1) {
+      // eslint-disable-next-line no-await-in-loop -- frames are inherently sequential
+      await advanceFrames(1);
+    }
 
     const visibleBeforeTransition = visiblePacketCount();
     expect(visibleBeforeTransition).toBeGreaterThan(0);
