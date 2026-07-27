@@ -96,6 +96,9 @@ Package names: `apps/web`→`@unimatrix/web`, `apps/api`→`@unimatrix/api`, `ap
 - Any change to a web component or live site (`apps/web`, `apps/cube-trainer`, `apps/auth`, `packages/ui`) must be live-tested in a real browser before being reported as done — automated tests verify correctness, not that the feature actually works on screen. If no Chromium instance is running, launch one to run this check.
 - Never report work as done, working, or verified on the strength of the code looking correct — run the check and report what it actually printed
 - State plainly what you could not verify rather than omitting it; an unmentioned gap reads as a confirmed result
+- **Do not assert what you have not verified.** This binds hardest on explanations of *why* something behaves as it does: a plausible mechanism reached quickly is still a guess, and stating it as fact is how wrong conclusions get acted on. Test it, or label it a hypothesis
+- One corroborating signal is not verification. A hook's output, a doc's phrasing, or another tool's claim can all be wrong — prefer what the system actually does (observed behavior, a command you ran, a reproduction) over what it says about itself
+- When observed behavior contradicts a source you trusted, the behavior wins; go back and find what the source actually got wrong rather than explaining the contradiction away
 
 ## CI And Automation
 - `main` accepts changes by pull request only, and the `Verify` CI job is a required status check; work on a branch and open a PR
