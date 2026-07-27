@@ -86,6 +86,21 @@ const RegistryContext = React.createContext<OccluderRegistry | null>(null);
 const RectsContext = React.createContext<Occluder[]>([]);
 const DeltaContext = React.createContext<DeltaSubscribe>(() => () => {});
 
+// Warn-once bookkeeping for the size floor below, which is now re-evaluated
+// on every measurement pass — a `WeakSet` so an unmounted registrant's
+// element doesn't stay reachable from module scope.
+const undersizedWarned = new WeakSet<Element>();
+
+/**
+ * The `MIN_OCCLUDER_SIDE_PX` floor is enforced here, per measurement pass,
+ * rather than once at registration time. A surface can legitimately measure
+ * 0-sized on the first passive effect after mount (a font or image still
+ * loading, a collapsed accordion, an animated-in panel, anything behind a
+ * suspense boundary that just resolved); rejecting at registration would drop
+ * it permanently, since the `ResizeObserver` only ever watches elements that
+ * did register and could therefore never notice it reaching its real size.
+ * Re-checking here keeps the same rejection semantics but self-corrects.
+ */
 function measureRegistrants(targets: Map<symbol, Registrant>): Map<symbol, Occluder> {
   const measured = new Map<symbol, Occluder>();
 
@@ -94,6 +109,27 @@ function measureRegistrants(targets: Map<symbol, Registrant>): Map<symbol, Occlu
     if (!el) return;
 
     const rect = el.getBoundingClientRect();
+    // `right - left` / `bottom - top`, not `.width`/`.height` — matches how
+    // the bounds below are derived from the same rect, and is robust to a
+    // `getBoundingClientRect` stub (e.g. in tests) that sets the edges but
+    // not the derived size.
+    const width = rect.right - rect.left;
+    const height = rect.bottom - rect.top;
+    if (width < MIN_OCCLUDER_SIDE_PX || height < MIN_OCCLUDER_SIDE_PX) {
+      // A fully-collapsed rect is the "not laid out yet" case this pass
+      // exists to keep recoverable, not a mis-registered element — stay
+      // quiet about it and only warn once a real, genuinely-too-small
+      // measurement lands.
+      if (width > 0 && height > 0 && !undersizedWarned.has(el)) {
+        undersizedWarned.add(el);
+        console.warn(
+          "[CircuitField] useCircuitOccluder skipped a registrant smaller than MIN_OCCLUDER_SIDE_PX on one side — register the surrounding surface instead.",
+          { width, height },
+        );
+      }
+      return;
+    }
+
     const y1 = options.maxHeightPx !== undefined ? Math.min(rect.bottom, rect.top + options.maxHeightPx) : rect.bottom;
 
     measured.set(id, { x0: rect.left, y0: rect.top, x1: rect.right, y1 });
@@ -381,23 +417,12 @@ export function useCircuitOccluder(
       return;
     }
 
+    // Deliberately no size check here: `MIN_OCCLUDER_SIDE_PX` is enforced in
+    // `measureRegistrants`, on every structural pass, so an element that
+    // simply hasn't been laid out yet at this (first passive effect) moment
+    // still gets observed and recovers once it reaches its real size.
     const el = ref.current;
     if (el) {
-      // `right - left` / `bottom - top`, not `.width`/`.height` — matches
-      // how `measureRegistrants` below derives an occluder's bounds from
-      // the same rect, and is robust to a `getBoundingClientRect` stub
-      // (e.g. in tests) that sets the edges but not the derived size.
-      const rect = el.getBoundingClientRect();
-      const width = rect.right - rect.left;
-      const height = rect.bottom - rect.top;
-      if (width < MIN_OCCLUDER_SIDE_PX || height < MIN_OCCLUDER_SIDE_PX) {
-        console.warn(
-          "[CircuitField] useCircuitOccluder skipped a registrant smaller than MIN_OCCLUDER_SIDE_PX on one side — register the surrounding surface instead.",
-          { width, height },
-        );
-        return;
-      }
-
       if (el.matches(INTERACTIVE_OCCLUDER_SELECTOR)) {
         console.warn(
           "[CircuitField] useCircuitOccluder was called with an interactive element (button/link/input) as the ref — register the surrounding non-interactive surface instead.",

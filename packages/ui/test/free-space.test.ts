@@ -87,4 +87,39 @@ describe("allocateSlots", () => {
     expect(slots.reduce((sum, n) => sum + n, 0)).toBe(10);
     expect(slots[0]).toBe(10);
   });
+
+  /**
+   * `generateTraces` renders exactly one path element per requested trace, so
+   * both halves of the contract are load-bearing: a total below `count`
+   * leaves painted-but-empty path slots, a total above it generates traces
+   * with no element to render, and a negative entry silently swallows a
+   * component's whole allocation. The eligible-outnumber-slots shapes below
+   * are the ones that used to break it — every eligible component floored to
+   * one slot over-assigns past `count`, and nothing could then be reduced.
+   */
+  it("keeps the sum-to-count and non-negative invariants when eligible components outnumber the slots", () => {
+    const field = buildBarrierField([]);
+    const [big] = findFreeComponents(field, GRID * 20, GRID * 20);
+    const sized = (id: number, size: number) => ({
+      ...big!,
+      id,
+      size,
+      cells: new Set(Array.from(big!.cells).slice(0, size)),
+    });
+
+    const shapes: { components: ReturnType<typeof sized>[]; count: number }[] = [
+      { components: [sized(0, 40), sized(1, 40), sized(2, 40), sized(3, 40), sized(4, 40)], count: 3 },
+      { components: [sized(0, 400), sized(1, 12), sized(2, 12), sized(3, 12)], count: 2 },
+      { components: [sized(0, 10), sized(1, 10)], count: 1 },
+      { components: [sized(0, 900), sized(1, 10), sized(2, 10)], count: 3 },
+      { components: [sized(0, 40), sized(1, 40), sized(2, 3)], count: 1 },
+    ];
+
+    for (const { components, count } of shapes) {
+      const slots = allocateSlots(components, count, 8);
+
+      expect(slots.reduce((sum, n) => sum + n, 0)).toBe(count);
+      expect(slots.every((n) => n >= 0)).toBe(true);
+    }
+  });
 });

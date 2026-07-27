@@ -13,6 +13,8 @@ const BUFFERED_STROKE = "#ffb000";
 const BUFFERED_FILL = "rgba(255, 176, 0, 0.15)";
 const CELL_FILL = "rgba(255, 176, 0, 0.35)";
 
+export type CircuitDebugOverlayProps = { occluders: readonly Occluder[] };
+
 /**
  * Draws every registered occluder's raw measured rect (thin dashed magenta
  * stroke) and buffer-inflated barrier rect (solid amber stroke + fill) on
@@ -29,7 +31,7 @@ const CELL_FILL = "rgba(255, 176, 0, 0.35)";
  * `useCircuitOccluderDelta`, independent of the structural
  * `useCircuitOccluderRects()` commit `CircuitField` renders from.
  */
-export function CircuitDebugOverlay({ occluders }: { occluders: readonly Occluder[] }): React.JSX.Element | null {
+export function CircuitDebugOverlay({ occluders }: CircuitDebugOverlayProps): React.JSX.Element | null {
   const debugState = React.useSyncExternalStore(subscribeCircuitDebug, getCircuitDebugState, getCircuitDebugState);
   const [liveOccluders, setLiveOccluders] = React.useState<readonly Occluder[] | null>(null);
 

@@ -46,9 +46,13 @@ describe("buildBarrierField cell blocking", () => {
 
   it("blocks the single nearest cell for a rect thinner than one grid cell", () => {
     // A rect entirely within one cell's span, even after inflation, must
-    // still block something rather than silently vanishing.
+    // still block something rather than silently vanishing. `buffer: 0`
+    // deliberately: `axisRange(41, 43)` then yields `cMin = 2 > cMax = 1`,
+    // which is the nearest-cell fallback this covers — inflating by even 1px
+    // pulls a real lattice multiple of GRID into the span and takes the
+    // ordinary branch instead.
     const rect: Occluder = { x0: 41, y0: 41, x1: 43, y1: 43 };
-    const field = buildBarrierField([rect], 1);
+    const field = buildBarrierField([rect], 0);
 
     const blockedCells = Array.from(field.cells);
     expect(blockedCells.length).toBeGreaterThan(0);

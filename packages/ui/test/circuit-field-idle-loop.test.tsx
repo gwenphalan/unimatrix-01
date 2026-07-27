@@ -27,6 +27,7 @@ function setHidden(hidden: boolean): void {
  */
 describe("CircuitField idle loop (full mode)", () => {
   const originalRAF = window.requestAnimationFrame.bind(window);
+  const originalPerformanceNow = performance.now.bind(performance);
   let rafCallCount = 0;
 
   beforeEach(() => {
@@ -39,8 +40,50 @@ describe("CircuitField idle loop (full mode)", () => {
 
   afterEach(() => {
     window.requestAnimationFrame = originalRAF;
+    performance.now = originalPerformanceNow;
     Object.defineProperty(document, "hidden", { value: false, configurable: true });
   });
+
+  /**
+   * Replaces wall-clock time with a clock the test steps by hand, for the one
+   * case below that has to cross real `CircuitField` time thresholds
+   * (`IDLE_READY_DELAY_MS`, `PACKET_SPAWN_INTERVAL_MS`) rather than just
+   * counting frames.
+   *
+   * Everything that reads time — `performance.now()` and the timestamp handed
+   * to rAF callbacks (which is what the boot frame-budget probe samples) —
+   * comes from this one counter, so a frame always looks exactly `FRAME_MS`
+   * long no matter how long the machine actually took. Without that, a loaded
+   * CI runner produces >250ms jsdom frame deltas, the probe's consecutive-
+   * outlier arm reaches an `over` verdict, `demoteToStatic()` fires, and idle
+   * packets are retired and never spawn again — the exact flake this test hit
+   * in CI (reproducible locally by feeding rAF timestamps 300ms apart).
+   *
+   * Starts well past zero so `lastPacketSpawnAtRef`'s initial `0` is already
+   * more than `PACKET_SPAWN_INTERVAL_MS` in the past: the first spawn is then
+   * gated purely on idle-readiness, not on an extra interval wait.
+   */
+  function installVirtualClock(): (frames: number) => Promise<void> {
+    const FRAME_MS = 16;
+    let clock = 10_000;
+
+    performance.now = () => clock;
+    window.requestAnimationFrame = ((callback: FrameRequestCallback) => {
+      rafCallCount += 1;
+      return originalRAF(() => {
+        callback(clock);
+      });
+    }) as typeof window.requestAnimationFrame;
+
+    return async (frames: number) => {
+      for (let i = 0; i < frames; i += 1) {
+        clock += FRAME_MS;
+        await act(async () => {
+          await nextFrame();
+        });
+      }
+    };
+  }
 
   it("keeps scheduling frames once boot settles, with zero in-flight transitions", async () => {
     render(<CircuitField routeKey="route-idle" />);
@@ -156,6 +199,9 @@ describe("CircuitField idle loop (full mode)", () => {
    * any further frame has a chance to run.
    */
   it("keeps packets running immediately after a route change instead of retiring them at the transition", async () => {
+    // Installed before mount so the component's own idle-ready deadline is
+    // stamped from the virtual clock, not from real time.
+    const advanceFrames = installVirtualClock();
     const { container, rerender } = render(<CircuitField routeKey="route-transition-a" />);
 
     const visiblePacketCount = () =>
@@ -164,17 +210,10 @@ describe("CircuitField idle loop (full mode)", () => {
       ).length;
 
     // Idle packets only become eligible after IDLE_READY_DELAY_MS
-    // (BOOT_STAGGER_MAX_MS + TRACE_DRAW_MS) and spawn on their own
-    // PACKET_SPAWN_INTERVAL_MS cadence — both wall-clock, not frame-count,
-    // so this polls real elapsed time rather than a fixed frame count.
-    let waitedMs = 0;
-    while (visiblePacketCount() === 0 && waitedMs < 6000) {
-      await act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 100));
-        await nextFrame();
-      });
-      waitedMs += 100;
-    }
+    // (BOOT_STAGGER_MAX_MS + TRACE_DRAW_MS = 1150ms), so step the virtual
+    // clock comfortably past that at 16ms/frame and let the first packet
+    // spawn and take a few hops.
+    await advanceFrames(100);
 
     const visibleBeforeTransition = visiblePacketCount();
     expect(visibleBeforeTransition).toBeGreaterThan(0);
@@ -189,12 +228,10 @@ describe("CircuitField idle loop (full mode)", () => {
     // never increase (allowSpawn: false while transitionsRef is non-empty)
     // — it only ever holds steady or drops as traces get crawled past.
     const counts: number[] = [visiblePacketCount()];
-    await act(async () => {
-      for (let i = 0; i < 10; i += 1) {
-        await nextFrame();
-        counts.push(visiblePacketCount());
-      }
-    });
+    for (let i = 0; i < 10; i += 1) {
+      await advanceFrames(1);
+      counts.push(visiblePacketCount());
+    }
 
     for (let i = 1; i < counts.length; i += 1) {
       expect(counts[i]).toBeLessThanOrEqual(counts[i - 1] as number);

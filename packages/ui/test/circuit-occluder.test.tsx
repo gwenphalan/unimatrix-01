@@ -392,6 +392,41 @@ describe("CircuitOccluderProvider / useCircuitOccluder", () => {
     warn.mockRestore();
   });
 
+  /**
+   * The size floor is enforced per measurement pass, not once at
+   * registration: a surface that is still 0-sized on the first passive
+   * effect (font/image loading, collapsed accordion, animated-in panel,
+   * content behind a suspense boundary that just resolved) must still be
+   * observed, so it recovers the moment it reaches its real size. Rejecting
+   * at registration time made that unrecoverable — the ResizeObserver only
+   * ever watches registered elements.
+   */
+  it("recovers a registrant that is 0-sized at mount and only later reaches its real size", async () => {
+    let latestRects: readonly { x0: number; y0: number; x1: number; y1: number }[] = [];
+    const rect = makeRect({ left: 0, top: 0, right: 0, bottom: 0 });
+
+    render(
+      <CircuitOccluderProvider>
+        <Registrant rect={rect} />
+        <RectsProbe onRects={(r) => (latestRects = r)} />
+      </CircuitOccluderProvider>,
+    );
+
+    await flushRaf();
+    expect(latestRects).toEqual([]);
+
+    rect.right = 200;
+    rect.bottom = 120;
+    await act(async () => {
+      MockResizeObserver.instances.forEach((instance) => {
+        instance.trigger();
+      });
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+    });
+
+    expect(latestRects).toEqual([{ x0: 0, y0: 0, x1: 200, y1: 120 }]);
+  });
+
   it("registers an element at exactly MIN_OCCLUDER_SIDE_PX on both sides", async () => {
     let latestRects: readonly { x0: number; y0: number; x1: number; y1: number }[] = [];
     const rect = makeRect({ left: 0, top: 0, right: 40, bottom: 40 });

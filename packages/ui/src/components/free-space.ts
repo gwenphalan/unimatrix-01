@@ -147,16 +147,33 @@ export function findFreeComponents(field: BarrierField, width: number, height: n
  * slot for any component holding at least `minCellsPerTree` cells (so a
  * viable pocket of free space always gets its own tree rather than being
  * rounded down to zero) and any remainder folded into the largest
- * component. Always sums to exactly `count`.
+ * component. When more components clear that floor than there are slots to
+ * hand out, the guarantee applies to the largest `count` of them and the
+ * rest get zero. Always sums to exactly `count`, and never returns a
+ * negative entry.
  */
 export function allocateSlots(components: readonly FreeComponent[], count: number, minCellsPerTree: number): number[] {
   if (components.length === 0 || count <= 0) return components.map(() => 0);
 
-  const eligible = components.map((c) => c.size >= minCellsPerTree);
+  // Only the largest `count` components can be *guaranteed* a slot — beyond
+  // that there is nothing left to hand out, and floor-everything-to-one would
+  // over-assign past `count` with no way to claw it back (every entry sits at
+  // its own minimum, so the reduction pass below finds nothing reducible and
+  // the final correction would drive the largest component negative).
+  const guaranteed = new Set(
+    components
+      .map((c, i) => ({ index: i, size: c.size }))
+      .filter(({ size }) => size >= minCellsPerTree)
+      .sort((a, b) => b.size - a.size)
+      .slice(0, count)
+      .map(({ index }) => index),
+  );
+
+  const eligible = components.map((_c, i) => guaranteed.has(i));
   const totalSize = components.reduce((sum, c) => sum + c.size, 0) || 1;
   const slots = components.map((c, i) => (eligible[i] ? Math.max(1, Math.floor((c.size / totalSize) * count)) : 0));
 
-  let assigned = slots.reduce((sum, n) => sum + n, 0);
+  const assigned = slots.reduce((sum, n) => sum + n, 0);
 
   // Nothing eligible (every component smaller than the floor): fall back to
   // giving every slot to the single largest component rather than returning
@@ -187,9 +204,23 @@ export function allocateSlots(components: readonly FreeComponent[], count: numbe
     }
   }
 
-  assigned = slots.reduce((sum, n) => sum + n, 0);
-  if (assigned !== count) {
-    slots[largestIndex] = (slots[largestIndex] as number) + (count - assigned);
+  // Final repair. A surplus all folds into the largest component; a residual
+  // deficit is drained largest-slot-first and never past zero, so no entry can
+  // come back negative while the total still lands exactly on `count` — the
+  // two invariants `generateTraces` depends on (it renders one path element
+  // per requested trace, so a sum below `count` leaves empty path slots and a
+  // sum above it generates traces with nowhere to render).
+  let residual = count - slots.reduce((sum, n) => sum + n, 0);
+  if (residual > 0) {
+    slots[largestIndex] = (slots[largestIndex] as number) + residual;
+    residual = 0;
+  }
+  const drainOrder = slots.map((n, i) => ({ i, n })).sort((a, b) => b.n - a.n);
+  for (const { i } of drainOrder) {
+    if (residual >= 0) break;
+    const take = Math.min(-residual, slots[i] as number);
+    slots[i] = (slots[i] as number) - take;
+    residual += take;
   }
 
   return slots;

@@ -15,7 +15,14 @@ afterEach(() => {
   // No manual DOM cleanup here — @testing-library/react's own afterEach
   // (registered globally) unmounts the render tree, which tears down the
   // portal itself; removing the node here too would race it.
-  setCircuitDebug(false);
+  //
+  // Wrapped in `act` because this file's hook runs *before* that global one
+  // (vitest runs `afterEach` hooks in reverse registration order, and the
+  // setup file registers first): the overlay is therefore still mounted and
+  // subscribed here, so flipping the store updates a live component.
+  act(() => {
+    setCircuitDebug(false);
+  });
 });
 
 function renderOverlay(occluders: Occluder[]) {
