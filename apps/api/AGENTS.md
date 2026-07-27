@@ -13,7 +13,7 @@
 - `test`: Node test runner coverage for app construction, config, env loading, and the user-data store.
 
 ## 2a. Coverage Floor
-`pnpm test` here runs under `--experimental-test-coverage` with `--test-coverage-lines=81` and `--test-coverage-functions=89`, the numbers this workspace measures today rounded down. This is the same ratchet policy `@unimatrix/config-vitest` applies to the vitest workspaces — `apps/api` runs the Node test runner instead, so it expresses the policy through flags rather than that shared config. Branch coverage is reported but not gated, matching the shared config's reasoning.
+`pnpm test` here runs under `--experimental-test-coverage` with `--test-coverage-lines=85` and `--test-coverage-functions=85`, the numbers this workspace measures today rounded down. This is the same ratchet policy `@unimatrix/config-vitest` applies to the vitest workspaces — `apps/api` runs the Node test runner instead, so it expresses the policy through flags rather than that shared config. Branch coverage is reported but not gated, matching the shared config's reasoning.
 
 Three details are load-bearing:
 - `--test-coverage-include='src/**'` is required. Without it the report also counts `test/` and the `packages/*` sources the tests pull in, which inflated the aggregate from 81.61% to 89.44% and made the floor measure other workspaces' testing.
@@ -21,6 +21,8 @@ Three details are load-bearing:
 - `test/module-graph.test.ts` imports every `src/` module and is what keeps the denominator honest — Node only reports files the run loaded, so without it an untested new module is absent from the report entirely and the percentage rises as coverage falls. Read the comment in that file before changing it.
 
 Raising a threshold after genuinely improving coverage is the intended workflow. Lowering one should be a deliberate, explained edit, not a quiet fix for a red build.
+
+One such edit already happened, and it is the reason the two numbers are equal. Adding `test/user-data-routes.test.ts` made the function threshold **fall** from 89 to 85 while coverage genuinely improved: before it, `userDataModule` was never registered (no test configured Clerk), so its eight route handlers were never created and never counted. Registering the module put them in the denominator, where they sit unexecuted — the auth guard rejects before any handler runs. Line coverage rose 81.61% → 85.53% over the same change. Closing the remaining gap needs an authenticated request, which is currently blocked (see the notes on that test file).
 
 ## 3. Core Behaviors & Patterns
 - **App wiring**: `buildApp()` in `src/app.ts` creates the Fastify instance, decorates `runtimeConfig`, installs core plugins, and centralizes error and not-found handling before modules are registered.
