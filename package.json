@@ -23,6 +23,7 @@
     "format:check": "prettier --check .",
     "deps:check": "syncpack lint",
     "deps:fix": "syncpack fix",
+    "lighthouse": "node ./infra/scripts/lighthouse.mjs apps/web && node ./infra/scripts/lighthouse.mjs apps/cube-trainer",
     "check": "pnpm format:check && pnpm deps:check && turbo run lint typecheck test",
     "knip": "knip",
     "verify": "pnpm format:check && pnpm deps:check && turbo run build lint typecheck test"
@@ -30,9 +31,11 @@
   "devDependencies": {
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
+    "chrome-launcher": "^1.2.1",
     "eslint": "^10.0.0",
     "jsdom": "^26.1.0",
     "knip": "^6.29.0",
+    "lighthouse": "^13.4.1",
     "prettier": "^3.9.6",
     "syncpack": "^15.3.2",
     "turbo": "^2.8.14",

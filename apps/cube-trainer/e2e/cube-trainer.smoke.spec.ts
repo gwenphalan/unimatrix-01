@@ -1,5 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
+import { expectNoAccessibilityViolations } from "./helpers/accessibility";
+
 function collectPageErrors(page: Page): Error[] {
   const pageErrors: Error[] = [];
 
@@ -31,6 +33,7 @@ test("homepage load", async ({ page }) => {
   await expect(main.getByRole("link", { name: "Learn" })).toBeVisible();
   await expect(main.getByRole("link", { name: "Drill" })).toBeVisible();
 
+  await expectNoAccessibilityViolations(page, "/");
   expectNoPageErrors(pageErrors);
 });
 
@@ -49,6 +52,7 @@ test("Drill flow: drill and case picker", async ({ page }) => {
   await expect(main.getByRole("heading", { name: "Choose cases" })).toBeVisible();
   await expect(main.getByRole("button", { name: "PLL Ua", exact: true })).toBeVisible();
 
+  await expectNoAccessibilityViolations(page, "/drill");
   expectNoPageErrors(pageErrors);
 });
 
@@ -67,5 +71,6 @@ test("Learn flow: guided session and case picker", async ({ page }) => {
   await expect(main.getByRole("heading", { name: "Choose cases" })).toBeVisible();
   await expect(main.getByRole("button", { name: "PLL Gd", exact: true })).toBeVisible();
 
+  await expectNoAccessibilityViolations(page, "/learn");
   expectNoPageErrors(pageErrors);
 });

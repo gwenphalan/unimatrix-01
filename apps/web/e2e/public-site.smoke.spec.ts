@@ -1,5 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
+import { expectNoAccessibilityViolations } from "./helpers/accessibility";
+
 function collectPageErrors(page: Page): Error[] {
   const pageErrors: Error[] = [];
 
@@ -33,6 +35,7 @@ test("homepage load", async ({ page }) => {
   await expect(main.getByRole("link", { name: "View all projects" })).toBeVisible();
   await expect(main.getByRole("link", { name: "View all blog posts" })).toBeVisible();
 
+  await expectNoAccessibilityViolations(page, "/");
   expectNoPageErrors(pageErrors);
 });
 
@@ -66,6 +69,7 @@ test("navigation smoke flow", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "About" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Draft an email" })).toBeVisible();
 
+  await expectNoAccessibilityViolations(page, "/about");
   expectNoPageErrors(pageErrors);
 });
 
@@ -90,6 +94,7 @@ test("project page render", async ({ page }) => {
   await expect(page.getByRole("link", { name: "Back to projects" })).toBeVisible();
   await expect(page.getByText(/^(Checking|Live|Offline)$/u)).toBeVisible();
 
+  await expectNoAccessibilityViolations(page, "/projects/cube-trainer");
   expectNoPageErrors(pageErrors);
 });
 
@@ -112,5 +117,6 @@ test("blog page render", async ({ page }) => {
   ).toBeVisible();
   await expect(page.getByRole("link", { name: "Back to blog" })).toBeVisible();
 
+  await expectNoAccessibilityViolations(page, "/blog/placeholder-post");
   expectNoPageErrors(pageErrors);
 });

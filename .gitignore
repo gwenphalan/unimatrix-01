@@ -17,6 +17,9 @@ coverage/
 apps/web/test-results/
 apps/cube-trainer/test-results/
 
+# lighthouse reports (written by infra/scripts/lighthouse.mjs, never uploaded)
+.lighthouse/
+
 # TypeScript
 *.tsbuildinfo
 
