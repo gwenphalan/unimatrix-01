@@ -17,7 +17,7 @@
 ## Workspace
 - Monorepo: `apps/*` and `packages/*` from `pnpm-workspace.yaml`; root scripts fan out through Turbo
 - Live apps: `apps/web`, `apps/api`, `apps/cube-trainer`, `apps/auth` (package `@unimatrix/auth-app`) — all Vite + React + TanStack Router except `apps/api` (Fastify); see Workspace Responsibilities for what each owns
-- Live packages: `packages/ui`, `packages/shared`, `packages/api-client`, `packages/content`, `packages/db`, `packages/auth`, `packages/user-data`, `packages/config-typescript`, `packages/config-eslint`
+- Live packages: `packages/ui`, `packages/shared`, `packages/api-client`, `packages/content`, `packages/db`, `packages/auth`, `packages/user-data`, `packages/config-typescript`, `packages/config-eslint`, `packages/config-vitest`
 - Live content: `content/home`, `content/projects`, `content/blog`
 - Repo-internal docs: `docs/`; infra/runtime helpers: `infra/scripts`, `infra/deployment`, `infra/docker`
 - Reserved, not live: `apps/workers`, `content/docs`, `content/notes`, future packages like `packages/bmd-parser`
@@ -36,6 +36,7 @@
 - `packages/db`: Drizzle + SQLite persistence, schema barrel, migrations, local DB path resolution
 - `packages/auth`: single source of truth for the permission scheme (`.`), Clerk Fastify guards (`./server`), and Clerk React provider/hooks (`./react`); never reads `process.env`
 - `packages/user-data`: unified per-user store (settings as JSON documents, files as blobs) with an account adapter (via `@unimatrix/api-client`) and a browser-only IndexedDB guest adapter
+- `packages/config-vitest`: shared Vitest coverage configuration; owns the provider, reporters, and exclusions, while each workspace supplies its own thresholds
 
 ## File-Scoped Commands
 Package names: `apps/web`→`@unimatrix/web`, `apps/api`→`@unimatrix/api`, `apps/cube-trainer`→`@unimatrix/cube-trainer`, `apps/auth`→`@unimatrix/auth-app`; packages use `@unimatrix/<dir-name>` (e.g. `packages/auth`→`@unimatrix/auth`).
