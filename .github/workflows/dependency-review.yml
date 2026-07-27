@@ -1,0 +1,31 @@
+name: Dependency review
+
+# Blocks a PR that introduces a dependency with a known advisory. This is the
+# advisory-database half of the supply-chain check; the behavioural half (obfuscated
+# code, new install scripts, unexpected network access) is the Socket.dev GitHub App,
+# which runs as an app and needs no workflow here.
+
+on: pull_request
+
+permissions:
+  contents: read
+
+jobs:
+  review:
+    name: Review dependency changes
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Dependency review
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: high
+          comment-summary-in-pr: on-failure

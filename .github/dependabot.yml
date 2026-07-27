@@ -3,26 +3,43 @@ updates:
   - package-ecosystem: npm
     directory: /
     schedule:
-      interval: weekly
-      day: monday
-      time: "06:00"
+      interval: daily
+      time: "08:00"
       timezone: America/Phoenix
     open-pull-requests-limit: 5
+
+    # Newly published versions are not proposed until they have been public for
+    # 14 days. This is the primary supply-chain control: the npm account-takeover
+    # incidents of the last few years were all detected and yanked well inside
+    # this window. Keep this strictly greater than `minimumReleaseAge` in
+    # pnpm-workspace.yaml — if Dependabot proposes a version pnpm then refuses to
+    # resolve, the update fails with a confusing "no matching version" error.
+    # See dependabot/dependabot-core#13165.
+    cooldown:
+      default-days: 14
+
     groups:
+      # Minor and patch land as one PR and are eligible for auto-merge once CI is
+      # green. Majors are deliberately left ungrouped so each arrives as its own
+      # PR, and dependabot-auto-merge.yml never auto-merges them.
       npm-minor-patch:
         patterns:
           - "*"
         update-types:
           - minor
           - patch
+
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: weekly
-      day: monday
-      time: "06:00"
+      interval: daily
+      time: "08:00"
       timezone: America/Phoenix
     open-pull-requests-limit: 5
+    # No `cooldown` here: Dependabot does not support it for the github-actions
+    # ecosystem, and an unsupported key makes it reject this entire file — which
+    # would silently kill the npm updates above too. Actions are pinned to commit
+    # SHAs, so a bump is reviewable as a SHA change regardless.
     groups:
       github-actions-minor-patch:
         patterns:

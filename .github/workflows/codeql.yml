@@ -1,0 +1,44 @@
+name: CodeQL
+
+# Static analysis of our own code. Findings land in the repository's Security tab,
+# which is restricted to users with write access even though the repo is public —
+# so nothing here publishes vulnerability details about our own code.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "0 15 * * *" # 08:00 America/Phoenix (UTC-7, no DST)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Analyze
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      # No build step: CodeQL extracts TypeScript and JavaScript directly from
+      # source, so the workspace never has to be installed or compiled here.
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@e58424170fb0262c8d7ed60a2e84b9bffe205c67 # codeql-bundle-v2.26.1
+        with:
+          languages: javascript-typescript
+          queries: security-and-quality
+
+      - name: Analyze
+        uses: github/codeql-action/analyze@e58424170fb0262c8d7ed60a2e84b9bffe205c67 # codeql-bundle-v2.26.1
+        with:
+          category: /language:javascript-typescript

@@ -1,0 +1,55 @@
+name: Dependabot auto-merge
+
+# Enables GitHub's native auto-merge on Dependabot PRs. GitHub then merges the PR
+# only once every required status check passes — CI is the gate, this workflow just
+# arms it. Majors are never armed.
+#
+# `pull_request_target` is used because Dependabot PRs receive a read-only
+# GITHUB_TOKEN under the plain `pull_request` event. This job deliberately never
+# checks out or executes PR code, which is what makes `pull_request_target` safe
+# here; do not add a checkout step to it.
+#
+# Static analysis will claim GITHUB_TOKEN is read-only here too, and that this needs
+# a PAT or GitHub App. It does not. The documented restriction is narrower than it
+# reads: under `pull_request_target` the token is read-only only "if the base ref of
+# the pull request was created by Dependabot". The base ref is `main`, which
+# Dependabot did not create, so the token is writable and the permissions block below
+# applies. That condition only bites for a PR stacked on another Dependabot branch.
+# Do not swap in a PAT to satisfy a linter — that would add a rotating credential
+# for no gain.
+on: pull_request_target
+
+permissions:
+  contents: read
+
+jobs:
+  auto-merge:
+    name: Arm auto-merge
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    if: github.actor == 'dependabot[bot]'
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Fetch Dependabot metadata
+        id: meta
+        uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3.1.0
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      # For a grouped PR, `update-type` reports the highest bump in the group, so a
+      # single major sneaking into a group would disqualify the whole PR.
+      - name: Enable auto-merge for minor and patch updates
+        if: |
+          steps.meta.outputs.update-type == 'version-update:semver-patch' ||
+          steps.meta.outputs.update-type == 'version-update:semver-minor'
+        run: gh pr merge --auto --squash "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Leave majors for review
+        if: steps.meta.outputs.update-type == 'version-update:semver-major'
+        run: |
+          echo "Major update detected — leaving for manual review." >> "$GITHUB_STEP_SUMMARY"
