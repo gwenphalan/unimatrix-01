@@ -66,8 +66,15 @@ updates:
     # check github.com/unimatrixcore/unimatrix-01/network/updates for a config
     # error before assuming it worked — a rejected file looks identical to a
     # quiet week.
+    #
+    # 7 days, not the 14 npm and docker use. The threat model is different: an
+    # action bump arrives as a commit SHA change against a repository whose tags
+    # and history are public and reviewable, rather than as an opaque tarball
+    # from a registry account that could have been taken over. The frequent
+    # releasers here — `github/codeql-action` above all — also make a long window
+    # costly, since it delays every scanning-engine improvement.
     cooldown:
-      default-days: 14
+      default-days: 7
 
     groups:
       github-actions-minor-patch:
