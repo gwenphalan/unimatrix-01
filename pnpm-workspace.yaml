@@ -20,4 +20,11 @@ onlyBuiltDependencies:
 #
 # 3 days, deliberately well below Dependabot's 14, so the two never disagree about
 # which version is installable. Raising this above 14 will break Dependabot PRs.
+#
+# Requires pnpm >= 10.16; this repo pins 10.30.3. Verified working on 10.30.3 rather
+# than assumed: with `minimumReleaseAge: 525600` a scratch workspace resolved
+# `typescript@5.8.3`, while the same install with the setting removed resolved
+# `typescript@7.0.2`. Some guidance says pnpm 10 reads this only from `.npmrc` — that
+# is not true of 10.30.3, which honours it here. If the pin ever drops below 10.16
+# this silently becomes a no-op.
 minimumReleaseAge: 4320

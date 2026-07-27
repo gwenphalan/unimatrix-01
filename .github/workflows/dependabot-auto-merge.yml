@@ -8,6 +8,15 @@ name: Dependabot auto-merge
 # GITHUB_TOKEN under the plain `pull_request` event. This job deliberately never
 # checks out or executes PR code, which is what makes `pull_request_target` safe
 # here; do not add a checkout step to it.
+#
+# Static analysis will claim GITHUB_TOKEN is read-only here too, and that this needs
+# a PAT or GitHub App. It does not. The documented restriction is narrower than it
+# reads: under `pull_request_target` the token is read-only only "if the base ref of
+# the pull request was created by Dependabot". The base ref is `main`, which
+# Dependabot did not create, so the token is writable and the permissions block below
+# applies. That condition only bites for a PR stacked on another Dependabot branch.
+# Do not swap in a PAT to satisfy a linter — that would add a rotating credential
+# for no gain.
 on: pull_request_target
 
 permissions:
