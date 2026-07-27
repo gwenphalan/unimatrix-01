@@ -85,7 +85,7 @@ export function packetPosition(fromCell: string, toCell: string, t: number): Poi
   return { x: from.x + (to.x - from.x) * clamped, y: from.y + (to.y - from.y) * clamped };
 }
 
-export const PACKET_STEP_MS = 110;
+const PACKET_STEP_MS = 110;
 export const IDLE_PACKET_POOL_SIZE = 12;
 export const IDLE_PACKET_MAX_CONCURRENT = 8;
 export const PACKET_SPAWN_INTERVAL_MS = 900;

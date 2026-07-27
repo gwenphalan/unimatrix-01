@@ -51,7 +51,7 @@ export function readCaseProgress(setId: AlgorithmSetId): CaseProgress {
   return parsed.success ? parsed.data : {};
 }
 
-export function writeCaseProgress(setId: AlgorithmSetId, progress: CaseProgress): void {
+function writeCaseProgress(setId: AlgorithmSetId, progress: CaseProgress): void {
   writeLocalStorage(storageKey(setId), JSON.stringify(progress));
 }
 

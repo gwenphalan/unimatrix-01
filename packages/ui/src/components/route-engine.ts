@@ -165,7 +165,7 @@ export function bfsConnectorCells(
   return cells.map((cell) => ({ x: cell.cx * GRID, y: cell.cy * GRID }));
 }
 
-export function countRouteCollisions(points: Point[]): number {
+function countRouteCollisions(points: Point[]): number {
   const seen = new Set<string>();
   let collisions = 0;
 

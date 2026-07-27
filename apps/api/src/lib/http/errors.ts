@@ -75,7 +75,7 @@ interface ApiErrorEnvelopeOptions {
   details?: ApiErrorDetails;
 }
 
-export function createApiErrorEnvelope(
+function createApiErrorEnvelope(
   options: ApiErrorEnvelopeOptions,
 ): ApiErrorEnvelope {
   const error: ApiErrorEnvelope["error"] = {

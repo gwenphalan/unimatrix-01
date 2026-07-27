@@ -17,25 +17,6 @@ export const RESIZE_SETTLE_MS = 200;
 // treated as chrome jitter, not a real resize.
 export const HEIGHT_JITTER_IGNORE_PX = 120;
 
-export function useReducedMotion(): boolean {
-  const [reduced, setReduced] = React.useState(false);
-
-  React.useEffect(() => {
-    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const update = () => {
-      setReduced(media.matches);
-    };
-
-    update();
-    media.addEventListener("change", update);
-    return () => {
-      media.removeEventListener("change", update);
-    };
-  }, []);
-
-  return reduced;
-}
-
 const MOTION_MEDIA_QUERIES = [
   "(prefers-reduced-motion: reduce)",
   "(prefers-reduced-data: reduce)",

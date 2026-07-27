@@ -5,7 +5,7 @@ import { type Point } from "./grid-math.js";
  * two grid cells so a trail never spans more than one corner — a longer tail
  * reads as a smear rather than a moving charge.
  */
-export const TRAIL_LENGTH_PX = 72;
+const TRAIL_LENGTH_PX = 72;
 
 /**
  * Number of sub-paths a trail is drawn as. SVG strokes can't taper, so the
