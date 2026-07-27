@@ -1645,7 +1645,7 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
           </g>
         </g>
       </svg>
-      <CircuitDebugOverlay occluders={occluders} />
+      <CircuitDebugOverlay gridPhase={gridPhase} occluders={occluders} />
     </>
   );
 }

@@ -3,8 +3,8 @@ import { createPortal } from "react-dom";
 
 import { getCircuitDebugState, subscribeCircuitDebug } from "./circuit-debug.js";
 import { useCircuitOccluderDelta } from "./circuit-occluder.js";
-import { GRID } from "./grid-math.js";
-import { OCCLUDER_BUFFER_PX, type Occluder, buildBarrierField, inflateRect } from "./occlusion.js";
+import { GRID, type Point } from "./grid-math.js";
+import { OCCLUDER_BUFFER_PX, type Occluder, buildBarrierField, inflateRect, translateRect } from "./occlusion.js";
 
 // Hardcoded, not theme tokens — this must stay legible on every app's
 // palette regardless of light/dark mode or brand color.
@@ -13,7 +13,16 @@ const BUFFERED_STROKE = "#ffb000";
 const BUFFERED_FILL = "rgba(255, 176, 0, 0.15)";
 const CELL_FILL = "rgba(255, 176, 0, 0.35)";
 
-export type CircuitDebugOverlayProps = { occluders: readonly Occluder[] };
+export type CircuitDebugOverlayProps = {
+  occluders: readonly Occluder[];
+  /**
+   * The same `gridPhase` `CircuitField` renders its content `<g>` translated
+   * by. Barriers are built against `-gridPhase`-shifted rects, so drawing the
+   * blocked cells at their raw lattice coordinates would put them a phase
+   * offset away from the lattice actually on screen.
+   */
+  gridPhase: Point;
+};
 
 /**
  * Draws every registered occluder's raw measured rect (thin dashed magenta
@@ -31,7 +40,7 @@ export type CircuitDebugOverlayProps = { occluders: readonly Occluder[] };
  * `useCircuitOccluderDelta`, independent of the structural
  * `useCircuitOccluderRects()` commit `CircuitField` renders from.
  */
-export function CircuitDebugOverlay({ occluders }: CircuitDebugOverlayProps): React.JSX.Element | null {
+export function CircuitDebugOverlay({ gridPhase, occluders }: CircuitDebugOverlayProps): React.JSX.Element | null {
   const debugState = React.useSyncExternalStore(subscribeCircuitDebug, getCircuitDebugState, getCircuitDebugState);
   const [liveOccluders, setLiveOccluders] = React.useState<readonly Occluder[] | null>(null);
 
@@ -46,7 +55,14 @@ export function CircuitDebugOverlay({ occluders }: CircuitDebugOverlayProps): Re
 
   const active = liveOccluders ?? occluders;
   const buffered = active.map((rect) => inflateRect(rect, OCCLUDER_BUFFER_PX));
-  const blockedCells = debugState.cells ? Array.from(buildBarrierField(active).cells) : [];
+  // Built from `-gridPhase`-shifted rects and drawn back at `+gridPhase`,
+  // the exact round trip `CircuitField` does — the raw and buffered rect
+  // outlines below stay in plain viewport coordinates (they *are* element
+  // rects), but a blocked cell is a lattice coordinate, and the lattice on
+  // screen is phase-shifted.
+  const blockedCells = debugState.cells
+    ? Array.from(buildBarrierField(active.map((rect) => translateRect(rect, -gridPhase.x, -gridPhase.y))).cells)
+    : [];
 
   return createPortal(
     <svg
@@ -61,8 +77,8 @@ export function CircuitDebugOverlay({ occluders }: CircuitDebugOverlayProps): Re
             height={GRID}
             key={key}
             width={GRID}
-            x={cx * GRID - GRID / 2}
-            y={cy * GRID - GRID / 2}
+            x={cx * GRID - GRID / 2 + gridPhase.x}
+            y={cy * GRID - GRID / 2 + gridPhase.y}
           />
         );
       })}

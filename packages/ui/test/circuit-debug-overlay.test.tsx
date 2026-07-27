@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { CircuitDebugOverlay } from "../src/components/circuit-debug-overlay.js";
 import { setCircuitDebug } from "../src/components/circuit-debug.js";
+import { GRID } from "../src/components/grid-math.js";
 import type { Occluder } from "../src/components/occlusion.js";
 
 // No `CircuitOccluderProvider` needed: `useCircuitOccluderDelta` no-ops
@@ -25,8 +26,8 @@ afterEach(() => {
   });
 });
 
-function renderOverlay(occluders: Occluder[]) {
-  return render(<CircuitDebugOverlay occluders={occluders} />);
+function renderOverlay(occluders: Occluder[], gridPhase: { x: number; y: number } = { x: 0, y: 0 }) {
+  return render(<CircuitDebugOverlay gridPhase={gridPhase} occluders={occluders} />);
 }
 
 describe("CircuitDebugOverlay", () => {
@@ -56,6 +57,51 @@ describe("CircuitDebugOverlay", () => {
 
     const rawRects = svg?.querySelectorAll('rect[stroke-dasharray]');
     expect(rawRects?.length).toBe(2);
+  });
+
+  /**
+   * `CircuitField` builds barriers from `-gridPhase`-shifted rects and renders
+   * its content `<g>` translated by `+gridPhase`. The overlay has to do that
+   * same round trip or its blocked cells land a phase offset away from the
+   * lattice actually on screen — which read live as the whole barrier field
+   * being nudged down and to the right of the surface it belongs to.
+   */
+  it("draws blocked cells at the phase-shifted lattice the field actually renders", () => {
+    act(() => {
+      setCircuitDebug(true, { cells: true });
+    });
+    const occluders: Occluder[] = [{ x0: 200, y0: 200, x1: 400, y1: 400 }];
+    const phase = { x: 34, y: 12 };
+
+    const cells = () =>
+      Array.from(document.body.querySelectorAll("svg rect:not([stroke])")).map((el) => ({
+        x: Number(el.getAttribute("x")),
+        y: Number(el.getAttribute("y")),
+      }));
+
+    renderOverlay(occluders, phase);
+    const drawn = cells();
+    expect(drawn.length).toBeGreaterThan(0);
+
+    // Every cell is centered on a real rendered lattice point: `cx * GRID +
+    // gridPhase`. Drawing them on the unshifted lattice (the bug) leaves
+    // every centre off by the phase instead.
+    for (const cell of drawn) {
+      expect((cell.x + GRID / 2 - phase.x) % GRID).toBe(0);
+      expect((cell.y + GRID / 2 - phase.y) % GRID).toBe(0);
+    }
+
+    // ...and they still sit over the surface they belong to, rather than
+    // being flung a phase away from it. Only within one cell: a blocked cell
+    // is a lattice *point*, and the last point inside the buffered rect can
+    // be up to a full cell in from its edge.
+    const rect = occluders[0] as Occluder;
+    const xs = drawn.map((c) => c.x);
+    const ys = drawn.map((c) => c.y);
+    expect(Math.min(...xs)).toBeLessThanOrEqual(rect.x0 + GRID);
+    expect(Math.max(...xs) + GRID).toBeGreaterThanOrEqual(rect.x1 - GRID);
+    expect(Math.min(...ys)).toBeLessThanOrEqual(rect.y0 + GRID);
+    expect(Math.max(...ys) + GRID).toBeGreaterThanOrEqual(rect.y1 - GRID);
   });
 
   it("unmounts the portal when the debug flag turns back off", () => {
