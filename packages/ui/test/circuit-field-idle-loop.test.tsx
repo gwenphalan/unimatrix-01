@@ -231,7 +231,22 @@ describe("CircuitField idle loop (full mode)", () => {
     }
 
     const visibleBeforeTransition = visiblePacketCount();
-    expect(visibleBeforeTransition).toBeGreaterThan(0);
+    // TEMPORARY (remove once the CI-only failure is diagnosed): the assertion
+    // below reproduces only on the runner, so carry the observable state into
+    // the failure message rather than guessing at it from a bare `0 > 0`.
+    const packetEls = Array.from(container.querySelectorAll(".circuit-field-packet"));
+    const pathEls = Array.from(container.querySelectorAll("path"));
+    const diagnostics = {
+      packetElements: packetEls.length,
+      packetOpacities: packetEls.map((el) => (el as SVGRectElement).style.opacity || "<unset>"),
+      packetXs: packetEls.slice(0, 4).map((el) => el.getAttribute("x")),
+      pathElements: pathEls.length,
+      pathsWithGeometry: pathEls.filter((el) => (el.getAttribute("d") ?? "").length > 0).length,
+      rafCallCount,
+      virtualNow: performance.now(),
+      containerHtmlHead: container.innerHTML.slice(0, 400),
+    };
+    expect(visibleBeforeTransition, `no visible packet: ${JSON.stringify(diagnostics)}`).toBeGreaterThan(0);
 
     rerender(<CircuitField routeKey="route-transition-b" />);
 
