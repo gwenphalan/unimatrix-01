@@ -36,8 +36,10 @@ updates:
       time: "08:00"
       timezone: America/Phoenix
     open-pull-requests-limit: 5
-    cooldown:
-      default-days: 14
+    # No `cooldown` here: Dependabot does not support it for the github-actions
+    # ecosystem, and an unsupported key makes it reject this entire file — which
+    # would silently kill the npm updates above too. Actions are pinned to commit
+    # SHAs, so a bump is reviewable as a SHA change regardless.
     groups:
       github-actions-minor-patch:
         patterns:

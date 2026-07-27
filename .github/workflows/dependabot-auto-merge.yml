@@ -16,7 +16,7 @@ permissions:
 jobs:
   auto-merge:
     name: Arm auto-merge
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     if: github.actor == 'dependabot[bot]'
     permissions:
       contents: write
