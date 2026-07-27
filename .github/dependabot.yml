@@ -47,3 +47,49 @@ updates:
         update-types:
           - minor
           - patch
+
+  # Base images live in `apps/*/Dockerfile`, NOT in `infra/docker/`. The four
+  # compose files there declare no `image:` at all — only `build:` plus a
+  # Dockerfile path — and Dependabot's `docker-compose` ecosystem parses only
+  # `image:` (or an inline `dockerfile_inline`), never a referenced Dockerfile.
+  # A `docker-compose` block would fetch those files and find nothing, forever.
+  # Do not add one.
+  #
+  # Dependabot's Dockerfile scan is per-directory and not recursive, so
+  # `directory: /` would find nothing and each app has to be listed explicitly.
+  # Keep this list in sync when an app gains or loses a Dockerfile.
+  #
+  # Only the `nginx` pins are actually tracked. Every
+  # `FROM node:${NODE_VERSION}-alpine` is invisible to Dependabot: it performs
+  # no ARG interpolation, and its tag regex cannot match a leading `$`, so the
+  # line parses with no version and is skipped. That is deliberate — the Node
+  # version stays owned by `.node-version` and CI's `node-version-file` rather
+  # than gaining Dependabot as a second, competing owner. `apps/api` is listed
+  # anyway so a future non-ARG base image there is picked up automatically.
+  - package-ecosystem: docker
+    directories:
+      - /apps/api
+      - /apps/auth
+      - /apps/cube-trainer
+      - /apps/web
+    schedule:
+      interval: daily
+      time: "08:00"
+      timezone: America/Phoenix
+    open-pull-requests-limit: 5
+
+    # Supported for the `docker` ecosystem (unlike `github-actions` above), so
+    # this does not risk the whole-file rejection described there. Same 14 days
+    # as npm, for the same reason.
+    cooldown:
+      default-days: 14
+
+    groups:
+      # The same `nginx` pin appears in three Dockerfiles; without grouping each
+      # bump would arrive as three near-identical PRs.
+      docker-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
