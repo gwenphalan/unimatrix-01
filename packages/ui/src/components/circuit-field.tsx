@@ -380,7 +380,11 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
         });
       }
 
-      packetsRef.current.forEach((packet, slot) => {
+      // Snapshot before iterating: the fork branch below inserts into this
+      // same map, and `Map.forEach` visits entries added during iteration —
+      // so a freshly forked packet would be advanced again in the frame it
+      // was created, double-stepping it away from the junction it forked at.
+      Array.from(packetsRef.current.entries()).forEach(([slot, packet]) => {
         const result = advancePacket(packet, graph, now);
         const el = packetElRefs.current.get(`p${slot}`);
 
@@ -400,7 +404,7 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
         if (
           options.allowSpawn &&
           result.packet.hops === packet.hops + 1 &&
-          graph.junctions.includes(result.packet.at)
+          graph.junctions.has(result.packet.at)
         ) {
           const neighborSet = graph.neighbors.get(result.packet.at);
           const forkCandidates = neighborSet
@@ -1045,6 +1049,9 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
     previousTracesRef.current.forEach((_trace, id) => {
       if (!validIds.has(id)) previousTracesRef.current.delete(id);
     });
+    lastRetargetAtRef.current.forEach((_at, id) => {
+      if (!validIds.has(id)) lastRetargetAtRef.current.delete(id);
+    });
 
     // A trace-count change invalidates the packet graph (it's built from
     // live bodies) and any packet currently walking a pruned trace's cells —
@@ -1233,8 +1240,9 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
       }
     });
 
+    const crawlingIds = new Set(existingTraces.map((trace) => trace.id));
     const untouched = Array.from(viaItemIndexRef.current.values()).filter(
-      (item) => !existingTraces.some((trace) => trace.id === item.traceId),
+      (item) => !crawlingIds.has(item.traceId),
     );
     setViaItems([...untouched, ...crawlItems]);
 
@@ -1329,14 +1337,18 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
       // could pick the same cell.
       const pendingCells = new Set<string>();
 
+      // Loop-invariant: `transitionsRef` is not written until `applyRetargets`
+      // below, well after this loop, so rebuilding this per candidate was
+      // pure repeated work.
+      const inFlightToBodies = new Map(
+        Array.from(transitionsRef.current.entries()).map(([tid, t]) => [tid, t.toBody] as const),
+      );
+
       candidateIds.forEach((id) => {
         const liveBody = liveBodyRef.current.get(id);
         const trace = previousTracesRef.current.get(id);
         if (!liveBody || !trace) return;
 
-        const inFlightToBodies = new Map(
-          Array.from(transitionsRef.current.entries()).map(([tid, t]) => [tid, t.toBody] as const),
-        );
         const occupied = buildOccupiedFootprint(liveBodyRef.current, id, inFlightToBodies);
         pendingCells.forEach((cell) => occupied.add(cell));
         const newTip = retargetTip(liveBody, occupied, liveBarriers, latticeSize.width, latticeSize.height);

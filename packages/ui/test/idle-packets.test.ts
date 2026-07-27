@@ -34,7 +34,7 @@ describe("buildPacketGraph", () => {
     expect(graph.leaves).toContain("0,0");
     expect(graph.leaves).toContain("2,0");
     expect(graph.leaves).toContain("1,1");
-    expect(graph.junctions).toEqual(["1,0"]);
+    expect([...graph.junctions]).toEqual(["1,0"]);
   });
 
   it("neighbor symmetry: every edge appears in both directions", () => {

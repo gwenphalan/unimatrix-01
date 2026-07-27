@@ -8,7 +8,13 @@ import { GRID, type Point, type RoutePoint, cellKey } from "./grid-math.js";
 export type PacketGraph = {
   neighbors: ReadonlyMap<string, ReadonlySet<string>>;
   leaves: readonly string[];
-  junctions: readonly string[];
+  /**
+   * Cells with three or more neighbours. A `Set`, not an array: this is
+   * membership-tested once per live packet per frame in `CircuitField`'s
+   * fork check, and a linear scan there scales with junction count on the
+   * hot path for no reason.
+   */
+  junctions: ReadonlySet<string>;
 };
 
 /**
@@ -36,10 +42,10 @@ export function buildPacketGraph(bodies: ReadonlyMap<string, readonly RoutePoint
   });
 
   const leaves: string[] = [];
-  const junctions: string[] = [];
+  const junctions = new Set<string>();
   neighbors.forEach((set, key) => {
     if (set.size === 1) leaves.push(key);
-    else if (set.size >= 3) junctions.push(key);
+    else if (set.size >= 3) junctions.add(key);
   });
 
   return { neighbors, leaves, junctions };
