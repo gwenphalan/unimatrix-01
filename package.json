@@ -38,5 +38,10 @@
     "turbo": "^2.8.14",
     "typescript": "^5.9.2",
     "vitest": "^3.2.4"
+  },
+  "pnpm": {
+    "overrides": {
+      "minimatch@9": "^10.2.5"
+    }
   }
 }
