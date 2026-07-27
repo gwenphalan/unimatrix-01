@@ -61,27 +61,39 @@ describe("CircuitField idle loop (full mode)", () => {
    * exactly how this test failed in CI (reproducible locally by feeding rAF
    * timestamps 300ms apart).
    *
-   * The counter advances once per *callback*, not once per real frame:
-   * `CircuitField`'s loop, the watchdog probe, and this file's own frame pump
-   * are three independent rAF consumers, and whether two of them land in the
-   * same jsdom frame is exactly the load-dependent detail being designed out.
-   * Per-callback stepping means no consumer can ever observe a zero delta —
-   * one zero poisons the probe's `Math.min` baseline and makes every later
-   * frame score as dropped.
+   * The counter advances once per real animation frame, keyed off the
+   * timestamp jsdom hands out (fixed for all callbacks in one frame, per
+   * spec) — *not* once per callback. `CircuitField`'s loop, the watchdog
+   * probe, and this file's own frame pump are three independent rAF
+   * consumers sharing each frame; stepping per callback made every consumer
+   * see a 3x-inflated delta, which tripped the probe's `SLOW_BASELINE_MS`
+   * arm and demoted to static just as surely as the real jank did. Per-frame
+   * stepping gives every consumer exactly `FRAME_MS`, since a callback
+   * registered during a frame runs in the *next* one and so no consumer can
+   * be called twice per frame.
+   *
+   * `FRAME_MS` is deliberately well under `SLOW_BASELINE_MS` (40ms) rather
+   * than a realistic 16ms, so even if that per-frame grouping degraded and
+   * several steps landed between one consumer's callbacks, the probe would
+   * still read the field as comfortably fast.
    *
    * Starts well past zero so `lastPacketSpawnAtRef`'s initial `0` is already
    * more than `PACKET_SPAWN_INTERVAL_MS` in the past: the first spawn is then
    * gated purely on idle-readiness, not on an extra interval wait.
    */
   function installVirtualClock(): (frames: number) => Promise<void> {
-    const FRAME_MS = 16;
+    const FRAME_MS = 8;
     let clock = 10_000;
+    let lastRealTimestamp: number | null = null;
 
     performance.now = () => clock;
     window.requestAnimationFrame = ((callback: FrameRequestCallback) => {
       rafCallCount += 1;
-      return originalRAF(() => {
-        clock += FRAME_MS;
+      return originalRAF((realTimestamp) => {
+        if (lastRealTimestamp === null || realTimestamp !== lastRealTimestamp) {
+          lastRealTimestamp = realTimestamp;
+          clock += FRAME_MS;
+        }
         callback(clock);
       });
     }) as typeof window.requestAnimationFrame;
