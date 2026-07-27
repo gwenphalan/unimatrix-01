@@ -1,0 +1,23 @@
+# Prettier already reads .gitignore by default (its --ignore-path defaults to
+# [.gitignore, .prettierignore]), so node_modules, dist, build, coverage,
+# .turbo, test-results, .issues and the design-sync directories are covered
+# there and are deliberately not repeated here.
+
+# Markdown is authored prose, not code. content/**/*.md is parsed by
+# @unimatrix/content and rendered on the public site, and AGENTS.md is the
+# instruction file agents read; reformatting either buys nothing and would
+# rewrite list markers and emphasis in text a human wrote.
+**/*.md
+
+# CLAUDE.md is a symlink to AGENTS.md. Prettier hard-errors on an explicitly
+# named symlink ("Explicitly specified pattern ... is a symbolic link"), so it
+# must stay ignored even if the *.md rule above is ever narrowed.
+CLAUDE.md
+
+# Generated, not hand-edited.
+pnpm-lock.yaml
+**/routeTree.gen.ts
+packages/db/drizzle/
+
+# Local SQLite artifacts and their directory.
+packages/db/local/

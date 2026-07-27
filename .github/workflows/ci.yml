@@ -43,6 +43,11 @@ jobs:
           pnpm --filter @unimatrix/web exec playwright install --with-deps chromium
           pnpm --filter @unimatrix/cube-trainer exec playwright install --with-deps chromium
 
+      # Runs before the expensive steps: formatting is the cheapest thing that
+      # can be wrong, so failing here saves a full build/test cycle.
+      - name: Format
+        run: pnpm format:check
+
       - name: Build
         run: pnpm build
 

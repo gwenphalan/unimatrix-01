@@ -1,4 +1,5 @@
 import js from "@eslint/js";
+import prettier from "eslint-config-prettier/flat";
 import globals from "globals";
 import tseslint from "typescript-eslint";
 
@@ -42,6 +43,11 @@ function createTypedConfig({ globalsMap, tsconfigRootDir }) {
         "@typescript-eslint/no-confusing-void-expression": "error",
       },
     },
+    // Must stay last: `eslint-config-prettier` only turns rules off, so any
+    // config placed after it could re-enable a stylistic rule and put ESLint
+    // back in conflict with Prettier. Prettier owns formatting; ESLint owns
+    // correctness.
+    prettier,
   );
 }
 
