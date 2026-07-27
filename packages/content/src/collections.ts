@@ -4,8 +4,7 @@ export type ContentCollectionKey = "home" | "projects" | "blog";
 
 export const deferredContentCollections = ["docs", "notes"] as const;
 
-export type DeferredContentCollectionKey =
-  (typeof deferredContentCollections)[number];
+export type DeferredContentCollectionKey = (typeof deferredContentCollections)[number];
 
 export interface ContentCollectionDefinition {
   key: ContentCollectionKey;
@@ -34,8 +33,7 @@ export const contentCollections = [
   {
     key: "blog",
     title: "Blog",
-    description:
-      "Repo-backed blog entries rooted at content/blog for the public site baseline.",
+    description: "Repo-backed blog entries rooted at content/blog for the public site baseline.",
     directory: "blog",
     entryShape: "list",
   },

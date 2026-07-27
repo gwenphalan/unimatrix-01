@@ -1,9 +1,5 @@
 import { Link, createLazyFileRoute } from "@tanstack/react-router";
-import {
-  RiArrowRightUpLine,
-  RiArticleLine,
-  RiFolderLine,
-} from "@remixicon/react";
+import { RiArrowRightUpLine, RiArticleLine, RiFolderLine } from "@remixicon/react";
 
 import {
   PublicProjectLedgerItem,
@@ -30,13 +26,13 @@ function IndexRoute() {
       <div className="grid gap-8 xl:grid-cols-2 xl:items-stretch">
         <section className="flex h-full flex-col gap-5">
           <PublicSectionHeading
-          badges={
-            <Badge className="gap-1.5">
-              <RiFolderLine aria-hidden="true" className="size-3.5" />
-              Featured projects
-            </Badge>
-          }
-        />
+            badges={
+              <Badge className="gap-1.5">
+                <RiFolderLine aria-hidden="true" className="size-3.5" />
+                Featured projects
+              </Badge>
+            }
+          />
 
           <div className="grid flex-1 gap-3">
             {projects.map((project, index) => (
@@ -68,13 +64,13 @@ function IndexRoute() {
 
         <section className="flex h-full flex-col gap-5">
           <PublicSectionHeading
-          badges={
-            <Badge className="gap-1.5">
-              <RiArticleLine aria-hidden="true" className="size-3.5" />
-              Recent blog posts
-            </Badge>
-          }
-        />
+            badges={
+              <Badge className="gap-1.5">
+                <RiArticleLine aria-hidden="true" className="size-3.5" />
+                Recent blog posts
+              </Badge>
+            }
+          />
 
           <div className="grid flex-1 gap-3">
             {blogEntries.map((entry, index) => (

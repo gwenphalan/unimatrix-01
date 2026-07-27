@@ -73,7 +73,10 @@ export function createFrameBudgetProbe(options: FrameBudgetProbeOptions = {}): {
 
       const baseline = Math.min(...deltas);
       const dropped = deltas.filter((d) => d > DROPPED_FRAME_MULTIPLIER * baseline).length;
-      verdict = dropped / samples > DROPPED_FRAME_RATIO_THRESHOLD || baseline > SLOW_BASELINE_MS ? "over" : "ok";
+      verdict =
+        dropped / samples > DROPPED_FRAME_RATIO_THRESHOLD || baseline > SLOW_BASELINE_MS
+          ? "over"
+          : "ok";
       return verdict;
     },
   };

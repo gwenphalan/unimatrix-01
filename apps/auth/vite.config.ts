@@ -3,11 +3,7 @@ import { fileURLToPath, URL } from "node:url";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { tanstackRouter } from "@tanstack/router-plugin/vite";
-import {
-  defineConfig,
-  loadEnv,
-  type UserConfig,
-} from "vite";
+import { defineConfig, loadEnv, type UserConfig } from "vite";
 
 import { loadAuthAppDevProxyConfig } from "./src/lib/config";
 
@@ -55,15 +51,11 @@ export function createAuthAppViteConfig(mode: string): UserConfig {
         },
         {
           find: /^@unimatrix\/auth\/react$/,
-          replacement: fileURLToPath(
-            new URL("../../packages/auth/src/react.tsx", import.meta.url),
-          ),
+          replacement: fileURLToPath(new URL("../../packages/auth/src/react.tsx", import.meta.url)),
         },
         {
           find: /^@unimatrix\/auth$/,
-          replacement: fileURLToPath(
-            new URL("../../packages/auth/src/index.ts", import.meta.url),
-          ),
+          replacement: fileURLToPath(new URL("../../packages/auth/src/index.ts", import.meta.url)),
         },
         {
           find: /^@unimatrix\/shared$/,
@@ -73,15 +65,11 @@ export function createAuthAppViteConfig(mode: string): UserConfig {
         },
         {
           find: /^@unimatrix\/ui\/public$/,
-          replacement: fileURLToPath(
-            new URL("../../packages/ui/src/public.ts", import.meta.url),
-          ),
+          replacement: fileURLToPath(new URL("../../packages/ui/src/public.ts", import.meta.url)),
         },
         {
           find: /^@unimatrix\/ui$/,
-          replacement: fileURLToPath(
-            new URL("../../packages/ui/src/index.ts", import.meta.url),
-          ),
+          replacement: fileURLToPath(new URL("../../packages/ui/src/index.ts", import.meta.url)),
         },
         {
           find: /^react$/,

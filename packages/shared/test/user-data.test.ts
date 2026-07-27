@@ -92,12 +92,16 @@ describe("userDocumentSchema", () => {
 
   it("accepts primitive and array values", () => {
     expect(userDocumentSchema.parse({ ...validDocument, value: 42 }).value).toBe(42);
-    expect(userDocumentSchema.parse({ ...validDocument, value: [1, 2, 3] }).value).toEqual([1, 2, 3]);
+    expect(userDocumentSchema.parse({ ...validDocument, value: [1, 2, 3] }).value).toEqual([
+      1, 2, 3,
+    ]);
     expect(userDocumentSchema.parse({ ...validDocument, value: null }).value).toBeNull();
   });
 
   it("rejects an invalid namespace", () => {
-    expect(userDocumentSchema.safeParse({ ...validDocument, namespace: "Bad Namespace" }).success).toBe(false);
+    expect(
+      userDocumentSchema.safeParse({ ...validDocument, namespace: "Bad Namespace" }).success,
+    ).toBe(false);
   });
 
   it("rejects an invalid key", () => {

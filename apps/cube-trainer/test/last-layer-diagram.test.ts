@@ -44,7 +44,9 @@ describe("derivePllDiagram", () => {
   it("shows mixed side colors for an unsolved PLL case (H perm)", () => {
     const cube = applyMoves(createSolvedCube(), parseAlgorithm("M2 U M2 U2 M2 U M2"));
     const diagram = derivePllDiagram(cube);
-    const frontColors = new Set(diagram.sides.front.map((s) => (s.kind === "color" ? s.face : null)));
+    const frontColors = new Set(
+      diagram.sides.front.map((s) => (s.kind === "color" ? s.face : null)),
+    );
 
     expect(frontColors.size).toBeGreaterThan(1);
   });

@@ -7,10 +7,7 @@ import { Badge, Card, cn, useCircuitOccluder } from "@unimatrix/ui/public";
 import { projectLiveStatusQueryOptions } from "./queries/check-project-live-status";
 import { emailAddress, githubProfileUrl } from "./site-links";
 
-export function PublicPageContainer({
-  className,
-  ...props
-}: React.ComponentProps<"div">) {
+export function PublicPageContainer({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       className={cn(
@@ -28,11 +25,12 @@ export function PublicSiteFooter() {
   useCircuitOccluder(footerRef);
 
   return (
-    <footer className="site-panel site-shell overflow-hidden px-5 py-5 lg:px-8 lg:py-6" ref={footerRef}>
+    <footer
+      className="site-panel site-shell overflow-hidden px-5 py-5 lg:px-8 lg:py-6"
+      ref={footerRef}
+    >
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-xs text-muted-foreground">
-          © {year} Gwen Phalan.
-        </p>
+        <p className="text-xs text-muted-foreground">© {year} Gwen Phalan.</p>
 
         <div className="flex flex-wrap items-center gap-4">
           <a
@@ -156,7 +154,8 @@ function PublicLinkedSurface({
     ? renderLink({
         ariaLabel: linkLabel ?? "Open item",
         children: <span className="sr-only">{linkLabel}</span>,
-        className: "absolute inset-0 z-10 outline-none focus-visible:ring-2 focus-visible:ring-primary/45",
+        className:
+          "absolute inset-0 z-10 outline-none focus-visible:ring-2 focus-visible:ring-primary/45",
       })
     : undefined;
   const ref = React.useRef<HTMLDivElement | null>(null);
@@ -173,9 +172,18 @@ function PublicLinkedSurface({
       ref={ref}
     >
       {overlay}
-      <div className={cn("space-y-4 px-5 py-4", interactive && "pointer-events-none relative z-10")}>{children}</div>
+      <div
+        className={cn("space-y-4 px-5 py-4", interactive && "pointer-events-none relative z-10")}
+      >
+        {children}
+      </div>
       {actions ? (
-        <div className={cn("flex flex-wrap gap-3 px-5 pb-4", interactive && "pointer-events-auto relative z-20")}>
+        <div
+          className={cn(
+            "flex flex-wrap gap-3 px-5 pb-4",
+            interactive && "pointer-events-auto relative z-20",
+          )}
+        >
           {actions}
         </div>
       ) : null}
@@ -205,7 +213,9 @@ export function PublicDecisionCard({
         </h3>
         <p className="text-sm leading-7 text-foreground/86">{summary}</p>
       </div>
-      <div className="border-t border-border/60 pt-3 text-sm leading-7 text-muted-foreground">{detail}</div>
+      <div className="border-t border-border/60 pt-3 text-sm leading-7 text-muted-foreground">
+        {detail}
+      </div>
     </PublicLinkedSurface>
   );
 }
@@ -248,9 +258,7 @@ export function ProjectStatusBadge({
   });
 
   if (liveUrl === undefined) {
-    return (
-      <Badge className={cn("border", getProjectStatusClassName(status))}>{status}</Badge>
-    );
+    return <Badge className={cn("border", getProjectStatusClassName(status))}>{status}</Badge>;
   }
 
   if (liveStatusQuery.isPending) {
@@ -301,11 +309,7 @@ export function PublicProjectLedgerItem({
     : {};
 
   return (
-    <PublicLinkedSurface
-      actions={actions}
-      className="h-full overflow-hidden"
-      {...linkProps}
-    >
+    <PublicLinkedSurface actions={actions} className="h-full overflow-hidden" {...linkProps}>
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
         <div className="space-y-2.5">
           <div className="flex flex-wrap items-center gap-2">

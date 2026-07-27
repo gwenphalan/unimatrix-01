@@ -23,10 +23,7 @@ export function OccludingCluster({ className, ...props }: React.ComponentProps<"
   return <div className={cn("-m-1 flex items-center gap-3 p-1", className)} ref={ref} {...props} />;
 }
 
-export function AppPageContainer({
-  className,
-  ...props
-}: React.ComponentProps<"div">) {
+export function AppPageContainer({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       className={cn(

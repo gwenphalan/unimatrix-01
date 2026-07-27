@@ -26,7 +26,10 @@ afterEach(() => {
   });
 });
 
-function renderOverlay(occluders: Occluder[], gridPhase: { x: number; y: number } = { x: 0, y: 0 }) {
+function renderOverlay(
+  occluders: Occluder[],
+  gridPhase: { x: number; y: number } = { x: 0, y: 0 },
+) {
   return render(<CircuitDebugOverlay gridPhase={gridPhase} occluders={occluders} />);
 }
 
@@ -55,7 +58,7 @@ describe("CircuitDebugOverlay", () => {
     const svg = document.body.querySelector("svg");
     expect(svg).not.toBeNull();
 
-    const rawRects = svg?.querySelectorAll('rect[stroke-dasharray]');
+    const rawRects = svg?.querySelectorAll("rect[stroke-dasharray]");
     expect(rawRects?.length).toBe(2);
   });
 

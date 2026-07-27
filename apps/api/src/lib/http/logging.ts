@@ -2,10 +2,7 @@ import type { FastifyServerOptions } from "fastify";
 
 import type { ApiRuntimeConfig } from "../../config.js";
 
-type ApiLoggerOptions = Exclude<
-  NonNullable<FastifyServerOptions["logger"]>,
-  boolean
->;
+type ApiLoggerOptions = Exclude<NonNullable<FastifyServerOptions["logger"]>, boolean>;
 
 const REDACTED_LOG_PATHS = [
   "req.headers.authorization",

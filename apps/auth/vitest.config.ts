@@ -19,27 +19,19 @@ export default defineConfig({
       },
       {
         find: /^@unimatrix\/auth\/react$/,
-        replacement: fileURLToPath(
-          new URL("../../packages/auth/src/react.tsx", import.meta.url),
-        ),
+        replacement: fileURLToPath(new URL("../../packages/auth/src/react.tsx", import.meta.url)),
       },
       {
         find: /^@unimatrix\/auth$/,
-        replacement: fileURLToPath(
-          new URL("../../packages/auth/src/index.ts", import.meta.url),
-        ),
+        replacement: fileURLToPath(new URL("../../packages/auth/src/index.ts", import.meta.url)),
       },
       {
         find: /^@unimatrix\/shared$/,
-        replacement: fileURLToPath(
-          new URL("../../packages/shared/src/index.ts", import.meta.url),
-        ),
+        replacement: fileURLToPath(new URL("../../packages/shared/src/index.ts", import.meta.url)),
       },
       {
         find: /^@unimatrix\/ui$/,
-        replacement: fileURLToPath(
-          new URL("../../packages/ui/src/index.ts", import.meta.url),
-        ),
+        replacement: fileURLToPath(new URL("../../packages/ui/src/index.ts", import.meta.url)),
       },
       {
         find: /^react$/,

@@ -29,7 +29,10 @@ describe("pool storage", () => {
     window.localStorage.setItem("cube-trainer:pool:oll", "not valid json");
     expect(readCasePool("oll")).toEqual({});
 
-    window.localStorage.setItem("cube-trainer:pool:oll", JSON.stringify({ "oll-1": "not-a-boolean" }));
+    window.localStorage.setItem(
+      "cube-trainer:pool:oll",
+      JSON.stringify({ "oll-1": "not-a-boolean" }),
+    );
     expect(readCasePool("oll")).toEqual({});
   });
 });

@@ -28,14 +28,10 @@ export function normalizeDatabaseFilePath(filePath: string): string {
   return fileURLToPath(new URL(filePath, REPO_ROOT_URL));
 }
 
-export function resolveDatabaseConfig(
-  overrides: Partial<DatabaseConfig> = {},
-): DatabaseConfig {
+export function resolveDatabaseConfig(overrides: Partial<DatabaseConfig> = {}): DatabaseConfig {
   return {
     filePath: normalizeDatabaseFilePath(
-      overrides.filePath ??
-        process.env.DATABASE_URL ??
-        DEFAULT_SQLITE_DATABASE_FILE_PATH,
+      overrides.filePath ?? process.env.DATABASE_URL ?? DEFAULT_SQLITE_DATABASE_FILE_PATH,
     ),
   };
 }

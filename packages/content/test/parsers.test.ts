@@ -169,8 +169,6 @@ Missing summary.
 `,
         "content/projects/berrybot.md",
       ),
-    ).toThrow(
-      /content\/projects\/berrybot\.md: summary: expected a non-empty string/u,
-    );
+    ).toThrow(/content\/projects\/berrybot\.md: summary: expected a non-empty string/u);
   });
 });

@@ -126,7 +126,11 @@ export function getSessionPermissionsClaim(request: FastifyRequest): SessionPerm
   const rawPermissions =
     sessionClaims === null ? undefined : (sessionClaims as { permissions?: unknown }).permissions;
 
-  if (typeof rawPermissions !== "object" || rawPermissions === null || Array.isArray(rawPermissions)) {
+  if (
+    typeof rawPermissions !== "object" ||
+    rawPermissions === null ||
+    Array.isArray(rawPermissions)
+  ) {
     return {};
   }
 

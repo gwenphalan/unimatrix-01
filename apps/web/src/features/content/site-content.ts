@@ -1,9 +1,4 @@
-import type {
-  BlogEntry,
-  HomePageContent,
-  ProjectEntry,
-  SiteContent,
-} from "@unimatrix/content";
+import type { BlogEntry, HomePageContent, ProjectEntry, SiteContent } from "@unimatrix/content";
 import {
   parseBlogContentFile,
   parseHomeContentFile,
@@ -34,9 +29,7 @@ const parsedBlogEntries = [
   parseBlogContentFile(placeholderPostSource, "content/blog/placeholder-post.md"),
 ];
 
-export const blogEntries: BlogEntry[] = sortEntriesByPublishedAtDesc([
-  ...parsedBlogEntries,
-]);
+export const blogEntries: BlogEntry[] = sortEntriesByPublishedAtDesc([...parsedBlogEntries]);
 
 export const siteContent: SiteContent = {
   blog: blogEntries,
@@ -44,9 +37,7 @@ export const siteContent: SiteContent = {
   projects: projectEntries,
 };
 
-export const featuredProjects = projectEntries.filter(
-  (entry) => entry.frontmatter.featured,
-);
+export const featuredProjects = projectEntries.filter((entry) => entry.frontmatter.featured);
 
 export const latestBlogEntries = blogEntries.slice(0, 2);
 

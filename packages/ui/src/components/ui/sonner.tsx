@@ -1,37 +1,31 @@
-"use client"
+"use client";
 
-import type * as React from "react"
-import { useTheme } from "next-themes"
-import { Toaster as Sonner, type ToasterProps } from "sonner"
-import { RiCheckboxCircleLine, RiInformationLine, RiErrorWarningLine, RiCloseCircleLine, RiLoaderLine } from "@remixicon/react"
+import type * as React from "react";
+import { useTheme } from "next-themes";
+import { Toaster as Sonner, type ToasterProps } from "sonner";
+import {
+  RiCheckboxCircleLine,
+  RiInformationLine,
+  RiErrorWarningLine,
+  RiCloseCircleLine,
+  RiLoaderLine,
+} from "@remixicon/react";
 
 const Toaster = ({ ...props }: ToasterProps) => {
-  const { theme } = useTheme()
+  const { theme } = useTheme();
   const resolvedTheme: ToasterProps["theme"] =
-    theme === "light" || theme === "dark" || theme === "system"
-      ? theme
-      : "system"
+    theme === "light" || theme === "dark" || theme === "system" ? theme : "system";
 
   return (
     <Sonner
       theme={resolvedTheme}
       className="toaster group"
       icons={{
-        success: (
-          <RiCheckboxCircleLine className="size-4" />
-        ),
-        info: (
-          <RiInformationLine className="size-4" />
-        ),
-        warning: (
-          <RiErrorWarningLine className="size-4" />
-        ),
-        error: (
-          <RiCloseCircleLine className="size-4" />
-        ),
-        loading: (
-          <RiLoaderLine className="size-4 animate-spin" />
-        ),
+        success: <RiCheckboxCircleLine className="size-4" />,
+        info: <RiInformationLine className="size-4" />,
+        warning: <RiErrorWarningLine className="size-4" />,
+        error: <RiCloseCircleLine className="size-4" />,
+        loading: <RiLoaderLine className="size-4 animate-spin" />,
       }}
       style={
         {
@@ -48,7 +42,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
       }}
       {...props}
     />
-  )
-}
+  );
+};
 
-export { Toaster }
+export { Toaster };

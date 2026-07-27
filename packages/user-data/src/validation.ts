@@ -31,8 +31,7 @@ export function assertValidKey(key: string): string {
 
   if (!result.success) {
     throw new Error(
-      `Invalid user-data key "${key}": must be 1-128 characters matching ` +
-        "/^[A-Za-z0-9._-]+$/.",
+      `Invalid user-data key "${key}": must be 1-128 characters matching ` + "/^[A-Za-z0-9._-]+$/.",
     );
   }
 

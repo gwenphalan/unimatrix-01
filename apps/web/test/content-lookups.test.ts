@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  findEntryBySlug,
-  indexEntriesBySlug,
-} from "../src/features/content/lookups.js";
+import { findEntryBySlug, indexEntriesBySlug } from "../src/features/content/lookups.js";
 
 describe("content lookup helpers", () => {
   it("resolves authored entries by slug", () => {
@@ -13,9 +10,7 @@ describe("content lookup helpers", () => {
     ];
 
     expect(findEntryBySlug(entries, "berrybot")?.title).toBe("BerryBot");
-    expect(indexEntriesBySlug(entries).get("unimatrix-01")?.title).toBe(
-      "Unimatrix-01",
-    );
+    expect(indexEntriesBySlug(entries).get("unimatrix-01")?.title).toBe("Unimatrix-01");
   });
 
   it("returns undefined for missing slugs", () => {

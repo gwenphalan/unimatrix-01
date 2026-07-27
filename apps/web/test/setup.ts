@@ -9,8 +9,9 @@ import { afterEach } from "vitest";
 // the tests, so align the async-util budget with the test timeout.
 configure({ asyncUtilTimeout: 5000 });
 
-(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean })
-  .IS_REACT_ACT_ENVIRONMENT = true;
+(
+  globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true;
 
 // Polyfill window.matchMedia for the jsdom environment used by Vitest.
 // Some components use matchMedia and will throw without this.

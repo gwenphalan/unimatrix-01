@@ -1,6 +1,11 @@
 import type { UserFileMetadata } from "@unimatrix/shared";
 
-import type { UserFilesStore, UserFilesUploadOptions, UserSettingsStore, UserStore } from "./types.js";
+import type {
+  UserFilesStore,
+  UserFilesUploadOptions,
+  UserSettingsStore,
+  UserStore,
+} from "./types.js";
 import { assertValidKey, assertValidNamespace } from "./validation.js";
 
 const DATABASE_NAME = "unimatrix-user-data";
@@ -95,7 +100,9 @@ export function createGuestUserStore(options: CreateGuestUserStoreOptions): User
       const db = await getDatabase();
       const tx = db.transaction(DOCUMENTS_STORE, "readonly");
       const record = await requestToPromise<DocumentRecord | undefined>(
-        tx.objectStore(DOCUMENTS_STORE).get([namespace, validKey]) as IDBRequest<DocumentRecord | undefined>,
+        tx.objectStore(DOCUMENTS_STORE).get([namespace, validKey]) as IDBRequest<
+          DocumentRecord | undefined
+        >,
       );
       return record?.value as T | undefined;
     },
@@ -139,9 +146,10 @@ export function createGuestUserStore(options: CreateGuestUserStoreOptions): User
     ): Promise<UserFileMetadata> {
       const validKey = assertValidKey(key);
       const contentType = uploadOptions?.contentType ?? file.type ?? "application/octet-stream";
-      const blob = uploadOptions?.contentType && uploadOptions.contentType !== file.type
-        ? new Blob([file], { type: contentType })
-        : file;
+      const blob =
+        uploadOptions?.contentType && uploadOptions.contentType !== file.type
+          ? new Blob([file], { type: contentType })
+          : file;
       const updatedAt = new Date().toISOString();
 
       const db = await getDatabase();
@@ -164,7 +172,9 @@ export function createGuestUserStore(options: CreateGuestUserStoreOptions): User
       const db = await getDatabase();
       const tx = db.transaction(FILES_STORE, "readonly");
       const record = await requestToPromise<FileRecord | undefined>(
-        tx.objectStore(FILES_STORE).get([namespace, validKey]) as IDBRequest<FileRecord | undefined>,
+        tx.objectStore(FILES_STORE).get([namespace, validKey]) as IDBRequest<
+          FileRecord | undefined
+        >,
       );
       return record?.blob;
     },

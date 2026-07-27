@@ -1,10 +1,7 @@
 import { Link, createLazyFileRoute } from "@tanstack/react-router";
 import { RiArrowRightUpLine } from "@remixicon/react";
 
-import {
-  PublicProjectLedgerItem,
-  PublicSectionHeading,
-} from "@/features/public-site/components";
+import { PublicProjectLedgerItem, PublicSectionHeading } from "@/features/public-site/components";
 import { Button } from "@unimatrix/ui/public";
 
 export const Route = createLazyFileRoute("/projects")({
@@ -16,9 +13,7 @@ function ProjectsRoute() {
 
   return (
     <div className="space-y-5">
-      <PublicSectionHeading
-        title="Projects"
-      />
+      <PublicSectionHeading title="Projects" />
 
       <div className="grid gap-3">
         {projects.map((project, index) => {

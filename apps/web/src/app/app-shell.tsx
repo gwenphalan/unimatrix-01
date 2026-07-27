@@ -11,10 +11,7 @@ import {
 } from "@remixicon/react";
 import { SignedIn, SignedOut, UserButton } from "@unimatrix/auth/react";
 
-import {
-  getBlogEntryBySlug,
-  getProjectEntryBySlug,
-} from "@/features/content/site-content";
+import { getBlogEntryBySlug, getProjectEntryBySlug } from "@/features/content/site-content";
 import { PublicPageContainer, PublicSiteFooter } from "@/features/public-site/components";
 import { isAuthEnabled, loadWebRuntimeConfig } from "@/lib/config";
 import { useIsNarrowViewport } from "@/lib/use-media-query";
@@ -90,7 +87,10 @@ function Breadcrumbs({ items }: { items: BreadcrumbItem[] }) {
 
         return (
           <span
-            className={cn("flex min-w-0 items-center gap-1", index === 0 ? undefined : "hidden sm:flex")}
+            className={cn(
+              "flex min-w-0 items-center gap-1",
+              index === 0 ? undefined : "hidden sm:flex",
+            )}
             key={`${item.to ?? "current"}:${item.label}:${index}`}
           >
             {index > 0 ? (
@@ -293,9 +293,7 @@ function AppShellContent({ children }: AppShellProps) {
       <div
         className={cn(
           "fixed top-3 inset-x-0 z-40 transition-opacity duration-300 ease-out",
-          isCondensed
-            ? "pointer-events-auto opacity-100"
-            : "pointer-events-none opacity-0",
+          isCondensed ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0",
         )}
       >
         <div className="mx-auto w-full max-w-[92rem] px-4 sm:px-6 lg:px-8 xl:px-10">

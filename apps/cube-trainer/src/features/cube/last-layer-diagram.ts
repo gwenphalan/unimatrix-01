@@ -1,7 +1,8 @@
 import { extractLastLayer } from "./model";
 import type { FaceLetter, FaceletCube } from "./model";
 
-export type DiagramSticker = { kind: "oriented" } | { kind: "unknown" } | { kind: "color"; face: FaceLetter };
+export type DiagramSticker =
+  { kind: "oriented" } | { kind: "unknown" } | { kind: "color"; face: FaceLetter };
 
 export interface LastLayerDiagram {
   top: DiagramSticker[];
@@ -38,7 +39,10 @@ function toDrawingOrder(row: FaceLetter[], reversed: boolean): FaceLetter[] {
   return reversed ? [c, b, a] : [a, b, c];
 }
 
-function buildDiagram(cube: FaceletCube, sideSticker: (facelet: FaceLetter) => DiagramSticker): LastLayerDiagram {
+function buildDiagram(
+  cube: FaceletCube,
+  sideSticker: (facelet: FaceLetter) => DiagramSticker,
+): LastLayerDiagram {
   const { sideRows, top } = extractLastLayer(cube);
 
   return {

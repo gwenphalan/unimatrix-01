@@ -19,8 +19,6 @@ export class ContentValidationError extends Error {
   }
 }
 
-export function isContentValidationError(
-  error: unknown,
-): error is ContentValidationError {
+export function isContentValidationError(error: unknown): error is ContentValidationError {
   return error instanceof ContentValidationError;
 }

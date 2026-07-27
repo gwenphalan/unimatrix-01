@@ -53,7 +53,10 @@ describe("CircuitField idle loop (full mode)", () => {
     if (originalHardwareConcurrency) {
       Object.defineProperty(navigator, "hardwareConcurrency", originalHardwareConcurrency);
     } else {
-      Reflect.deleteProperty(navigator as unknown as Record<string, unknown>, "hardwareConcurrency");
+      Reflect.deleteProperty(
+        navigator as unknown as Record<string, unknown>,
+        "hardwareConcurrency",
+      );
     }
     window.requestAnimationFrame = originalRAF;
     performance.now = originalPerformanceNow;

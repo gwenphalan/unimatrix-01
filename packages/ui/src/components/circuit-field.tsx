@@ -1,11 +1,29 @@
 import * as React from "react";
 
-import { HEIGHT_JITTER_IGNORE_PX, RESIZE_SETTLE_MS, useDebouncedSize, useMotionMode, useViewportSize } from "./circuit-field-hooks.js";
+import {
+  HEIGHT_JITTER_IGNORE_PX,
+  RESIZE_SETTLE_MS,
+  useDebouncedSize,
+  useMotionMode,
+  useViewportSize,
+} from "./circuit-field-hooks.js";
 import { CircuitDebugOverlay } from "./circuit-debug-overlay.js";
 import { installCircuitDebugConsoleApi } from "./circuit-debug.js";
 import { useCircuitOccluderDelta, useCircuitOccluderRects } from "./circuit-occluder.js";
 import { createFrameBudgetProbe } from "./frame-budget.js";
-import { GRID, type Point, type RoutePoint, cellKey, densify, easeInOutCubic, hashString, pathData, polylineLength, recomputeCorners, snap } from "./grid-math.js";
+import {
+  GRID,
+  type Point,
+  type RoutePoint,
+  cellKey,
+  densify,
+  easeInOutCubic,
+  hashString,
+  pathData,
+  polylineLength,
+  recomputeCorners,
+  snap,
+} from "./grid-math.js";
 import {
   IDLE_PACKET_MAX_CONCURRENT,
   IDLE_PACKET_POOL_SIZE,
@@ -16,11 +34,7 @@ import {
   buildPacketGraph,
   packetsOffLiveGeometry,
 } from "./idle-packets.js";
-import {
-  TRAIL_SEGMENTS,
-  pushTrailPoint,
-  trailSlices,
-} from "./packet-trail.js";
+import { TRAIL_SEGMENTS, pushTrailPoint, trailSlices } from "./packet-trail.js";
 import {
   type BarrierField,
   type Occluder,
@@ -124,7 +138,13 @@ type TraceTransition = {
 
 // Input shape for an in-place tip retarget (scroll delta) — see
 // `applyRetargets` below.
-type RetargetEntry = { id: string; route: RoutePoint[]; lenO: number; lenN: number; toBody: RoutePoint[] };
+type RetargetEntry = {
+  id: string;
+  route: RoutePoint[];
+  lenO: number;
+  lenN: number;
+  toBody: RoutePoint[];
+};
 
 export type CircuitFieldProps = {
   /**
@@ -171,7 +191,9 @@ function pointsEqual(a: readonly Point[], b: readonly Point[]): boolean {
  */
 export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.Element | null {
   const size = useViewportSize();
-  const debouncedSize = useDebouncedSize(size, RESIZE_SETTLE_MS, { heightJitterIgnorePx: HEIGHT_JITTER_IGNORE_PX });
+  const debouncedSize = useDebouncedSize(size, RESIZE_SETTLE_MS, {
+    heightJitterIgnorePx: HEIGHT_JITTER_IGNORE_PX,
+  });
 
   // How far the whole lattice — background grid *and* rendered traces — is
   // offset from the 0,0 origin so a grid line lands exactly on the page's
@@ -211,8 +233,14 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
       const { x, y } = measureGridPhase();
       root.style.setProperty("--grid-phase-x", `${x}px`);
       root.style.setProperty("--grid-phase-y", `${y}px`);
-      root.style.setProperty("--grid-bold-phase-x", `${latticePhase(root.clientWidth, BOLD_GRID)}px`);
-      root.style.setProperty("--grid-bold-phase-y", `${latticePhase(root.clientHeight, BOLD_GRID)}px`);
+      root.style.setProperty(
+        "--grid-bold-phase-x",
+        `${latticePhase(root.clientWidth, BOLD_GRID)}px`,
+      );
+      root.style.setProperty(
+        "--grid-bold-phase-y",
+        `${latticePhase(root.clientHeight, BOLD_GRID)}px`,
+      );
       // Traces are generated on the unphased `n * GRID` lattice and shifted
       // into place at render time (see the translated `<g>` below), so the
       // fine phase has to reach the render as state, not just as a CSS var.
@@ -271,7 +299,10 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
 
     setTraceCount((current) => {
       if (current === null) return desired;
-      const band = Math.max(TRACE_COUNT_HYSTERESIS_MIN_STEP, Math.round(current * TRACE_COUNT_HYSTERESIS_RATIO));
+      const band = Math.max(
+        TRACE_COUNT_HYSTERESIS_MIN_STEP,
+        Math.round(current * TRACE_COUNT_HYSTERESIS_RATIO),
+      );
       return Math.abs(desired - current) > band ? desired : current;
     });
   }, [debouncedSize?.width, debouncedSize?.height]);
@@ -320,7 +351,9 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
   const trailElRefs = React.useRef(new Map<string, SVGPathElement>());
 
   const loopShouldRun = React.useCallback(() => {
-    return !documentHiddenRef.current && (transitionsRef.current.size > 0 || idleEnabledRef.current);
+    return (
+      !documentHiddenRef.current && (transitionsRef.current.size > 0 || idleEnabledRef.current)
+    );
   }, []);
 
   // Hides a slot's packet rect and every one of its trail sub-paths, and
@@ -363,7 +396,14 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
   // packet disappear exactly when the trace it's on is crawled past,
   // instead of at the moment the crawl starts.
   const advanceIdlePackets = React.useCallback(
-    (now: number, options: { isCellLive?: (cell: string) => boolean; allowSpawn: boolean; allowRebuild: boolean }) => {
+    (
+      now: number,
+      options: {
+        isCellLive?: (cell: string) => boolean;
+        allowSpawn: boolean;
+        allowRebuild: boolean;
+      },
+    ) => {
       if (graphDirtyRef.current && options.allowRebuild) {
         packetGraphRef.current = buildPacketGraph(liveBodyRef.current);
         graphDirtyRef.current = false;
@@ -408,11 +448,17 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
         ) {
           const neighborSet = graph.neighbors.get(result.packet.at);
           const forkCandidates = neighborSet
-            ? Array.from(neighborSet).filter((n) => n !== result.packet.cameFrom && n !== result.packet.next)
+            ? Array.from(neighborSet).filter(
+                (n) => n !== result.packet.cameFrom && n !== result.packet.next,
+              )
             : [];
           const forkTarget = forkCandidates[Math.floor(Math.random() * forkCandidates.length)];
 
-          if (forkTarget && freeSlotsRef.current.length > 0 && packetsRef.current.size < IDLE_PACKET_POOL_SIZE) {
+          if (
+            forkTarget &&
+            freeSlotsRef.current.length > 0 &&
+            packetsRef.current.size < IDLE_PACKET_POOL_SIZE
+          ) {
             const forkSlot = freeSlotsRef.current.pop() as number;
             packetsRef.current.set(forkSlot, {
               slot: forkSlot,
@@ -465,7 +511,14 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
         const leaf = graph.leaves[Math.floor(Math.random() * graph.leaves.length)];
         if (leaf) {
           const slot = freeSlotsRef.current.pop() as number;
-          packetsRef.current.set(slot, { slot, at: leaf, cameFrom: null, next: null, stepStart: now, hops: 0 });
+          packetsRef.current.set(slot, {
+            slot,
+            at: leaf,
+            cameFrom: null,
+            next: null,
+            stepStart: now,
+            hops: 0,
+          });
           lastPacketSpawnAtRef.current = now;
         }
       }
@@ -574,7 +627,10 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
   // ever written to by `advanceIdlePackets`, itself only invoked while
   // `idleEnabledRef.current` (`full` mode) — in every other mode these stay
   // at their initial `opacity: 0` forever.
-  const packetSlotIds = React.useMemo(() => Array.from({ length: IDLE_PACKET_POOL_SIZE }, (_, i) => `p${i}`), []);
+  const packetSlotIds = React.useMemo(
+    () => Array.from({ length: IDLE_PACKET_POOL_SIZE }, (_, i) => `p${i}`),
+    [],
+  );
 
   const packetRefCallback = React.useCallback((key: string) => {
     return (el: SVGRectElement | null) => {
@@ -650,7 +706,8 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
   // the real DOM rect once translated back. Exact, not approximate — the two
   // shifts cancel.
   const barriers: BarrierField = React.useMemo(
-    () => buildBarrierField(occluders.map((rect) => translateRect(rect, -gridPhase.x, -gridPhase.y))),
+    () =>
+      buildBarrierField(occluders.map((rect) => translateRect(rect, -gridPhase.x, -gridPhase.y))),
     [occluders, gridPhase.x, gridPhase.y],
   );
 
@@ -724,8 +781,10 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
         const tailNext = points[1];
         const head = points[points.length - 1];
         const headPrev = points[points.length - 2];
-        if (tail && tailNext) tipInfo.push({ id, end: "tail", point: tail, axis: tail.y === tailNext.y ? "h" : "v" });
-        if (head && headPrev) tipInfo.push({ id, end: "head", point: head, axis: headPrev.y === head.y ? "h" : "v" });
+        if (tail && tailNext)
+          tipInfo.push({ id, end: "tail", point: tail, axis: tail.y === tailNext.y ? "h" : "v" });
+        if (head && headPrev)
+          tipInfo.push({ id, end: "head", point: head, axis: headPrev.y === head.y ? "h" : "v" });
         return;
       }
 
@@ -746,8 +805,10 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
       const tailNext = window[1];
       const head = window[window.length - 1];
       const headPrev = window[window.length - 2];
-      if (tail && tailNext) tipInfo.push({ id, end: "tail", point: tail, axis: tail.y === tailNext.y ? "h" : "v" });
-      if (head && headPrev) tipInfo.push({ id, end: "head", point: head, axis: headPrev.y === head.y ? "h" : "v" });
+      if (tail && tailNext)
+        tipInfo.push({ id, end: "tail", point: tail, axis: tail.y === tailNext.y ? "h" : "v" });
+      if (head && headPrev)
+        tipInfo.push({ id, end: "head", point: head, axis: headPrev.y === head.y ? "h" : "v" });
 
       if (t >= 1) {
         bodies.set(id, transition.toBody);
@@ -797,7 +858,9 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
 
     if (finished.length > 0) {
       const finishedIds = new Set(finished.map((f) => f.id));
-      const carried = Array.from(viaItemIndexRef.current.values()).filter((item) => !finishedIds.has(item.traceId));
+      const carried = Array.from(viaItemIndexRef.current.values()).filter(
+        (item) => !finishedIds.has(item.traceId),
+      );
       const settled: ViaItem[] = [];
 
       finished.forEach(({ id, toBody }) => {
@@ -827,7 +890,15 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
     }
 
     rafActiveRef.current = loopShouldRun() ? requestAnimationFrame(scheduleTick) : null;
-  }, [advanceIdlePackets, applyIntersections, loopShouldRun, scheduleTick, setTipPosition, setViaItems, traceIds]);
+  }, [
+    advanceIdlePackets,
+    applyIntersections,
+    loopShouldRun,
+    scheduleTick,
+    setTipPosition,
+    setViaItems,
+    traceIds,
+  ]);
 
   // Layout effect, not passive: a passive effect would leave the frame
   // scheduled by this same commit's crawl/idle layout effects running the
@@ -946,7 +1017,9 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
       });
 
       const snappedIds = new Set(items.map((item) => item.id));
-      const untouched = Array.from(viaItemIndexRef.current.values()).filter((item) => !snappedIds.has(item.traceId));
+      const untouched = Array.from(viaItemIndexRef.current.values()).filter(
+        (item) => !snappedIds.has(item.traceId),
+      );
       setViaItems([...untouched, ...settled]);
       applyIntersections(findIntersections(cellAxisMap));
     },
@@ -966,7 +1039,9 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
         return;
       }
 
-      const initialCellAxisMap = buildCellAxisMap(entries.map((r) => ({ id: r.id, points: r.route.slice(0, r.lenO) })));
+      const initialCellAxisMap = buildCellAxisMap(
+        entries.map((r) => ({ id: r.id, points: r.route.slice(0, r.lenO) })),
+      );
       const crawlItems: ViaItem[] = [];
 
       entries.forEach((r) => {
@@ -990,11 +1065,21 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
         const beforeHead = r.route[r.lenO - 2];
         if (start && second) {
           const axis: "h" | "v" = start.y === second.y ? "h" : "v";
-          setTipPosition(r.id, "tail", start, !isColinearWithOther(initialCellAxisMap, r.id, start, axis));
+          setTipPosition(
+            r.id,
+            "tail",
+            start,
+            !isColinearWithOther(initialCellAxisMap, r.id, start, axis),
+          );
         }
         if (head && beforeHead) {
           const axis: "h" | "v" = beforeHead.y === head.y ? "h" : "v";
-          setTipPosition(r.id, "head", head, !isColinearWithOther(initialCellAxisMap, r.id, head, axis));
+          setTipPosition(
+            r.id,
+            "head",
+            head,
+            !isColinearWithOther(initialCellAxisMap, r.id, head, axis),
+          );
         }
       });
 
@@ -1072,9 +1157,13 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
       rafActiveRef.current = null;
     }
 
-    const stale = Array.from(viaItemIndexRef.current.values()).some((item) => !validIds.has(item.traceId));
+    const stale = Array.from(viaItemIndexRef.current.values()).some(
+      (item) => !validIds.has(item.traceId),
+    );
     if (stale) {
-      setViaItems(Array.from(viaItemIndexRef.current.values()).filter((item) => validIds.has(item.traceId)));
+      setViaItems(
+        Array.from(viaItemIndexRef.current.values()).filter((item) => validIds.has(item.traceId)),
+      );
     }
   }, [retireAllPackets, traceIds, setViaItems]);
 
@@ -1104,12 +1193,20 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
     // reactive trace-count increase) draw in with the staggered stroke
     // animation, ordered by their depth in the generated spanning tree.
     if (newTraces.length > 0) {
-      const newBodies = new Map(newTraces.map((trace) => [trace.id, recomputeCorners(densify(trace.points))]));
+      const newBodies = new Map(
+        newTraces.map((trace) => [trace.id, recomputeCorners(densify(trace.points))]),
+      );
       newBodies.forEach((body, id) => liveBodies.set(id, body));
 
       const cellAxisMap = buildCellAxisMap([
-        ...newTraces.map((trace) => ({ id: trace.id, points: newBodies.get(trace.id) as RoutePoint[] })),
-        ...existingTraces.map((trace) => ({ id: trace.id, points: priorBodies.get(trace.id) as RoutePoint[] })),
+        ...newTraces.map((trace) => ({
+          id: trace.id,
+          points: newBodies.get(trace.id) as RoutePoint[],
+        })),
+        ...existingTraces.map((trace) => ({
+          id: trace.id,
+          points: priorBodies.get(trace.id) as RoutePoint[],
+        })),
       ]);
 
       const bootItems: ViaItem[] = [];
@@ -1137,11 +1234,21 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
         const beforeLast = body[body.length - 2];
         if (first && second) {
           const axis: "h" | "v" = first.y === second.y ? "h" : "v";
-          setTipPosition(trace.id, "tail", first, !isColinearWithOther(cellAxisMap, trace.id, first, axis));
+          setTipPosition(
+            trace.id,
+            "tail",
+            first,
+            !isColinearWithOther(cellAxisMap, trace.id, first, axis),
+          );
         }
         if (last && beforeLast) {
           const axis: "h" | "v" = beforeLast.y === last.y ? "h" : "v";
-          setTipPosition(trace.id, "head", last, !isColinearWithOther(cellAxisMap, trace.id, last, axis));
+          setTipPosition(
+            trace.id,
+            "head",
+            last,
+            !isColinearWithOther(cellAxisMap, trace.id, last, axis),
+          );
         }
 
         const el = pathElRefs.current.get(trace.id);
@@ -1186,7 +1293,9 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
     });
 
     if (staticModeRef.current) {
-      snapTransitionsToTarget(transitions.map((transition) => ({ id: transition.id, toBody: transition.toBody })));
+      snapTransitionsToTarget(
+        transitions.map((transition) => ({ id: transition.id, toBody: transition.toBody })),
+      );
       return;
     }
 
@@ -1197,7 +1306,10 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
     // whole pool the instant a crawl is seeded.
 
     const initialCellAxisMap = buildCellAxisMap(
-      transitions.map((transition) => ({ id: transition.id, points: transition.route.slice(0, transition.lenO) })),
+      transitions.map((transition) => ({
+        id: transition.id,
+        points: transition.route.slice(0, transition.lenO),
+      })),
     );
 
     const crawlItems: ViaItem[] = [];
@@ -1267,7 +1379,15 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
     ensureLoop();
     // Only the target trace identity should retrigger this effect — the
     // refs and callbacks it closes over are stable across renders.
-  }, [applyIntersections, barriers, ensureLoop, setTipPosition, setViaItems, snapTransitionsToTarget, targetTraces]);
+  }, [
+    applyIntersections,
+    barriers,
+    ensureLoop,
+    setTipPosition,
+    setViaItems,
+    snapTransitionsToTarget,
+    targetTraces,
+  ]);
 
   // Scroll-driven retarget: nudges a live trace's tip away from an occluder
   // that just moved under it, using Session B's per-trace transition engine
@@ -1303,7 +1423,9 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
       const liveBarriers = buildBarrierField(
         liveOccluders.map((rect) => translateRect(rect, -gridPhase.x, -gridPhase.y)),
       );
-      const shiftedDirtyRects = dirtyRects.map((rect) => translateRect(rect, -gridPhase.x, -gridPhase.y));
+      const shiftedDirtyRects = dirtyRects.map((rect) =>
+        translateRect(rect, -gridPhase.x, -gridPhase.y),
+      );
       const tipById = new Map(tips.map((tip) => [tip.id, tip.point]));
 
       const candidateIds = findAffectedTraceIds(tips, shiftedDirtyRects, OCCLUDER_AFFECT_MARGIN_PX)
@@ -1351,7 +1473,13 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
 
         const occupied = buildOccupiedFootprint(liveBodyRef.current, id, inFlightToBodies);
         pendingCells.forEach((cell) => occupied.add(cell));
-        const newTip = retargetTip(liveBody, occupied, liveBarriers, latticeSize.width, latticeSize.height);
+        const newTip = retargetTip(
+          liveBody,
+          occupied,
+          liveBarriers,
+          latticeSize.width,
+          latticeSize.height,
+        );
         if (!newTip) return;
         pendingCells.add(cellKey(newTip));
 
@@ -1366,7 +1494,11 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
         // `pointsEqual(previous.points, trace.points)` check permanently
         // miscompare dense-vs-sparse for this trace, defeating the
         // skip-if-unchanged optimization for it forever.
-        previousTracesRef.current.set(id, { ...trace, points: sparsePoints, length: polylineLength(sparsePoints) });
+        previousTracesRef.current.set(id, {
+          ...trace,
+          points: sparsePoints,
+          length: polylineLength(sparsePoints),
+        });
         lastRetargetAtRef.current.set(id, now);
         retargets.push({ id, route, lenO: liveBody.length, lenN: toBody.length, toBody });
       });
@@ -1564,14 +1696,21 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
               <path key={id} ref={pathRefCallbacks.get(id)} />
             ))}
           </g>
-          <g className="circuit-field-glow" fill="color-mix(in oklab, var(--primary) 60%, var(--background))">
+          <g
+            className="circuit-field-glow"
+            fill="color-mix(in oklab, var(--primary) 60%, var(--background))"
+          >
             {viaItems.map((item) => (
               <rect
                 className={item.boot ? "circuit-field-via" : undefined}
                 height={6}
                 key={item.key}
                 ref={viaRefCallback(item.key)}
-                style={item.boot ? { animationDelay: `${item.delay}ms` } : { opacity: item.initiallyVisible ? 1 : 0 }}
+                style={
+                  item.boot
+                    ? { animationDelay: `${item.delay}ms` }
+                    : { opacity: item.initiallyVisible ? 1 : 0 }
+                }
                 width={6}
                 x={item.x - 3}
                 y={item.y - 3}

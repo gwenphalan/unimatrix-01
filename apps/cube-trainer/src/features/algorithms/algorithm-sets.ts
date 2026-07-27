@@ -33,8 +33,7 @@ export const ALGORITHM_SETS: Record<AlgorithmSetId, AlgorithmSet> = {
   },
   pll: {
     cases: PLL_ALGORITHMS,
-    description:
-      "Permute the last layer's pieces into their solved positions to finish the cube.",
+    description: "Permute the last layer's pieces into their solved positions to finish the cube.",
     groupOrder: PLL_GROUP_ORDER,
     id: "pll",
     label: "PLL",

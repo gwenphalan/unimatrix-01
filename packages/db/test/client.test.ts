@@ -28,15 +28,12 @@ describe("@unimatrix/db baseline", () => {
 
     try {
       client.exec(
-        readFileSync(
-          new URL("../drizzle/0000_round_molly_hayes.sql", import.meta.url),
-          "utf8",
-        ),
+        readFileSync(new URL("../drizzle/0000_round_molly_hayes.sql", import.meta.url), "utf8"),
       );
 
-      const columns = client
-        .prepare("pragma table_info('system_settings')")
-        .all() as Array<{ name: string }>;
+      const columns = client.prepare("pragma table_info('system_settings')").all() as Array<{
+        name: string;
+      }>;
 
       expect(columns.map((column) => column.name)).toEqual([
         "key",
@@ -59,10 +56,7 @@ describe("@unimatrix/db baseline", () => {
 
     try {
       client.exec(
-        readFileSync(
-          new URL("../drizzle/0000_round_molly_hayes.sql", import.meta.url),
-          "utf8",
-        ),
+        readFileSync(new URL("../drizzle/0000_round_molly_hayes.sql", import.meta.url), "utf8"),
       );
 
       const insertedRow = client
@@ -98,9 +92,7 @@ describe("@unimatrix/db baseline", () => {
         .get("site_name") as { updated_at: string };
 
       expect(updatedRow.updated_at).not.toBe(insertedRow.updated_at);
-      expect(updatedRow.updated_at).toMatch(
-        /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/u,
-      );
+      expect(updatedRow.updated_at).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/u);
     } finally {
       client.close();
       rmSync(tempDirectory, {

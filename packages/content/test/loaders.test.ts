@@ -64,10 +64,7 @@ Newer body.
 
       expect(siteContent.home.frontmatter.title).toBe("Home title");
       expect(siteContent.projects[0]?.slug).toBe("berrybot");
-      expect(siteContent.blog.map((entry) => entry.slug)).toEqual([
-        "newer-post",
-        "older-post",
-      ]);
+      expect(siteContent.blog.map((entry) => entry.slug)).toEqual(["newer-post", "older-post"]);
     } finally {
       rmSync(rootDir, { force: true, recursive: true });
     }

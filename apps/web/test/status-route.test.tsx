@@ -1,8 +1,5 @@
 import { render, screen, within } from "@testing-library/react";
-import {
-  RouterProvider,
-  createMemoryHistory,
-} from "@tanstack/react-router";
+import { RouterProvider, createMemoryHistory } from "@tanstack/react-router";
 import { act } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -46,17 +43,11 @@ describe("about route", () => {
       await router.load();
     });
 
-    expect(
-      await screen.findByText(
-        "Draft an email",
-      ),
-    ).toBeInTheDocument();
+    expect(await screen.findByText("Draft an email")).toBeInTheDocument();
 
     const main = screen.getByRole("main");
 
-    expect(
-      await within(main).findByText("gwen.phalan@unimatrix-01.dev"),
-    ).toBeInTheDocument();
+    expect(await within(main).findByText("gwen.phalan@unimatrix-01.dev")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /open email draft/i })).toBeInTheDocument();
   });
 });

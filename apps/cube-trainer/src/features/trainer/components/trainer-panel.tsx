@@ -33,7 +33,10 @@ export function TrainerPanel({
   }, [next]);
 
   return (
-    <Card className="site-panel site-panel-strong flex min-h-96 flex-col items-center justify-center gap-6 px-6 py-10 text-center" ref={panelRef}>
+    <Card
+      className="site-panel site-panel-strong flex min-h-96 flex-col items-center justify-center gap-6 px-6 py-10 text-center"
+      ref={panelRef}
+    >
       {currentCase && diagram ? (
         <>
           <LastLayerDiagramView

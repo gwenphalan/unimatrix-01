@@ -1,9 +1,4 @@
-import {
-  HeadContent,
-  Link,
-  Outlet,
-  createRootRouteWithContext,
-} from "@tanstack/react-router";
+import { HeadContent, Link, Outlet, createRootRouteWithContext } from "@tanstack/react-router";
 import { RiAlertLine } from "@remixicon/react";
 import { useRef } from "react";
 

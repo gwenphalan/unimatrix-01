@@ -41,7 +41,8 @@ describe("createAccountUserStore", () => {
     it("resolves undefined when getDocument 404s", async () => {
       const fetchMock = fetchMockOf(
         createResponse({
-          json: () => Promise.resolve({ error: { code: "NOT_FOUND", message: "Document not found." } }),
+          json: () =>
+            Promise.resolve({ error: { code: "NOT_FOUND", message: "Document not found." } }),
           ok: false,
           status: 404,
         }),
@@ -143,7 +144,10 @@ describe("createAccountUserStore", () => {
         fetch: fetchMock,
       });
 
-      const metadata = await store.files.upload("avatar.png", new Blob(["12345"], { type: "image/png" }));
+      const metadata = await store.files.upload(
+        "avatar.png",
+        new Blob(["12345"], { type: "image/png" }),
+      );
 
       expect(metadata.key).toBe("avatar.png");
       expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -201,7 +205,9 @@ describe("createAccountUserStore", () => {
 
     it("returns the blob body from getBlob on success", async () => {
       const fakeBlob = new Blob(["file-bytes"], { type: "image/png" });
-      const fetchMock = fetchMockOf(createResponse({ ok: true, status: 200, blob: () => Promise.resolve(fakeBlob) }));
+      const fetchMock = fetchMockOf(
+        createResponse({ ok: true, status: 200, blob: () => Promise.resolve(fakeBlob) }),
+      );
       const store = createAccountUserStore({
         namespace: NAMESPACE,
         baseUrl: BASE_URL,

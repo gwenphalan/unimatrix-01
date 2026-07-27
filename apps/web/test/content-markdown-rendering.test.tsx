@@ -31,15 +31,7 @@ const renderer = "safe-gfm";
 [Internal](/projects/unimatrix-01)
 
 ![Topology](/content/ops-console-topology.svg)`,
-      ({
-        children,
-        className,
-        href,
-      }: {
-        children: ReactNode;
-        className: string;
-        href: string;
-      }) =>
+      ({ children, className, href }: { children: ReactNode; className: string; href: string }) =>
         createElement(
           "a",
           {

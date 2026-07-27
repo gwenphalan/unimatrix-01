@@ -32,7 +32,8 @@ function createFakeStore(mode: "account" | "guest"): {
       documents.delete(key);
       return Promise.resolve();
     },
-    list: () => Promise.resolve([...documents.values()].map((doc) => ({ key: doc.key, value: doc.value }))),
+    list: () =>
+      Promise.resolve([...documents.values()].map((doc) => ({ key: doc.key, value: doc.value }))),
   };
 
   const filesStore: UserFilesStore = {
@@ -188,7 +189,9 @@ describe("migrateGuestDataToAccount", () => {
       guest: guest.store,
     });
 
-    await expect(guest.store.settings.list()).resolves.toEqual([{ key: "progress", value: { streak: 3 } }]);
+    await expect(guest.store.settings.list()).resolves.toEqual([
+      { key: "progress", value: { streak: 3 } },
+    ]);
   });
 
   it("throws when account/guest store modes are swapped", async () => {

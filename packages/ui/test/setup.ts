@@ -2,8 +2,9 @@ import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
 import { afterEach } from "vitest";
 
-(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean })
-  .IS_REACT_ACT_ENVIRONMENT = true;
+(
+  globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true;
 
 // jsdom ships no `ResizeObserver`, so components that construct one
 // unconditionally (`CircuitField`'s grid-phase effect, the occluder provider)
@@ -18,8 +19,8 @@ if (!("ResizeObserver" in globalThis)) {
     disconnect(): void {}
   }
 
-  (globalThis as typeof globalThis & { ResizeObserver: typeof ResizeObserver })
-    .ResizeObserver = NoopResizeObserver;
+  (globalThis as typeof globalThis & { ResizeObserver: typeof ResizeObserver }).ResizeObserver =
+    NoopResizeObserver;
 }
 
 afterEach(() => {

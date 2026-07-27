@@ -1,7 +1,4 @@
-import {
-  ContentValidationError,
-  type ContentValidationIssue,
-} from "./errors.js";
+import { ContentValidationError, type ContentValidationIssue } from "./errors.js";
 
 export type FrontmatterValue = boolean | string;
 
@@ -14,10 +11,7 @@ const FRONTMATTER_DELIMITER = "---";
 const FRONTMATTER_OPENING = `${FRONTMATTER_DELIMITER}\n`;
 const FRONTMATTER_CLOSING = `\n${FRONTMATTER_DELIMITER}\n`;
 
-export function parseFrontmatterDocument(
-  source: string,
-  filePath: string,
-): FrontmatterDocument {
+export function parseFrontmatterDocument(source: string, filePath: string): FrontmatterDocument {
   const normalizedSource = source.replace(/\r\n?/gu, "\n");
 
   if (!normalizedSource.startsWith(FRONTMATTER_OPENING)) {
@@ -29,10 +23,7 @@ export function parseFrontmatterDocument(
     ]);
   }
 
-  const closingIndex = normalizedSource.indexOf(
-    FRONTMATTER_CLOSING,
-    FRONTMATTER_OPENING.length,
-  );
+  const closingIndex = normalizedSource.indexOf(FRONTMATTER_CLOSING, FRONTMATTER_OPENING.length);
 
   if (closingIndex === -1) {
     throw new ContentValidationError(filePath, [
@@ -43,13 +34,8 @@ export function parseFrontmatterDocument(
     ]);
   }
 
-  const rawFrontmatter = normalizedSource.slice(
-    FRONTMATTER_OPENING.length,
-    closingIndex,
-  );
-  const body = normalizedSource
-    .slice(closingIndex + FRONTMATTER_CLOSING.length)
-    .trim();
+  const rawFrontmatter = normalizedSource.slice(FRONTMATTER_OPENING.length, closingIndex);
+  const body = normalizedSource.slice(closingIndex + FRONTMATTER_CLOSING.length).trim();
   const frontmatter: Record<string, FrontmatterValue> = {};
   const issues: ContentValidationIssue[] = [];
 

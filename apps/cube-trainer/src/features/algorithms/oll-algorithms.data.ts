@@ -13,21 +13,33 @@ export const OLL_ALGORITHMS: AlgorithmCase[] = [
     id: "oll-2",
     displayName: "OLL 2",
     group: "Dot",
-    algorithms: ["r U r' U2 r U2 R' U2 R U' r'", "y' F R U R' U' F' f R U R' U' f'", "y' F R U R' U' S R U R' U' f'"],
+    algorithms: [
+      "r U r' U2 r U2 R' U2 R U' r'",
+      "y' F R U R' U' F' f R U R' U' f'",
+      "y' F R U R' U' S R U R' U' f'",
+    ],
     probabilityWeight: 4,
   },
   {
     id: "oll-3",
     displayName: "OLL 3",
     group: "Dot",
-    algorithms: ["r' R2 U R' U r U2 r' U M'", "y F U R U' R' F' U F R U R' U' F'", "y' f R U R' U' f' U' F R U R' U' F'"],
+    algorithms: [
+      "r' R2 U R' U r U2 r' U M'",
+      "y F U R U' R' F' U F R U R' U' F'",
+      "y' f R U R' U' f' U' F R U R' U' F'",
+    ],
     probabilityWeight: 4,
   },
   {
     id: "oll-4",
     displayName: "OLL 4",
     group: "Dot",
-    algorithms: ["M U' r U2 r' U' R U' R' M'", "y F U R U' R' F' U' F R U R' U' F'", "y' f R U R' U' f' U F R U R' U' F'"],
+    algorithms: [
+      "M U' r U2 r' U' R U' R' M'",
+      "y F U R U' R' F' U' F R U R' U' F'",
+      "y' f R U R' U' f' U F R U R' U' F'",
+    ],
     probabilityWeight: 4,
   },
   {
@@ -328,7 +340,11 @@ export const OLL_ALGORITHMS: AlgorithmCase[] = [
     id: "oll-47",
     displayName: "OLL 47",
     group: "Small L Shape",
-    algorithms: ["R' U' R' F R F' R' F R F' U R", "F' L' U' L U L' U' L U F", "y' F U R U' R' F' R U R' U R U2 R'"],
+    algorithms: [
+      "R' U' R' F R F' R' F R F' U R",
+      "F' L' U' L U L' U' L U F",
+      "y' F U R U' R' F' R U R' U R U2 R'",
+    ],
     probabilityWeight: 4,
   },
   {
@@ -363,14 +379,22 @@ export const OLL_ALGORITHMS: AlgorithmCase[] = [
     id: "oll-52",
     displayName: "OLL 52",
     group: "I Shape",
-    algorithms: ["R U R' U R U' B U' B' R'", "y2 R' F' U' F U' (R U R' U) R", "R U R' U R U' y R U' R' F'"],
+    algorithms: [
+      "R U R' U R U' B U' B' R'",
+      "y2 R' F' U' F U' (R U R' U) R",
+      "R U R' U R U' y R U' R' F'",
+    ],
     probabilityWeight: 4,
   },
   {
     id: "oll-53",
     displayName: "OLL 53",
     group: "Small L Shape",
-    algorithms: ["l' U2 L U L' U' L U L' U l", "y2 r' U2 (R U R' U') R U R' U r", "y r' U' R U' R' U R U' R' U2 r"],
+    algorithms: [
+      "l' U2 L U L' U' L U L' U l",
+      "y2 r' U2 (R U R' U') R U R' U r",
+      "y r' U' R U' R' U R U' R' U2 r",
+    ],
     probabilityWeight: 4,
   },
   {
@@ -391,7 +415,11 @@ export const OLL_ALGORITHMS: AlgorithmCase[] = [
     id: "oll-56",
     displayName: "OLL 56",
     group: "I Shape",
-    algorithms: ["(r' U' r) U' R' U R U' R' U R r' U r", "(r U r') U R U' R' U R U' R' (r U' r')", "(r U r') U R U' R' U R U' M' U' r'"],
+    algorithms: [
+      "(r' U' r) U' R' U R U' R' U R r' U r",
+      "(r U r') U R U' R' U R U' R' (r U' r')",
+      "(r U r') U R U' R' U R U' M' U' r'",
+    ],
     probabilityWeight: 2,
   },
   {

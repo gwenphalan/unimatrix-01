@@ -5,11 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ApiClientError, createApiClient } from "../src/client.js";
 
-function createResponse(options: {
-  json?: () => Promise<unknown>;
-  ok: boolean;
-  status: number;
-}) {
+function createResponse(options: { json?: () => Promise<unknown>; ok: boolean; status: number }) {
   return {
     json:
       options.json ??
