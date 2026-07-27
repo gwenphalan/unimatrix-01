@@ -42,6 +42,13 @@ Thumbs.db
 # misc
 *.log
 
+# Claude Code local state. `.claude/settings.json` is deliberately NOT ignored:
+# project-scoped settings are meant to be shared. Only per-developer state is.
+.claude/settings.local.json
+.claude/settings.local.json.bak.*
+.claude/scheduled_tasks.lock
+.claude/worktrees/
+
 # issue workflow artifacts
 .issues/
 .issues/*.md
