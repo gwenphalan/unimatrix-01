@@ -25,6 +25,10 @@ export function inflateRect(rect: Rect, buffer: number): Rect {
   return { x0: rect.x0 - buffer, y0: rect.y0 - buffer, x1: rect.x1 + buffer, y1: rect.y1 + buffer };
 }
 
+export function translateRect(rect: Rect, dx: number, dy: number): Rect {
+  return { x0: rect.x0 + dx, y0: rect.y0 + dy, x1: rect.x1 + dx, y1: rect.y1 + dy };
+}
+
 export type BarrierField = {
   /** Buffer-inflated occluder rects, for exact (non-lattice-snapped) segment tests. */
   readonly buffered: readonly Rect[];
@@ -75,12 +79,6 @@ export function isCellBlocked(field: BarrierField, point: Point): boolean {
   return field.cells.has(cellKey(point));
 }
 
-export function isPointInBarrier(field: BarrierField, point: Point): boolean {
-  return field.buffered.some(
-    (rect) => point.x >= rect.x0 && point.x <= rect.x1 && point.y >= rect.y0 && point.y <= rect.y1,
-  );
-}
-
 /**
  * Exact (non-lattice-snapped) segment-vs-barrier test via Liang-Barsky
  * clipping against each inflated rect — the enforcement primitive for "a
@@ -121,22 +119,4 @@ function segmentIntersectsRect(a: Point, b: Point, rect: Rect): boolean {
   }
 
   return t0 <= t1;
-}
-
-/** Count of lattice cells (within the same 1-cell-inset bounds
- * `clampToLattice` uses) not blocked by `field` — the barrier-aware
- * replacement for the old openness-weighted area estimate, consumed only by
- * trace generation's free-space partitioning. */
-export function countFreeCells(field: BarrierField, width: number, height: number): number {
-  const maxCx = Math.max(1, Math.round(width / GRID) - 1);
-  const maxCy = Math.max(1, Math.round(height / GRID) - 1);
-  let free = 0;
-
-  for (let cx = 1; cx <= maxCx; cx += 1) {
-    for (let cy = 1; cy <= maxCy; cy += 1) {
-      if (!field.cells.has(`${cx},${cy}`)) free += 1;
-    }
-  }
-
-  return free;
 }

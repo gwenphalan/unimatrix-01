@@ -230,7 +230,7 @@ describe("CircuitOccluderProvider / useCircuitOccluder", () => {
     expect(latestDelta).toBeUndefined();
   });
 
-  it("a scroll-triggered measurement never changes useCircuitOccluderRects()'s value", async () => {
+  it("a scroll-triggered measurement does not immediately change useCircuitOccluderRects()'s value", async () => {
     const rectsSeen: (readonly { x0: number; y0: number; x1: number; y1: number }[])[] = [];
     const rect = makeRect({ left: 0, top: 0, right: 100, bottom: 100 });
 
@@ -255,6 +255,40 @@ describe("CircuitOccluderProvider / useCircuitOccluder", () => {
     expect(rectsSeen.length).toBe(countBeforeScroll);
     expect(rectsSeen[rectsSeen.length - 1]).toEqual([{ x0: 0, y0: 0, x1: 100, y1: 100 }]);
   });
+
+  it("commits the settled rect via useCircuitOccluderRects() once scrolling stops", async () => {
+    const rectsSeen: (readonly { x0: number; y0: number; x1: number; y1: number }[])[] = [];
+    const rect = makeRect({ left: 0, top: 0, right: 100, bottom: 100 });
+
+    render(
+      <CircuitOccluderProvider>
+        <Registrant rect={rect} />
+        <RectsProbe onRects={(r) => rectsSeen.push(r)} />
+      </CircuitOccluderProvider>,
+    );
+
+    await flushRaf();
+
+    rect.top = 400;
+    rect.bottom = 450;
+
+    await act(async () => {
+      scroll();
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+    });
+
+    // Not yet committed — scroll only notifies the delta path immediately.
+    expect(rectsSeen[rectsSeen.length - 1]).toEqual([{ x0: 0, y0: 0, x1: 100, y1: 100 }]);
+
+    // Past SCROLL_SETTLE_MS: the settle timer should have forced a
+    // structural commit of the settled rect.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    });
+    await flushRaf();
+
+    expect(rectsSeen[rectsSeen.length - 1]).toEqual([{ x0: 0, y0: 400, x1: 100, y1: 450 }]);
+  }, 10000);
 
   it("a structural ResizeObserver change does not also notify useCircuitOccluderDelta", async () => {
     let latestDelta: Rect[] | undefined;
@@ -338,7 +372,7 @@ describe("CircuitOccluderProvider / useCircuitOccluder", () => {
   it("skips registering an element narrower than MIN_OCCLUDER_SIDE_PX and warns", async () => {
     let latestRects: readonly { x0: number; y0: number; x1: number; y1: number }[] = [];
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    const rect = makeRect({ left: 0, top: 0, right: 50, bottom: 100 }); // 50px wide, under the 80px floor
+    const rect = makeRect({ left: 0, top: 0, right: 30, bottom: 100 }); // 30px wide, under the one-grid-cell (40px) floor
 
     render(
       <CircuitOccluderProvider>
@@ -360,7 +394,7 @@ describe("CircuitOccluderProvider / useCircuitOccluder", () => {
 
   it("registers an element at exactly MIN_OCCLUDER_SIDE_PX on both sides", async () => {
     let latestRects: readonly { x0: number; y0: number; x1: number; y1: number }[] = [];
-    const rect = makeRect({ left: 0, top: 0, right: 80, bottom: 80 });
+    const rect = makeRect({ left: 0, top: 0, right: 40, bottom: 40 });
 
     render(
       <CircuitOccluderProvider>
@@ -371,7 +405,25 @@ describe("CircuitOccluderProvider / useCircuitOccluder", () => {
 
     await flushRaf();
 
-    expect(latestRects).toEqual([{ x0: 0, y0: 0, x1: 80, y1: 80 }]);
+    expect(latestRects).toEqual([{ x0: 0, y0: 0, x1: 40, y1: 40 }]);
+  });
+
+  it("registers a full-width bar thinner than two grid cells but at least one (a real header/footer shape)", async () => {
+    let latestRects: readonly { x0: number; y0: number; x1: number; y1: number }[] = [];
+    // Matches the live regression: a 1392x76 header and a 1392x66 footer
+    // were both silently dropped under a two-grid-cell (80px) floor.
+    const rect = makeRect({ left: 0, top: 0, right: 1392, bottom: 76 });
+
+    render(
+      <CircuitOccluderProvider>
+        <Registrant rect={rect} />
+        <RectsProbe onRects={(r) => (latestRects = r)} />
+      </CircuitOccluderProvider>,
+    );
+
+    await flushRaf();
+
+    expect(latestRects).toEqual([{ x0: 0, y0: 0, x1: 1392, y1: 76 }]);
   });
 
   it("stamps data-circuit-occluder on register and removes it on unregister", async () => {
@@ -435,5 +487,37 @@ describe("CircuitOccluderProvider / useCircuitOccluder", () => {
     expect(warn).toHaveBeenCalledWith(expect.stringContaining("useCircuitOccluder called outside a CircuitOccluderProvider"));
 
     warn.mockRestore();
+  });
+
+  /**
+   * Regression guard for a real live bug: under React.StrictMode, the
+   * measurement-scheduling effect mounts, is immediately cleaned up
+   * (StrictMode's simulated unmount), then remounts. The cleanup used to
+   * cancel the pending rAF without resetting `rafRef.current` back to
+   * `null` — the remount's own `scheduleMeasure()` call then saw a
+   * non-null (but already-cancelled) handle and silently never scheduled
+   * a replacement, so `flush()` never ran again and `useCircuitOccluderRects()`
+   * stayed `[]` forever, i.e. every occluder in the app was permanently
+   * invisible to `CircuitField`. Confirmed live: `apps/web` mounts under
+   * `React.StrictMode`, and this exact sequence made hard-barrier
+   * enforcement a silent no-op in the running app despite every unit test
+   * (none of which render under StrictMode) passing.
+   */
+  it("still populates rects after React.StrictMode's simulated mount->unmount->remount", async () => {
+    let latestRects: readonly { x0: number; y0: number; x1: number; y1: number }[] = [];
+    const rect = makeRect({ left: 0, top: 0, right: 100, bottom: 100 });
+
+    render(
+      <React.StrictMode>
+        <CircuitOccluderProvider>
+          <Registrant rect={rect} />
+          <RectsProbe onRects={(r) => (latestRects = r)} />
+        </CircuitOccluderProvider>
+      </React.StrictMode>,
+    );
+
+    await flushRaf();
+
+    expect(latestRects).toEqual([{ x0: 0, y0: 0, x1: 100, y1: 100 }]);
   });
 });

@@ -5,7 +5,7 @@ import { CircuitDebugOverlay } from "./circuit-debug-overlay.js";
 import { installCircuitDebugConsoleApi } from "./circuit-debug.js";
 import { useCircuitOccluderDelta, useCircuitOccluderRects } from "./circuit-occluder.js";
 import { createFrameBudgetProbe } from "./frame-budget.js";
-import { type Point, type RoutePoint, cellKey, densify, easeInOutCubic, hashString, pathData, polylineLength, recomputeCorners, snap } from "./grid-math.js";
+import { GRID, type Point, type RoutePoint, cellKey, densify, easeInOutCubic, hashString, pathData, polylineLength, recomputeCorners, snap } from "./grid-math.js";
 import {
   IDLE_PACKET_MAX_CONCURRENT,
   IDLE_PACKET_POOL_SIZE,
@@ -16,7 +16,15 @@ import {
   buildPacketGraph,
   packetsOffLiveGeometry,
 } from "./idle-packets.js";
-import { type BarrierField, type Occluder, type Rect, OCCLUDER_AFFECT_MARGIN_PX, buildBarrierField } from "./occlusion.js";
+import {
+  type BarrierField,
+  type Occluder,
+  type Rect,
+  OCCLUDER_AFFECT_MARGIN_PX,
+  buildBarrierField,
+  isCellBlocked,
+  translateRect,
+} from "./occlusion.js";
 import {
   buildCellAxisMap,
   buildRoute,
@@ -28,8 +36,14 @@ import {
 import { buildOccupiedFootprint, findAffectedTraceIds, retargetTip } from "./scroll-retarget.js";
 import { type Trace, generateTraces } from "./trace-generation.js";
 
-const MIN_TRACE_COUNT = 14;
-const MIN_TRACE_COUNT_AREA_DIVISOR = 55000;
+// Tile size of `.grid-backdrop`'s bold background tier, in `GRID` cells — a
+// mirror of the `240px` in `styles.css`, needed here only to phase that tier
+// (see the `--grid-bold-phase-*` effect below). Nothing else in this file
+// knows about the bold tier.
+const BOLD_GRID = GRID * 6;
+
+const MIN_TRACE_COUNT = 18;
+const MIN_TRACE_COUNT_AREA_DIVISOR = 40000;
 // A traceCount recompute only commits if the desired value differs from the
 // currently-committed one by more than this band — otherwise small occluder
 // jitter (e.g. a header reflowing a couple px on font load) would thrash the
@@ -126,6 +140,59 @@ function pointsEqual(a: readonly Point[], b: readonly Point[]): boolean {
 export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.Element | null {
   const size = useViewportSize();
   const debouncedSize = useDebouncedSize(size, RESIZE_SETTLE_MS, { heightJitterIgnorePx: HEIGHT_JITTER_IGNORE_PX });
+
+  // How far the whole lattice — background grid *and* rendered traces — is
+  // offset from the 0,0 origin so a grid line lands exactly on the page's
+  // centerline. Without it the lattice is lopsided against centered content
+  // on any viewport whose half-extent isn't a whole number of cells: the
+  // content edges sit at different distances from their nearest lines.
+  // Content is centered in the viewport here — measured live, the `mx-auto
+  // max-w-[92rem]` shell's rect center equals `clientWidth / 2` — so the
+  // viewport centerline *is* the content centerline.
+  //
+  // Both background tiers get a phase (`--grid-phase-*` for the 40px tier,
+  // `--grid-bold-phase-*` for the 240px one). They stay seam-locked because
+  // 240 is a whole multiple of GRID, so `center % 240 ≡ center % GRID`.
+  //
+  // `ResizeObserver` on `documentElement`, not a `size`/`useViewportSize`
+  // (`window.innerWidth/innerHeight`) dependency — this centers against
+  // `clientWidth/clientHeight` (excludes the scrollbar gutter), which can
+  // change from a vertical scrollbar toggling on/off, with no matching
+  // `innerWidth/innerHeight` change to re-trigger a `size`-keyed effect.
+  // That gap left the phase permanently stale at whatever it computed
+  // before the first scrollbar appeared — confirmed live. `clientHeight` on
+  // `documentElement` is the *viewport* height, not the content height, so
+  // this fires on real viewport changes only and never thrashes.
+  const [gridPhase, setGridPhase] = React.useState<Point>({ x: 0, y: 0 });
+
+  React.useEffect(() => {
+    const root = document.documentElement;
+    // `background-position: P` on a tile of size T puts lines at `P + n * T`,
+    // so a line hits `center` exactly when `P ≡ center (mod T)`.
+    const phase = (extent: number, tile: number) => ((extent / 2) % tile) + (extent < 0 ? tile : 0);
+
+    const apply = () => {
+      const x = phase(root.clientWidth, GRID);
+      const y = phase(root.clientHeight, GRID);
+      root.style.setProperty("--grid-phase-x", `${x}px`);
+      root.style.setProperty("--grid-phase-y", `${y}px`);
+      root.style.setProperty("--grid-bold-phase-x", `${phase(root.clientWidth, BOLD_GRID)}px`);
+      root.style.setProperty("--grid-bold-phase-y", `${phase(root.clientHeight, BOLD_GRID)}px`);
+      // Traces are generated on the unphased `n * GRID` lattice and shifted
+      // into place at render time (see the translated `<g>` below), so the
+      // fine phase has to reach the render as state, not just as a CSS var.
+      setGridPhase((previous) => (previous.x === x && previous.y === y ? previous : { x, y }));
+    };
+
+    apply();
+    const observer = new ResizeObserver(() => {
+      apply();
+    });
+    observer.observe(root);
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
   const { mode: motionMode, demoteToStatic, idleGlowEligible } = useMotionMode();
   const occluders = useCircuitOccluderRects();
 
@@ -470,21 +537,47 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
   }, [viaItems]);
 
   // Hard-barrier field derived from the structurally-committed occluder set
-  // (`useCircuitOccluderRects()`). The scroll-delta path never commits this
-  // context (see `circuit-occluder.tsx`'s provider doc comment), so
+  // (`useCircuitOccluderRects()`). Mid-scroll this context lags the real
+  // geometry (the scroll-delta path only commits once scrolling settles —
+  // see `circuit-occluder.tsx`'s provider doc comment), so
   // `handleOccluderDelta` below builds its own barrier field from the
   // scroll-fresh `liveOccluders` it receives instead of reading this memo.
-  const barriers: BarrierField = React.useMemo(() => buildBarrierField(occluders), [occluders]);
+  //
+  // Occluders are shifted by `-gridPhase` on the way in, the exact inverse of
+  // the `+gridPhase` translate the rendered `<g>` applies: generation runs on
+  // the unphased `n * GRID` lattice it has always used (nothing in
+  // `trace-generation`/`route-engine`/`scroll-retarget` needs to learn about
+  // phase), and a trace that clears a shifted barrier in that space clears
+  // the real DOM rect once translated back. Exact, not approximate — the two
+  // shifts cancel.
+  const barriers: BarrierField = React.useMemo(
+    () => buildBarrierField(occluders.map((rect) => translateRect(rect, -gridPhase.x, -gridPhase.y))),
+    [occluders, gridPhase],
+  );
+
+  // The viewport box as generation sees it: shrunk by the phase the rendered
+  // `<g>` then adds back. Generation keeps everything within `GRID` of these
+  // bounds, so without the shrink the `+gridPhase` translate pushes the
+  // right/bottom-most traces past the real viewport edge, where the SVG
+  // clips them mid-run — they read as running off the page.
+  const latticeSize = React.useMemo(
+    () =>
+      debouncedSize
+        ? { width: debouncedSize.width - gridPhase.x, height: debouncedSize.height - gridPhase.y }
+        : null,
+    [debouncedSize, gridPhase],
+  );
 
   const targetTraces = React.useMemo(() => {
-    if (!debouncedSize || traceCount === null) return null;
+    if (!latticeSize || !debouncedSize || traceCount === null) return null;
 
     // Occluder rects feed barrier geometry only, never the seed — a panel
     // resize must not re-seed the whole field and blow away an in-flight
-    // crawl.
+    // crawl. Seeded off the unshrunk viewport so a phase change alone (which
+    // only ever accompanies a resize) isn't an extra source of re-seeding.
     const seed = hashString(`${routeKey}:${debouncedSize.width}x${debouncedSize.height}`);
-    return generateTraces(debouncedSize.width, debouncedSize.height, seed, barriers, traceCount);
-  }, [routeKey, debouncedSize?.width, debouncedSize?.height, traceCount, barriers]);
+    return generateTraces(latticeSize.width, latticeSize.height, seed, barriers, traceCount);
+  }, [routeKey, debouncedSize?.width, debouncedSize?.height, latticeSize, traceCount, barriers]);
 
   // The single shared rAF driving every in-flight transition. Reads
   // `transitionsRef` fresh each frame instead of closing over a fixed
@@ -1080,7 +1173,7 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
   // approach `runTick` already uses.
   const handleOccluderDelta = React.useCallback(
     (dirtyRects: Rect[], liveOccluders: Occluder[]) => {
-      if (!debouncedSize) return;
+      if (!debouncedSize || !latticeSize) return;
       const now = performance.now();
 
       const tips: { id: string; point: Point }[] = [];
@@ -1090,22 +1183,44 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
         if (last) tips.push({ id, point: last });
       });
 
-      const candidateIds = findAffectedTraceIds(tips, dirtyRects, OCCLUDER_AFFECT_MARGIN_PX)
+      // Built from `liveOccluders` (the scroll-fresh full set this delta
+      // callback receives), not the `barriers` memo above — that memo only
+      // updates on a structural commit, which the scroll path deliberately
+      // never triggers (see `circuit-occluder.tsx`'s provider doc comment).
+      // Built before `candidateIds` below: the barrier-membership filter
+      // needs it ahead of the `slice`, not after.
+      // Shifted by `-gridPhase` for the same reason the `barriers` memo above
+      // is: `tips` are in the unphased generation lattice, so every rect
+      // compared against them — barriers *and* `dirtyRects` — has to be
+      // pulled into that same space first.
+      const liveBarriers = buildBarrierField(
+        liveOccluders.map((rect) => translateRect(rect, -gridPhase.x, -gridPhase.y)),
+      );
+      const shiftedDirtyRects = dirtyRects.map((rect) => translateRect(rect, -gridPhase.x, -gridPhase.y));
+      const tipById = new Map(tips.map((tip) => [tip.id, tip.point]));
+
+      const candidateIds = findAffectedTraceIds(tips, shiftedDirtyRects, OCCLUDER_AFFECT_MARGIN_PX)
         // A trace already mid-crawl has a `liveBodyRef` entry that's a
         // `sliceWindow(...)` partial window (old body + connector + new
         // body) — retargeting off that would truncate it and abandon its
         // real target, so never interrupt one.
         .filter((id) => !transitionsRef.current.has(id))
         .filter((id) => now - (lastRetargetAtRef.current.get(id) ?? 0) >= RETARGET_COOLDOWN_MS)
+        // `retargetTip` only ever fires as a genuine barrier escape (never
+        // an ambient nudge — see its own doc comment), so a tip that isn't
+        // actually swallowed by a barrier can never produce a retarget.
+        // This must run *before* the slice below: `findAffectedTraceIds`'s
+        // 160px margin can easily surface more than
+        // `MAX_SCROLL_RETARGETS_PER_EVENT` nearby tips, and the one that's
+        // actually blocked isn't guaranteed to be among the first few.
+        .filter((id) => {
+          const tip = tipById.get(id);
+          return tip ? isCellBlocked(liveBarriers, tip) : false;
+        })
         .slice(0, MAX_SCROLL_RETARGETS_PER_EVENT);
 
       if (candidateIds.length === 0) return;
 
-      // Built from `liveOccluders` (the scroll-fresh full set this delta
-      // callback receives), not the `barriers` memo above — that memo only
-      // updates on a structural commit, which the scroll path deliberately
-      // never triggers (see `circuit-occluder.tsx`'s provider doc comment).
-      const liveBarriers = buildBarrierField(liveOccluders);
       const retargets: RetargetEntry[] = [];
       // Cells claimed by a candidate already resolved earlier in this same
       // delta event — `liveBodyRef` for that candidate isn't mutated until
@@ -1125,7 +1240,7 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
         );
         const occupied = buildOccupiedFootprint(liveBodyRef.current, id, inFlightToBodies);
         pendingCells.forEach((cell) => occupied.add(cell));
-        const newTip = retargetTip(liveBody, occupied, liveBarriers, debouncedSize.width, debouncedSize.height);
+        const newTip = retargetTip(liveBody, occupied, liveBarriers, latticeSize.width, latticeSize.height);
         if (!newTip) return;
         pendingCells.add(cellKey(newTip));
 
@@ -1147,7 +1262,7 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
 
       applyRetargets(retargets, now);
     },
-    [applyRetargets, debouncedSize, traceIds],
+    [applyRetargets, debouncedSize, gridPhase, latticeSize, traceIds],
   );
 
   useCircuitOccluderDelta(handleOccluderDelta);
@@ -1320,75 +1435,83 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
         style={{ position: "fixed", inset: 0, zIndex: -1, pointerEvents: "none" }}
         width={size.width}
       >
-        <g
-          className="circuit-field-glow"
-          fill="none"
-          stroke="color-mix(in oklab, var(--primary) 60%, var(--background))"
-          strokeLinecap="square"
-          strokeWidth={1.5}
-        >
-          {traceIds.map((id) => (
-            <path key={id} ref={pathRefCallbacks.get(id)} />
-          ))}
-        </g>
-        <g className="circuit-field-glow" fill="color-mix(in oklab, var(--primary) 60%, var(--background))">
-          {viaItems.map((item) => (
-            <rect
-              className={item.boot ? "circuit-field-via" : undefined}
-              height={6}
-              key={item.key}
-              ref={viaRefCallback(item.key)}
-              style={item.boot ? { animationDelay: `${item.delay}ms` } : { opacity: item.initiallyVisible ? 1 : 0 }}
-              width={6}
-              x={item.x - 3}
-              y={item.y - 3}
-            />
-          ))}
-          {traceIds.flatMap((id) => [
-            <rect
-              height={6}
-              key={`${id}-tail`}
-              ref={tipRefCallback(`${id}-tail`)}
-              style={{ opacity: 0 }}
-              width={6}
-              x={-3}
-              y={-3}
-            />,
-            <rect
-              height={6}
-              key={`${id}-head`}
-              ref={tipRefCallback(`${id}-head`)}
-              style={{ opacity: 0 }}
-              width={6}
-              x={-3}
-              y={-3}
-            />,
-          ])}
-          {intersectionSlotIds.map((key) => (
-            <rect
-              height={6}
-              key={key}
-              ref={intersectionRefCallback(key)}
-              style={{ opacity: 0 }}
-              width={6}
-              x={-3}
-              y={-3}
-            />
-          ))}
-        </g>
-        <g className="circuit-field-glow" fill="var(--primary)">
-          {packetSlotIds.map((key) => (
-            <rect
-              className="circuit-field-packet"
-              height={6}
-              key={key}
-              ref={packetRefCallback(key)}
-              style={{ opacity: 0 }}
-              width={6}
-              x={-3}
-              y={-3}
-            />
-          ))}
+        {/* The one place the lattice phase is applied to rendered output.
+            Everything inside is generated on the unphased `n * GRID` lattice
+            against `-gridPhase`-shifted barriers, so this translate is what
+            puts traces back in real viewport coordinates — aligned with the
+            equally-phased background grid, and still clear of the real
+            occluder rects the sibling debug overlay draws unshifted. */}
+        <g transform={`translate(${gridPhase.x} ${gridPhase.y})`}>
+          <g
+            className="circuit-field-glow"
+            fill="none"
+            stroke="color-mix(in oklab, var(--primary) 60%, var(--background))"
+            strokeLinecap="square"
+            strokeWidth={1.5}
+          >
+            {traceIds.map((id) => (
+              <path key={id} ref={pathRefCallbacks.get(id)} />
+            ))}
+          </g>
+          <g className="circuit-field-glow" fill="color-mix(in oklab, var(--primary) 60%, var(--background))">
+            {viaItems.map((item) => (
+              <rect
+                className={item.boot ? "circuit-field-via" : undefined}
+                height={6}
+                key={item.key}
+                ref={viaRefCallback(item.key)}
+                style={item.boot ? { animationDelay: `${item.delay}ms` } : { opacity: item.initiallyVisible ? 1 : 0 }}
+                width={6}
+                x={item.x - 3}
+                y={item.y - 3}
+              />
+            ))}
+            {traceIds.flatMap((id) => [
+              <rect
+                height={6}
+                key={`${id}-tail`}
+                ref={tipRefCallback(`${id}-tail`)}
+                style={{ opacity: 0 }}
+                width={6}
+                x={-3}
+                y={-3}
+              />,
+              <rect
+                height={6}
+                key={`${id}-head`}
+                ref={tipRefCallback(`${id}-head`)}
+                style={{ opacity: 0 }}
+                width={6}
+                x={-3}
+                y={-3}
+              />,
+            ])}
+            {intersectionSlotIds.map((key) => (
+              <rect
+                height={6}
+                key={key}
+                ref={intersectionRefCallback(key)}
+                style={{ opacity: 0 }}
+                width={6}
+                x={-3}
+                y={-3}
+              />
+            ))}
+          </g>
+          <g className="circuit-field-glow" fill="var(--primary)">
+            {packetSlotIds.map((key) => (
+              <rect
+                className="circuit-field-packet"
+                height={6}
+                key={key}
+                ref={packetRefCallback(key)}
+                style={{ opacity: 0 }}
+                width={6}
+                x={-3}
+                y={-3}
+              />
+            ))}
+          </g>
         </g>
       </svg>
       <CircuitDebugOverlay occluders={occluders} />

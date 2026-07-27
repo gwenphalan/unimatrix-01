@@ -5,10 +5,8 @@ import {
   OCCLUDER_BUFFER_PX,
   type Occluder,
   buildBarrierField,
-  countFreeCells,
   inflateRect,
   isCellBlocked,
-  isPointInBarrier,
   segmentCrossesBarrier,
 } from "../src/components/occlusion.js";
 
@@ -57,18 +55,16 @@ describe("buildBarrierField cell blocking", () => {
   });
 });
 
-describe("isCellBlocked / isPointInBarrier", () => {
+describe("isCellBlocked", () => {
   const rect: Occluder = { x0: 100, y0: 100, x1: 300, y1: 300 };
   const field = buildBarrierField([rect], OCCLUDER_BUFFER_PX);
 
   it("reports a point deep inside the occluder as blocked", () => {
     expect(isCellBlocked(field, { x: 200, y: 200 })).toBe(true);
-    expect(isPointInBarrier(field, { x: 200, y: 200 })).toBe(true);
   });
 
   it("reports a point far outside the occluder as clear", () => {
     expect(isCellBlocked(field, { x: 1000, y: 1000 })).toBe(false);
-    expect(isPointInBarrier(field, { x: 1000, y: 1000 })).toBe(false);
   });
 });
 
@@ -96,22 +92,5 @@ describe("segmentCrossesBarrier", () => {
   it("treats a zero-length segment as a point test", () => {
     expect(segmentCrossesBarrier(field, { x: 200, y: 200 }, { x: 200, y: 200 })).toBe(true);
     expect(segmentCrossesBarrier(field, { x: 1000, y: 1000 }, { x: 1000, y: 1000 })).toBe(false);
-  });
-});
-
-describe("countFreeCells", () => {
-  it("counts every cell when there are no occluders", () => {
-    const field = buildBarrierField([]);
-    const width = GRID * 10;
-    const height = GRID * 10;
-    expect(countFreeCells(field, width, height)).toBe((10 - 1) * (10 - 1));
-  });
-
-  it("decreases when an occluder blocks cells", () => {
-    const width = GRID * 10;
-    const height = GRID * 10;
-    const empty = countFreeCells(buildBarrierField([]), width, height);
-    const withOccluder = countFreeCells(buildBarrierField([{ x0: 0, y0: 0, x1: GRID * 4, y1: height }]), width, height);
-    expect(withOccluder).toBeLessThan(empty);
   });
 });

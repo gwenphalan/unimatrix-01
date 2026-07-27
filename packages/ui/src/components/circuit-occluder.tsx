@@ -41,6 +41,21 @@ type DeltaSubscribe = (listener: DeltaListener) => () => void;
 // materially different occlusion-weight zone.
 const OCCLUDER_SCROLL_DELTA_PX = GRID;
 
+// How long scrolling must be quiet before the provider forces a structural
+// `RectsContext` commit of the settled rects. The scroll path's own
+// `handleOccluderDelta`/`retargetTip` nudge mechanism is bounded (a fixed
+// attempt count, a small search radius) and exists only to keep a crawling
+// trace visually escaping a moving occluder mid-scroll — it is not
+// guaranteed to fully clear every tip, and a fast or large scroll gesture
+// can outrun it, leaving a trace stranded inside an occluder's final
+// settled bounds (confirmed live on a tall article panel: scrolling to the
+// bottom and back left 11 path points inside the panel). A settle-triggered
+// structural commit is the correctness backstop: once scrolling actually
+// stops, `barriers`/`generateTraces` recompute against the real final
+// geometry, guaranteeing zero occluder violations regardless of how the
+// scroll gesture itself was handled.
+const SCROLL_SETTLE_MS = 200;
+
 // Suggested `maxHeightPx` for a content panel taller than a viewport (e.g. a
 // long markdown article) — generous vs typical viewport heights; needs a
 // real-browser visual pass to tune further.
@@ -49,10 +64,16 @@ export const TALL_OCCLUDER_MAX_HEIGHT_PX = 900;
 // A registrant narrower or shorter than this on either side never registers
 // as a hard-barrier occluder. Hard barriers snap outward to whole lattice
 // cells (see `occlusion.ts`'s `buildBarrierField`), so even a small
-// registrant blocks a multi-cell span — a stray badge-sized element would
-// otherwise carve a hole in the trace field several times its own size.
-// Two grid cells is the floor a genuine panel/card/footer clears easily.
-export const MIN_OCCLUDER_SIDE_PX = GRID * 2;
+// registrant blocks a multi-cell span — a stray badge/button-sized element
+// would otherwise carve a hole in the trace field several times its own
+// size. One grid cell, not two: a real full-width header/footer bar is
+// routinely 60-80px tall (well under two cells) while still being exactly
+// the kind of surface that should occlude — confirmed live, where an
+// earlier two-cell floor silently dropped both this site's header (76px)
+// and footer (66px) from registering at all. A single grid cell still
+// excludes badges/buttons/titles (routinely under 40px on their short
+// side) while clearing genuine bars/cards/panels.
+export const MIN_OCCLUDER_SIDE_PX = GRID;
 
 // Registration stays explicit opt-in (no DOM-scanning heuristic) — this is
 // a dev-only warn, not a rejection, for the common mistake of registering
@@ -144,17 +165,26 @@ function diffMeasurements(previous: Map<symbol, Occluder>, next: Map<symbol, Occ
  * commits a fresh `Occluder[]` via `RectsContext` (feeds `CircuitField`'s
  * `targetTraces`/`traceCount` — a real spanning-tree rebuild, so this stays
  * exactly as expensive/rare as before). A `scroll` event is measured too
- * (rects go stale the instant the page scrolls otherwise) but never commits
- * `RectsContext` on its own — it only notifies `DeltaContext` subscribers
- * with whatever rects actually moved, so a full re-render/regeneration can
- * never be triggered by scrolling alone.
+ * (rects go stale the instant the page scrolls otherwise) and, while
+ * actively scrolling, only notifies `DeltaContext` subscribers with
+ * whatever rects actually moved — it does not commit `RectsContext` on
+ * every tick, so a full re-render/regeneration is never triggered mid-
+ * gesture. But `SCROLL_SETTLE_MS` after the last scroll event, the provider
+ * forces one structural commit of the settled rects — the bounded per-tip
+ * scroll-delta nudge (`handleOccluderDelta`/`retargetTip`) is best-effort
+ * and can leave a trace stranded inside an occluder's final position after
+ * a fast/large scroll, so the settled geometry always gets one authoritative
+ * `barriers`/`generateTraces` recompute to guarantee zero occluder
+ * violations once scrolling actually stops.
  */
 export function CircuitOccluderProvider({ children }: { children: React.ReactNode }): React.JSX.Element {
   const targetsRef = React.useRef(new Map<symbol, Registrant>());
   const observerRef = React.useRef<ResizeObserver | null>(null);
   const rafRef = React.useRef<number | null>(null);
+  const scrollSettleTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const structuralPendingRef = React.useRef(true); // first measurement pass is always a commit
   const measuredRef = React.useRef(new Map<symbol, Occluder>());
+  const committedRef = React.useRef(new Map<symbol, Occluder>());
   const deltaListenersRef = React.useRef(new Set<DeltaListener>());
   const [rects, setRects] = React.useState<Occluder[]>([]);
 
@@ -164,16 +194,27 @@ export function CircuitOccluderProvider({ children }: { children: React.ReactNod
     if (structuralPendingRef.current) {
       structuralPendingRef.current = false;
       // Skip the commit when this structural pass measured to the same
-      // rects as last time — e.g. a card-dense route with several
-      // independently-async registrants (a per-card live-status badge
-      // resolving at its own time) each trigger their own structural flush,
-      // but most of those passes measure identically to what's already
-      // committed. Suppressing the no-op commit avoids a needless
-      // `targetTraces` recompute (a real spanning-tree rebuild) per
-      // registrant instead of per actual layout change.
-      const unchanged = measurementsEqual(measuredRef.current, next);
+      // rects as what's currently *committed* — e.g. a card-dense route
+      // with several independently-async registrants (a per-card
+      // live-status badge resolving at its own time) each trigger their own
+      // structural flush, but most of those passes measure identically to
+      // what's already committed. Suppressing the no-op commit avoids a
+      // needless `targetTraces` recompute (a real spanning-tree rebuild)
+      // per registrant instead of per actual layout change.
+      //
+      // Deliberately compared against `committedRef`, not `measuredRef` —
+      // the scroll path below overwrites `measuredRef` on every scroll
+      // flush (it needs the freshest snapshot for its own delta diff), so
+      // comparing a settle-triggered structural pass against `measuredRef`
+      // would always read "unchanged" (scroll already measured the same
+      // settled rects seconds earlier) and silently swallow the commit this
+      // whole settle mechanism exists to force.
+      const unchanged = measurementsEqual(committedRef.current, next);
       measuredRef.current = next;
-      if (!unchanged) setRects(Array.from(next.values()));
+      if (!unchanged) {
+        committedRef.current = next;
+        setRects(Array.from(next.values()));
+      }
       return;
     }
 
@@ -226,6 +267,15 @@ export function CircuitOccluderProvider({ children }: { children: React.ReactNod
 
     const onScroll = () => {
       scheduleMeasure("scroll");
+
+      if (scrollSettleTimerRef.current !== null) clearTimeout(scrollSettleTimerRef.current);
+      scrollSettleTimerRef.current = setTimeout(() => {
+        scrollSettleTimerRef.current = null;
+        // Settled: force the structural commit the lightweight scroll path
+        // deliberately skips (see the provider doc comment above) so
+        // `barriers`/`generateTraces` land on the real final geometry.
+        scheduleMeasure("structural");
+      }, SCROLL_SETTLE_MS);
     };
     window.addEventListener("scroll", onScroll, { passive: true, capture: true });
 
@@ -233,7 +283,28 @@ export function CircuitOccluderProvider({ children }: { children: React.ReactNod
       observer.disconnect();
       observerRef.current = null;
       window.removeEventListener("scroll", onScroll, { capture: true });
-      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+      if (scrollSettleTimerRef.current !== null) {
+        clearTimeout(scrollSettleTimerRef.current);
+        scrollSettleTimerRef.current = null;
+      }
+      // Reset to `null` after cancelling, not just cancel — a dead
+      // (already-cancelled) handle left sitting in `rafRef.current` reads as
+      // "a frame is still pending" to every future `scheduleMeasure()` call
+      // (`rafRef.current === null` is its only signal to schedule a new
+      // one), permanently wedging this provider's measurement pipeline.
+      // React 18/19 StrictMode's simulated mount->unmount->remount runs this
+      // exact cleanup right after the first mount's own `scheduleMeasure`
+      // call already scheduled a frame — without resetting the ref here,
+      // that first frame is cancelled but never forgotten, so the remount's
+      // own `scheduleMeasure` call sees a non-null `rafRef.current` and
+      // silently no-ops forever: `flush()` never runs again, `rects` never
+      // leaves its initial `[]`, and every consumer's occlusion is
+      // permanently empty. Same hazard class, same fix, as
+      // `circuit-field.tsx`'s own unmount-cleanup effect.
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
     };
   }, [scheduleMeasure]);
 

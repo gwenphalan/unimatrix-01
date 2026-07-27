@@ -170,14 +170,20 @@ function pickTargetPointInComponent(
 function walkFromStart(start: Point, width: number, height: number, component: FreeComponent, rand: () => number): Point[] {
   const points: Point[] = [start];
   const visited = new Set<string>([cellKey(start)]);
-  const segments = 2 + Math.floor(rand() * 4);
+  // More segments, and a strong (not absolute — occasional straight run
+  // reads as natural, always-alternating reads as a saw blade) bias toward
+  // flipping axis each step, so a branch reads as a zigzag PCB trace rather
+  // than a couple of long straight legs.
+  const segments = 3 + Math.floor(rand() * 5);
+  let lastHorizontal: boolean | undefined;
 
   for (let s = 0; s < segments; s += 1) {
     let placed = false;
 
     for (let attempt = 0; attempt < 6 && !placed; attempt += 1) {
-      const horizontal = rand() < 0.5;
-      const magnitude = (40 + Math.floor(rand() * 6) * 20) * (rand() < 0.5 ? -1 : 1);
+      const horizontal =
+        lastHorizontal === undefined ? rand() < 0.5 : rand() < 0.75 ? !lastHorizontal : lastHorizontal;
+      const magnitude = (40 + Math.floor(rand() * 4) * 20) * (rand() < 0.5 ? -1 : 1);
       const prev = points[points.length - 1] as Point;
       const next = clampToLattice(
         horizontal ? { x: prev.x + magnitude, y: prev.y } : { x: prev.x, y: prev.y + magnitude },
@@ -196,6 +202,7 @@ function walkFromStart(start: Point, width: number, height: number, component: F
       segmentCells.forEach((key) => visited.add(key));
       points.push(next);
       placed = true;
+      lastHorizontal = horizontal;
     }
 
     if (!placed) break;
@@ -217,6 +224,37 @@ function walkFromStart(start: Point, width: number, height: number, component: F
  * merely disfavored, and the BFS corridor treats every barrier-blocked cell
  * as occupied.
  */
+/**
+ * Two-corner "staircase" alternative to a plain one-corner elbow: anchor to
+ * a mid column/row, jog to the target's own column/row, then in. Purely
+ * cosmetic — offered only as an extra candidate `attachRoute` may pick
+ * alongside the plain elbows, subject to the exact same collision/barrier
+ * checks — so it can only ever make an attach point read more like a real
+ * PCB trace's staggered bends, never bypass a barrier a plain elbow
+ * wouldn't.
+ */
+function doglegCandidates(anchor: Point, target: Point, rand: () => number): Point[][] {
+  const candidates: Point[][] = [];
+  const dx = target.x - anchor.x;
+  const dy = target.y - anchor.y;
+
+  if (Math.abs(dx) >= GRID * 2) {
+    const steps = Math.round(dx / GRID);
+    const split = 1 + Math.floor(rand() * (Math.abs(steps) - 1));
+    const midX = anchor.x + split * GRID * Math.sign(dx);
+    candidates.push(densify([anchor, { x: midX, y: anchor.y }, { x: midX, y: target.y }, target]).slice(1, -1));
+  }
+
+  if (Math.abs(dy) >= GRID * 2) {
+    const steps = Math.round(dy / GRID);
+    const split = 1 + Math.floor(rand() * (Math.abs(steps) - 1));
+    const midY = anchor.y + split * GRID * Math.sign(dy);
+    candidates.push(densify([anchor, { x: anchor.x, y: midY }, { x: target.x, y: midY }, target]).slice(1, -1));
+  }
+
+  return candidates;
+}
+
 function attachRoute(
   target: Point,
   footprint: Set<string>,
@@ -224,6 +262,7 @@ function attachRoute(
   width: number,
   height: number,
   barriers: BarrierField,
+  rand: () => number,
 ): { ownerIndex: number; body: Point[] } {
   let anchorKey = "";
   let anchorCx = 0;
@@ -269,10 +308,20 @@ function attachRoute(
   ];
 
   const validElbowCandidates = elbowCandidates.filter((candidate) => !collides(candidate) && !crossesBarrier(candidate));
+  const validDoglegCandidates = doglegCandidates(anchor, target, rand).filter(
+    (candidate) => !collides(candidate) && !crossesBarrier(candidate),
+  );
+
+  // Favor a staggered dogleg over a plain single-bend elbow about a third of
+  // the time it's available — enough to break up long runs of identical
+  // L-shaped joints into something that reads as a denser, more branchy
+  // circuit, without replacing the elbow as the common case.
   let interior: Point[] | null =
-    validElbowCandidates.length === 0
-      ? null
-      : validElbowCandidates.reduce((best, candidate) => (candidate.length < best.length ? candidate : best));
+    validDoglegCandidates.length > 0 && rand() < 0.35
+      ? (validDoglegCandidates[Math.floor(rand() * validDoglegCandidates.length)] as Point[])
+      : validElbowCandidates.length === 0
+        ? null
+        : validElbowCandidates.reduce((best, candidate) => (candidate.length < best.length ? candidate : best));
 
   if (!interior) {
     const maxCx = Math.round(width / GRID);
@@ -387,7 +436,7 @@ export function generateTraces(width: number, height: number, seed: number, barr
         continue;
       }
 
-      const { ownerIndex, body } = attachRoute(target, localFootprint, localFootprintOwner, width, height, barriers);
+      const { ownerIndex, body } = attachRoute(target, localFootprint, localFootprintOwner, width, height, barriers, rand);
       const depth = (depths.get(ownerIndex) ?? 0) + 1;
 
       traces.push({ id: `t${traceIndex}`, points: body, length: polylineLength(body), depth, treeIndex: componentIdx });
