@@ -44,9 +44,10 @@ export type ApiContractResponse<TContract extends ApiContract> = z.output<
  * would incorrectly fail for a present schema because the union includes
  * `undefined`.
  */
-export type ApiContractBody<TContract extends ApiContract> = TContract["bodySchema"] extends undefined
-  ? never
-  : z.input<Exclude<TContract["bodySchema"], undefined>>;
+export type ApiContractBody<TContract extends ApiContract> =
+  TContract["bodySchema"] extends undefined
+    ? never
+    : z.input<Exclude<TContract["bodySchema"], undefined>>;
 
 /**
  * The query parameters type a caller supplies for `TContract`, inferred as
@@ -55,6 +56,7 @@ export type ApiContractBody<TContract extends ApiContract> = TContract["bodySche
  * `querySchema`. See {@link ApiContractBody} for why the check is written
  * as `extends undefined` rather than `extends z.ZodType`.
  */
-export type ApiContractQuery<TContract extends ApiContract> = TContract["querySchema"] extends undefined
-  ? undefined
-  : z.input<Exclude<TContract["querySchema"], undefined>>;
+export type ApiContractQuery<TContract extends ApiContract> =
+  TContract["querySchema"] extends undefined
+    ? undefined
+    : z.input<Exclude<TContract["querySchema"], undefined>>;

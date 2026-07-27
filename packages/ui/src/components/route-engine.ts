@@ -1,4 +1,13 @@
-import { GRID, type Point, type RoutePoint, cellKey, densify, pointAtIndex, recomputeCorners, snap } from "./grid-math.js";
+import {
+  GRID,
+  type Point,
+  type RoutePoint,
+  cellKey,
+  densify,
+  pointAtIndex,
+  recomputeCorners,
+  snap,
+} from "./grid-math.js";
 import { type BarrierField, segmentCrossesBarrier } from "./occlusion.js";
 
 const MS_PER_STEP = 150;
@@ -64,7 +73,12 @@ export function findIntersections(cells: CellAxisMap): Point[] {
  * caller should suppress `id`'s own tip via in that case rather than drop a
  * dot in the middle of what looks like an uninterrupted run.
  */
-export function isColinearWithOther(cells: CellAxisMap, id: string, point: Point, axis: "h" | "v"): boolean {
+export function isColinearWithOther(
+  cells: CellAxisMap,
+  id: string,
+  point: Point,
+  axis: "h" | "v",
+): boolean {
   const entry = cells.get(cellKey(point));
   if (!entry) return false;
 
@@ -139,7 +153,13 @@ export function bfsConnectorCells(
       const nextKey = key(next.cx, next.cy);
 
       if (visited.has(nextKey)) continue;
-      if (next.cx < bounds.minX || next.cx > bounds.maxX || next.cy < bounds.minY || next.cy > bounds.maxY) continue;
+      if (
+        next.cx < bounds.minX ||
+        next.cx > bounds.maxX ||
+        next.cy < bounds.minY ||
+        next.cy > bounds.maxY
+      )
+        continue;
       if (occupied.has(nextKey) && nextKey !== targetKey) continue;
 
       visited.add(nextKey);
@@ -208,11 +228,19 @@ function countRouteCollisions(points: Point[]): number {
  * compiling; omitting it reproduces the pre-barrier collision-only
  * behavior exactly.
  */
-export function buildRoute(from: RoutePoint[], to: RoutePoint[], barriers?: BarrierField): RoutePoint[] {
+export function buildRoute(
+  from: RoutePoint[],
+  to: RoutePoint[],
+  barriers?: BarrierField,
+): RoutePoint[] {
   const fromEnd = from[from.length - 1] as RoutePoint;
   const toStart = to[0] as RoutePoint;
 
-  const snappedFromEnd: RoutePoint = { x: snap(fromEnd.x), y: snap(fromEnd.y), corner: fromEnd.corner };
+  const snappedFromEnd: RoutePoint = {
+    x: snap(fromEnd.x),
+    y: snap(fromEnd.y),
+    corner: fromEnd.corner,
+  };
   const leadIn: RoutePoint[] =
     fromEnd.x !== snappedFromEnd.x || fromEnd.y !== snappedFromEnd.y ? [snappedFromEnd] : [];
 
@@ -294,10 +322,13 @@ export function buildRoute(from: RoutePoint[], to: RoutePoint[], barriers?: Barr
     // canary, not an expected path. Fall back to the first raw elbow
     // (unfiltered) so a route is always produced; it may visually clip a
     // barrier in this pathological case.
-    console.warn("[CircuitField] buildRoute found no barrier-clear connector — falling back to a direct elbow", {
-      from: snappedFromEnd,
-      to: toStart,
-    });
+    console.warn(
+      "[CircuitField] buildRoute found no barrier-clear connector — falling back to a direct elbow",
+      {
+        from: snappedFromEnd,
+        to: toStart,
+      },
+    );
     best = connectorViaElbow(snappedFromEnd, toStart, { x: toStart.x, y: snappedFromEnd.y });
   }
 
@@ -315,7 +346,11 @@ export function buildRoute(from: RoutePoint[], to: RoutePoint[], barriers?: Barr
  * can hand this window straight back in as the next transition's `from`
  * body, vias and all.
  */
-export function sliceWindow(route: RoutePoint[], tailIndex: number, headIndex: number): RoutePoint[] {
+export function sliceWindow(
+  route: RoutePoint[],
+  tailIndex: number,
+  headIndex: number,
+): RoutePoint[] {
   const points: RoutePoint[] = [pointAtIndex(route, tailIndex)];
   const startInt = Math.ceil(tailIndex + 1e-6);
   const endInt = Math.floor(headIndex - 1e-6);

@@ -1,9 +1,28 @@
-import { GRID, type Point, cellKey, densify, mulberry32, polylineLength, snap } from "./grid-math.js";
-import { type FreeComponent, allocateSlots, cellKeyToPoint, findFreeComponents } from "./free-space.js";
+import {
+  GRID,
+  type Point,
+  cellKey,
+  densify,
+  mulberry32,
+  polylineLength,
+  snap,
+} from "./grid-math.js";
+import {
+  type FreeComponent,
+  allocateSlots,
+  cellKeyToPoint,
+  findFreeComponents,
+} from "./free-space.js";
 import { type BarrierField, isCellBlocked, segmentCrossesBarrier } from "./occlusion.js";
 import { bfsConnectorCells, cellOf, connectorViaElbow } from "./route-engine.js";
 
-export type Trace = { id: string; points: Point[]; length: number; depth: number; treeIndex: number };
+export type Trace = {
+  id: string;
+  points: Point[];
+  length: number;
+  depth: number;
+  treeIndex: number;
+};
 export type CircuitTree = { traces: Trace[]; adjacency: Map<string, Set<string>>; roots: number[] };
 
 // A grid-division cell used only to spread target pads within a free
@@ -30,7 +49,13 @@ function shuffled<T>(items: T[], rand: () => number): T[] {
   return result;
 }
 
-function cellsCoveringArea(width: number, height: number, count: number, offsetX = 0, offsetY = 0): Cell[] {
+function cellsCoveringArea(
+  width: number,
+  height: number,
+  count: number,
+  offsetX = 0,
+  offsetY = 0,
+): Cell[] {
   const cellSize = Math.max(GRID * 3, Math.sqrt((width * height) / Math.max(1, count)));
   const cols = Math.max(1, Math.round(width / cellSize));
   const rows = Math.max(1, Math.round(height / cellSize));
@@ -62,7 +87,11 @@ function cellsCoveringArea(width: number, height: number, count: number, offsetX
  * `free-space.ts`'s own distance-transform pick), since branch 0 can only
  * ever grow inside this component anyway.
  */
-function assignTargetCellsForComponent(component: FreeComponent, count: number, rand: () => number): Cell[] {
+function assignTargetCellsForComponent(
+  component: FreeComponent,
+  count: number,
+  rand: () => number,
+): Cell[] {
   const { minCx, maxCx, minCy, maxCy } = component.bounds;
   const x0 = minCx * GRID;
   const y0 = minCy * GRID;
@@ -70,14 +99,20 @@ function assignTargetCellsForComponent(component: FreeComponent, count: number, 
   const h = Math.max(GRID, (maxCy - minCy + 1) * GRID);
   const cells = shuffled(cellsCoveringArea(w, h, count, x0, y0), rand);
   const fallback: Cell = { x0, y0, x1: x0 + w, y1: y0 + h };
-  const assigned = Array.from({ length: count }, (_, i) => cells[i % Math.max(1, cells.length)] ?? fallback);
+  const assigned = Array.from(
+    { length: count },
+    (_, i) => cells[i % Math.max(1, cells.length)] ?? fallback,
+  );
   const rootPoint = cellKeyToPoint(component.centerCell);
   const cellCenter = (cell: Cell) => ({ x: (cell.x0 + cell.x1) / 2, y: (cell.y0 + cell.y1) / 2 });
 
   return assigned.slice().sort((a, b) => {
     const ac = cellCenter(a);
     const bc = cellCenter(b);
-    return Math.hypot(ac.x - rootPoint.x, ac.y - rootPoint.y) - Math.hypot(bc.x - rootPoint.x, bc.y - rootPoint.y);
+    return (
+      Math.hypot(ac.x - rootPoint.x, ac.y - rootPoint.y) -
+      Math.hypot(bc.x - rootPoint.x, bc.y - rootPoint.y)
+    );
   });
 }
 
@@ -101,7 +136,11 @@ function jitterInCell(cell: Cell, rand: () => number): Point {
  * arbitrary clamped point, so this can never hand back a point sitting
  * inside a barrier even in the pathological exhausted case.
  */
-function ringSearchInComponent(point: Point, component: FreeComponent, footprint: ReadonlySet<string>): Point {
+function ringSearchInComponent(
+  point: Point,
+  component: FreeComponent,
+  footprint: ReadonlySet<string>,
+): Point {
   const baseCx = Math.round(point.x / GRID);
   const baseCy = Math.round(point.y / GRID);
   const { minCx, maxCx, minCy, maxCy } = component.bounds;
@@ -122,7 +161,10 @@ function ringSearchInComponent(point: Point, component: FreeComponent, footprint
     }
   }
 
-  console.warn("[CircuitField] ringSearchInComponent exhausted its component — reusing the component center", point);
+  console.warn(
+    "[CircuitField] ringSearchInComponent exhausted its component — reusing the component center",
+    point,
+  );
   return cellKeyToPoint(component.centerCell);
 }
 
@@ -167,7 +209,13 @@ function pickTargetPointInComponent(
  * self-collision, stopping the walk early (fewer than the intended segment
  * count) rather than ever forcing a collision or a barrier crossing.
  */
-function walkFromStart(start: Point, width: number, height: number, component: FreeComponent, rand: () => number): Point[] {
+function walkFromStart(
+  start: Point,
+  width: number,
+  height: number,
+  component: FreeComponent,
+  rand: () => number,
+): Point[] {
   const points: Point[] = [start];
   const visited = new Set<string>([cellKey(start)]);
   // More segments, and a strong (not absolute — occasional straight run
@@ -182,7 +230,11 @@ function walkFromStart(start: Point, width: number, height: number, component: F
 
     for (let attempt = 0; attempt < 6 && !placed; attempt += 1) {
       const horizontal =
-        lastHorizontal === undefined ? rand() < 0.5 : rand() < 0.75 ? !lastHorizontal : lastHorizontal;
+        lastHorizontal === undefined
+          ? rand() < 0.5
+          : rand() < 0.75
+            ? !lastHorizontal
+            : lastHorizontal;
       const magnitude = (40 + Math.floor(rand() * 4) * 20) * (rand() < 0.5 ? -1 : 1);
       const prev = points[points.length - 1] as Point;
       const next = clampToLattice(
@@ -242,14 +294,18 @@ function doglegCandidates(anchor: Point, target: Point, rand: () => number): Poi
     const steps = Math.round(dx / GRID);
     const split = 1 + Math.floor(rand() * (Math.abs(steps) - 1));
     const midX = anchor.x + split * GRID * Math.sign(dx);
-    candidates.push(densify([anchor, { x: midX, y: anchor.y }, { x: midX, y: target.y }, target]).slice(1, -1));
+    candidates.push(
+      densify([anchor, { x: midX, y: anchor.y }, { x: midX, y: target.y }, target]).slice(1, -1),
+    );
   }
 
   if (Math.abs(dy) >= GRID * 2) {
     const steps = Math.round(dy / GRID);
     const split = 1 + Math.floor(rand() * (Math.abs(steps) - 1));
     const midY = anchor.y + split * GRID * Math.sign(dy);
-    candidates.push(densify([anchor, { x: anchor.x, y: midY }, { x: target.x, y: midY }, target]).slice(1, -1));
+    candidates.push(
+      densify([anchor, { x: anchor.x, y: midY }, { x: target.x, y: midY }, target]).slice(1, -1),
+    );
   }
 
   return candidates;
@@ -307,7 +363,9 @@ function attachRoute(
     connectorViaElbow(anchor, target, { x: anchor.x, y: target.y }),
   ];
 
-  const validElbowCandidates = elbowCandidates.filter((candidate) => !collides(candidate) && !crossesBarrier(candidate));
+  const validElbowCandidates = elbowCandidates.filter(
+    (candidate) => !collides(candidate) && !crossesBarrier(candidate),
+  );
   const validDoglegCandidates = doglegCandidates(anchor, target, rand).filter(
     (candidate) => !collides(candidate) && !crossesBarrier(candidate),
   );
@@ -321,7 +379,9 @@ function attachRoute(
       ? (validDoglegCandidates[Math.floor(rand() * validDoglegCandidates.length)] as Point[])
       : validElbowCandidates.length === 0
         ? null
-        : validElbowCandidates.reduce((best, candidate) => (candidate.length < best.length ? candidate : best));
+        : validElbowCandidates.reduce((best, candidate) =>
+            candidate.length < best.length ? candidate : best,
+          );
 
   if (!interior) {
     const maxCx = Math.round(width / GRID);
@@ -346,10 +406,13 @@ function attachRoute(
     // is always reachable from itself under BFS by construction. A canary,
     // not an expected path — the direct elbow fallback here may cross a
     // barrier, which the warning flags for investigation.
-    console.warn("[CircuitField] attachRoute found no barrier-clear corridor — falling back to a direct elbow", {
-      anchor,
-      target,
-    });
+    console.warn(
+      "[CircuitField] attachRoute found no barrier-clear corridor — falling back to a direct elbow",
+      {
+        anchor,
+        target,
+      },
+    );
     interior = elbowCandidates[0] as Point[];
   }
 
@@ -358,7 +421,10 @@ function attachRoute(
   // off an exact GRID multiple — invisible for live-crawl rendering but not
   // exact enough for generation output, which the "every vertex on the
   // lattice" invariant checks precisely.
-  const body = [anchor, ...interior, target].map((point) => ({ x: snap(point.x), y: snap(point.y) }));
+  const body = [anchor, ...interior, target].map((point) => ({
+    x: snap(point.x),
+    y: snap(point.y),
+  }));
 
   return { ownerIndex, body };
 }
@@ -380,7 +446,13 @@ function attachRoute(
  * branch (`Trace.depth === 0`), and `Trace.treeIndex` ties every branch back
  * to the component it grew in.
  */
-export function generateTraces(width: number, height: number, seed: number, barriers: BarrierField, count: number): CircuitTree {
+export function generateTraces(
+  width: number,
+  height: number,
+  seed: number,
+  barriers: BarrierField,
+  count: number,
+): CircuitTree {
   const rand = mulberry32(seed);
   const components = findFreeComponents(barriers, width, height);
   const adjacency = new Map<string, Set<string>>();
@@ -425,21 +497,46 @@ export function generateTraces(width: number, height: number, seed: number, barr
 
     for (let j = 0; j < slotCount; j += 1) {
       const traceIndex = traces.length;
-      const target = pickTargetPointInComponent(targetCells[j] as Cell, component, localFootprint, rand);
+      const target = pickTargetPointInComponent(
+        targetCells[j] as Cell,
+        component,
+        localFootprint,
+        rand,
+      );
 
       if (j === 0) {
         const points = walkFromStart(target, width, height, component, rand);
-        traces.push({ id: `t${traceIndex}`, points, length: polylineLength(points), depth: 0, treeIndex: componentIdx });
+        traces.push({
+          id: `t${traceIndex}`,
+          points,
+          length: polylineLength(points),
+          depth: 0,
+          treeIndex: componentIdx,
+        });
         depths.set(traceIndex, 0);
         roots.push(traceIndex);
         claim(points, traceIndex);
         continue;
       }
 
-      const { ownerIndex, body } = attachRoute(target, localFootprint, localFootprintOwner, width, height, barriers, rand);
+      const { ownerIndex, body } = attachRoute(
+        target,
+        localFootprint,
+        localFootprintOwner,
+        width,
+        height,
+        barriers,
+        rand,
+      );
       const depth = (depths.get(ownerIndex) ?? 0) + 1;
 
-      traces.push({ id: `t${traceIndex}`, points: body, length: polylineLength(body), depth, treeIndex: componentIdx });
+      traces.push({
+        id: `t${traceIndex}`,
+        points: body,
+        length: polylineLength(body),
+        depth,
+        treeIndex: componentIdx,
+      });
       depths.set(traceIndex, depth);
       claim(body, traceIndex);
     }

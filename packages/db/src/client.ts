@@ -2,15 +2,9 @@ import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 
 import BetterSqlite3 from "better-sqlite3";
-import {
-  drizzle,
-  type BetterSQLite3Database,
-} from "drizzle-orm/better-sqlite3";
+import { drizzle, type BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 
-import {
-  resolveDatabaseConfig,
-  type DatabaseConfig,
-} from "./config.js";
+import { resolveDatabaseConfig, type DatabaseConfig } from "./config.js";
 import * as schema from "./schema/index.js";
 
 export interface DatabaseInstance {
@@ -19,9 +13,7 @@ export interface DatabaseInstance {
   db: BetterSQLite3Database<typeof schema>;
 }
 
-function createSqliteClientFromConfig(
-  config: DatabaseConfig,
-): BetterSqlite3.Database {
+function createSqliteClientFromConfig(config: DatabaseConfig): BetterSqlite3.Database {
   if (config.filePath !== ":memory:") {
     mkdirSync(dirname(config.filePath), {
       recursive: true,
@@ -44,9 +36,7 @@ export function createSqliteClient(
   return createSqliteClientFromConfig(config);
 }
 
-export function createDatabase(
-  overrides: Partial<DatabaseConfig> = {},
-): DatabaseInstance {
+export function createDatabase(overrides: Partial<DatabaseConfig> = {}): DatabaseInstance {
   const config = resolveDatabaseConfig(overrides);
   const client = createSqliteClientFromConfig(config);
   const db = drizzle({ client, schema });

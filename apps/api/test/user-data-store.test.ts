@@ -106,10 +106,7 @@ void test("listDocuments only returns documents for the given user and namespace
 
     const documents = await listDocuments(db, "user_1", "cube-trainer");
 
-    assert.deepEqual(
-      documents.map((document) => document.key).sort(),
-      ["a", "b"],
-    );
+    assert.deepEqual(documents.map((document) => document.key).sort(), ["a", "b"]);
   } finally {
     client.close();
   }
@@ -139,7 +136,15 @@ void test("putFile stores a blob and getFile reads back matching bytes and metad
 
   try {
     const data = Buffer.from("hello world", "utf8");
-    const metadata = await putFile(db, "user_1", "cube-trainer", "avatar.png", "image/png", data.length, data);
+    const metadata = await putFile(
+      db,
+      "user_1",
+      "cube-trainer",
+      "avatar.png",
+      "image/png",
+      data.length,
+      data,
+    );
 
     assert.deepEqual(metadata, {
       namespace: "cube-trainer",
@@ -214,10 +219,7 @@ void test("listFiles returns metadata only, never the blob, scoped to user and n
     for (const file of files) {
       assert.equal("data" in file, false);
     }
-    assert.deepEqual(
-      files.map((file) => file.key).sort(),
-      ["a.txt", "b.txt"],
-    );
+    assert.deepEqual(files.map((file) => file.key).sort(), ["a.txt", "b.txt"]);
   } finally {
     client.close();
   }

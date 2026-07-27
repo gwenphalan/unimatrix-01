@@ -7,10 +7,7 @@
  * per-request rather than cached at construction time.
  */
 export type ApiClientAuthTokenProvider = () =>
-  | string
-  | null
-  | undefined
-  | Promise<string | null | undefined>;
+  string | null | undefined | Promise<string | null | undefined>;
 
 export interface ApiClientConfig {
   baseUrl: string;

@@ -1,7 +1,12 @@
 import { useCallback, useState } from "react";
 
 import type { AlgorithmSetId } from "@/features/algorithms/types";
-import { type CaseProgress, type CaseStatus, readCaseProgress, setCaseStatus } from "@/lib/progress-storage";
+import {
+  type CaseProgress,
+  type CaseStatus,
+  readCaseProgress,
+  setCaseStatus,
+} from "@/lib/progress-storage";
 
 export interface UseCaseProgressResult {
   progress: CaseProgress;

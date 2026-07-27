@@ -35,8 +35,7 @@ function WelcomeCard() {
           Unimatrix Accounts
         </h1>
         <p className="text-sm leading-7 text-muted-foreground">
-          Sign in to your Unimatrix account, or create a new one to get
-          started.
+          Sign in to your Unimatrix account, or create a new one to get started.
         </p>
         <div className="flex flex-wrap gap-3">
           <Button asChild className="w-fit">

@@ -82,11 +82,7 @@ function validateHttpUrl(
 }
 
 function validateApiBaseUrl(value: string | undefined): string {
-  const apiBaseUrl = readOptionalString(
-    "VITE_API_BASE_URL",
-    value,
-    DEFAULT_API_BASE_URL,
-  );
+  const apiBaseUrl = readOptionalString("VITE_API_BASE_URL", value, DEFAULT_API_BASE_URL);
 
   if (apiBaseUrl.startsWith("/")) {
     if (apiBaseUrl.startsWith("//")) {
@@ -110,7 +106,10 @@ function validateApiBaseUrl(value: string | undefined): string {
 export function loadAuthAppRuntimeConfig(env: AuthAppRuntimeEnv): AuthAppRuntimeConfig {
   return {
     apiBaseUrl: validateApiBaseUrl(env.VITE_API_BASE_URL),
-    clerkPublishableKey: readRequiredString("VITE_CLERK_PUBLISHABLE_KEY", env.VITE_CLERK_PUBLISHABLE_KEY),
+    clerkPublishableKey: readRequiredString(
+      "VITE_CLERK_PUBLISHABLE_KEY",
+      env.VITE_CLERK_PUBLISHABLE_KEY,
+    ),
   };
 }
 

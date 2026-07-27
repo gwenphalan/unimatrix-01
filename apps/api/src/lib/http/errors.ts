@@ -52,10 +52,7 @@ export class ApiError extends Error {
   readonly details?: ApiErrorDetails;
 
   constructor(options: ApiErrorOptions) {
-    super(
-      options.message,
-      options.cause === undefined ? undefined : { cause: options.cause },
-    );
+    super(options.message, options.cause === undefined ? undefined : { cause: options.cause });
 
     this.name = "ApiError";
     this.statusCode = options.statusCode;
@@ -75,9 +72,7 @@ interface ApiErrorEnvelopeOptions {
   details?: ApiErrorDetails;
 }
 
-function createApiErrorEnvelope(
-  options: ApiErrorEnvelopeOptions,
-): ApiErrorEnvelope {
+function createApiErrorEnvelope(options: ApiErrorEnvelopeOptions): ApiErrorEnvelope {
   const error: ApiErrorEnvelope["error"] = {
     code: options.code,
     message: options.message,
@@ -116,10 +111,7 @@ function createClientErrorEnvelope(
   });
 }
 
-export function normalizeError(
-  error: unknown,
-  requestId: string,
-): NormalizedApiError {
+export function normalizeError(error: unknown, requestId: string): NormalizedApiError {
   if (hasZodFastifySchemaValidationErrors(error)) {
     return {
       statusCode: 400,
@@ -225,20 +217,14 @@ function normalizeInstancePath(instancePath: string): string {
     return "$";
   }
 
-  return instancePath
-    .split("/")
-    .filter(Boolean)
-    .map(decodeJsonPointerSegment)
-    .join(".");
+  return instancePath.split("/").filter(Boolean).map(decodeJsonPointerSegment).join(".");
 }
 
 function decodeJsonPointerSegment(segment: string): string {
   return segment.replaceAll("~1", "/").replaceAll("~0", "~");
 }
 
-function hasApiErrorDetails(
-  details: ApiErrorDetails | undefined,
-): details is ApiErrorDetails {
+function hasApiErrorDetails(details: ApiErrorDetails | undefined): details is ApiErrorDetails {
   return Boolean(details?.issues?.length);
 }
 
@@ -259,14 +245,10 @@ function getFastifyErrorMessage(error: unknown): string {
 
   const { message } = error as FastifyError;
 
-  return typeof message === "string" && message.length > 0
-    ? message
-    : "Request failed";
+  return typeof message === "string" && message.length > 0 ? message : "Request failed";
 }
 
-function isClientErrorStatusCode(
-  statusCode: number | undefined,
-): statusCode is number {
+function isClientErrorStatusCode(statusCode: number | undefined): statusCode is number {
   return typeof statusCode === "number" && statusCode >= 400 && statusCode < 500;
 }
 

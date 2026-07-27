@@ -13,9 +13,7 @@ export default defineConfig({
       },
       {
         find: /^@unimatrix\/ui$/,
-        replacement: fileURLToPath(
-          new URL("../../packages/ui/src/index.ts", import.meta.url),
-        ),
+        replacement: fileURLToPath(new URL("../../packages/ui/src/index.ts", import.meta.url)),
       },
       {
         find: /^react$/,

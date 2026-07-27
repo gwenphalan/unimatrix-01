@@ -157,7 +157,14 @@ export function advancePacket(
   const t = elapsed / PACKET_STEP_MS;
 
   if (t >= 1) {
-    const arrived: Packet = { slot: packet.slot, at: packet.next, cameFrom: packet.at, next: null, stepStart: now, hops: packet.hops + 1 };
+    const arrived: Packet = {
+      slot: packet.slot,
+      at: packet.next,
+      cameFrom: packet.at,
+      next: null,
+      stepStart: now,
+      hops: packet.hops + 1,
+    };
     return advancePacket(arrived, graph, now, rand);
   }
 

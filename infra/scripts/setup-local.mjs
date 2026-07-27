@@ -33,10 +33,9 @@ function createBootstrapLocalEnvError(file, error) {
   const targetPath = toRepoRelativePath(file.targetPath);
 
   if (error instanceof Error && "code" in error && error.code === "ENOENT") {
-    return new Error(
-      `Cannot bootstrap ${targetPath}: example file ${examplePath} is missing.`,
-      { cause: error },
-    );
+    return new Error(`Cannot bootstrap ${targetPath}: example file ${examplePath} is missing.`, {
+      cause: error,
+    });
   }
 
   const message = error instanceof Error ? error.message : String(error);

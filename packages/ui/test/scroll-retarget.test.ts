@@ -2,7 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import { GRID, type RoutePoint } from "../src/components/grid-math.js";
 import { type Occluder, buildBarrierField } from "../src/components/occlusion.js";
-import { buildOccupiedFootprint, findAffectedTraceIds, retargetTip } from "../src/components/scroll-retarget.js";
+import {
+  buildOccupiedFootprint,
+  findAffectedTraceIds,
+  retargetTip,
+} from "../src/components/scroll-retarget.js";
 
 function rp(x: number, y: number, corner = true): RoutePoint {
   return { x, y, corner };

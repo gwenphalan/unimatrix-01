@@ -2,7 +2,12 @@ import { RiArrowLeftLine, RiArrowRightUpLine } from "@remixicon/react";
 import { Link, createLazyFileRoute } from "@tanstack/react-router";
 import { useRef } from "react";
 
-import { Badge, Button, TALL_OCCLUDER_MAX_HEIGHT_PX, useCircuitOccluder } from "@unimatrix/ui/public";
+import {
+  Badge,
+  Button,
+  TALL_OCCLUDER_MAX_HEIGHT_PX,
+  useCircuitOccluder,
+} from "@unimatrix/ui/public";
 
 import { LazyPublicMarkdown } from "@/features/content/lazy-public-markdown";
 import { renderPublicMarkdownInternalLink } from "@/features/content/markdown";

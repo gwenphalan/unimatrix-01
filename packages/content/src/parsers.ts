@@ -8,19 +8,13 @@ import type {
   ProjectFrontmatter,
 } from "./documents.js";
 import { ContentValidationError } from "./errors.js";
-import {
-  parseFrontmatterDocument,
-  type FrontmatterValue,
-} from "./frontmatter.js";
+import { parseFrontmatterDocument, type FrontmatterValue } from "./frontmatter.js";
 
 type ContentEntryWithPublishedAt = ParsedContentDocument<{
   publishedAt: string;
 }>;
 
-export function parseHomeContentFile(
-  source: string,
-  filePath: string,
-): HomePageContent {
+export function parseHomeContentFile(source: string, filePath: string): HomePageContent {
   const { body, frontmatter } = parseFrontmatterDocument(source, filePath);
 
   return {
@@ -37,10 +31,7 @@ export function parseHomeContentFile(
   };
 }
 
-export function parseProjectContentFile(
-  source: string,
-  filePath: string,
-): ProjectEntry {
+export function parseProjectContentFile(source: string, filePath: string): ProjectEntry {
   const { body, frontmatter } = parseFrontmatterDocument(source, filePath);
   const slug = requireString(frontmatter, "slug", filePath);
 
@@ -62,10 +53,7 @@ export function parseProjectContentFile(
   };
 }
 
-export function parseBlogContentFile(
-  source: string,
-  filePath: string,
-): BlogEntry {
+export function parseBlogContentFile(source: string, filePath: string): BlogEntry {
   const { body, frontmatter } = parseFrontmatterDocument(source, filePath);
   const slug = requireString(frontmatter, "slug", filePath);
 
@@ -79,10 +67,7 @@ export function parseBlogContentFile(
       slug,
       summary: requireString(frontmatter, "summary", filePath),
       title: requireString(frontmatter, "title", filePath),
-      ...optionalProperty(
-        "description",
-        optionalString(frontmatter, "description"),
-      ),
+      ...optionalProperty("description", optionalString(frontmatter, "description")),
     } satisfies BlogFrontmatter,
   };
 }
@@ -196,16 +181,11 @@ function optionalProperty<T extends string, TValue>(
   key: T,
   value: TValue | undefined,
 ): Partial<Record<T, TValue>> {
-  return value === undefined
-    ? {}
-    : ({ [key]: value } as Partial<Record<T, TValue>>);
+  return value === undefined ? {} : ({ [key]: value } as Partial<Record<T, TValue>>);
 }
 
 function stripFencedCodeBlocks(markdown: string): string {
-  return markdown.replace(
-    /(?:^|\n)(`{3,}|~{3,})[^\n]*\n[\s\S]*?\1[ \t]*(?=\n|$)/gu,
-    "\n",
-  );
+  return markdown.replace(/(?:^|\n)(`{3,}|~{3,})[^\n]*\n[\s\S]*?\1[ \t]*(?=\n|$)/gu, "\n");
 }
 
 function normalizeExcerptBlock(block: string): {
@@ -256,10 +236,7 @@ function normalizeExcerptLine(line: string, isTableLine: boolean): string {
     return "";
   }
 
-  normalizedLine = normalizedLine.replace(
-    /^\s*(?:[-+*]|\d+[.)])\s+(?:\[[ xX]\]\s+)?/u,
-    "",
-  );
+  normalizedLine = normalizedLine.replace(/^\s*(?:[-+*]|\d+[.)])\s+(?:\[[ xX]\]\s+)?/u, "");
 
   if (isTableLine && normalizedLine.includes("|")) {
     normalizedLine = normalizedLine

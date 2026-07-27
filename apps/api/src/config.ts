@@ -283,7 +283,10 @@ function normalizeOriginPort(protocol: ApiCorsProtocol, port: string | undefined
 
   const normalizedPort = String(portNumber);
 
-  if ((protocol === "http:" && normalizedPort === "80") || (protocol === "https:" && normalizedPort === "443")) {
+  if (
+    (protocol === "http:" && normalizedPort === "80") ||
+    (protocol === "https:" && normalizedPort === "443")
+  ) {
     return null;
   }
 
@@ -346,7 +349,11 @@ function validateWildcardDomainSuffix(token: string, domainSuffix: string): void
 
   const labels = domainSuffix.split(".");
 
-  if (isIP(domainSuffix) !== 0 || labels.length < 2 || labels.some((label) => !HOST_LABEL_PATTERN.test(label))) {
+  if (
+    isIP(domainSuffix) !== 0 ||
+    labels.length < 2 ||
+    labels.some((label) => !HOST_LABEL_PATTERN.test(label))
+  ) {
     throw createApiConfigError(
       `CORS_ALLOWED_ORIGINS wildcard entries must include a real domain suffix. Received ${JSON.stringify(token)}.`,
     );
@@ -401,7 +408,9 @@ function parseCorsAllowedOriginRule(token: string): ApiCorsOriginRule {
 
 function parseCorsAllowedOrigins(value: string | undefined): ApiCorsConfig {
   const originTokens =
-    value === undefined ? [...DEFAULT_API_CORS_ALLOWED_ORIGINS] : value.split(",").map((token) => token.trim());
+    value === undefined
+      ? [...DEFAULT_API_CORS_ALLOWED_ORIGINS]
+      : value.split(",").map((token) => token.trim());
 
   if (originTokens.some((token) => token.length === 0)) {
     throw createApiConfigError("CORS_ALLOWED_ORIGINS must not contain blank entries.");
@@ -423,14 +432,20 @@ function originPortForMatching(url: URL): string | null {
     return null;
   }
 
-  if ((url.protocol === "http:" && portNumber === 80) || (url.protocol === "https:" && portNumber === 443)) {
+  if (
+    (url.protocol === "http:" && portNumber === 80) ||
+    (url.protocol === "https:" && portNumber === 443)
+  ) {
     return null;
   }
 
   return String(portNumber);
 }
 
-export function isApiCorsOriginAllowed(corsConfig: ApiCorsConfig, origin: string | undefined): boolean {
+export function isApiCorsOriginAllowed(
+  corsConfig: ApiCorsConfig,
+  origin: string | undefined,
+): boolean {
   if (origin === undefined) {
     return false;
   }

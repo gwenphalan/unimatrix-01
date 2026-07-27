@@ -7,7 +7,10 @@ class FakeMediaQueryList {
   matches: boolean;
   private readonly listeners = new Set<() => void>();
 
-  constructor(public readonly media: string, matches: boolean) {
+  constructor(
+    public readonly media: string,
+    matches: boolean,
+  ) {
     this.matches = matches;
   }
 
@@ -29,7 +32,9 @@ class FakeMediaQueryList {
 
 function stubMatchMedia(initial: Record<string, boolean>): Map<string, FakeMediaQueryList> {
   const registry = new Map<string, FakeMediaQueryList>();
-  Object.entries(initial).forEach(([query, matches]) => registry.set(query, new FakeMediaQueryList(query, matches)));
+  Object.entries(initial).forEach(([query, matches]) =>
+    registry.set(query, new FakeMediaQueryList(query, matches)),
+  );
 
   window.matchMedia = ((query: string) => {
     let mql = registry.get(query);
@@ -147,7 +152,10 @@ describe("useDebouncedSize", () => {
 describe("useMotionMode", () => {
   let registry: Map<string, FakeMediaQueryList>;
   const originalMatchMedia = window.matchMedia;
-  const originalConcurrency = Object.getOwnPropertyDescriptor(window.navigator, "hardwareConcurrency");
+  const originalConcurrency = Object.getOwnPropertyDescriptor(
+    window.navigator,
+    "hardwareConcurrency",
+  );
 
   beforeEach(() => {
     registry = stubMatchMedia({
@@ -156,7 +164,10 @@ describe("useMotionMode", () => {
       "(pointer: coarse)": false,
       "(update: slow)": false,
     });
-    Object.defineProperty(window.navigator, "hardwareConcurrency", { value: 8, configurable: true });
+    Object.defineProperty(window.navigator, "hardwareConcurrency", {
+      value: 8,
+      configurable: true,
+    });
   });
 
   afterEach(() => {

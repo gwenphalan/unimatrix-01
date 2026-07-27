@@ -27,7 +27,9 @@ test("homepage load", async ({ page }) => {
 
   await gotoRoute(page, "/");
 
-  await expect(main.getByRole("heading", { name: "Projects I need and no one wants." })).toBeVisible();
+  await expect(
+    main.getByRole("heading", { name: "Projects I need and no one wants." }),
+  ).toBeVisible();
   await expect(main.getByRole("link", { name: "View all projects" })).toBeVisible();
   await expect(main.getByRole("link", { name: "View all blog posts" })).toBeVisible();
 
@@ -42,9 +44,7 @@ test("navigation smoke flow", async ({ page }) => {
 
   await main.getByRole("link", { name: "View all projects" }).click();
   await expect(page).toHaveURL(/\/projects$/u);
-  await expect(
-    page.getByRole("link", { name: "Open project Cube Trainer" }),
-  ).toBeVisible();
+  await expect(page.getByRole("link", { name: "Open project Cube Trainer" })).toBeVisible();
 
   await page.getByRole("link", { name: "Open project Cube Trainer" }).click();
   await expect(page).toHaveURL(/\/projects\/cube-trainer$/u);
@@ -76,9 +76,12 @@ test("project page render", async ({ page }) => {
 
   await expect(page.getByRole("heading", { name: "Cube Trainer" })).toBeVisible();
   await expect(
-    page.getByText("A flashcard trainer for memorizing every 3x3 Rubik's Cube OLL and PLL algorithm.", {
-      exact: false,
-    }),
+    page.getByText(
+      "A flashcard trainer for memorizing every 3x3 Rubik's Cube OLL and PLL algorithm.",
+      {
+        exact: false,
+      },
+    ),
   ).toBeVisible();
   await expect(page.getByRole("link", { name: "Visit site" })).toHaveAttribute(
     "href",
@@ -96,8 +99,17 @@ test("blog page render", async ({ page }) => {
   await gotoRoute(page, "/blog/placeholder-post");
 
   await expect(page.getByRole("heading", { name: "Placeholder blog" })).toBeVisible();
-  await expect(page.getByText("This is explicitly a placeholder blog post. A real post will replace it later.", { exact: false })).toBeVisible();
-  await expect(page.getByText("This is a placeholder blog post while I figure out what belongs here.", { exact: false })).toBeVisible();
+  await expect(
+    page.getByText(
+      "This is explicitly a placeholder blog post. A real post will replace it later.",
+      { exact: false },
+    ),
+  ).toBeVisible();
+  await expect(
+    page.getByText("This is a placeholder blog post while I figure out what belongs here.", {
+      exact: false,
+    }),
+  ).toBeVisible();
   await expect(page.getByRole("link", { name: "Back to blog" })).toBeVisible();
 
   expectNoPageErrors(pageErrors);

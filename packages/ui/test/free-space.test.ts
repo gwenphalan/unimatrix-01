@@ -18,7 +18,12 @@ describe("findFreeComponents", () => {
   it("splits into two components across a full-width bar", () => {
     const width = GRID * 20;
     const height = GRID * 20;
-    const bar: Occluder = { x0: 0, y0: height / 2 - GRID / 2, x1: width, y1: height / 2 + GRID / 2 };
+    const bar: Occluder = {
+      x0: 0,
+      y0: height / 2 - GRID / 2,
+      x1: width,
+      y1: height / 2 + GRID / 2,
+    };
     const field = buildBarrierField([bar]);
     const components = findFreeComponents(field, width, height);
 
@@ -42,7 +47,9 @@ describe("findFreeComponents", () => {
   it("returns no components when the whole canvas is barricaded", () => {
     const width = GRID * 5;
     const height = GRID * 5;
-    const field = buildBarrierField([{ x0: -1000, y0: -1000, x1: width + 1000, y1: height + 1000 }]);
+    const field = buildBarrierField([
+      { x0: -1000, y0: -1000, x1: width + 1000, y1: height + 1000 },
+    ]);
 
     expect(findFreeComponents(field, width, height)).toHaveLength(0);
   });
@@ -108,7 +115,10 @@ describe("allocateSlots", () => {
     });
 
     const shapes: { components: ReturnType<typeof sized>[]; count: number }[] = [
-      { components: [sized(0, 40), sized(1, 40), sized(2, 40), sized(3, 40), sized(4, 40)], count: 3 },
+      {
+        components: [sized(0, 40), sized(1, 40), sized(2, 40), sized(3, 40), sized(4, 40)],
+        count: 3,
+      },
       { components: [sized(0, 400), sized(1, 12), sized(2, 12), sized(3, 12)], count: 2 },
       { components: [sized(0, 10), sized(1, 10)], count: 1 },
       { components: [sized(0, 900), sized(1, 10), sized(2, 10)], count: 3 },

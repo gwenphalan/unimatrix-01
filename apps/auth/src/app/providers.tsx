@@ -10,7 +10,5 @@ type ProvidersProps = {
 };
 
 export function Providers({ children, client = queryClient }: ProvidersProps) {
-  return (
-    <QueryClientProvider client={client}>{children}</QueryClientProvider>
-  );
+  return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
 }

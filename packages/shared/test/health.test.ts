@@ -1,10 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  healthContract,
-  healthQuerySchema,
-  healthResponseSchema,
-} from "../src/index.js";
+import { healthContract, healthQuerySchema, healthResponseSchema } from "../src/index.js";
 
 describe("health shared contract surface", () => {
   it("accepts the expected health response payload", () => {

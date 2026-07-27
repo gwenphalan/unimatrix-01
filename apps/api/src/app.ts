@@ -1,15 +1,9 @@
 import type { DatabaseInstance } from "@unimatrix/db";
-import Fastify, {
-  type FastifyInstance,
-  type FastifyServerOptions,
-} from "fastify";
+import Fastify, { type FastifyInstance, type FastifyServerOptions } from "fastify";
 import { isResponseSerializationError } from "fastify-type-provider-zod";
 
 import type { ApiRuntimeConfig } from "./config.js";
-import {
-  createNotFoundErrorEnvelope,
-  normalizeError,
-} from "./lib/http/errors.js";
+import { createNotFoundErrorEnvelope, normalizeError } from "./lib/http/errors.js";
 import { buildLoggerOptions } from "./lib/http/logging.js";
 import { registerModules } from "./modules/index.js";
 import { setupCorePlugins } from "./plugins/index.js";
@@ -58,7 +52,9 @@ export function buildApp(config: ApiRuntimeConfig): FastifyInstance {
     }
 
     request.responseLogMessage =
-      normalizedError.logLevel === "error" ? "request failed" : "request completed with client error";
+      normalizedError.logLevel === "error"
+        ? "request failed"
+        : "request completed with client error";
 
     reply.status(normalizedError.statusCode).send(normalizedError.envelope);
   });

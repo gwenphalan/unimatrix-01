@@ -1,12 +1,14 @@
-import type {
-  ApiClientAuthTokenProvider,
-  ApiClientResponse,
-} from "@unimatrix/api-client";
+import type { ApiClientAuthTokenProvider, ApiClientResponse } from "@unimatrix/api-client";
 import type { UserFileMetadata } from "@unimatrix/shared";
 
 import { ApiClientError, createApiClient } from "@unimatrix/api-client";
 
-import type { UserFilesStore, UserFilesUploadOptions, UserSettingsStore, UserStore } from "./types.js";
+import type {
+  UserFilesStore,
+  UserFilesUploadOptions,
+  UserSettingsStore,
+  UserStore,
+} from "./types.js";
 import { assertValidKey, assertValidNamespace } from "./validation.js";
 
 /**
@@ -29,7 +31,10 @@ export interface AccountFetchResponse extends ApiClientResponse {
   blob(): Promise<Blob>;
 }
 
-export type AccountFetch = (input: string, init?: AccountFetchInit) => Promise<AccountFetchResponse>;
+export type AccountFetch = (
+  input: string,
+  init?: AccountFetchInit,
+) => Promise<AccountFetchResponse>;
 
 export interface CreateAccountUserStoreOptions {
   /** The service/feature namespace this store's documents and files are scoped to. */
@@ -140,7 +145,8 @@ export function createAccountUserStore(options: CreateAccountUserStoreOptions): 
     ): Promise<UserFileMetadata> {
       const validKey = assertValidKey(key);
       const contentType = uploadOptions?.contentType;
-      const blobToSend = contentType && contentType !== file.type ? new Blob([file], { type: contentType }) : file;
+      const blobToSend =
+        contentType && contentType !== file.type ? new Blob([file], { type: contentType }) : file;
 
       const formData = new FormData();
       formData.append("file", blobToSend);
@@ -150,7 +156,9 @@ export function createAccountUserStore(options: CreateAccountUserStoreOptions): 
       const response = await fetchImpl(url, { method: "POST", headers, body: formData });
 
       if (!response.ok) {
-        throw new Error(`Upload failed for "${namespace}/${validKey}" with status ${response.status}.`);
+        throw new Error(
+          `Upload failed for "${namespace}/${validKey}" with status ${response.status}.`,
+        );
       }
 
       return (await response.json()) as UserFileMetadata;
@@ -159,7 +167,10 @@ export function createAccountUserStore(options: CreateAccountUserStoreOptions): 
     async getBlob(key: string): Promise<Blob | undefined> {
       const validKey = assertValidKey(key);
       const headers = await authHeaders();
-      const url = joinUrl(baseUrl, `/me/files/content${buildQueryString({ namespace, key: validKey })}`);
+      const url = joinUrl(
+        baseUrl,
+        `/me/files/content${buildQueryString({ namespace, key: validKey })}`,
+      );
       const response = await fetchImpl(url, { method: "GET", headers });
 
       if (response.status === 404) {
@@ -167,7 +178,9 @@ export function createAccountUserStore(options: CreateAccountUserStoreOptions): 
       }
 
       if (!response.ok) {
-        throw new Error(`Download failed for "${namespace}/${validKey}" with status ${response.status}.`);
+        throw new Error(
+          `Download failed for "${namespace}/${validKey}" with status ${response.status}.`,
+        );
       }
 
       return response.blob();

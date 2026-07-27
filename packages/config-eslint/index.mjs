@@ -3,11 +3,7 @@ import prettier from "eslint-config-prettier/flat";
 import globals from "globals";
 import tseslint from "typescript-eslint";
 
-const sharedIgnores = [
-  "**/dist/**",
-  "**/coverage/**",
-  "**/node_modules/**",
-];
+const sharedIgnores = ["**/dist/**", "**/coverage/**", "**/node_modules/**"];
 
 function createTypedConfig({ globalsMap, tsconfigRootDir }) {
   const typedFiles = ["**/*.{ts,tsx,mts,cts}"];

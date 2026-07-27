@@ -23,11 +23,7 @@ import {
   type UserDocument,
 } from "@unimatrix/shared";
 
-import type {
-  ApiClientConfig,
-  ApiClientFetch,
-  ApiClientResponse,
-} from "./config.js";
+import type { ApiClientConfig, ApiClientFetch, ApiClientResponse } from "./config.js";
 
 /**
  * Options accepted by `request()` for a given contract. `body` is only
@@ -306,8 +302,10 @@ export function createApiClient(config: ApiClientConfig): ApiClient {
       request<typeof deleteDocumentContract>(deleteDocumentContract, { body }),
     listDocuments: (query: ListDocumentsQuery) =>
       request<typeof listDocumentsContract>(listDocumentsContract, { query }),
-    listFiles: (query: ListFilesQuery) => request<typeof listFilesContract>(listFilesContract, { query }),
-    deleteFile: (body: DeleteFileBody) => request<typeof deleteFileContract>(deleteFileContract, { body }),
+    listFiles: (query: ListFilesQuery) =>
+      request<typeof listFilesContract>(listFilesContract, { query }),
+    deleteFile: (body: DeleteFileBody) =>
+      request<typeof deleteFileContract>(deleteFileContract, { body }),
     request,
   };
 }

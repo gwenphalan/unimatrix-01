@@ -38,7 +38,11 @@ const MOTION_MEDIA_QUERIES = [
  * never rise above `static` again for the rest of the mount, per this
  * session's "downgrade must be one-way" requirement.
  */
-export function useMotionMode(): { mode: MotionMode; demoteToStatic: () => void; idleGlowEligible: boolean } {
+export function useMotionMode(): {
+  mode: MotionMode;
+  demoteToStatic: () => void;
+  idleGlowEligible: boolean;
+} {
   const [signals, setSignals] = React.useState<CapabilitySignals>(() => readCapabilitySignals());
   const preferenceMode = React.useMemo(() => decideMotionMode(signals), [signals]);
   const runtimeFloorRef = React.useRef<MotionMode>("full");
@@ -72,7 +76,8 @@ export function useMotionMode(): { mode: MotionMode; demoteToStatic: () => void;
   // The frame-budget watchdog's runtime demotion is always performance-
   // motivated, regardless of what the live preference signals say — a
   // device it demoted must never get the idle glow.
-  const idleGlowEligible = mode === "static" && runtimeFloorRef.current !== "static" && canShowIdleGlow(signals);
+  const idleGlowEligible =
+    mode === "static" && runtimeFloorRef.current !== "static" && canShowIdleGlow(signals);
 
   return { mode, demoteToStatic, idleGlowEligible };
 }

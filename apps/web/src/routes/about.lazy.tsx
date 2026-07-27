@@ -1,19 +1,11 @@
 import { createLazyFileRoute } from "@tanstack/react-router";
 import { useMemo, useRef, useState } from "react";
-import {
-  RiGithubLine,
-  RiMailLine,
-  RiSendPlaneLine,
-} from "@remixicon/react";
+import { RiGithubLine, RiMailLine, RiSendPlaneLine } from "@remixicon/react";
 
 import { Button, useCircuitOccluder } from "@unimatrix/ui/public";
 
 import { homeContent } from "@/features/content/site-content";
-import {
-  emailAddress,
-  githubProfileUrl,
-  projectRepoUrl,
-} from "@/features/public-site/site-links";
+import { emailAddress, githubProfileUrl, projectRepoUrl } from "@/features/public-site/site-links";
 
 export const Route = createLazyFileRoute("/about")({
   component: AboutRoute,
@@ -85,7 +77,9 @@ function AboutRoute() {
                   <RiGithubLine aria-hidden="true" className="size-4 text-primary" />
                   <span className="text-sm font-medium">GitHub</span>
                 </div>
-                <p className="mt-2 text-sm leading-7 text-muted-foreground">github.com/gwenphalan</p>
+                <p className="mt-2 text-sm leading-7 text-muted-foreground">
+                  github.com/gwenphalan
+                </p>
               </a>
 
               <a
@@ -124,7 +118,9 @@ function AboutRoute() {
               }}
             >
               <label className="grid gap-2">
-                <span className="text-xs font-medium tracking-wide text-muted-foreground">Name</span>
+                <span className="text-xs font-medium tracking-wide text-muted-foreground">
+                  Name
+                </span>
                 <input
                   className="border border-border/70 bg-background/80 px-3 py-3 text-sm text-foreground outline-none transition-colors focus:border-primary/45"
                   name="name"
@@ -138,7 +134,9 @@ function AboutRoute() {
               </label>
 
               <label className="grid gap-2">
-                <span className="text-xs font-medium tracking-wide text-muted-foreground">Email</span>
+                <span className="text-xs font-medium tracking-wide text-muted-foreground">
+                  Email
+                </span>
                 <input
                   className="border border-border/70 bg-background/80 px-3 py-3 text-sm text-foreground outline-none transition-colors focus:border-primary/45"
                   name="email"
@@ -152,7 +150,9 @@ function AboutRoute() {
               </label>
 
               <label className="grid gap-2">
-                <span className="text-xs font-medium tracking-wide text-muted-foreground">Message</span>
+                <span className="text-xs font-medium tracking-wide text-muted-foreground">
+                  Message
+                </span>
                 <textarea
                   className="min-h-36 border border-border/70 bg-background/80 px-3 py-3 text-sm leading-7 text-foreground outline-none transition-colors focus:border-primary/45"
                   name="message"

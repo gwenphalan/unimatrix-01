@@ -1,11 +1,7 @@
 import * as React from "react";
 import Markdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
-import {
-  Highlight,
-  Prism,
-  type PrismTheme,
-} from "prism-react-renderer";
+import { Highlight, Prism, type PrismTheme } from "prism-react-renderer";
 
 import { cn } from "../lib/utils.js";
 
@@ -81,11 +77,7 @@ type SanitizedLink =
 const markdownLinkClassName =
   "font-medium text-foreground underline decoration-border underline-offset-[0.28em] transition-colors hover:text-primary hover:decoration-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40";
 
-export function PublicMarkdown({
-  className,
-  markdown,
-  renderInternalLink,
-}: PublicMarkdownProps) {
+export function PublicMarkdown({ className, markdown, renderInternalLink }: PublicMarkdownProps) {
   const components: Components = {
     a({ children, className: linkClassName, href, node, ...props }) {
       void node;
@@ -119,14 +111,10 @@ export function PublicMarkdown({
           className={resolvedClassName}
           href={safeLink.href}
           rel={
-            safeLink.kind === "external" || safeLink.kind === "mailto"
-              ? "noreferrer"
-              : props.rel
+            safeLink.kind === "external" || safeLink.kind === "mailto" ? "noreferrer" : props.rel
           }
           target={
-            safeLink.kind === "external" || safeLink.kind === "mailto"
-              ? "_blank"
-              : props.target
+            safeLink.kind === "external" || safeLink.kind === "mailto" ? "_blank" : props.target
           }
         >
           {children}
@@ -166,9 +154,7 @@ export function PublicMarkdown({
       const safeSource = sanitizeMarkdownImageSource(src);
 
       if (!safeSource) {
-        return alt ? (
-          <span className="text-sm text-muted-foreground">{alt}</span>
-        ) : null;
+        return alt ? <span className="text-sm text-muted-foreground">{alt}</span> : null;
       }
 
       return (
@@ -281,12 +267,7 @@ function HighlightedCodeBlock({
   }
 
   return (
-    <Highlight
-      code={code}
-      language={resolvedLanguage}
-      prism={Prism}
-      theme={opsConsoleCodeTheme}
-    >
+    <Highlight code={code} language={resolvedLanguage} prism={Prism} theme={opsConsoleCodeTheme}>
       {({ className: highlightClassName, getLineProps, getTokenProps, style, tokens }) => (
         <pre
           className={cn(
@@ -328,10 +309,12 @@ function HighlightedCodeBlock({
   );
 }
 
-function extractCodeBlock(children: React.ReactNode): {
-  code: string;
-  language?: string | undefined;
-} | undefined {
+function extractCodeBlock(children: React.ReactNode):
+  | {
+      code: string;
+      language?: string | undefined;
+    }
+  | undefined {
   const childNodes = React.Children.toArray(children);
 
   if (childNodes.length !== 1) {
@@ -340,10 +323,12 @@ function extractCodeBlock(children: React.ReactNode): {
 
   const onlyChild = childNodes[0];
 
-  if (!React.isValidElement<{
-    children?: React.ReactNode;
-    className?: string;
-  }>(onlyChild)) {
+  if (
+    !React.isValidElement<{
+      children?: React.ReactNode;
+      className?: string;
+    }>(onlyChild)
+  ) {
     return undefined;
   }
 
@@ -417,20 +402,19 @@ function isMarkdownCodeBlock({
 
   const codeNode = node as
     | {
-        position?: {
-          end?: { line?: number } | undefined;
-          start?: { column?: number; line?: number } | undefined;
-        } | undefined;
+        position?:
+          | {
+              end?: { line?: number } | undefined;
+              start?: { column?: number; line?: number } | undefined;
+            }
+          | undefined;
       }
     | undefined;
   const startLine = codeNode?.position?.start?.line;
   const endLine = codeNode?.position?.end?.line;
 
   return Boolean(
-    startLine &&
-      endLine &&
-      endLine > startLine &&
-      codeNode?.position?.start?.column === 1,
+    startLine && endLine && endLine > startLine && codeNode?.position?.start?.column === 1,
   );
 }
 
@@ -488,9 +472,7 @@ function sanitizeMarkdownLink(url: string | undefined | null): SanitizedLink {
   return undefined;
 }
 
-function sanitizeMarkdownImageSource(
-  url: string | undefined | null,
-): string | undefined {
+function sanitizeMarkdownImageSource(url: string | undefined | null): string | undefined {
   const normalizedUrl = normalizeUrl(url);
 
   if (!normalizedUrl) {

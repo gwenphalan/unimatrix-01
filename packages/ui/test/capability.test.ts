@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { type CapabilitySignals, canShowIdleGlow, decideMotionMode, mostRestrictive } from "../src/components/capability.js";
+import {
+  type CapabilitySignals,
+  canShowIdleGlow,
+  decideMotionMode,
+  mostRestrictive,
+} from "../src/components/capability.js";
 
 const NEUTRAL: CapabilitySignals = {
   reducedMotion: false,
@@ -28,7 +33,9 @@ describe("decideMotionMode", () => {
   });
 
   it("(pointer: coarse) alone forces static, regardless of concurrency", () => {
-    expect(decideMotionMode({ ...NEUTRAL, coarsePointer: true, hardwareConcurrency: 8 })).toBe("static");
+    expect(decideMotionMode({ ...NEUTRAL, coarsePointer: true, hardwareConcurrency: 8 })).toBe(
+      "static",
+    );
   });
 
   it("low hardwareConcurrency (<=2) forces static", () => {
@@ -50,7 +57,9 @@ describe("decideMotionMode", () => {
   });
 
   it("undefined hardwareConcurrency still yields static/transitions-only when another signal demotes", () => {
-    expect(decideMotionMode({ ...NEUTRAL, hardwareConcurrency: undefined, reducedMotion: true })).toBe("static");
+    expect(
+      decideMotionMode({ ...NEUTRAL, hardwareConcurrency: undefined, reducedMotion: true }),
+    ).toBe("static");
   });
 });
 
@@ -60,7 +69,9 @@ describe("canShowIdleGlow", () => {
   });
 
   it("undefined hardwareConcurrency (Safari) does not disqualify it on its own", () => {
-    expect(canShowIdleGlow({ ...NEUTRAL, coarsePointer: true, hardwareConcurrency: undefined })).toBe(true);
+    expect(
+      canShowIdleGlow({ ...NEUTRAL, coarsePointer: true, hardwareConcurrency: undefined }),
+    ).toBe(true);
   });
 
   it("reduced-motion disqualifies it", () => {
@@ -76,7 +87,9 @@ describe("canShowIdleGlow", () => {
   });
 
   it("low hardwareConcurrency (<=2) disqualifies it, even alongside coarsePointer", () => {
-    expect(canShowIdleGlow({ ...NEUTRAL, coarsePointer: true, hardwareConcurrency: 2 })).toBe(false);
+    expect(canShowIdleGlow({ ...NEUTRAL, coarsePointer: true, hardwareConcurrency: 2 })).toBe(
+      false,
+    );
   });
 });
 

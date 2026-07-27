@@ -175,34 +175,31 @@ describe("alternate algorithms consistency", () => {
   //     turn for algorithms written from a different recognition angle.
   const AUF_OPTIONS = ["", "U", "U2", "U'"];
 
-  describe.each(OLL_ALGORITHMS.filter((c) => c.algorithms.length > 1))(
-    "$id",
-    (algorithmCase) => {
-      const primary = algorithmCase.algorithms[0];
-      if (!primary) return;
+  describe.each(OLL_ALGORITHMS.filter((c) => c.algorithms.length > 1))("$id", (algorithmCase) => {
+    const primary = algorithmCase.algorithms[0];
+    if (!primary) return;
 
-      const setupState = normalizeOrientation(
-        applyMoves(createSolvedCube(), invertMoves(parseAlgorithm(primary))),
-      );
+    const setupState = normalizeOrientation(
+      applyMoves(createSolvedCube(), invertMoves(parseAlgorithm(primary))),
+    );
 
-      algorithmCase.algorithms.forEach((algorithm, index) => {
-        if (index === 0) return;
+    algorithmCase.algorithms.forEach((algorithm, index) => {
+      if (index === 0) return;
 
-        it(`alternate[${index}] fully orients the last layer`, () => {
-          // Full orientation is exactly "every last-layer piece's up-facing sticker shows
-          // U" - permutation (which piece, i.e. which non-U color, ends up where) is not
-          // OLL's job and is deliberately not asserted here. Checking the top face alone is
-          // sufficient: each piece has exactly one U-sticker, so if all 9 top facelets read
-          // "U" none can also be peeking out on a side.
-          const { top } = extractLastLayer(
-            normalizeOrientation(applyMoves(setupState, parseAlgorithm(algorithm))),
-          );
+      it(`alternate[${index}] fully orients the last layer`, () => {
+        // Full orientation is exactly "every last-layer piece's up-facing sticker shows
+        // U" - permutation (which piece, i.e. which non-U color, ends up where) is not
+        // OLL's job and is deliberately not asserted here. Checking the top face alone is
+        // sufficient: each piece has exactly one U-sticker, so if all 9 top facelets read
+        // "U" none can also be peeking out on a side.
+        const { top } = extractLastLayer(
+          normalizeOrientation(applyMoves(setupState, parseAlgorithm(algorithm))),
+        );
 
-          expect(top.every((facelet) => facelet === "U")).toBe(true);
-        });
+        expect(top.every((facelet) => facelet === "U")).toBe(true);
       });
-    },
-  );
+    });
+  });
 
   const pllCases = PLL_ALGORITHMS.filter((c) => c.algorithms.length > 1);
 
@@ -245,10 +242,14 @@ describe("alternate algorithms consistency", () => {
       runner(testName, () => {
         const solvesUpToAuf = AUF_OPTIONS.some((preAuf) => {
           const preApplied = preAuf ? applyMoves(setupState, parseAlgorithm(preAuf)) : setupState;
-          const normalized = normalizeOrientation(applyMoves(preApplied, parseAlgorithm(algorithm)));
+          const normalized = normalizeOrientation(
+            applyMoves(preApplied, parseAlgorithm(algorithm)),
+          );
 
           return AUF_OPTIONS.some((postAuf) => {
-            const withPostAuf = postAuf ? applyMoves(normalized, parseAlgorithm(postAuf)) : normalized;
+            const withPostAuf = postAuf
+              ? applyMoves(normalized, parseAlgorithm(postAuf))
+              : normalized;
             return JSON.stringify(withPostAuf) === JSON.stringify(solved);
           });
         });

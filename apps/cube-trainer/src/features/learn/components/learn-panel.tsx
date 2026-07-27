@@ -41,7 +41,10 @@ export function LearnPanel({ previewVisible, setId }: LearnPanelProps) {
 
   if (!currentCase || !diagram) {
     return (
-      <Card className="site-panel site-panel-strong flex min-h-96 flex-col items-center justify-center gap-3 px-6 py-10 text-center" ref={panelRef}>
+      <Card
+        className="site-panel site-panel-strong flex min-h-96 flex-col items-center justify-center gap-3 px-6 py-10 text-center"
+        ref={panelRef}
+      >
         <p className="text-sm text-muted-foreground">Every case in this set is known.</p>
       </Card>
     );
@@ -50,7 +53,10 @@ export function LearnPanel({ previewVisible, setId }: LearnPanelProps) {
   const [primaryAlgorithm, ...alternateAlgorithms] = currentCase.algorithms;
 
   return (
-    <Card className="site-panel site-panel-strong flex flex-col items-center gap-6 px-6 py-10 text-center" ref={panelRef}>
+    <Card
+      className="site-panel site-panel-strong flex flex-col items-center gap-6 px-6 py-10 text-center"
+      ref={panelRef}
+    >
       <LastLayerDiagramView
         diagram={diagram}
         label={currentCase.displayName}

@@ -85,7 +85,10 @@ export class GridGraph {
 
       for (let s = 1; s <= steps; s += 1) {
         const t = s / steps;
-        const toKey = cellKey({ x: prev.x + (point.x - prev.x) * t, y: prev.y + (point.y - prev.y) * t });
+        const toKey = cellKey({
+          x: prev.x + (point.x - prev.x) * t,
+          y: prev.y + (point.y - prev.y) * t,
+        });
         if (!trial.union(fromKey, toKey)) return null;
         fromKey = toKey;
       }

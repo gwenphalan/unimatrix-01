@@ -82,7 +82,10 @@ export interface UseGuestDataMigrationOptions {
  * again for the lifetime of the component. Requires an `AuthProvider`
  * above it, same as `useUserStore`.
  */
-export function useGuestDataMigration(namespace: string, options?: UseGuestDataMigrationOptions): void {
+export function useGuestDataMigration(
+  namespace: string,
+  options?: UseGuestDataMigrationOptions,
+): void {
   const { getToken, isLoaded, isSignedIn } = useAuth();
   const wasSignedOutRef = React.useRef(false);
   const hasMigratedRef = React.useRef(false);

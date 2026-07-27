@@ -1,7 +1,4 @@
-import {
-  createFileRoute,
-  notFound,
-} from "@tanstack/react-router";
+import { createFileRoute, notFound } from "@tanstack/react-router";
 
 import { getBlogEntryBySlug } from "@/features/content/site-content";
 

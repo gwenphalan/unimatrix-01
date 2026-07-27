@@ -20,6 +20,21 @@ function findRepositoryRoot(startDir: string): string {
 
 const repositoryRoot = findRepositoryRoot(process.cwd());
 
+/**
+ * Collapses each `{ ... }` specifier list onto a single line and drops the
+ * trailing comma Prettier leaves behind when it wraps one.
+ *
+ * The assertions below are about *which* symbols a barrel re-exports and from
+ * where — not about how the statement is wrapped. Matching the raw source made
+ * them fail the moment Prettier split a long export list across lines, which
+ * says nothing about the package boundary this test exists to protect.
+ */
+function collapseExportSpecifiers(source: string): string {
+  return source.replace(/\{[^}]*\}/gu, (block) =>
+    block.replace(/\s+/gu, " ").replace(/,\s*\}$/u, " }"),
+  );
+}
+
 function readRepositoryFile(path: string): string {
   return readFileSync(join(repositoryRoot, path), "utf8");
 }
@@ -44,7 +59,8 @@ describe("public UI package usage", () => {
     const rootSource = readRepositoryFile("packages/ui/src/index.ts");
     const publicSource = readRepositoryFile("packages/ui/src/public.ts");
     const uiBarrelSource = readRepositoryFile("packages/ui/src/components/ui/index.ts");
-    const publicExportLines = publicSource.match(/^export \{ .* \} from ".*";$/gmu) ?? [];
+    const collapsedPublicSource = collapseExportSpecifiers(publicSource);
+    const publicExportLines = collapsedPublicSource.match(/^export \{ .* \} from ".*";$/gmu) ?? [];
     const expectedPublicExportLines = [
       'export { Badge } from "./components/ui/badge.js";',
       'export { Button } from "./components/ui/button.js";',
@@ -75,7 +91,7 @@ describe("public UI package usage", () => {
 
     expect(publicExportLines).toHaveLength(expectedPublicExportLines.length);
     for (const line of expectedPublicExportLines) {
-      expect(publicSource).toContain(line);
+      expect(collapsedPublicSource).toContain(line);
     }
     expect(publicSource).not.toMatch(/accordion/u);
     expect(publicSource).not.toMatch(/dialog/u);
@@ -91,17 +107,15 @@ describe("public UI package usage", () => {
     const uiPackageJson = readRepositoryFile("packages/ui/package.json");
     const webStylesSource = readRepositoryFile("apps/web/src/styles.css");
 
-    expect(uiPackageJson).toContain("\"./styles.css\"");
-    expect(uiPackageJson).toContain("\"./public\"");
+    expect(uiPackageJson).toContain('"./styles.css"');
+    expect(uiPackageJson).toContain('"./public"');
     expect(webStylesSource).toContain('@import "@unimatrix/ui/styles.css";');
     expect(webStylesSource).not.toContain('@import "shadcn/tailwind.css";');
     expect(webStylesSource).not.toContain('@import "@fontsource-variable/geist-mono";');
   });
 
   it("apps/web owns its public-site compositions while consuming shared ui primitives", () => {
-    const publicSiteSource = readRepositoryFile(
-      "apps/web/src/features/public-site/components.tsx",
-    );
+    const publicSiteSource = readRepositoryFile("apps/web/src/features/public-site/components.tsx");
 
     expect(publicSiteSource).toMatch(/PublicPageContainer/u);
     expect(publicSiteSource).toMatch(/PublicSectionHeading/u);
@@ -140,15 +154,11 @@ describe("public UI package usage", () => {
     const blogLazyRouteSource = readRepositoryFile("apps/web/src/routes/blog.lazy.tsx");
     const aboutRouteSource = readRepositoryFile("apps/web/src/routes/about.tsx");
     const aboutLazyRouteSource = readRepositoryFile("apps/web/src/routes/about.lazy.tsx");
-    const projectDetailRouteSource = readRepositoryFile(
-      "apps/web/src/routes/projects_.$slug.tsx",
-    );
+    const projectDetailRouteSource = readRepositoryFile("apps/web/src/routes/projects_.$slug.tsx");
     const projectDetailLazyRouteSource = readRepositoryFile(
       "apps/web/src/routes/projects_.$slug.lazy.tsx",
     );
-    const blogDetailRouteSource = readRepositoryFile(
-      "apps/web/src/routes/blog_.$slug.tsx",
-    );
+    const blogDetailRouteSource = readRepositoryFile("apps/web/src/routes/blog_.$slug.tsx");
     const blogDetailLazyRouteSource = readRepositoryFile(
       "apps/web/src/routes/blog_.$slug.lazy.tsx",
     );
@@ -211,9 +221,7 @@ describe("public UI package usage", () => {
     expect(projectDetailRouteSource).toMatch(/createFileRoute\("\/projects_\/\$slug"\)/u);
     expect(projectDetailRouteSource).toMatch(/throw createProjectNotFoundError/u);
     expect(projectDetailRouteSource).not.toMatch(/PublicMarkdown/u);
-    expect(projectDetailLazyRouteSource).toMatch(
-      /createLazyFileRoute\("\/projects_\/\$slug"\)/u,
-    );
+    expect(projectDetailLazyRouteSource).toMatch(/createLazyFileRoute\("\/projects_\/\$slug"\)/u);
     expect(projectDetailLazyRouteSource).toMatch(/notFoundComponent: ProjectNotFound/u);
     expect(projectDetailLazyRouteSource).toMatch(/LazyPublicMarkdown/u);
     expect(projectDetailLazyRouteSource).toMatch(/renderPublicMarkdownInternalLink/u);

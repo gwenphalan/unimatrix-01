@@ -22,9 +22,7 @@ describe("checkProjectLiveStatus", () => {
   it("resolves to offline when the fetch rejects", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")));
 
-    await expect(checkProjectLiveStatus("https://cube.unimatrix-01.dev")).resolves.toBe(
-      "offline",
-    );
+    await expect(checkProjectLiveStatus("https://cube.unimatrix-01.dev")).resolves.toBe("offline");
   });
 
   it("resolves to offline when the request times out", async () => {

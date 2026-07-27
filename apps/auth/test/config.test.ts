@@ -1,25 +1,18 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  loadAuthAppDevProxyConfig,
-  loadAuthAppRuntimeConfig,
-} from "../src/lib/config.js";
+import { loadAuthAppDevProxyConfig, loadAuthAppRuntimeConfig } from "../src/lib/config.js";
 
 describe("auth app runtime config", () => {
   it("requires a Clerk publishable key", () => {
-    expect(() => loadAuthAppRuntimeConfig({})).toThrow(
-      /VITE_CLERK_PUBLISHABLE_KEY is required/,
-    );
+    expect(() => loadAuthAppRuntimeConfig({})).toThrow(/VITE_CLERK_PUBLISHABLE_KEY is required/);
 
-    expect(() =>
-      loadAuthAppRuntimeConfig({ VITE_CLERK_PUBLISHABLE_KEY: "   " }),
-    ).toThrow(/VITE_CLERK_PUBLISHABLE_KEY must not be empty/);
+    expect(() => loadAuthAppRuntimeConfig({ VITE_CLERK_PUBLISHABLE_KEY: "   " })).toThrow(
+      /VITE_CLERK_PUBLISHABLE_KEY must not be empty/,
+    );
   });
 
   it("loads a valid config with the default api base url", () => {
-    expect(
-      loadAuthAppRuntimeConfig({ VITE_CLERK_PUBLISHABLE_KEY: "pk_test_xxx" }),
-    ).toEqual({
+    expect(loadAuthAppRuntimeConfig({ VITE_CLERK_PUBLISHABLE_KEY: "pk_test_xxx" })).toEqual({
       apiBaseUrl: "/api",
       clerkPublishableKey: "pk_test_xxx",
     });
@@ -72,8 +65,8 @@ describe("auth app runtime config", () => {
   });
 
   it("rejects invalid proxy targets", () => {
-    expect(() =>
-      loadAuthAppDevProxyConfig({ VITE_API_TARGET: "ws://127.0.0.1:3001" }),
-    ).toThrow(/VITE_API_TARGET must be a valid http:\/\/ or https:\/\/ URL/);
+    expect(() => loadAuthAppDevProxyConfig({ VITE_API_TARGET: "ws://127.0.0.1:3001" })).toThrow(
+      /VITE_API_TARGET must be a valid http:\/\/ or https:\/\/ URL/,
+    );
   });
 });

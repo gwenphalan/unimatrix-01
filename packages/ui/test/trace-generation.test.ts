@@ -8,7 +8,13 @@ import { generateTraces } from "../src/components/trace-generation.js";
 // Reuses the old single hardcoded keep-out rect (pre-Session-C's fixed
 // 14–86%/10–78% formula) as one continuity occluder case, alongside a bare
 // `occluders: []` baseline and a couple of multi-occluder/edge-count cases.
-const SCENARIOS: { width: number; height: number; seed: number; count: number; occluders: Occluder[] }[] = [
+const SCENARIOS: {
+  width: number;
+  height: number;
+  seed: number;
+  count: number;
+  occluders: Occluder[];
+}[] = [
   { width: 1440, height: 900, seed: 1, count: 24, occluders: [] },
   {
     width: 1440,

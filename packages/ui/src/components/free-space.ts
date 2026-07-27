@@ -31,7 +31,9 @@ function pickCenterCell(cells: Set<string>): string {
 
   cells.forEach((key) => {
     const [cx, cy] = key.split(",").map(Number) as [number, number];
-    const isBoundary = directions.some(([dx, dy]) => !cells.has(`${cx + (dx as number)},${cy + (dy as number)}`));
+    const isBoundary = directions.some(
+      ([dx, dy]) => !cells.has(`${cx + (dx as number)},${cy + (dy as number)}`),
+    );
     if (isBoundary) boundary.push(key);
   });
 
@@ -82,7 +84,11 @@ function pickCenterCell(cells: Set<string>): string {
  * this is what lets `trace-generation.ts` grow one tree per region instead
  * of one tree straddling a wall it can't cross.
  */
-export function findFreeComponents(field: BarrierField, width: number, height: number): FreeComponent[] {
+export function findFreeComponents(
+  field: BarrierField,
+  width: number,
+  height: number,
+): FreeComponent[] {
   const maxCx = Math.max(1, Math.round(width / GRID) - 1);
   const maxCy = Math.max(1, Math.round(height / GRID) - 1);
   const visited = new Set<string>();
@@ -152,7 +158,11 @@ export function findFreeComponents(field: BarrierField, width: number, height: n
  * rest get zero. Always sums to exactly `count`, and never returns a
  * negative entry.
  */
-export function allocateSlots(components: readonly FreeComponent[], count: number, minCellsPerTree: number): number[] {
+export function allocateSlots(
+  components: readonly FreeComponent[],
+  count: number,
+  minCellsPerTree: number,
+): number[] {
   if (components.length === 0 || count <= 0) return components.map(() => 0);
 
   // Only the largest `count` components can be *guaranteed* a slot — beyond
@@ -171,7 +181,9 @@ export function allocateSlots(components: readonly FreeComponent[], count: numbe
 
   const eligible = components.map((_c, i) => guaranteed.has(i));
   const totalSize = components.reduce((sum, c) => sum + c.size, 0) || 1;
-  const slots = components.map((c, i) => (eligible[i] ? Math.max(1, Math.floor((c.size / totalSize) * count)) : 0));
+  const slots = components.map((c, i) =>
+    eligible[i] ? Math.max(1, Math.floor((c.size / totalSize) * count)) : 0,
+  );
 
   const assigned = slots.reduce((sum, n) => sum + n, 0);
 

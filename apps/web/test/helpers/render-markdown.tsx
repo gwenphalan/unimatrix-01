@@ -26,9 +26,6 @@ export function renderMarkdownWithInternalLink(
   renderInternalLink: (props: RenderInternalLinkProps) => ReactElement,
 ): string {
   return renderToStaticMarkup(
-    <PublicMarkdown
-      markdown={markdown}
-      renderInternalLink={renderInternalLink}
-    />,
+    <PublicMarkdown markdown={markdown} renderInternalLink={renderInternalLink} />,
   );
 }

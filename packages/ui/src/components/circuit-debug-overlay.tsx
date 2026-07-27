@@ -4,7 +4,13 @@ import { createPortal } from "react-dom";
 import { getCircuitDebugState, subscribeCircuitDebug } from "./circuit-debug.js";
 import { useCircuitOccluderDelta } from "./circuit-occluder.js";
 import { GRID, type Point } from "./grid-math.js";
-import { OCCLUDER_BUFFER_PX, type Occluder, buildBarrierField, inflateRect, translateRect } from "./occlusion.js";
+import {
+  OCCLUDER_BUFFER_PX,
+  type Occluder,
+  buildBarrierField,
+  inflateRect,
+  translateRect,
+} from "./occlusion.js";
 
 // Hardcoded, not theme tokens — this must stay legible on every app's
 // palette regardless of light/dark mode or brand color.
@@ -40,8 +46,15 @@ export type CircuitDebugOverlayProps = {
  * `useCircuitOccluderDelta`, independent of the structural
  * `useCircuitOccluderRects()` commit `CircuitField` renders from.
  */
-export function CircuitDebugOverlay({ gridPhase, occluders }: CircuitDebugOverlayProps): React.JSX.Element | null {
-  const debugState = React.useSyncExternalStore(subscribeCircuitDebug, getCircuitDebugState, getCircuitDebugState);
+export function CircuitDebugOverlay({
+  gridPhase,
+  occluders,
+}: CircuitDebugOverlayProps): React.JSX.Element | null {
+  const debugState = React.useSyncExternalStore(
+    subscribeCircuitDebug,
+    getCircuitDebugState,
+    getCircuitDebugState,
+  );
   const [liveOccluders, setLiveOccluders] = React.useState<readonly Occluder[] | null>(null);
 
   useCircuitOccluderDelta(
@@ -71,13 +84,23 @@ export function CircuitDebugOverlay({ gridPhase, occluders }: CircuitDebugOverla
   // rects), but a blocked cell is a lattice coordinate, and the lattice on
   // screen is phase-shifted.
   const blockedCells = debugState.cells
-    ? Array.from(buildBarrierField(active.map((rect) => translateRect(rect, -gridPhase.x, -gridPhase.y))).cells)
+    ? Array.from(
+        buildBarrierField(active.map((rect) => translateRect(rect, -gridPhase.x, -gridPhase.y)))
+          .cells,
+      )
     : [];
 
   return createPortal(
     <svg
       aria-hidden="true"
-      style={{ position: "fixed", inset: 0, height: "100vh", width: "100vw", pointerEvents: "none", zIndex: 2147483000 }}
+      style={{
+        position: "fixed",
+        inset: 0,
+        height: "100vh",
+        width: "100vw",
+        pointerEvents: "none",
+        zIndex: 2147483000,
+      }}
     >
       {blockedCells.map((key) => {
         const [cx, cy] = key.split(",").map(Number) as [number, number];

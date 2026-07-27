@@ -14,9 +14,7 @@ function BlogRoute() {
 
   return (
     <div className="space-y-5">
-      <PublicSectionHeading
-        title="Blog"
-      />
+      <PublicSectionHeading title="Blog" />
 
       <div className="grid gap-3">
         {entries.map((entry, index) => (

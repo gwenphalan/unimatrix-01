@@ -90,7 +90,10 @@ void test("GET /health allows configured unimatrix subdomains", async () => {
     });
 
     assert.equal(response.statusCode, 200);
-    assert.equal(response.headers["access-control-allow-origin"], "https://status.unimatrix-01.dev");
+    assert.equal(
+      response.headers["access-control-allow-origin"],
+      "https://status.unimatrix-01.dev",
+    );
   } finally {
     await app.close();
   }
@@ -167,7 +170,10 @@ void test("OPTIONS /health returns the configured CORS preflight response", asyn
 
     assert.equal(response.statusCode, 204);
     assert.equal(response.body, "");
-    assert.equal(response.headers["access-control-allow-origin"], "https://status.unimatrix-01.dev");
+    assert.equal(
+      response.headers["access-control-allow-origin"],
+      "https://status.unimatrix-01.dev",
+    );
     // Read and write methods must both be advertised: the user-data routes
     // use PUT/POST/DELETE, so a cross-origin browser preflight has to see the
     // full advertised method set or every write is blocked.

@@ -1,10 +1,7 @@
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
-import {
-  bootstrapLocalEnvFiles,
-  printBootstrapLocalEnvFiles,
-} from "./setup-local.mjs";
+import { bootstrapLocalEnvFiles, printBootstrapLocalEnvFiles } from "./setup-local.mjs";
 
 const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const PNPM_COMMAND = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
@@ -57,9 +54,11 @@ function runPnpmCommand(args, label) {
     });
 
     child.on("error", (error) => {
-      reject(new Error(`Failed to start ${label}: ${error.message}`, {
-        cause: error,
-      }));
+      reject(
+        new Error(`Failed to start ${label}: ${error.message}`, {
+          cause: error,
+        }),
+      );
     });
 
     child.on("exit", (code, signal) => {
@@ -93,10 +92,7 @@ function printSetupWarnings() {
 async function main() {
   const options = parseOptions();
 
-  await runPnpmCommand(
-    ["install", "--frozen-lockfile"],
-    "pnpm install --frozen-lockfile",
-  );
+  await runPnpmCommand(["install", "--frozen-lockfile"], "pnpm install --frozen-lockfile");
 
   const bootstrapResults = await bootstrapLocalEnvFiles();
   printBootstrapLocalEnvFiles(bootstrapResults);

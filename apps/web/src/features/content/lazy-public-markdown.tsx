@@ -1,9 +1,5 @@
 import type { ReactElement, ReactNode } from "react";
-import {
-  Component,
-  Suspense,
-  lazy,
-} from "react";
+import { Component, Suspense, lazy } from "react";
 
 const PublicMarkdown = lazy(async () => {
   const module = await import("@unimatrix/ui/public");
@@ -54,9 +50,7 @@ class LazyPublicMarkdownErrorBoundary extends Component<
     };
   }
 
-  override componentDidUpdate(
-    prevProps: Readonly<LazyPublicMarkdownErrorBoundaryProps>,
-  ) {
+  override componentDidUpdate(prevProps: Readonly<LazyPublicMarkdownErrorBoundaryProps>) {
     if (this.state.hasError && prevProps.resetKey !== this.props.resetKey) {
       this.setState({
         hasError: false,

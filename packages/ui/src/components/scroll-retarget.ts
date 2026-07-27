@@ -58,10 +58,16 @@ function rectContains(point: Point, rect: Rect, margin: number): boolean {
  * whose mid-body geometry crosses a moved occluder would test for a fix
  * this mechanism can't deliver.
  */
-export function findAffectedTraceIds(tips: readonly TraceTip[], dirtyRects: readonly Rect[], margin: number): string[] {
+export function findAffectedTraceIds(
+  tips: readonly TraceTip[],
+  dirtyRects: readonly Rect[],
+  margin: number,
+): string[] {
   if (dirtyRects.length === 0) return [];
 
-  return tips.filter((tip) => dirtyRects.some((rect) => rectContains(tip.point, rect, margin))).map((tip) => tip.id);
+  return tips
+    .filter((tip) => dirtyRects.some((rect) => rectContains(tip.point, rect, margin)))
+    .map((tip) => tip.id);
 }
 
 /**
@@ -121,7 +127,8 @@ export function retargetTip(
     const steps = Math.round((rand() * 2 - 1) * RETARGET_SEARCH_RADIUS_CELLS);
     if (steps === 0) continue;
 
-    const raw: Point = axis === "x" ? { x: tip.x + steps * GRID, y: tip.y } : { x: tip.x, y: tip.y + steps * GRID };
+    const raw: Point =
+      axis === "x" ? { x: tip.x + steps * GRID, y: tip.y } : { x: tip.x, y: tip.y + steps * GRID };
     const candidate = clampToLattice(raw, width, height);
     if (candidate.x === pivot.x && candidate.y === pivot.y) continue;
     if (candidate.x === tip.x && candidate.y === tip.y) continue;
@@ -136,7 +143,9 @@ export function retargetTip(
 
     for (let s = 1; s <= Math.abs(candidateSteps); s += 1) {
       const point: Point =
-        axis === "x" ? { x: pivot.x + s * direction * GRID, y: pivot.y } : { x: pivot.x, y: pivot.y + s * direction * GRID };
+        axis === "x"
+          ? { x: pivot.x + s * direction * GRID, y: pivot.y }
+          : { x: pivot.x, y: pivot.y + s * direction * GRID };
       const key = cellKey(point);
       // The cell at s === Math.abs(candidateSteps) is the candidate itself,
       // which is expected to replace the vacated tip cell — everything

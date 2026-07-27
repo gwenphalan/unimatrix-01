@@ -105,7 +105,11 @@ export function faceFromNormal(normal: readonly [number, number, number]): FaceL
  * x: L(-1) -> R(+1), y: D(-1) -> U(+1), z: B(-1) -> F(+1). Must stay the exact inverse of
  * `xyzToFaceRowCol` and agree with the row/col convention documented on `FaceletCube`.
  */
-export function faceRowColToXyz(face: FaceLetter, row: number, col: number): readonly [number, number, number] {
+export function faceRowColToXyz(
+  face: FaceLetter,
+  row: number,
+  col: number,
+): readonly [number, number, number] {
   switch (face) {
     case "U":
       return [col - 1, 1, row - 1];

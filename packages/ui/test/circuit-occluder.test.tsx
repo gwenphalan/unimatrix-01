@@ -42,9 +42,24 @@ class MockResizeObserver implements ResizeObserver {
 // tests mutate this in place to simulate a registrant resizing, then read it
 // back through a `getBoundingClientRect` stub cast to `DOMRect` at the point
 // of use.
-type MutableRect = { x: number; y: number; width: number; height: number; top: number; left: number; right: number; bottom: number };
+type MutableRect = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  top: number;
+  left: number;
+  right: number;
+  bottom: number;
+};
 
-function Registrant({ rect, onElement }: { rect: MutableRect; onElement?: (el: HTMLDivElement) => void }) {
+function Registrant({
+  rect,
+  onElement,
+}: {
+  rect: MutableRect;
+  onElement?: (el: HTMLDivElement) => void;
+}) {
   const ref = React.useRef<HTMLDivElement>(null);
   useCircuitOccluder(ref);
 
@@ -62,7 +77,11 @@ function makeRect(overrides: Partial<MutableRect>): MutableRect {
   return { x: 0, y: 0, width: 0, height: 0, top: 0, left: 0, right: 0, bottom: 0, ...overrides };
 }
 
-function RectsProbe({ onRects }: { onRects: (rects: readonly { x0: number; y0: number; x1: number; y1: number }[]) => void }) {
+function RectsProbe({
+  onRects,
+}: {
+  onRects: (rects: readonly { x0: number; y0: number; x1: number; y1: number }[]) => void;
+}) {
   const rects = useCircuitOccluderRects();
   onRects(rects);
   return null;
@@ -138,7 +157,9 @@ describe("CircuitOccluderProvider / useCircuitOccluder", () => {
     // this, `MockResizeObserver.trigger()` below invokes the callback
     // regardless of what was observed and would mask a missing `observe()`.
     expect(registrantEl).toBeDefined();
-    expect(MockResizeObserver.instances[0]?.observed.has(registrantEl as HTMLDivElement)).toBe(true);
+    expect(MockResizeObserver.instances[0]?.observed.has(registrantEl as HTMLDivElement)).toBe(
+      true,
+    );
 
     await act(async () => {
       MockResizeObserver.instances.forEach((instance) => {
@@ -159,7 +180,8 @@ describe("CircuitOccluderProvider / useCircuitOccluder", () => {
       useCircuitOccluder(ref, { maxHeightPx: 900 });
 
       React.useLayoutEffect(() => {
-        if (ref.current) ref.current.getBoundingClientRect = () => ({ ...rect, toJSON: () => ({}) }) as DOMRect;
+        if (ref.current)
+          ref.current.getBoundingClientRect = () => ({ ...rect, toJSON: () => ({}) }) as DOMRect;
       }, []);
 
       return <div ref={ref} />;
@@ -319,7 +341,9 @@ describe("CircuitOccluderProvider / useCircuitOccluder", () => {
 
   it("many registrants mounting together collapse into one measurement commit", async () => {
     const rectsSeen: (readonly { x0: number; y0: number; x1: number; y1: number }[])[] = [];
-    const registrants = Array.from({ length: 12 }, (_, i) => makeRect({ left: i * 200, top: 0, right: i * 200 + 100, bottom: 100 }));
+    const registrants = Array.from({ length: 12 }, (_, i) =>
+      makeRect({ left: i * 200, top: 0, right: i * 200 + 100, bottom: 100 }),
+    );
 
     render(
       <CircuitOccluderProvider>
@@ -524,7 +548,8 @@ describe("CircuitOccluderProvider / useCircuitOccluder", () => {
       useCircuitOccluder(ref);
 
       React.useLayoutEffect(() => {
-        if (ref.current) ref.current.getBoundingClientRect = () => ({ ...rect, toJSON: () => ({}) }) as DOMRect;
+        if (ref.current)
+          ref.current.getBoundingClientRect = () => ({ ...rect, toJSON: () => ({}) }) as DOMRect;
       }, []);
 
       return <a href="/somewhere" ref={ref} />;
@@ -540,7 +565,10 @@ describe("CircuitOccluderProvider / useCircuitOccluder", () => {
     await flushRaf();
 
     expect(latestRects).toEqual([{ x0: 0, y0: 0, x1: 100, y1: 100 }]);
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining("interactive element (button/link/input)"), expect.anything());
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining("interactive element (button/link/input)"),
+      expect.anything(),
+    );
 
     warn.mockRestore();
   });
@@ -555,7 +583,9 @@ describe("CircuitOccluderProvider / useCircuitOccluder", () => {
     }
 
     expect(() => render(<Orphan />)).not.toThrow();
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining("useCircuitOccluder called outside a CircuitOccluderProvider"));
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining("useCircuitOccluder called outside a CircuitOccluderProvider"),
+    );
 
     warn.mockRestore();
   });

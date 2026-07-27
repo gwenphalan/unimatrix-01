@@ -4,9 +4,9 @@ import { hasPermission, isAdmin } from "../src/permissions.js";
 
 describe("hasPermission", () => {
   it("returns true when the role is present for the app slug", () => {
-    expect(
-      hasPermission({ permissions: { web: ["viewer", "editor"] } }, "web", "editor"),
-    ).toBe(true);
+    expect(hasPermission({ permissions: { web: ["viewer", "editor"] } }, "web", "editor")).toBe(
+      true,
+    );
   });
 
   it("returns false when the role is absent for the app slug", () => {
@@ -36,12 +36,8 @@ describe("hasPermission", () => {
   });
 
   it("returns false when the role list for the app slug is malformed", () => {
-    expect(hasPermission({ permissions: { web: "admin" } } as never, "web", "admin")).toBe(
-      false,
-    );
-    expect(
-      hasPermission({ permissions: { web: [1, 2, 3] } } as never, "web", "admin"),
-    ).toBe(false);
+    expect(hasPermission({ permissions: { web: "admin" } } as never, "web", "admin")).toBe(false);
+    expect(hasPermission({ permissions: { web: [1, 2, 3] } } as never, "web", "admin")).toBe(false);
   });
 
   it("ignores unknown role strings in an otherwise valid role list", () => {

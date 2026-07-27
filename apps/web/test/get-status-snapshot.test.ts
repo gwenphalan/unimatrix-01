@@ -17,9 +17,7 @@ function createMockApiClient(getHealth: ApiClient["getHealth"]): ApiClient {
 
 describe("getStatusSnapshot", () => {
   it("reports the health check result from the given api client", async () => {
-    const client = createMockApiClient(() =>
-      Promise.resolve({ service: "api", status: "ok" }),
-    );
+    const client = createMockApiClient(() => Promise.resolve({ service: "api", status: "ok" }));
 
     const snapshot = await getStatusSnapshot(client);
 
@@ -29,9 +27,7 @@ describe("getStatusSnapshot", () => {
   });
 
   it("falls back to an unavailable snapshot when the api client rejects", async () => {
-    const client = createMockApiClient(() =>
-      Promise.reject(new Error("network unreachable")),
-    );
+    const client = createMockApiClient(() => Promise.reject(new Error("network unreachable")));
 
     const snapshot = await getStatusSnapshot(client);
 
@@ -43,9 +39,8 @@ describe("getStatusSnapshot", () => {
 
 describe("statusSnapshotQueryOptions", () => {
   it("builds query options that call getHealth on the given client", async () => {
-    const getHealth = vi.fn(
-      (): Promise<{ service: "api"; status: "ok" }> =>
-        Promise.resolve({ service: "api", status: "ok" }),
+    const getHealth = vi.fn((): Promise<{ service: "api"; status: "ok" }> =>
+      Promise.resolve({ service: "api", status: "ok" }),
     );
     const client = createMockApiClient(getHealth);
 

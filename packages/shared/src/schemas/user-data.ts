@@ -12,7 +12,11 @@ export type DataNamespace = z.output<typeof dataNamespaceSchema>;
 /**
  * A key identifies a single document/file within a namespace.
  */
-export const dataKeySchema = z.string().min(1).max(128).regex(/^[A-Za-z0-9._-]+$/);
+export const dataKeySchema = z
+  .string()
+  .min(1)
+  .max(128)
+  .regex(/^[A-Za-z0-9._-]+$/);
 
 export type DataKey = z.output<typeof dataKeySchema>;
 

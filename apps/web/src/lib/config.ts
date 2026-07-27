@@ -90,11 +90,7 @@ function validateHttpUrl(
 }
 
 function validateApiBaseUrl(value: string | undefined): string {
-  const apiBaseUrl = readOptionalString(
-    "VITE_API_BASE_URL",
-    value,
-    DEFAULT_API_BASE_URL,
-  );
+  const apiBaseUrl = readOptionalString("VITE_API_BASE_URL", value, DEFAULT_API_BASE_URL);
 
   if (apiBaseUrl.startsWith("/")) {
     if (apiBaseUrl.startsWith("//")) {

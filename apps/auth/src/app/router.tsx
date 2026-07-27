@@ -1,8 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query";
-import {
-  createRouter,
-  type RouterHistory,
-} from "@tanstack/react-router";
+import { createRouter, type RouterHistory } from "@tanstack/react-router";
 
 import { queryClient } from "@/lib/query-client";
 import { routeTree } from "@/routes/routeTree.gen";
@@ -16,9 +13,7 @@ export interface CreateAppRouterOptions {
   queryClient?: QueryClient;
 }
 
-export function createAppRouter(
-  options: CreateAppRouterOptions = {},
-) {
+export function createAppRouter(options: CreateAppRouterOptions = {}) {
   return createRouter({
     ...(options.history ? { history: options.history } : {}),
     context: {

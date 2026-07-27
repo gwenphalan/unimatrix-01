@@ -80,7 +80,8 @@ const MIN_OCCLUDER_SIDE_PX = GRID;
 // an interactive element (a link/button) instead of the non-interactive
 // surface around it. Occluders are meant for panels/cards/footers, never
 // for titles, badges, buttons, or other interactive/decorative elements.
-const INTERACTIVE_OCCLUDER_SELECTOR = 'button, a[href], input, select, textarea, [role="button"], [role="link"]';
+const INTERACTIVE_OCCLUDER_SELECTOR =
+  'button, a[href], input, select, textarea, [role="button"], [role="link"]';
 
 const RegistryContext = React.createContext<OccluderRegistry | null>(null);
 const RectsContext = React.createContext<Occluder[]>([]);
@@ -130,7 +131,10 @@ function measureRegistrants(targets: Map<symbol, Registrant>): Map<symbol, Occlu
       return;
     }
 
-    const y1 = options.maxHeightPx !== undefined ? Math.min(rect.bottom, rect.top + options.maxHeightPx) : rect.bottom;
+    const y1 =
+      options.maxHeightPx !== undefined
+        ? Math.min(rect.bottom, rect.top + options.maxHeightPx)
+        : rect.bottom;
 
     measured.set(id, { x0: rect.left, y0: rect.top, x1: rect.right, y1 });
   });
@@ -144,7 +148,13 @@ function measurementsEqual(a: Map<symbol, Occluder>, b: Map<symbol, Occluder>): 
   for (const [id, rect] of a) {
     const other = b.get(id);
     if (!other) return false;
-    if (rect.x0 !== other.x0 || rect.y0 !== other.y0 || rect.x1 !== other.x1 || rect.y1 !== other.y1) return false;
+    if (
+      rect.x0 !== other.x0 ||
+      rect.y0 !== other.y0 ||
+      rect.x1 !== other.x1 ||
+      rect.y1 !== other.y1
+    )
+      return false;
   }
 
   return true;
@@ -213,7 +223,11 @@ function diffMeasurements(previous: Map<symbol, Occluder>, next: Map<symbol, Occ
  * `barriers`/`generateTraces` recompute to guarantee zero occluder
  * violations once scrolling actually stops.
  */
-export function CircuitOccluderProvider({ children }: { children: React.ReactNode }): React.JSX.Element {
+export function CircuitOccluderProvider({
+  children,
+}: {
+  children: React.ReactNode;
+}): React.JSX.Element {
   const targetsRef = React.useRef(new Map<symbol, Registrant>());
   const observerRef = React.useRef<ResizeObserver | null>(null);
   const rafRef = React.useRef<number | null>(null);
@@ -439,7 +453,9 @@ export function useCircuitOccluder(
     if (!enabled) return;
 
     if (!registry) {
-      console.warn("[CircuitField] useCircuitOccluder called outside a CircuitOccluderProvider — ignoring.");
+      console.warn(
+        "[CircuitField] useCircuitOccluder called outside a CircuitOccluderProvider — ignoring.",
+      );
       return;
     }
 
@@ -487,7 +503,9 @@ export function useCircuitOccluderRects(): Occluder[] {
  * `@unimatrix/ui/public`'s exported surface; `CircuitField` is the only
  * intended consumer.
  */
-export function useCircuitOccluderDelta(onDelta: (dirtyRects: Rect[], liveOccluders: Occluder[]) => void): void {
+export function useCircuitOccluderDelta(
+  onDelta: (dirtyRects: Rect[], liveOccluders: Occluder[]) => void,
+): void {
   const subscribe = React.useContext(DeltaContext);
   const onDeltaRef = React.useRef(onDelta);
   onDeltaRef.current = onDelta;

@@ -11,7 +11,9 @@ let state: CircuitDebugState = Object.freeze({ enabled: false, cells: false });
 const listeners = new Set<() => void>();
 
 function notify(): void {
-  listeners.forEach((listener) => { listener(); });
+  listeners.forEach((listener) => {
+    listener();
+  });
 }
 
 /**
@@ -70,13 +72,19 @@ declare global {
  * console toggle costs every consuming app bundle size for one two-field
  * boundary.
  */
-function parseDebugArgs(on: unknown, options: unknown): { on: boolean; options: CircuitDebugOptions } {
+function parseDebugArgs(
+  on: unknown,
+  options: unknown,
+): { on: boolean; options: CircuitDebugOptions } {
   const cells =
     typeof options === "object" && options !== null && "cells" in options
       ? Boolean((options as { cells?: unknown }).cells)
       : undefined;
 
-  return { on: on === undefined ? true : Boolean(on), options: cells === undefined ? {} : { cells } };
+  return {
+    on: on === undefined ? true : Boolean(on),
+    options: cells === undefined ? {} : { cells },
+  };
 }
 
 /**

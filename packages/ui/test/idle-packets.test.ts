@@ -116,19 +116,38 @@ describe("advancePacket", () => {
     expect(first).not.toBeNull();
     expect(first?.packet.next).toBe("1,0");
 
-    const midway = advancePacket(first?.packet as Packet, graph, (first?.packet.stepStart ?? 0) + 55, () => 0);
+    const midway = advancePacket(
+      first?.packet as Packet,
+      graph,
+      (first?.packet.stepStart ?? 0) + 55,
+      () => 0,
+    );
     expect(midway?.point.x).toBeGreaterThan(0);
     expect(midway?.point.x).toBeLessThan(GRID);
     expect(midway?.point.y).toBe(0); // axis-aligned
   });
 
   it("retires (returns null) at a dead end", () => {
-    const atLeaf: Packet = { slot: 0, at: "2,0", cameFrom: "1,0", next: null, stepStart: 0, hops: 1 };
+    const atLeaf: Packet = {
+      slot: 0,
+      at: "2,0",
+      cameFrom: "1,0",
+      next: null,
+      stepStart: 0,
+      hops: 1,
+    };
     expect(advancePacket(atLeaf, graph, 0)).toBeNull();
   });
 
   it("retires at PACKET_MAX_HOPS", () => {
-    const maxedOut: Packet = { slot: 0, at: "1,0", cameFrom: "0,0", next: null, stepStart: 0, hops: PACKET_MAX_HOPS };
+    const maxedOut: Packet = {
+      slot: 0,
+      at: "1,0",
+      cameFrom: "0,0",
+      next: null,
+      stepStart: 0,
+      hops: PACKET_MAX_HOPS,
+    };
     expect(advancePacket(maxedOut, graph, 0)).toBeNull();
   });
 
