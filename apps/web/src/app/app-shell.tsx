@@ -78,35 +78,67 @@ function isNavItemActive(pathname: string, exact: boolean, to: (typeof navItems)
  * with a responsive class so this stays a pure CSS breakpoint rather than a
  * JS-measured one; hiding a whole segment takes its leading separator with
  * it, which is why no separator is left dangling on mobile.
+ *
+ * Rendered as a real `nav` landmark, with the home logo link inside it. It was
+ * a plain `div` beside a bare `Link`, and in the condensed header — which is
+ * not inside `header` — that left both outside any landmark, which is what
+ * axe's `region` rule reports. `nav[aria-label="Breadcrumb"]` is also just the
+ * correct markup for a breadcrumb trail.
+ *
+ * `label` exists because both header bars render one of these, and two
+ * landmarks sharing a role and an accessible name is exactly what
+ * `landmark-unique` reports.
  */
-function Breadcrumbs({ items }: { items: BreadcrumbItem[] }) {
+function Breadcrumbs({
+  items,
+  label,
+  logoClassName,
+}: {
+  items: BreadcrumbItem[];
+  label: string;
+  logoClassName: string;
+}) {
   return (
-    <div className="flex min-w-0 flex-wrap items-center gap-1 text-sm text-muted-foreground">
-      {items.map((item, index) => {
-        const isLast = index === items.length - 1;
+    <nav
+      aria-label={label}
+      // `flex-nowrap` is load-bearing. The logo and the trail live in one flex
+      // line; letting that line wrap drops the logo onto a row of its own at
+      // 640-768px, where the trail is long enough to need the space. Measured:
+      // with `flex-wrap` here the header's breadcrumb grew from 24px to 102px
+      // tall at 640px and the trail broke across three lines. Wrapping belongs
+      // on the inner trail span, which already has it, so only the crumbs move.
+      className="flex min-w-0 flex-1 flex-nowrap items-center gap-2.5 text-sm text-muted-foreground"
+    >
+      <Link aria-label="Unimatrix-01 home" to="/">
+        <img alt="" className={logoClassName} src="/logo.png" />
+      </Link>
+      <span className="flex min-w-0 flex-wrap items-center gap-1">
+        {items.map((item, index) => {
+          const isLast = index === items.length - 1;
 
-        return (
-          <span
-            className={cn(
-              "flex min-w-0 items-center gap-1",
-              index === 0 ? undefined : "hidden sm:flex",
-            )}
-            key={`${item.to ?? "current"}:${item.label}:${index}`}
-          >
-            {index > 0 ? (
-              <RiArrowRightSLine aria-hidden="true" className="size-3.5 shrink-0" />
-            ) : null}
-            {isLast || !item.to ? (
-              <span className="truncate font-medium text-foreground">{item.label}</span>
-            ) : (
-              <Link className="truncate transition-colors hover:text-foreground" to={item.to}>
-                {item.label}
-              </Link>
-            )}
-          </span>
-        );
-      })}
-    </div>
+          return (
+            <span
+              className={cn(
+                "flex min-w-0 items-center gap-1",
+                index === 0 ? undefined : "hidden sm:flex",
+              )}
+              key={`${item.to ?? "current"}:${item.label}:${index}`}
+            >
+              {index > 0 ? (
+                <RiArrowRightSLine aria-hidden="true" className="size-3.5 shrink-0" />
+              ) : null}
+              {isLast || !item.to ? (
+                <span className="truncate font-medium text-foreground">{item.label}</span>
+              ) : (
+                <Link className="truncate transition-colors hover:text-foreground" to={item.to}>
+                  {item.label}
+                </Link>
+              )}
+            </span>
+          );
+        })}
+      </span>
+    </nav>
   );
 }
 
@@ -249,12 +281,7 @@ function AppShellContent({ children }: AppShellProps) {
             stays title → nav → auth so desktop tab order matches what's on
             screen. */}
         <div className="flex flex-wrap items-center gap-x-4 gap-y-3 px-5 py-4 sm:flex-nowrap lg:px-8 lg:py-5">
-          <div className="flex min-w-0 flex-1 items-center gap-2.5">
-            <Link aria-label="Unimatrix-01 home" to="/">
-              <img alt="" className="size-6 shrink-0" src="/logo.png" />
-            </Link>
-            <Breadcrumbs items={breadcrumbItems} />
-          </div>
+          <Breadcrumbs items={breadcrumbItems} label="Breadcrumb" logoClassName="size-6 shrink-0" />
 
           <nav
             aria-label="Primary"
@@ -290,11 +317,20 @@ function AppShellContent({ children }: AppShellProps) {
         </div>
       </header>
 
+      {/* `opacity-0 pointer-events-none` hides this bar from sight and from
+          the mouse, but not from the keyboard: before `inert`, tabbing an
+          unscrolled page walked an invisible duplicate of the entire nav.
+          `inert` removes it from the tab order and the accessibility tree
+          while it is hidden, and gives it back — fully interactive — the
+          moment it is shown. `aria-hidden` alone would be wrong here: it
+          hides content from assistive technology while leaving it focusable,
+          which is a WCAG 4.1.2 failure rather than a fix. */}
       <div
         className={cn(
           "fixed top-3 inset-x-0 z-40 transition-opacity duration-300 ease-out",
           isCondensed ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0",
         )}
+        inert={!isCondensed}
       >
         <div className="mx-auto w-full max-w-[92rem] px-4 sm:px-6 lg:px-8 xl:px-10">
           <div
@@ -309,15 +345,14 @@ function AppShellContent({ children }: AppShellProps) {
                 tabs, and the auth action do not fit this fixed overlay, and
                 the trail truncates to "Uni… > B… > P…" across three lines. */}
             <div className="flex flex-wrap items-center gap-x-3 gap-y-2 lg:flex-nowrap">
-              <div className="flex min-w-0 flex-1 items-center gap-2.5">
-                <Link aria-label="Unimatrix-01 home" to="/">
-                  <img alt="" className="size-5 shrink-0" src="/logo.png" />
-                </Link>
-                <Breadcrumbs items={breadcrumbItems} />
-              </div>
+              <Breadcrumbs
+                items={breadcrumbItems}
+                label="Breadcrumb, condensed header"
+                logoClassName="size-5 shrink-0"
+              />
 
               <nav
-                aria-label="Primary"
+                aria-label="Primary, condensed header"
                 className="order-last grid w-full grid-cols-2 gap-2 lg:flex lg:w-auto lg:flex-wrap lg:justify-end lg:order-none"
               >
                 {navItems.map(({ icon: Icon, label, to, exact }) => {

@@ -13,7 +13,7 @@ function ProjectsRoute() {
 
   return (
     <div className="space-y-5">
-      <PublicSectionHeading title="Projects" />
+      <PublicSectionHeading headingLevel={1} title="Projects" />
 
       <div className="grid gap-3">
         {projects.map((project, index) => {
@@ -22,6 +22,7 @@ function ProjectsRoute() {
 
           return (
             <PublicProjectLedgerItem
+              headingLevel={2}
               actions={
                 hasActions ? (
                   <>

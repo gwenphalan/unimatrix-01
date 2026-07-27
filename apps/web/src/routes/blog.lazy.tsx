@@ -14,11 +14,12 @@ function BlogRoute() {
 
   return (
     <div className="space-y-5">
-      <PublicSectionHeading title="Blog" />
+      <PublicSectionHeading headingLevel={1} title="Blog" />
 
       <div className="grid gap-3">
         {entries.map((entry, index) => (
           <PublicTransmissionListItem
+            headingLevel={2}
             entry={entry}
             index={index + 1}
             key={entry.slug}
