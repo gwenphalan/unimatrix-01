@@ -47,3 +47,30 @@ minimumReleaseAge: 4320
 # review turns red again with no explanation of why.
 overrides:
   minimatch@9: ^10.2.5
+
+  # `drizzle-kit` declares `@esbuild-kit/esm-loader`, which pulls in
+  # `@esbuild-kit/core-utils` and through it `esbuild@0.18.20`, carrying
+  # GHSA-67mh-4wv8-2f99 (moderate): esbuild's dev server accepts requests from
+  # any origin. There is no upstream fix at any age — `drizzle-kit@0.31.10` is
+  # the latest release (2026-03-17) and still declares the dependency, and both
+  # `@esbuild-kit` packages are deprecated, having been folded into `tsx`.
+  #
+  # Overriding is safe here for a specific, checked reason rather than a hopeful
+  # one: `@esbuild-kit` is referenced *only* in drizzle-kit's own package.json.
+  # Grepping its shipped code — api.js, api.mjs, bin.cjs, utils.js, utils.mjs,
+  # roughly 2.8 MB of bundles — finds zero occurrences of `esbuild-kit` or
+  # `esm-loader`. drizzle-kit bundles its own tooling and depends on `tsx`
+  # directly; the `@esbuild-kit` entry is vestigial and nothing loads it.
+  #
+  # That cuts both ways, and is why this comment exists: because the package is
+  # never loaded, a genuine incompatibility introduced by this override would not
+  # surface as a failing test. The justification is the reachability check above,
+  # not a green build.
+  #
+  # The advisory itself is also unreachable — it affects `esbuild serve`, which
+  # drizzle-kit never invokes. The override is about keeping `pnpm audit` at a
+  # real zero so the next moderate finding stands out, rather than about
+  # closing an exploitable hole.
+  #
+  # Remove this once drizzle-kit drops the vestigial dependency.
+  "@esbuild-kit/core-utils>esbuild": ^0.25.0
