@@ -155,6 +155,38 @@ describe("createAccountUserStore", () => {
       expect(init?.body).toBeInstanceOf(FormData);
     });
 
+    it.each([
+      ["https://api.example.test", "no trailing slash"],
+      ["https://api.example.test/", "one trailing slash"],
+      ["https://api.example.test///", "several trailing slashes"],
+    ])("collapses %s (%s) to a single separator", async (baseUrl) => {
+      const fetchMock = fetchMockOf(
+        createResponse({
+          json: () =>
+            Promise.resolve({
+              namespace: NAMESPACE,
+              key: "avatar.png",
+              contentType: "image/png",
+              size: 5,
+              updatedAt: "2026-07-01T00:00:00.000Z",
+            }),
+          ok: true,
+          status: 200,
+        }),
+      );
+      const store = createAccountUserStore({
+        namespace: NAMESPACE,
+        baseUrl,
+        getToken: () => "test-token",
+        fetch: fetchMock,
+      });
+
+      await store.files.upload("avatar.png", new Blob(["12345"], { type: "image/png" }));
+
+      const [url] = fetchMock.mock.calls[0] ?? [];
+      expect(url).toBe(`https://api.example.test/me/files?namespace=${NAMESPACE}&key=avatar.png`);
+    });
+
     it("resolves undefined from getBlob on a 404", async () => {
       const fetchMock = fetchMockOf(createResponse({ ok: false, status: 404 }));
       const store = createAccountUserStore({
