@@ -43,20 +43,17 @@ describe("CircuitField idle loop (full mode)", () => {
   beforeEach(() => {
     Object.defineProperty(navigator, "hardwareConcurrency", { value: 16, configurable: true });
     rafCallCount = 0;
-    window.requestAnimationFrame = ((callback: FrameRequestCallback) => {
+    window.requestAnimationFrame = (callback: FrameRequestCallback) => {
       rafCallCount += 1;
       return originalRAF(callback);
-    }) as typeof window.requestAnimationFrame;
+    };
   });
 
   afterEach(() => {
     if (originalHardwareConcurrency) {
       Object.defineProperty(navigator, "hardwareConcurrency", originalHardwareConcurrency);
     } else {
-      Reflect.deleteProperty(
-        navigator as unknown as Record<string, unknown>,
-        "hardwareConcurrency",
-      );
+      Reflect.deleteProperty(navigator, "hardwareConcurrency");
     }
     window.requestAnimationFrame = originalRAF;
     performance.now = originalPerformanceNow;
@@ -106,7 +103,7 @@ describe("CircuitField idle loop (full mode)", () => {
     let lastRealTimestamp: number | null = null;
 
     performance.now = () => clock;
-    window.requestAnimationFrame = ((callback: FrameRequestCallback) => {
+    window.requestAnimationFrame = (callback: FrameRequestCallback) => {
       rafCallCount += 1;
       return originalRAF((realTimestamp) => {
         if (lastRealTimestamp === null || realTimestamp !== lastRealTimestamp) {
@@ -115,7 +112,7 @@ describe("CircuitField idle loop (full mode)", () => {
         }
         callback(clock);
       });
-    }) as typeof window.requestAnimationFrame;
+    };
 
     return async (frames: number) => {
       for (let i = 0; i < frames; i += 1) {

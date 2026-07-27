@@ -151,6 +151,10 @@ describe("useDebouncedSize", () => {
 
 describe("useMotionMode", () => {
   let registry: Map<string, FakeMediaQueryList>;
+  // Captured purely to restore `window.matchMedia` in afterEach. It is reassigned
+  // to the same receiver it came from and never invoked detached, so the `this`
+  // scoping `unbound-method` guards against cannot occur here.
+  // eslint-disable-next-line @typescript-eslint/unbound-method
   const originalMatchMedia = window.matchMedia;
   const originalConcurrency = Object.getOwnPropertyDescriptor(
     window.navigator,
