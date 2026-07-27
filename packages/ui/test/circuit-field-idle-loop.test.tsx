@@ -20,17 +20,28 @@ function setHidden(hidden: boolean): void {
 }
 
 /**
- * jsdom has no `matchMedia`/reports `hardwareConcurrency: undefined`, so
- * `decideMotionMode` resolves to `full` here by default (see capability.ts's
- * decision order) — this suite relies on that to exercise Session E2's
- * idle-loop lifecycle without needing to stub media queries.
+ * Every test here needs `motionMode === "full"`, since that is the only mode
+ * with idle producers. jsdom has no `matchMedia`, so the media-query signals
+ * all read false — but it *does* implement `navigator.hardwareConcurrency`,
+ * reporting the host's real core count, and `decideMotionMode` demotes to
+ * `transitions-only` at four cores or fewer (see capability.ts's decision
+ * order). That made the whole suite depend on how many cores the machine
+ * running it happens to have: fine on a developer workstation, silently
+ * `transitions-only` on a 4-core CI runner, where the idle loop never starts
+ * and no packet ever spawns. Stubbed to a high count so the mode is decided
+ * by this file, not by the host.
  */
 describe("CircuitField idle loop (full mode)", () => {
   const originalRAF = window.requestAnimationFrame.bind(window);
   const originalPerformanceNow = performance.now.bind(performance);
+  const originalHardwareConcurrency = Object.getOwnPropertyDescriptor(
+    Object.getPrototypeOf(navigator) as object,
+    "hardwareConcurrency",
+  );
   let rafCallCount = 0;
 
   beforeEach(() => {
+    Object.defineProperty(navigator, "hardwareConcurrency", { value: 16, configurable: true });
     rafCallCount = 0;
     window.requestAnimationFrame = ((callback: FrameRequestCallback) => {
       rafCallCount += 1;
@@ -39,6 +50,11 @@ describe("CircuitField idle loop (full mode)", () => {
   });
 
   afterEach(() => {
+    if (originalHardwareConcurrency) {
+      Object.defineProperty(navigator, "hardwareConcurrency", originalHardwareConcurrency);
+    } else {
+      Reflect.deleteProperty(navigator as unknown as Record<string, unknown>, "hardwareConcurrency");
+    }
     window.requestAnimationFrame = originalRAF;
     performance.now = originalPerformanceNow;
     Object.defineProperty(document, "hidden", { value: false, configurable: true });
@@ -238,27 +254,11 @@ describe("CircuitField idle loop (full mode)", () => {
     // thing that moves time forward, so this stays deterministic while not
     // depending on exactly how many ticks the field's loop wins per frame.
     for (let i = 0; i < 400 && visiblePacketCount() === 0; i += 1) {
-      // eslint-disable-next-line no-await-in-loop -- frames are inherently sequential
       await advanceFrames(1);
     }
 
     const visibleBeforeTransition = visiblePacketCount();
-    // TEMPORARY (remove once the CI-only failure is diagnosed): the assertion
-    // below reproduces only on the runner, so carry the observable state into
-    // the failure message rather than guessing at it from a bare `0 > 0`.
-    const packetEls = Array.from(container.querySelectorAll(".circuit-field-packet"));
-    const pathEls = Array.from(container.querySelectorAll("path"));
-    const diagnostics = {
-      packetElements: packetEls.length,
-      packetOpacities: packetEls.map((el) => (el as SVGRectElement).style.opacity || "<unset>"),
-      packetXs: packetEls.slice(0, 4).map((el) => el.getAttribute("x")),
-      pathElements: pathEls.length,
-      pathsWithGeometry: pathEls.filter((el) => (el.getAttribute("d") ?? "").length > 0).length,
-      rafCallCount,
-      virtualNow: performance.now(),
-      containerHtmlHead: container.innerHTML.slice(0, 400),
-    };
-    expect(visibleBeforeTransition, `no visible packet: ${JSON.stringify(diagnostics)}`).toBeGreaterThan(0);
+    expect(visibleBeforeTransition).toBeGreaterThan(0);
 
     rerender(<CircuitField routeKey="route-transition-b" />);
 
