@@ -73,7 +73,7 @@ export const TALL_OCCLUDER_MAX_HEIGHT_PX = 900;
 // and footer (66px) from registering at all. A single grid cell still
 // excludes badges/buttons/titles (routinely under 40px on their short
 // side) while clearing genuine bars/cards/panels.
-export const MIN_OCCLUDER_SIDE_PX = GRID;
+const MIN_OCCLUDER_SIDE_PX = GRID;
 
 // Registration stays explicit opt-in (no DOM-scanning heuristic) — this is
 // a dev-only warn, not a rejection, for the common mistake of registering

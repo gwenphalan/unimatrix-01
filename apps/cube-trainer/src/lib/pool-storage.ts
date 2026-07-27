@@ -47,7 +47,7 @@ export function readCasePool(setId: AlgorithmSetId): CasePool {
   return parsed.success ? parsed.data : {};
 }
 
-export function writeCasePool(setId: AlgorithmSetId, pool: CasePool): void {
+function writeCasePool(setId: AlgorithmSetId, pool: CasePool): void {
   writeLocalStorage(storageKey(setId), JSON.stringify(pool));
 }
 

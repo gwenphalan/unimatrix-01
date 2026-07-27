@@ -1,6 +1,14 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema-jsonc.json",
 
+  // AGENTS.md requires "explicit exported types at boundaries instead of anonymous
+  // inline shapes". Following that rule produces exported types with no importer by
+  // design, and knip cannot tell those apart from genuinely dead ones — it reported
+  // 13, all of which were the convention being obeyed. Reporting them permanently
+  // would bury the findings that do matter, so the whole `types` class is excluded.
+  // Unused *values* are still reported; this only silences type-only exports.
+  "exclude": ["types"],
+
   // Knip auto-detects most entry points from each workspace's plugins (Vite,
   // Vitest, Playwright, Drizzle, ESLint). Only the cases it cannot infer are
   // spelled out below — everything else is left to the plugins so this file
