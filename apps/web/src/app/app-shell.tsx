@@ -303,6 +303,13 @@ function AppShellContent({ children }: AppShellProps) {
             className="site-panel site-shell overflow-hidden border-primary/45 shadow-[0_0_0_1px_color-mix(in_oklab,var(--primary)_35%,transparent),0_18px_48px_-32px_color-mix(in_oklab,var(--primary)_35%,transparent)] px-3 py-2 lg:px-4 lg:py-2"
             ref={condensedHeaderRef}
           >
+            {/* This bar keeps an `lg` nav breakpoint while the main header
+                uses `sm`. Below `lg` the nav is already `order-last w-full`,
+                so the auth action sits on the title row at every stacked
+                width — the user-visible fix holds. Switching this to `sm`
+                was tried and reverted: at 640px the full breadcrumb, four
+                tabs, and the auth action do not fit this fixed overlay, and
+                the trail truncates to "Uni… > B… > P…" across three lines. */}
             <div className="flex flex-wrap items-center gap-x-3 gap-y-2 lg:flex-nowrap">
               <div className="flex min-w-0 flex-1 items-center gap-2.5">
                 <Link aria-label="Unimatrix-01 home" to="/">

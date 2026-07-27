@@ -1,5 +1,5 @@
 {
-  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "$schema": "https://unpkg.com/knip@6/schema-jsonc.json",
 
   // Knip auto-detects most entry points from each workspace's plugins (Vite,
   // Vitest, Playwright, Drizzle, ESLint). Only the cases it cannot infer are
