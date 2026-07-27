@@ -6,27 +6,35 @@ on:
   pull_request_review_comment:
     types: [created]
 
+permissions:
+  contents: read
+
 jobs:
   opencode:
+    # The author-association gate is a security control, not a convenience. This repo
+    # is public, so without it any account on GitHub could comment "/oc" and drive an
+    # agent that holds OPENROUTER_API_KEY. Keep it as the first clause.
     if: |
-      contains(github.event.comment.body, ' /oc') ||
-      startsWith(github.event.comment.body, '/oc') ||
-      contains(github.event.comment.body, ' /opencode') ||
-      startsWith(github.event.comment.body, '/opencode')
+      (github.event.comment.author_association == 'OWNER' ||
+       github.event.comment.author_association == 'MEMBER' ||
+       github.event.comment.author_association == 'COLLABORATOR') &&
+      (contains(github.event.comment.body, ' /oc') ||
+       startsWith(github.event.comment.body, '/oc') ||
+       contains(github.event.comment.body, ' /opencode') ||
+       startsWith(github.event.comment.body, '/opencode'))
     runs-on: ubuntu-latest
     permissions:
-      id-token: write
       contents: read
       pull-requests: read
       issues: read
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
 
       - name: Run opencode
-        uses: anomalyco/opencode/github@latest
+        uses: anomalyco/opencode/github@02981844b88aed33f06f1527da6c58d137975069 # v1.18.7
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         with:

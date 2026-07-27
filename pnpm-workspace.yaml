@@ -2,6 +2,22 @@ packages:
   - apps/*
   - packages/*
 
+# Lifecycle scripts are blocked for every dependency except the two below, which
+# genuinely need a native build step. This is pnpm 10's default-deny behaviour —
+# it is the `--ignore-scripts` + allowlist policy, enforced by the package
+# manager rather than bolted on at the CI layer.
 onlyBuiltDependencies:
   - better-sqlite3
   - esbuild
+
+# Minutes a version must have been public before pnpm will resolve it. Dependabot's
+# 14-day `cooldown` only gates the *direct* dependency it proposes; the transitive
+# graph is resolved by pnpm, so without this a compromised transitive release could
+# still enter the lockfile the moment it is published. Renovate has the same
+# limitation ("Renovate does not currently manage any transitive dependencies") and
+# its `--before` mitigation is npm-only, so this setting — not the choice of bot —
+# is what actually closes the transitive gap.
+#
+# 3 days, deliberately well below Dependabot's 14, so the two never disagree about
+# which version is installable. Raising this above 14 will break Dependabot PRs.
+minimumReleaseAge: 4320
