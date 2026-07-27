@@ -340,7 +340,15 @@ rather than editing the file. `cube-trainer-compose.yaml` has no
 environment-dependent values to set. `auth-compose.yaml` reads
 `VITE_API_BASE_URL` and `VITE_CLERK_PUBLISHABLE_KEY` the same way.
 
-See `infra/deployment/README.md` for the full Dokploy service setup.
+These four files are Dokploy **Compose** apps, and Dokploy has no preview
+deployment support for that service type — every `preview*` field lives on its
+`applications` record and none exist on `compose`. Previews are therefore
+configured on *separate* Application-type services that reuse these same
+Dockerfiles unchanged, rather than by turning something on here. Don't try to
+enable previews on these apps; there is nothing to enable.
+
+See `infra/deployment/README.md` for the full Dokploy service setup, including
+the preview deployment section.
 
 ## Base image updates
 
