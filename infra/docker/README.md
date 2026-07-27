@@ -342,6 +342,27 @@ environment-dependent values to set. `auth-compose.yaml` reads
 
 See `infra/deployment/README.md` for the full Dokploy service setup.
 
+## Base image updates
+
+Dependabot watches base images through the `docker` ecosystem, pointed at the
+four `apps/*` directories — **not** at this one. The compose files here declare
+no `image:` at all, only `build:` plus a Dockerfile path, and Dependabot's
+`docker-compose` parser reads only `image:` (or an inline `dockerfile_inline`).
+It never follows `build.dockerfile`, so a `docker-compose` block would scan
+these files and find nothing. Don't add one.
+
+Two consequences worth knowing before treating a quiet Dependabot as "nothing
+to update":
+
+- Only the `nginx:1.29-alpine` pins are tracked. Every
+  `FROM node:${NODE_VERSION}-alpine` is invisible: Dependabot does no ARG
+  interpolation and its tag regex cannot match a leading `$`. That is
+  deliberate — the Node version stays owned by `.node-version` and CI's
+  `node-version-file` rather than gaining a second, competing owner.
+- Base-image PRs are excluded from auto-merge, because no CI job builds a
+  container image. They need a human. See the comment in
+  `.github/workflows/dependabot-auto-merge.yml`.
+
 ## Relationship to production deployment docs
 
 - `infra/docker/README.md`: repo-owned Dockerfiles, Compose, and manual

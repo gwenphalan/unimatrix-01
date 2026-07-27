@@ -40,10 +40,19 @@ jobs:
 
       # For a grouped PR, `update-type` reports the highest bump in the group, so a
       # single major sneaking into a group would disqualify the whole PR.
+      #
+      # `docker` is excluded because CI does not verify it. `Verify` runs
+      # `turbo run build`, which is Vite and tsc only — no workflow in this repo
+      # builds a container image. Without this guard a base-image bump would arm
+      # auto-merge, pass a `Verify` that never touched the Dockerfile, land on
+      # `main`, and get deployed with nothing having checked that the image still
+      # builds or runs. Base-image bumps get a human instead. If CI ever gains a
+      # real `docker build` job as a required check, this exclusion can go.
       - name: Enable auto-merge for minor and patch updates
         if: |
-          steps.meta.outputs.update-type == 'version-update:semver-patch' ||
-          steps.meta.outputs.update-type == 'version-update:semver-minor'
+          steps.meta.outputs.package-ecosystem != 'docker' &&
+          (steps.meta.outputs.update-type == 'version-update:semver-patch' ||
+           steps.meta.outputs.update-type == 'version-update:semver-minor')
         run: gh pr merge --auto --squash "$PR_URL"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
@@ -53,3 +62,10 @@ jobs:
         if: steps.meta.outputs.update-type == 'version-update:semver-major'
         run: |
           echo "Major update detected — leaving for manual review." >> "$GITHUB_STEP_SUMMARY"
+
+      # Says so out loud. A skipped auto-merge and a broken auto-merge look
+      # identical from the PR page otherwise.
+      - name: Leave base-image bumps for review
+        if: steps.meta.outputs.package-ecosystem == 'docker'
+        run: |
+          echo "Docker base-image update — auto-merge is deliberately not armed, because no CI job builds the image. Review and merge manually." >> "$GITHUB_STEP_SUMMARY"
