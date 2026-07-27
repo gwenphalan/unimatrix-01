@@ -1,4 +1,4 @@
-import type { BlogEntry, HomePageContent, ProjectEntry, SiteContent } from "@unimatrix/content";
+import type { BlogEntry, HomePageContent, ProjectEntry } from "@unimatrix/content";
 import {
   parseBlogContentFile,
   parseHomeContentFile,
@@ -30,12 +30,6 @@ const parsedBlogEntries = [
 ];
 
 export const blogEntries: BlogEntry[] = sortEntriesByPublishedAtDesc([...parsedBlogEntries]);
-
-export const siteContent: SiteContent = {
-  blog: blogEntries,
-  home: homeContent,
-  projects: projectEntries,
-};
 
 export const featuredProjects = projectEntries.filter((entry) => entry.frontmatter.featured);
 
