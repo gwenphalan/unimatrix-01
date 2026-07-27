@@ -24,6 +24,11 @@ jobs:
        startsWith(github.event.comment.body, '/opencode'))
     runs-on: blacksmith-4vcpu-ubuntu-2404
     permissions:
+      # Required, not vestigial: the action's `use_github_token` input defaults to
+      # "false", so it calls core.getIDToken() to exchange an OIDC token for an
+      # OpenCode App token. Removing this permission makes every /oc run fail before
+      # it processes the request.
+      id-token: write
       contents: read
       pull-requests: read
       issues: read
@@ -33,6 +38,13 @@ jobs:
         with:
           persist-credentials: false
 
+      # The SHA pins the composite action wrapper, not the agent it runs. Internally
+      # this action queries GitHub for the *latest* opencode release and installs it
+      # with `curl -fsSL https://opencode.ai/install | bash` on every run — no
+      # checksum, no version pin. So an upstream release changes the executed binary
+      # without any change here. Pinning is still worth doing (it stops the wrapper
+      # itself from silently changing), but do not read it as reproducibility.
+      # Closing this properly means vendoring a checksummed opencode artifact.
       - name: Run opencode
         uses: anomalyco/opencode/github@02981844b88aed33f06f1527da6c58d137975069 # v1.18.7
         env:
