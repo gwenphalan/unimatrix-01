@@ -28,3 +28,22 @@ onlyBuiltDependencies:
 # is not true of 10.30.3, which honours it here. If the pin ever drops below 10.16
 # this silently becomes a no-op.
 minimumReleaseAge: 4320
+
+# `@vitest/coverage-v8` reaches `brace-expansion@2.1.2` through
+# `test-exclude` -> `glob@10` -> `minimatch@9`, which carries
+# GHSA-mh99-v99m-4gvg (high) — the same advisory the ESLint 9 -> 10 upgrade
+# removed from this tree. `Review dependency changes` fails on it, correctly.
+#
+# The advisory has no patched release below `brace-expansion@5.0.8`, and 5.0.8
+# cannot simply be substituted: it exports a named `{ expand }` with no
+# default, while `minimatch@9` does `import expand from "brace-expansion"`.
+# Overriding `brace-expansion` itself leaves `expand` undefined at runtime.
+#
+# Overriding `minimatch@9` works because `minimatch@10` still exports
+# everything `glob@10` imports from it — `escape`, `unescape`, `Minimatch`,
+# `GLOBSTAR` — and depends on the patched `brace-expansion@5.0.8`.
+#
+# This is load-bearing, not leftover cruft. Remove it and the dependency
+# review turns red again with no explanation of why.
+overrides:
+  minimatch@9: ^10.2.5
