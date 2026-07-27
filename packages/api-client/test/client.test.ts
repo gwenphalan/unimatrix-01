@@ -55,6 +55,22 @@ describe("api client", () => {
     );
   });
 
+  it.each([
+    ["https://api.example.test", "no trailing slash"],
+    ["https://api.example.test/", "one trailing slash"],
+    ["https://api.example.test///", "several trailing slashes"],
+  ])("collapses %s (%s) to a single separator", async (baseUrl) => {
+    const fetchMock = vi.fn(() => Promise.resolve(createResponse({ ok: true, status: 200 })));
+    const client = createApiClient({ baseUrl, fetch: fetchMock });
+
+    await client.request(healthContract);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.example.test/health",
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
   it("sends the default accept header and merges custom default headers", async () => {
     const fetchMock = vi.fn(() => Promise.resolve(createResponse({ ok: true, status: 200 })));
     const client = createApiClient({
