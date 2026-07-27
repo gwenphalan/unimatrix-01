@@ -1,5 +1,12 @@
 # Agent Instructions
 
+## Who You Are Working For
+- The repo owner is a software developer and architects this project — choosing the services, shared packages, and tools. What is scarce is time, not ability: explain trade-offs at full engineering depth and never simplify them
+- **Present options for dependency, tooling, and architectural choices** — those are the owner's call. Give a recommendation alongside the options, not instead of them
+- Once an approach is chosen, implement it without further checkpoints, and report the implementation decisions you made along the way
+- Do not assume a diff will be read line by line. Verification has to come from checks you actually ran, so treat a red check as the signal it is and never route around one
+- Be conservative wherever a mistake would fail silently rather than loudly
+
 ## Package Manager
 - Use **pnpm** with Node `22.22.1` and pnpm `10.30.3`
 - Canonical root commands: `pnpm install`, `pnpm dev`, `pnpm setup:local`, `pnpm setup:worktree`, `pnpm check`, `pnpm verify`
@@ -87,6 +94,21 @@ Package names: `apps/web`→`@unimatrix/web`, `apps/api`→`@unimatrix/api`, `ap
 - Auth app deeper checks: `pnpm --filter @unimatrix/auth-app test` (unit only), `pnpm --filter @unimatrix/auth-app build`
 - Auth / user-data package checks: `pnpm --filter @unimatrix/auth test`, `pnpm --filter @unimatrix/user-data test`
 - Any change to a web component or live site (`apps/web`, `apps/cube-trainer`, `apps/auth`, `packages/ui`) must be live-tested in a real browser before being reported as done — automated tests verify correctness, not that the feature actually works on screen. If no Chromium instance is running, launch one to run this check.
+- Never report work as done, working, or verified on the strength of the code looking correct — run the check and report what it actually printed
+- State plainly what you could not verify rather than omitting it; an unmentioned gap reads as a confirmed result
+- **Do not assert what you have not verified.** This binds hardest on explanations of *why* something behaves as it does: a plausible mechanism reached quickly is still a guess, and stating it as fact is how wrong conclusions get acted on. Test it, or label it a hypothesis
+- One corroborating signal is not verification. A hook's output, a doc's phrasing, or another tool's claim can all be wrong — prefer what the system actually does (observed behavior, a command you ran, a reproduction) over what it says about itself
+- When observed behavior contradicts a source you trusted, the behavior wins; go back and find what the source actually got wrong rather than explaining the contradiction away
+
+## CI And Automation
+- `main` accepts changes by pull request only, and the `Verify` CI job is a required status check; work on a branch and open a PR
+- Dependabot runs daily with a 14-day `cooldown`; `pnpm-workspace.yaml` sets `minimumReleaseAge` to 3 days. The pnpm value must stay **below** Dependabot's or updates fail with a misleading "no matching version" error
+- `cooldown` is not a valid Dependabot key for the `github-actions` ecosystem; an unsupported key makes Dependabot reject the whole file, silently disabling npm updates too
+- Auto-merge is armed for grouped minor/patch Dependabot PRs only, and gates on CI rather than on any review
+- CodeRabbit is advisory and non-blocking: treat its comments as leads to verify against primary sources, never as conclusions to act on directly
+- Never add self-hosted Actions runners — this repo is public, so fork PRs would execute untrusted code on the owner's hardware
+- Pin third-party actions to a commit SHA with the version in a trailing comment
+- Several workflow settings that look redundant are load-bearing and carry a comment saying why; read the comment before removing one
 
 ## Git And PR Rules
 - Keep PRs small and issue-aligned; avoid unrelated scaffolding or setup churn
