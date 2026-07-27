@@ -17,6 +17,11 @@ import {
   packetsOffLiveGeometry,
 } from "./idle-packets.js";
 import {
+  TRAIL_SEGMENTS,
+  pushTrailPoint,
+  trailSlices,
+} from "./packet-trail.js";
+import {
   type BarrierField,
   type Occluder,
   type Rect,
@@ -41,6 +46,33 @@ import { type Trace, generateTraces } from "./trace-generation.js";
 // (see the `--grid-bold-phase-*` effect below). Nothing else in this file
 // knows about the bold tier.
 const BOLD_GRID = GRID * 6;
+
+// Opacity of the trail slice nearest the packet; the rest fade linearly to
+// nothing at the tail. Deliberately below the packet's own so the head still
+// reads as the brightest thing on the trace.
+/**
+ * Offset that puts a line of a `tile`-sized lattice exactly on `extent`'s
+ * midpoint: `background-position: P` on a tile of size T puts lines at
+ * `P + n * T`, so a line hits `center` exactly when `P ≡ center (mod T)`.
+ */
+function latticePhase(extent: number, tile: number): number {
+  return ((extent / 2) % tile) + (extent < 0 ? tile : 0);
+}
+
+/** The fine-lattice phase for the current document, or 0,0 outside a DOM. */
+function measureGridPhase(): Point {
+  if (typeof document === "undefined") return { x: 0, y: 0 };
+
+  const root = document.documentElement;
+  return { x: latticePhase(root.clientWidth, GRID), y: latticePhase(root.clientHeight, GRID) };
+}
+
+const TRAIL_HEAD_OPACITY = 0.3;
+
+// Stroke width (px) of the trail slice nearest the packet. Slices narrow
+// linearly from here toward the tail, which is what reads as a taper — SVG
+// strokes are uniform-width, so the taper has to be faked by slicing.
+const TRAIL_HEAD_WIDTH = 4;
 
 const MIN_TRACE_COUNT = 18;
 const MIN_TRACE_COUNT_AREA_DIVISOR = 40000;
@@ -163,21 +195,24 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
   // before the first scrollbar appeared — confirmed live. `clientHeight` on
   // `documentElement` is the *viewport* height, not the content height, so
   // this fires on real viewport changes only and never thrashes.
-  const [gridPhase, setGridPhase] = React.useState<Point>({ x: 0, y: 0 });
+  //
+  // Seeded synchronously from the real document rather than starting at 0,0
+  // and being corrected by the effect below: generation routes against
+  // `-gridPhase`-shifted barriers but renders `+gridPhase`, so a first pass
+  // at a stale zero phase draws every trace offset from the barriers it was
+  // routed around — traces sat behind the footer and ran past the bottom of
+  // the viewport until something else happened to force a regeneration.
+  const [gridPhase, setGridPhase] = React.useState<Point>(measureGridPhase);
 
   React.useEffect(() => {
     const root = document.documentElement;
-    // `background-position: P` on a tile of size T puts lines at `P + n * T`,
-    // so a line hits `center` exactly when `P ≡ center (mod T)`.
-    const phase = (extent: number, tile: number) => ((extent / 2) % tile) + (extent < 0 ? tile : 0);
 
     const apply = () => {
-      const x = phase(root.clientWidth, GRID);
-      const y = phase(root.clientHeight, GRID);
+      const { x, y } = measureGridPhase();
       root.style.setProperty("--grid-phase-x", `${x}px`);
       root.style.setProperty("--grid-phase-y", `${y}px`);
-      root.style.setProperty("--grid-bold-phase-x", `${phase(root.clientWidth, BOLD_GRID)}px`);
-      root.style.setProperty("--grid-bold-phase-y", `${phase(root.clientHeight, BOLD_GRID)}px`);
+      root.style.setProperty("--grid-bold-phase-x", `${latticePhase(root.clientWidth, BOLD_GRID)}px`);
+      root.style.setProperty("--grid-bold-phase-y", `${latticePhase(root.clientHeight, BOLD_GRID)}px`);
       // Traces are generated on the unphased `n * GRID` lattice and shifted
       // into place at render time (see the translated `<g>` below), so the
       // fine phase has to reach the render as state, not just as a CSS var.
@@ -276,6 +311,13 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
   const freeSlotsRef = React.useRef(Array.from({ length: IDLE_PACKET_POOL_SIZE }, (_, i) => i));
   const lastPacketSpawnAtRef = React.useRef(0);
   const packetElRefs = React.useRef(new Map<string, SVGRectElement>());
+  // Per-slot walked-path history behind each packet, head-first, trimmed to
+  // `TRAIL_LENGTH_PX` of arc length. Because it *is* the traversed polyline,
+  // the drawn trail bends around corners for free. Cleared wherever a slot is
+  // freed — a reused slot would otherwise splice the retired packet's tail
+  // onto the new one's head and draw a streak across the field.
+  const packetTrailsRef = React.useRef(new Map<number, Point[]>());
+  const trailElRefs = React.useRef(new Map<string, SVGPathElement>());
 
   const loopShouldRun = React.useCallback(() => {
     return !documentHiddenRef.current && (transitionsRef.current.size > 0 || idleEnabledRef.current);
@@ -286,15 +328,29 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
   // tab hide/show, and — the frame any crawl starts — `runTick` itself.
   // Retiring rather than trying to salvage in-flight packets is deliberate:
   // the graph is rebuilt from live bodies on the next idle frame anyway.
+  // Hides a slot's packet rect and every one of its trail sub-paths, and
+  // drops its history. Every path that frees a slot goes through this, so a
+  // recycled slot always starts from an empty trail.
+  const hidePacketSlot = React.useCallback((slot: number) => {
+    const el = packetElRefs.current.get(`p${slot}`);
+    if (el) el.style.opacity = "0";
+
+    for (let i = 0; i < TRAIL_SEGMENTS; i += 1) {
+      const trailEl = trailElRefs.current.get(`t${slot}-${i}`);
+      if (trailEl) trailEl.style.opacity = "0";
+    }
+
+    packetTrailsRef.current.delete(slot);
+  }, []);
+
   const retireAllPackets = React.useCallback(() => {
     graphDirtyRef.current = true;
     packetsRef.current.forEach((_packet, slot) => {
-      const el = packetElRefs.current.get(`p${slot}`);
-      if (el) el.style.opacity = "0";
+      hidePacketSlot(slot);
     });
     packetsRef.current.clear();
     freeSlotsRef.current = Array.from({ length: IDLE_PACKET_POOL_SIZE }, (_, i) => i);
-  }, []);
+  }, [hidePacketSlot]);
 
   // `allowRebuild` gates the graph rebuild on nothing currently crawling —
   // during a transition, `liveBodyRef` holds mid-crawl `sliceWindow`
@@ -318,8 +374,7 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
       if (options.isCellLive) {
         const isCellLive = options.isCellLive;
         packetsOffLiveGeometry(packetsRef.current, isCellLive).forEach((slot) => {
-          const el = packetElRefs.current.get(`p${slot}`);
-          if (el) el.style.opacity = "0";
+          hidePacketSlot(slot);
           packetsRef.current.delete(slot);
           freeSlotsRef.current.push(slot);
         });
@@ -332,7 +387,7 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
         if (!result) {
           packetsRef.current.delete(slot);
           freeSlotsRef.current.push(slot);
-          if (el) el.style.opacity = "0";
+          hidePacketSlot(slot);
           return;
         }
 
@@ -372,6 +427,29 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
           el.setAttribute("y", String(result.point.y - 3));
           el.style.opacity = "1";
         }
+
+        // Trail: extend this slot's history with the frame's position, then
+        // repaint its sub-paths head-first. `trailSlices` hands back at most
+        // `TRAIL_SEGMENTS` entries, and a slice too short to draw comes back
+        // empty — either way every unused element is explicitly hidden, so a
+        // shrinking trail never leaves a stale sub-path on screen.
+        const trail = pushTrailPoint(packetTrailsRef.current.get(slot) ?? [], result.point);
+        packetTrailsRef.current.set(slot, trail);
+
+        const slices = trailSlices(trail);
+        for (let i = 0; i < TRAIL_SEGMENTS; i += 1) {
+          const trailEl = trailElRefs.current.get(`t${slot}-${i}`);
+          if (!trailEl) continue;
+
+          const slice = slices[i];
+          if (!slice || slice.length < 2) {
+            trailEl.style.opacity = "0";
+            continue;
+          }
+
+          trailEl.setAttribute("d", pathData(slice));
+          trailEl.style.opacity = String(TRAIL_HEAD_OPACITY * (1 - i / TRAIL_SEGMENTS));
+        }
       });
 
       if (
@@ -388,7 +466,7 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
         }
       }
     },
-    [],
+    [hidePacketSlot],
   );
 
   // The shared loop reschedules itself through this indirection rather than
@@ -498,6 +576,23 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
     return (el: SVGRectElement | null) => {
       if (el) packetElRefs.current.set(key, el);
       else packetElRefs.current.delete(key);
+    };
+  }, []);
+
+  // One pooled path per (slot, trail slice), same fixed-pool/direct-ref
+  // pattern as the packet rects themselves — never created per frame.
+  const trailSlotIds = React.useMemo(
+    () =>
+      Array.from({ length: IDLE_PACKET_POOL_SIZE }, (_, slot) =>
+        Array.from({ length: TRAIL_SEGMENTS }, (_, i) => ({ key: `t${slot}-${i}`, index: i })),
+      ).flat(),
+    [],
+  );
+
+  const trailRefCallback = React.useCallback((key: string) => {
+    return (el: SVGPathElement | null) => {
+      if (el) trailElRefs.current.set(key, el);
+      else trailElRefs.current.delete(key);
     };
   }, []);
 
@@ -1495,6 +1590,26 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
                 width={6}
                 x={-3}
                 y={-3}
+              />
+            ))}
+          </g>
+          {/* Tapering glow trails, drawn under the packets so a packet always
+              sits on top of its own tail. Each slice gets a fixed width from
+              its index (widest at the packet, narrowing toward the tail); `d`
+              and opacity are written per frame by `advanceIdlePackets`. */}
+          <g
+            className="circuit-field-glow"
+            fill="none"
+            stroke="var(--primary)"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            {trailSlotIds.map(({ key, index }) => (
+              <path
+                key={key}
+                ref={trailRefCallback(key)}
+                strokeWidth={TRAIL_HEAD_WIDTH * (1 - index / (TRAIL_SEGMENTS + 1))}
+                style={{ opacity: 0 }}
               />
             ))}
           </g>
