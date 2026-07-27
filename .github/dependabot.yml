@@ -36,10 +36,39 @@ updates:
       time: "08:00"
       timezone: America/Phoenix
     open-pull-requests-limit: 5
-    # No `cooldown` here: Dependabot does not support it for the github-actions
-    # ecosystem, and an unsupported key makes it reject this entire file — which
-    # would silently kill the npm updates above too. Actions are pinned to commit
-    # SHAs, so a bump is reviewable as a SHA change regardless.
+
+    # This block previously carried a comment saying `cooldown` was unsupported
+    # for `github-actions` and would make Dependabot reject the whole file. That
+    # was true when written and is not true now — checked against three
+    # independent sources rather than one:
+    #   - dependabot-core implements it: `latest_version_tag_respecting_cooldown`
+    #     in github_actions/lib/dependabot/github_actions/update_checker/
+    #     latest_version_finder.rb, landed in #12486 / #12502 (June 2025), feature
+    #     flag removed in #12577 (July 2025).
+    #   - GitHub changelog 2025-07-29, "Dependabot: Expanded cooldown and package
+    #     manager support".
+    #   - The options reference now lists GitHub Actions in the cooldown table.
+    #
+    # Only `default-days` is meaningful here. The semver-specific keys
+    # (`semver-major-days` and friends) are not supported for this ecosystem, so
+    # do not add them — that is the shape the old warning actually applies to.
+    #
+    # There was a real defect worth knowing about: for actions that release
+    # frequently, cooldown checked only the newest release's date and, if that
+    # failed the window, proposed nothing at all — freezing the action forever
+    # (dependabot-core#13691, #14645), and it read the tag's commit date rather
+    # than the release date (#13078). All three are closed as completed as of
+    # June 2026. `github/codeql-action` is the dependency here that would have
+    # been affected.
+    #
+    # Whole-file rejection on a bad key is still the failure mode, and it takes
+    # the npm updates above down with it. After changing anything in this file,
+    # check github.com/unimatrixcore/unimatrix-01/network/updates for a config
+    # error before assuming it worked — a rejected file looks identical to a
+    # quiet week.
+    cooldown:
+      default-days: 14
+
     groups:
       github-actions-minor-patch:
         patterns:
@@ -78,9 +107,7 @@ updates:
       timezone: America/Phoenix
     open-pull-requests-limit: 5
 
-    # Supported for the `docker` ecosystem (unlike `github-actions` above), so
-    # this does not risk the whole-file rejection described there. Same 14 days
-    # as npm, for the same reason.
+    # Same 14 days as npm and github-actions, for the same reason.
     cooldown:
       default-days: 14
 

@@ -104,7 +104,7 @@ Package names: `apps/web`→`@unimatrix/web`, `apps/api`→`@unimatrix/api`, `ap
 ## CI And Automation
 - `main` accepts changes by pull request only, and the `Verify` CI job is a required status check; work on a branch and open a PR
 - Dependabot runs daily with a 14-day `cooldown`; `pnpm-workspace.yaml` sets `minimumReleaseAge` to 3 days. The pnpm value must stay **below** Dependabot's or updates fail with a misleading "no matching version" error
-- `cooldown` is not a valid Dependabot key for the `github-actions` ecosystem; an unsupported key makes Dependabot reject the whole file, silently disabling npm updates too
+- All three Dependabot ecosystems (`npm`, `github-actions`, `docker`) set `cooldown: default-days: 14`. `github-actions` supports only `default-days` — the `semver-*-days` keys are not valid there, and an unsupported key makes Dependabot reject the whole file, silently disabling npm updates too. After editing `.github/dependabot.yml`, check `/network/updates` for a config error: a rejected file looks exactly like a quiet week
 - Auto-merge is armed for grouped minor/patch Dependabot PRs only, and gates on CI rather than on any review
 - CodeRabbit is advisory and non-blocking: treat its comments as leads to verify against primary sources, never as conclusions to act on directly
 - Never add self-hosted Actions runners — this repo is public, so fork PRs would execute untrusted code on the owner's hardware
