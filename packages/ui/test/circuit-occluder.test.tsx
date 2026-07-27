@@ -117,7 +117,7 @@ describe("CircuitOccluderProvider / useCircuitOccluder", () => {
   it("re-measures when the shared ResizeObserver fires", async () => {
     let latestRects: readonly { x0: number; y0: number; x1: number; y1: number }[] = [];
     let registrantEl: HTMLDivElement | undefined;
-    const rect = makeRect({ left: 0, top: 0, right: 50, bottom: 50 });
+    const rect = makeRect({ left: 0, top: 0, right: 100, bottom: 100 });
 
     render(
       <CircuitOccluderProvider>
@@ -129,7 +129,7 @@ describe("CircuitOccluderProvider / useCircuitOccluder", () => {
     await act(async () => {
       await new Promise((resolve) => requestAnimationFrame(resolve));
     });
-    expect(latestRects).toEqual([{ x0: 0, y0: 0, x1: 50, y1: 50 }]);
+    expect(latestRects).toEqual([{ x0: 0, y0: 0, x1: 100, y1: 100 }]);
 
     rect.left = 0;
     rect.right = 200;
@@ -147,7 +147,7 @@ describe("CircuitOccluderProvider / useCircuitOccluder", () => {
       await new Promise((resolve) => requestAnimationFrame(resolve));
     });
 
-    expect(latestRects).toEqual([{ x0: 0, y0: 0, x1: 200, y1: 50 }]);
+    expect(latestRects).toEqual([{ x0: 0, y0: 0, x1: 200, y1: 100 }]);
   });
 
   it("clamps a registrant's measured height to maxHeightPx", async () => {
@@ -180,7 +180,7 @@ describe("CircuitOccluderProvider / useCircuitOccluder", () => {
   it("a scroll event beyond the delta threshold notifies useCircuitOccluderDelta with the moved rect", async () => {
     let latestDelta: Rect[] | undefined;
     let registrantEl: HTMLDivElement | undefined;
-    const rect = makeRect({ left: 0, top: 0, right: 50, bottom: 50 });
+    const rect = makeRect({ left: 0, top: 0, right: 100, bottom: 100 });
 
     render(
       <CircuitOccluderProvider>
@@ -201,14 +201,14 @@ describe("CircuitOccluderProvider / useCircuitOccluder", () => {
     });
 
     expect(latestDelta).toEqual([
-      { x0: 0, y0: 0, x1: 50, y1: 50 },
-      { x0: 0, y0: 200, x1: 50, y1: 250 },
+      { x0: 0, y0: 0, x1: 100, y1: 100 },
+      { x0: 0, y0: 200, x1: 100, y1: 250 },
     ]);
   });
 
   it("a sub-threshold scroll move does not notify useCircuitOccluderDelta", async () => {
     let latestDelta: Rect[] | undefined;
-    const rect = makeRect({ left: 0, top: 0, right: 50, bottom: 50 });
+    const rect = makeRect({ left: 0, top: 0, right: 100, bottom: 100 });
 
     render(
       <CircuitOccluderProvider>
@@ -220,7 +220,7 @@ describe("CircuitOccluderProvider / useCircuitOccluder", () => {
     await flushRaf();
 
     rect.top = 5;
-    rect.bottom = 55;
+    rect.bottom = 105;
 
     await act(async () => {
       scroll();
@@ -230,9 +230,9 @@ describe("CircuitOccluderProvider / useCircuitOccluder", () => {
     expect(latestDelta).toBeUndefined();
   });
 
-  it("a scroll-triggered measurement never changes useCircuitOccluderRects()'s value", async () => {
+  it("a scroll-triggered measurement does not immediately change useCircuitOccluderRects()'s value", async () => {
     const rectsSeen: (readonly { x0: number; y0: number; x1: number; y1: number }[])[] = [];
-    const rect = makeRect({ left: 0, top: 0, right: 50, bottom: 50 });
+    const rect = makeRect({ left: 0, top: 0, right: 100, bottom: 100 });
 
     render(
       <CircuitOccluderProvider>
@@ -253,13 +253,47 @@ describe("CircuitOccluderProvider / useCircuitOccluder", () => {
     });
 
     expect(rectsSeen.length).toBe(countBeforeScroll);
-    expect(rectsSeen[rectsSeen.length - 1]).toEqual([{ x0: 0, y0: 0, x1: 50, y1: 50 }]);
+    expect(rectsSeen[rectsSeen.length - 1]).toEqual([{ x0: 0, y0: 0, x1: 100, y1: 100 }]);
   });
+
+  it("commits the settled rect via useCircuitOccluderRects() once scrolling stops", async () => {
+    const rectsSeen: (readonly { x0: number; y0: number; x1: number; y1: number }[])[] = [];
+    const rect = makeRect({ left: 0, top: 0, right: 100, bottom: 100 });
+
+    render(
+      <CircuitOccluderProvider>
+        <Registrant rect={rect} />
+        <RectsProbe onRects={(r) => rectsSeen.push(r)} />
+      </CircuitOccluderProvider>,
+    );
+
+    await flushRaf();
+
+    rect.top = 400;
+    rect.bottom = 450;
+
+    await act(async () => {
+      scroll();
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+    });
+
+    // Not yet committed — scroll only notifies the delta path immediately.
+    expect(rectsSeen[rectsSeen.length - 1]).toEqual([{ x0: 0, y0: 0, x1: 100, y1: 100 }]);
+
+    // Past SCROLL_SETTLE_MS: the settle timer should have forced a
+    // structural commit of the settled rect.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    });
+    await flushRaf();
+
+    expect(rectsSeen[rectsSeen.length - 1]).toEqual([{ x0: 0, y0: 400, x1: 100, y1: 450 }]);
+  }, 10000);
 
   it("a structural ResizeObserver change does not also notify useCircuitOccluderDelta", async () => {
     let latestDelta: Rect[] | undefined;
     let registrantEl: HTMLDivElement | undefined;
-    const rect = makeRect({ left: 0, top: 0, right: 50, bottom: 50 });
+    const rect = makeRect({ left: 0, top: 0, right: 100, bottom: 100 });
 
     render(
       <CircuitOccluderProvider>
@@ -285,7 +319,7 @@ describe("CircuitOccluderProvider / useCircuitOccluder", () => {
 
   it("many registrants mounting together collapse into one measurement commit", async () => {
     const rectsSeen: (readonly { x0: number; y0: number; x1: number; y1: number }[])[] = [];
-    const registrants = Array.from({ length: 12 }, (_, i) => makeRect({ left: i * 10, top: 0, right: i * 10 + 5, bottom: 5 }));
+    const registrants = Array.from({ length: 12 }, (_, i) => makeRect({ left: i * 200, top: 0, right: i * 200 + 100, bottom: 100 }));
 
     render(
       <CircuitOccluderProvider>
@@ -308,7 +342,7 @@ describe("CircuitOccluderProvider / useCircuitOccluder", () => {
   it("a structural remeasurement that measures identically does not recommit useCircuitOccluderRects()", async () => {
     const rectsSeen: (readonly { x0: number; y0: number; x1: number; y1: number }[])[] = [];
     let registrantEl: HTMLDivElement | undefined;
-    const rect = makeRect({ left: 0, top: 0, right: 50, bottom: 50 });
+    const rect = makeRect({ left: 0, top: 0, right: 100, bottom: 100 });
 
     render(
       <CircuitOccluderProvider>
@@ -335,6 +369,182 @@ describe("CircuitOccluderProvider / useCircuitOccluder", () => {
     expect(rectsSeen[rectsSeen.length - 1]).toBe(rectsAfterMount);
   });
 
+  it("skips registering an element narrower than MIN_OCCLUDER_SIDE_PX and warns", async () => {
+    let latestRects: readonly { x0: number; y0: number; x1: number; y1: number }[] = [];
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const rect = makeRect({ left: 0, top: 0, right: 30, bottom: 100 }); // 30px wide, under the one-grid-cell (40px) floor
+
+    render(
+      <CircuitOccluderProvider>
+        <Registrant rect={rect} />
+        <RectsProbe onRects={(r) => (latestRects = r)} />
+      </CircuitOccluderProvider>,
+    );
+
+    await flushRaf();
+
+    expect(latestRects).toEqual([]);
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining("skipped a registrant smaller than MIN_OCCLUDER_SIDE_PX"),
+      expect.anything(),
+    );
+
+    warn.mockRestore();
+  });
+
+  /**
+   * The size floor is enforced per measurement pass, not once at
+   * registration: a surface that is still 0-sized on the first passive
+   * effect (font/image loading, collapsed accordion, animated-in panel,
+   * content behind a suspense boundary that just resolved) must still be
+   * observed, so it recovers the moment it reaches its real size. Rejecting
+   * at registration time made that unrecoverable — the ResizeObserver only
+   * ever watches registered elements.
+   */
+  it("recovers a registrant that is 0-sized at mount and only later reaches its real size", async () => {
+    let latestRects: readonly { x0: number; y0: number; x1: number; y1: number }[] = [];
+    const rect = makeRect({ left: 0, top: 0, right: 0, bottom: 0 });
+
+    render(
+      <CircuitOccluderProvider>
+        <Registrant rect={rect} />
+        <RectsProbe onRects={(r) => (latestRects = r)} />
+      </CircuitOccluderProvider>,
+    );
+
+    await flushRaf();
+    expect(latestRects).toEqual([]);
+
+    rect.right = 200;
+    rect.bottom = 120;
+    await act(async () => {
+      MockResizeObserver.instances.forEach((instance) => {
+        instance.trigger();
+      });
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+    });
+
+    expect(latestRects).toEqual([{ x0: 0, y0: 0, x1: 200, y1: 120 }]);
+  });
+
+  it("registers an element at exactly MIN_OCCLUDER_SIDE_PX on both sides", async () => {
+    let latestRects: readonly { x0: number; y0: number; x1: number; y1: number }[] = [];
+    const rect = makeRect({ left: 0, top: 0, right: 40, bottom: 40 });
+
+    render(
+      <CircuitOccluderProvider>
+        <Registrant rect={rect} />
+        <RectsProbe onRects={(r) => (latestRects = r)} />
+      </CircuitOccluderProvider>,
+    );
+
+    await flushRaf();
+
+    expect(latestRects).toEqual([{ x0: 0, y0: 0, x1: 40, y1: 40 }]);
+  });
+
+  it("registers a full-width bar thinner than two grid cells but at least one (a real header/footer shape)", async () => {
+    let latestRects: readonly { x0: number; y0: number; x1: number; y1: number }[] = [];
+    // Matches the live regression: a 1392x76 header and a 1392x66 footer
+    // were both silently dropped under a two-grid-cell (80px) floor.
+    const rect = makeRect({ left: 0, top: 0, right: 1392, bottom: 76 });
+
+    render(
+      <CircuitOccluderProvider>
+        <Registrant rect={rect} />
+        <RectsProbe onRects={(r) => (latestRects = r)} />
+      </CircuitOccluderProvider>,
+    );
+
+    await flushRaf();
+
+    expect(latestRects).toEqual([{ x0: 0, y0: 0, x1: 1392, y1: 76 }]);
+  });
+
+  /**
+   * A viewport resize moves registrants without necessarily resizing them —
+   * a `max-w-*` panel keeps its width and height while the centering margins
+   * around it shift — and `ResizeObserver` fires on size changes only. Left
+   * unhandled, the committed rects stay pinned to pre-resize geometry and
+   * `CircuitField` (which regenerates on its own resize handler) rebuilds
+   * against stale barriers, laying traces straight across the surface.
+   */
+  it("remeasures on a window resize that moves a registrant without resizing it", async () => {
+    let latestRects: readonly { x0: number; y0: number; x1: number; y1: number }[] = [];
+    const rect = makeRect({ left: 100, top: 200, right: 500, bottom: 400 });
+
+    render(
+      <CircuitOccluderProvider>
+        <Registrant rect={rect} />
+        <RectsProbe onRects={(r) => (latestRects = r)} />
+      </CircuitOccluderProvider>,
+    );
+
+    await flushRaf();
+    expect(latestRects).toEqual([{ x0: 100, y0: 200, x1: 500, y1: 400 }]);
+
+    // Same 400x200 box, moved — exactly what ResizeObserver stays silent on.
+    rect.left = 100;
+    rect.right = 500;
+    rect.top = 40;
+    rect.bottom = 240;
+
+    await act(async () => {
+      window.dispatchEvent(new Event("resize"));
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+    });
+
+    expect(latestRects).toEqual([{ x0: 100, y0: 40, x1: 500, y1: 240 }]);
+  });
+
+  it("stamps data-circuit-occluder on register and removes it on unregister", async () => {
+    const rect = makeRect({ left: 0, top: 0, right: 100, bottom: 100 });
+    let registrantEl: HTMLDivElement | undefined;
+
+    const { unmount } = render(
+      <CircuitOccluderProvider>
+        <Registrant onElement={(el) => (registrantEl = el)} rect={rect} />
+      </CircuitOccluderProvider>,
+    );
+
+    await flushRaf();
+    expect(registrantEl?.getAttribute("data-circuit-occluder")).toBe("surface");
+
+    unmount();
+    expect(registrantEl?.getAttribute("data-circuit-occluder")).toBeNull();
+  });
+
+  it("warns (but still registers) when the ref points at an interactive element", async () => {
+    let latestRects: readonly { x0: number; y0: number; x1: number; y1: number }[] = [];
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const rect = makeRect({ left: 0, top: 0, right: 100, bottom: 100 });
+
+    function LinkRegistrant() {
+      const ref = React.useRef<HTMLAnchorElement>(null);
+      useCircuitOccluder(ref);
+
+      React.useLayoutEffect(() => {
+        if (ref.current) ref.current.getBoundingClientRect = () => ({ ...rect, toJSON: () => ({}) }) as DOMRect;
+      }, []);
+
+      return <a href="/somewhere" ref={ref} />;
+    }
+
+    render(
+      <CircuitOccluderProvider>
+        <LinkRegistrant />
+        <RectsProbe onRects={(r) => (latestRects = r)} />
+      </CircuitOccluderProvider>,
+    );
+
+    await flushRaf();
+
+    expect(latestRects).toEqual([{ x0: 0, y0: 0, x1: 100, y1: 100 }]);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("interactive element (button/link/input)"), expect.anything());
+
+    warn.mockRestore();
+  });
+
   it("useCircuitOccluder outside a Provider warns instead of throwing", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 
@@ -348,5 +558,37 @@ describe("CircuitOccluderProvider / useCircuitOccluder", () => {
     expect(warn).toHaveBeenCalledWith(expect.stringContaining("useCircuitOccluder called outside a CircuitOccluderProvider"));
 
     warn.mockRestore();
+  });
+
+  /**
+   * Regression guard for a real live bug: under React.StrictMode, the
+   * measurement-scheduling effect mounts, is immediately cleaned up
+   * (StrictMode's simulated unmount), then remounts. The cleanup used to
+   * cancel the pending rAF without resetting `rafRef.current` back to
+   * `null` — the remount's own `scheduleMeasure()` call then saw a
+   * non-null (but already-cancelled) handle and silently never scheduled
+   * a replacement, so `flush()` never ran again and `useCircuitOccluderRects()`
+   * stayed `[]` forever, i.e. every occluder in the app was permanently
+   * invisible to `CircuitField`. Confirmed live: `apps/web` mounts under
+   * `React.StrictMode`, and this exact sequence made hard-barrier
+   * enforcement a silent no-op in the running app despite every unit test
+   * (none of which render under StrictMode) passing.
+   */
+  it("still populates rects after React.StrictMode's simulated mount->unmount->remount", async () => {
+    let latestRects: readonly { x0: number; y0: number; x1: number; y1: number }[] = [];
+    const rect = makeRect({ left: 0, top: 0, right: 100, bottom: 100 });
+
+    render(
+      <React.StrictMode>
+        <CircuitOccluderProvider>
+          <Registrant rect={rect} />
+          <RectsProbe onRects={(r) => (latestRects = r)} />
+        </CircuitOccluderProvider>
+      </React.StrictMode>,
+    );
+
+    await flushRaf();
+
+    expect(latestRects).toEqual([{ x0: 0, y0: 0, x1: 100, y1: 100 }]);
   });
 });

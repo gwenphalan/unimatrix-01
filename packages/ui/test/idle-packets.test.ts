@@ -9,8 +9,10 @@ import {
   cellPoint,
   chooseNextCell,
   packetPosition,
+  packetsOffLiveGeometry,
   type Packet,
 } from "../src/components/idle-packets.js";
+import { buildBarrierField } from "../src/components/occlusion.js";
 import { generateTraces } from "../src/components/trace-generation.js";
 import { recomputeCorners, densify } from "../src/components/grid-math.js";
 
@@ -32,7 +34,7 @@ describe("buildPacketGraph", () => {
     expect(graph.leaves).toContain("0,0");
     expect(graph.leaves).toContain("2,0");
     expect(graph.leaves).toContain("1,1");
-    expect(graph.junctions).toEqual(["1,0"]);
+    expect([...graph.junctions]).toEqual(["1,0"]);
   });
 
   it("neighbor symmetry: every edge appears in both directions", () => {
@@ -47,7 +49,7 @@ describe("buildPacketGraph", () => {
   });
 
   it("stays a single connected component over real generateTraces output", () => {
-    const { traces } = generateTraces(1200, 900, 42, [], 14);
+    const { traces } = generateTraces(1200, 900, 42, buildBarrierField([]), 14);
     const bodies = new Map(traces.map((t) => [t.id, recomputeCorners(densify(t.points))]));
     const graph = buildPacketGraph(bodies);
 
@@ -133,5 +135,43 @@ describe("advancePacket", () => {
   it("pool cap constant is a sane positive integer", () => {
     expect(IDLE_PACKET_POOL_SIZE).toBeGreaterThan(0);
     expect(Number.isInteger(IDLE_PACKET_POOL_SIZE)).toBe(true);
+  });
+});
+
+describe("packetsOffLiveGeometry", () => {
+  const isLive = (liveCells: Set<string>) => (cell: string) => liveCells.has(cell);
+
+  it("retires a packet whose next cell is no longer live", () => {
+    const packets = new Map<number, Packet>([
+      [0, { slot: 0, at: "0,0", cameFrom: null, next: "1,0", stepStart: 0, hops: 0 }],
+    ]);
+
+    expect(packetsOffLiveGeometry(packets, isLive(new Set(["0,0"])))).toEqual([0]);
+  });
+
+  it("keeps a packet whose next cell is still live", () => {
+    const packets = new Map<number, Packet>([
+      [0, { slot: 0, at: "0,0", cameFrom: null, next: "1,0", stepStart: 0, hops: 0 }],
+    ]);
+
+    expect(packetsOffLiveGeometry(packets, isLive(new Set(["0,0", "1,0"])))).toEqual([]);
+  });
+
+  it("checks `at` when `next` is null (a packet standing still, not mid-hop)", () => {
+    const packets = new Map<number, Packet>([
+      [0, { slot: 0, at: "5,5", cameFrom: "4,5", next: null, stepStart: 0, hops: 3 }],
+    ]);
+
+    expect(packetsOffLiveGeometry(packets, isLive(new Set(["4,5"])))).toEqual([0]);
+    expect(packetsOffLiveGeometry(packets, isLive(new Set(["5,5"])))).toEqual([]);
+  });
+
+  it("is empty when every packet's relevant cell is live", () => {
+    const packets = new Map<number, Packet>([
+      [0, { slot: 0, at: "0,0", cameFrom: null, next: "1,0", stepStart: 0, hops: 0 }],
+      [1, { slot: 1, at: "2,2", cameFrom: "2,1", next: null, stepStart: 0, hops: 5 }],
+    ]);
+
+    expect(packetsOffLiveGeometry(packets, isLive(new Set(["0,0", "1,0", "2,2"])))).toEqual([]);
   });
 });

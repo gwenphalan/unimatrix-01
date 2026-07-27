@@ -8,6 +8,7 @@ import { AlgorithmSetToggle } from "@/features/algorithms/components/algorithm-s
 import type { CaseFilterMode } from "@/features/algorithms/components/case-category-filter";
 import { CaseCategoryFilter } from "@/features/algorithms/components/case-category-filter";
 import type { AlgorithmSetId } from "@/features/algorithms/types";
+import { OccludingCluster } from "@/features/cube-trainer-site/components";
 import { DrillCasesGrid } from "@/features/trainer/components/drill-cases-grid";
 import { TrainerPanel } from "@/features/trainer/components/trainer-panel";
 
@@ -30,7 +31,7 @@ export function DrillSetView() {
     return (
       <div className="space-y-8">
         <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
+          <OccludingCluster>
             <Button
               aria-label="Back to drilling"
               onClick={() => {
@@ -42,14 +43,16 @@ export function DrillSetView() {
               <RiArrowLeftLine aria-hidden="true" className="size-4" />
             </Button>
             <h1 className="text-xl font-medium tracking-[-0.03em] text-foreground">Choose cases</h1>
-          </div>
-          <CaseCategoryFilter
-            groups={algorithmSet.groupOrder}
-            mode={caseFilterMode}
-            onModeChange={setCaseFilterMode}
-            onSelectedGroupsChange={setSelectedGroups}
-            selectedGroups={selectedGroups}
-          />
+          </OccludingCluster>
+          <OccludingCluster>
+            <CaseCategoryFilter
+              groups={algorithmSet.groupOrder}
+              mode={caseFilterMode}
+              onModeChange={setCaseFilterMode}
+              onSelectedGroupsChange={setSelectedGroups}
+              selectedGroups={selectedGroups}
+            />
+          </OccludingCluster>
         </div>
 
         <DrillCasesGrid
@@ -65,22 +68,24 @@ export function DrillSetView() {
   return (
     <div className="space-y-8">
       <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
+        <OccludingCluster>
           <Button asChild aria-label="Home" size="icon" variant="outline">
             <Link to="/">
               <RiArrowLeftLine aria-hidden="true" className="size-4" />
             </Link>
           </Button>
           <h1 className="text-xl font-medium tracking-[-0.03em] text-foreground">Drilling</h1>
-        </div>
-        <Button
-          onClick={() => {
-            setMode("cases");
-          }}
-          variant="outline"
-        >
-          Choose cases
-        </Button>
+        </OccludingCluster>
+        <OccludingCluster>
+          <Button
+            onClick={() => {
+              setMode("cases");
+            }}
+            variant="outline"
+          >
+            Choose cases
+          </Button>
+        </OccludingCluster>
       </div>
 
       <TrainerPanel
@@ -91,22 +96,26 @@ export function DrillSetView() {
       />
 
       <div className="flex items-center justify-between gap-4">
-        <AlgorithmSetToggle onChange={setSetId} setId={setId} />
-        <Button
-          aria-label={previewVisible ? "Hide cube preview" : "Show cube preview"}
-          aria-pressed={previewVisible}
-          onClick={() => {
-            setPreviewVisible((visible) => !visible);
-          }}
-          size="icon"
-          variant="outline"
-        >
-          {previewVisible ? (
-            <RiEyeLine aria-hidden="true" className="size-4" />
-          ) : (
-            <RiEyeOffLine aria-hidden="true" className="size-4" />
-          )}
-        </Button>
+        <OccludingCluster>
+          <AlgorithmSetToggle onChange={setSetId} setId={setId} />
+        </OccludingCluster>
+        <OccludingCluster>
+          <Button
+            aria-label={previewVisible ? "Hide cube preview" : "Show cube preview"}
+            aria-pressed={previewVisible}
+            onClick={() => {
+              setPreviewVisible((visible) => !visible);
+            }}
+            size="icon"
+            variant="outline"
+          >
+            {previewVisible ? (
+              <RiEyeLine aria-hidden="true" className="size-4" />
+            ) : (
+              <RiEyeOffLine aria-hidden="true" className="size-4" />
+            )}
+          </Button>
+        </OccludingCluster>
       </div>
     </div>
   );

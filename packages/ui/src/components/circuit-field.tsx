@@ -1,9 +1,11 @@
 import * as React from "react";
 
 import { HEIGHT_JITTER_IGNORE_PX, RESIZE_SETTLE_MS, useDebouncedSize, useMotionMode, useViewportSize } from "./circuit-field-hooks.js";
+import { CircuitDebugOverlay } from "./circuit-debug-overlay.js";
+import { installCircuitDebugConsoleApi } from "./circuit-debug.js";
 import { useCircuitOccluderDelta, useCircuitOccluderRects } from "./circuit-occluder.js";
 import { createFrameBudgetProbe } from "./frame-budget.js";
-import { type Point, type RoutePoint, cellKey, densify, easeInOutCubic, hashString, pathData, polylineLength, recomputeCorners, snap } from "./grid-math.js";
+import { GRID, type Point, type RoutePoint, cellKey, densify, easeInOutCubic, hashString, pathData, polylineLength, recomputeCorners, snap } from "./grid-math.js";
 import {
   IDLE_PACKET_MAX_CONCURRENT,
   IDLE_PACKET_POOL_SIZE,
@@ -12,8 +14,22 @@ import {
   type PacketGraph,
   advancePacket,
   buildPacketGraph,
+  packetsOffLiveGeometry,
 } from "./idle-packets.js";
-import { type Occluder, type Rect, OCCLUDER_AFFECT_MARGIN_PX } from "./occlusion.js";
+import {
+  TRAIL_SEGMENTS,
+  pushTrailPoint,
+  trailSlices,
+} from "./packet-trail.js";
+import {
+  type BarrierField,
+  type Occluder,
+  type Rect,
+  OCCLUDER_AFFECT_MARGIN_PX,
+  buildBarrierField,
+  isCellBlocked,
+  translateRect,
+} from "./occlusion.js";
 import {
   buildCellAxisMap,
   buildRoute,
@@ -25,8 +41,41 @@ import {
 import { buildOccupiedFootprint, findAffectedTraceIds, retargetTip } from "./scroll-retarget.js";
 import { type Trace, generateTraces } from "./trace-generation.js";
 
-const MIN_TRACE_COUNT = 14;
-const MIN_TRACE_COUNT_AREA_DIVISOR = 55000;
+// Tile size of `.grid-backdrop`'s bold background tier, in `GRID` cells — a
+// mirror of the `240px` in `styles.css`, needed here only to phase that tier
+// (see the `--grid-bold-phase-*` effect below). Nothing else in this file
+// knows about the bold tier.
+const BOLD_GRID = GRID * 6;
+
+/**
+ * Offset that puts a line of a `tile`-sized lattice exactly on `extent`'s
+ * midpoint: `background-position: P` on a tile of size T puts lines at
+ * `P + n * T`, so a line hits `center` exactly when `P ≡ center (mod T)`.
+ */
+function latticePhase(extent: number, tile: number): number {
+  return ((extent / 2) % tile) + (extent < 0 ? tile : 0);
+}
+
+/** The fine-lattice phase for the current document, or 0,0 outside a DOM. */
+function measureGridPhase(): Point {
+  if (typeof document === "undefined") return { x: 0, y: 0 };
+
+  const root = document.documentElement;
+  return { x: latticePhase(root.clientWidth, GRID), y: latticePhase(root.clientHeight, GRID) };
+}
+
+// Opacity of the trail slice nearest the packet; the rest fade linearly to
+// nothing at the tail. Deliberately below the packet's own so the head still
+// reads as the brightest thing on the trace.
+const TRAIL_HEAD_OPACITY = 0.3;
+
+// Stroke width (px) of the trail slice nearest the packet. Slices narrow
+// linearly from here toward the tail, which is what reads as a taper — SVG
+// strokes are uniform-width, so the taper has to be faked by slicing.
+const TRAIL_HEAD_WIDTH = 4;
+
+const MIN_TRACE_COUNT = 18;
+const MIN_TRACE_COUNT_AREA_DIVISOR = 40000;
 // A traceCount recompute only commits if the desired value differs from the
 // currently-committed one by more than this band — otherwise small occluder
 // jitter (e.g. a header reflowing a couple px on font load) would thrash the
@@ -96,9 +145,12 @@ function pointsEqual(a: readonly Point[], b: readonly Point[]): boolean {
  * Renders above the static CSS grid and below page content (fixed,
  * `z-index: -1`, so any unpositioned in-flow content still paints on top).
  *
- * Trace count reacts to *available* area (viewport size minus soft DOM
- * occlusion, registered via `useCircuitOccluder`/`CircuitOccluderProvider`)
- * rather than being frozen at mount. On the very first mount, traces draw in
+ * Trace count reacts to raw viewport area (see the `traceCount` effect's own
+ * comment for why occluder-adjusted area was reverted) rather than being
+ * frozen at mount; barrier geometry from `useCircuitOccluder`/
+ * `CircuitOccluderProvider`-registered rects still drives where each trace
+ * *routes*, as a hard keep-out with a small buffer, never where its count
+ * lands. On the very first mount, traces draw in
  * with a staggered stroke animation (the "boot" moment, ordered by each
  * trace's depth in the generated spanning tree — see `trace-generation.ts`).
  * The same boot treatment applies to any slot added later by a trace-count
@@ -120,6 +172,62 @@ function pointsEqual(a: readonly Point[], b: readonly Point[]): boolean {
 export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.Element | null {
   const size = useViewportSize();
   const debouncedSize = useDebouncedSize(size, RESIZE_SETTLE_MS, { heightJitterIgnorePx: HEIGHT_JITTER_IGNORE_PX });
+
+  // How far the whole lattice — background grid *and* rendered traces — is
+  // offset from the 0,0 origin so a grid line lands exactly on the page's
+  // centerline. Without it the lattice is lopsided against centered content
+  // on any viewport whose half-extent isn't a whole number of cells: the
+  // content edges sit at different distances from their nearest lines.
+  // Content is centered in the viewport here — measured live, the `mx-auto
+  // max-w-[92rem]` shell's rect center equals `clientWidth / 2` — so the
+  // viewport centerline *is* the content centerline.
+  //
+  // Both background tiers get a phase (`--grid-phase-*` for the 40px tier,
+  // `--grid-bold-phase-*` for the 240px one). They stay seam-locked because
+  // 240 is a whole multiple of GRID, so `center % 240 ≡ center % GRID`.
+  //
+  // `ResizeObserver` on `documentElement`, not a `size`/`useViewportSize`
+  // (`window.innerWidth/innerHeight`) dependency — this centers against
+  // `clientWidth/clientHeight` (excludes the scrollbar gutter), which can
+  // change from a vertical scrollbar toggling on/off, with no matching
+  // `innerWidth/innerHeight` change to re-trigger a `size`-keyed effect.
+  // That gap left the phase permanently stale at whatever it computed
+  // before the first scrollbar appeared — confirmed live. `clientHeight` on
+  // `documentElement` is the *viewport* height, not the content height, so
+  // this fires on real viewport changes only and never thrashes.
+  //
+  // Seeded synchronously from the real document rather than starting at 0,0
+  // and being corrected by the effect below: generation routes against
+  // `-gridPhase`-shifted barriers but renders `+gridPhase`, so a first pass
+  // at a stale zero phase draws every trace offset from the barriers it was
+  // routed around — traces sat behind the footer and ran past the bottom of
+  // the viewport until something else happened to force a regeneration.
+  const [gridPhase, setGridPhase] = React.useState<Point>(measureGridPhase);
+
+  React.useEffect(() => {
+    const root = document.documentElement;
+
+    const apply = () => {
+      const { x, y } = measureGridPhase();
+      root.style.setProperty("--grid-phase-x", `${x}px`);
+      root.style.setProperty("--grid-phase-y", `${y}px`);
+      root.style.setProperty("--grid-bold-phase-x", `${latticePhase(root.clientWidth, BOLD_GRID)}px`);
+      root.style.setProperty("--grid-bold-phase-y", `${latticePhase(root.clientHeight, BOLD_GRID)}px`);
+      // Traces are generated on the unphased `n * GRID` lattice and shifted
+      // into place at render time (see the translated `<g>` below), so the
+      // fine phase has to reach the render as state, not just as a CSS var.
+      setGridPhase((previous) => (previous.x === x && previous.y === y ? previous : { x, y }));
+    };
+
+    apply();
+    const observer = new ResizeObserver(() => {
+      apply();
+    });
+    observer.observe(root);
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
   const { mode: motionMode, demoteToStatic, idleGlowEligible } = useMotionMode();
   const occluders = useCircuitOccluderRects();
 
@@ -136,24 +244,25 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
 
   const [traceCount, setTraceCount] = React.useState<number | null>(null);
 
-  // Deliberately raw viewport area, not `estimateEffectiveArea(..., occluders)`
-  // (Session C/D.5's original design) — occluders register asynchronously
-  // (CircuitOccluderProvider measures via rAF-batched ResizeObserver), so
-  // computing `desired` from post-occlusion area raced that registration: the
-  // very first commit (which bypasses the hysteresis band below, since there
-  // is no `current` to compare against yet) could land before any occluder
-  // had measured, producing an inflated slot count that a moment later
-  // "corrected" downward by more than the band once real occlusion arrived —
-  // a real, reproduced-on-production add/remove of a dozen-plus slots at
-  // mount, and the same race on every route's occluder set re-registering.
-  // Confirmed live: `unimatrix-01.dev` mounted 32 traces, then dropped to 20
-  // within ~1s with no user action. Occlusion still drives routing (traces
-  // steer around registered occluders via `generateTraces`' weighting) — this
-  // only decouples slot *count* from occluder timing, matching the stated
-  // user preference that page-change reactivity reuse the same fixed set of
-  // lines rather than add/remove slots. `estimateEffectiveArea` stays in
-  // `occlusion.ts`, intentionally unconsumed in production now (same
-  // test-only status as `CircuitTree.adjacency`).
+  // Deliberately raw viewport area, not barrier-adjusted free area —
+  // occluders register asynchronously (CircuitOccluderProvider measures via
+  // rAF-batched ResizeObserver), so computing `desired` from post-occlusion
+  // area raced that registration: the very first commit (which bypasses the
+  // hysteresis band below, since there is no `current` to compare against
+  // yet) could land before any occluder had measured, producing an inflated
+  // slot count that a moment later "corrected" downward by more than the
+  // band once real occlusion arrived — a real, reproduced-on-production
+  // add/remove of a dozen-plus slots at mount, and the same race on every
+  // route's occluder set re-registering. Confirmed live: `unimatrix-01.dev`
+  // mounted 32 traces, then dropped to 20 within ~1s with no user action.
+  // Hard barriers still drive routing/placement (traces route around
+  // registered occluders' buffered rects via `generateTraces`'
+  // `barriers` argument) — this only decouples slot *count* from occluder
+  // timing, matching the stated user preference that page-change
+  // reactivity reuse the same fixed set of lines rather than add/remove
+  // slots. `CircuitTree.adjacency` stays intentionally unconsumed in
+  // production, test-only (see `idle-packets.ts`'s own doc comment on why
+  // it builds from live bodies instead).
   React.useEffect(() => {
     if (!debouncedSize) return;
 
@@ -202,9 +311,31 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
   const freeSlotsRef = React.useRef(Array.from({ length: IDLE_PACKET_POOL_SIZE }, (_, i) => i));
   const lastPacketSpawnAtRef = React.useRef(0);
   const packetElRefs = React.useRef(new Map<string, SVGRectElement>());
+  // Per-slot walked-path history behind each packet, head-first, trimmed to
+  // `TRAIL_LENGTH_PX` of arc length. Because it *is* the traversed polyline,
+  // the drawn trail bends around corners for free. Cleared wherever a slot is
+  // freed — a reused slot would otherwise splice the retired packet's tail
+  // onto the new one's head and draw a streak across the field.
+  const packetTrailsRef = React.useRef(new Map<number, Point[]>());
+  const trailElRefs = React.useRef(new Map<string, SVGPathElement>());
 
   const loopShouldRun = React.useCallback(() => {
     return !documentHiddenRef.current && (transitionsRef.current.size > 0 || idleEnabledRef.current);
+  }, []);
+
+  // Hides a slot's packet rect and every one of its trail sub-paths, and
+  // drops its history. Every path that frees a slot goes through this, so a
+  // recycled slot always starts from an empty trail.
+  const hidePacketSlot = React.useCallback((slot: number) => {
+    const el = packetElRefs.current.get(`p${slot}`);
+    if (el) el.style.opacity = "0";
+
+    for (let i = 0; i < TRAIL_SEGMENTS; i += 1) {
+      const trailEl = trailElRefs.current.get(`t${slot}-${i}`);
+      if (trailEl) trailEl.style.opacity = "0";
+    }
+
+    packetTrailsRef.current.delete(slot);
   }, []);
 
   // Hides every pooled packet rect and returns its slot. Used wherever the
@@ -215,77 +346,132 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
   const retireAllPackets = React.useCallback(() => {
     graphDirtyRef.current = true;
     packetsRef.current.forEach((_packet, slot) => {
-      const el = packetElRefs.current.get(`p${slot}`);
-      if (el) el.style.opacity = "0";
+      hidePacketSlot(slot);
     });
     packetsRef.current.clear();
     freeSlotsRef.current = Array.from({ length: IDLE_PACKET_POOL_SIZE }, (_, i) => i);
-  }, []);
+  }, [hidePacketSlot]);
 
-  const advanceIdlePackets = React.useCallback((now: number) => {
-    if (graphDirtyRef.current) {
-      packetGraphRef.current = buildPacketGraph(liveBodyRef.current);
-      graphDirtyRef.current = false;
-    }
-    const graph = packetGraphRef.current;
-    if (!graph || graph.leaves.length === 0) return;
+  // `allowRebuild` gates the graph rebuild on nothing currently crawling —
+  // during a transition, `liveBodyRef` holds mid-crawl `sliceWindow`
+  // partial bodies, which must never become the packet graph; surviving
+  // packets keep walking whatever graph was frozen before the crawl
+  // started. `allowSpawn` similarly stops new packets/forks from appearing
+  // mid-crawl (existing ones just keep running). `isCellLive`, when
+  // supplied, culls any packet whose next (or current) cell just stopped
+  // being rendered — see `packetsOffLiveGeometry` — which is what lets a
+  // packet disappear exactly when the trace it's on is crawled past,
+  // instead of at the moment the crawl starts.
+  const advanceIdlePackets = React.useCallback(
+    (now: number, options: { isCellLive?: (cell: string) => boolean; allowSpawn: boolean; allowRebuild: boolean }) => {
+      if (graphDirtyRef.current && options.allowRebuild) {
+        packetGraphRef.current = buildPacketGraph(liveBodyRef.current);
+        graphDirtyRef.current = false;
+      }
+      const graph = packetGraphRef.current;
+      if (!graph || graph.leaves.length === 0) return;
 
-    packetsRef.current.forEach((packet, slot) => {
-      const result = advancePacket(packet, graph, now);
-      const el = packetElRefs.current.get(`p${slot}`);
-
-      if (!result) {
-        packetsRef.current.delete(slot);
-        freeSlotsRef.current.push(slot);
-        if (el) el.style.opacity = "0";
-        return;
+      if (options.isCellLive) {
+        const isCellLive = options.isCellLive;
+        packetsOffLiveGeometry(packetsRef.current, isCellLive).forEach((slot) => {
+          hidePacketSlot(slot);
+          packetsRef.current.delete(slot);
+          freeSlotsRef.current.push(slot);
+        });
       }
 
-      // A hop just completed this frame (arrived at a new cell): fork down a
-      // second branch if that cell is a real junction and a slot is free —
-      // max one fork per junction visit, never queued/preempting on pool
-      // exhaustion.
-      if (result.packet.hops === packet.hops + 1 && graph.junctions.includes(result.packet.at)) {
-        const neighborSet = graph.neighbors.get(result.packet.at);
-        const forkCandidates = neighborSet
-          ? Array.from(neighborSet).filter((n) => n !== result.packet.cameFrom && n !== result.packet.next)
-          : [];
-        const forkTarget = forkCandidates[Math.floor(Math.random() * forkCandidates.length)];
+      // Snapshot before iterating: the fork branch below inserts into this
+      // same map, and `Map.forEach` visits entries added during iteration —
+      // so a freshly forked packet would be advanced again in the frame it
+      // was created, double-stepping it away from the junction it forked at.
+      Array.from(packetsRef.current.entries()).forEach(([slot, packet]) => {
+        const result = advancePacket(packet, graph, now);
+        const el = packetElRefs.current.get(`p${slot}`);
 
-        if (forkTarget && freeSlotsRef.current.length > 0 && packetsRef.current.size < IDLE_PACKET_POOL_SIZE) {
-          const forkSlot = freeSlotsRef.current.pop() as number;
-          packetsRef.current.set(forkSlot, {
-            slot: forkSlot,
-            at: result.packet.at,
-            cameFrom: result.packet.cameFrom,
-            next: forkTarget,
-            stepStart: now,
-            hops: result.packet.hops,
-          });
+        if (!result) {
+          packetsRef.current.delete(slot);
+          freeSlotsRef.current.push(slot);
+          hidePacketSlot(slot);
+          return;
+        }
+
+        // A hop just completed this frame (arrived at a new cell): fork down
+        // a second branch if that cell is a real junction and a slot is free
+        // — max one fork per junction visit, never queued/preempting on pool
+        // exhaustion. Gated on `allowSpawn` same as the leaf-spawn below —
+        // forking mid-crawl could land a fresh packet on a cell that's about
+        // to vanish, retiring it the very next frame.
+        if (
+          options.allowSpawn &&
+          result.packet.hops === packet.hops + 1 &&
+          graph.junctions.has(result.packet.at)
+        ) {
+          const neighborSet = graph.neighbors.get(result.packet.at);
+          const forkCandidates = neighborSet
+            ? Array.from(neighborSet).filter((n) => n !== result.packet.cameFrom && n !== result.packet.next)
+            : [];
+          const forkTarget = forkCandidates[Math.floor(Math.random() * forkCandidates.length)];
+
+          if (forkTarget && freeSlotsRef.current.length > 0 && packetsRef.current.size < IDLE_PACKET_POOL_SIZE) {
+            const forkSlot = freeSlotsRef.current.pop() as number;
+            packetsRef.current.set(forkSlot, {
+              slot: forkSlot,
+              at: result.packet.at,
+              cameFrom: result.packet.cameFrom,
+              next: forkTarget,
+              stepStart: now,
+              hops: result.packet.hops,
+            });
+          }
+        }
+
+        packetsRef.current.set(slot, result.packet);
+        if (el) {
+          el.setAttribute("x", String(result.point.x - 3));
+          el.setAttribute("y", String(result.point.y - 3));
+          el.style.opacity = "1";
+        }
+
+        // Trail: extend this slot's history with the frame's position, then
+        // repaint its sub-paths head-first. `trailSlices` hands back at most
+        // `TRAIL_SEGMENTS` entries, and a slice too short to draw comes back
+        // empty — either way every unused element is explicitly hidden, so a
+        // shrinking trail never leaves a stale sub-path on screen.
+        const trail = pushTrailPoint(packetTrailsRef.current.get(slot) ?? [], result.point);
+        packetTrailsRef.current.set(slot, trail);
+
+        const slices = trailSlices(trail);
+        for (let i = 0; i < TRAIL_SEGMENTS; i += 1) {
+          const trailEl = trailElRefs.current.get(`t${slot}-${i}`);
+          if (!trailEl) continue;
+
+          const slice = slices[i];
+          if (!slice || slice.length < 2) {
+            trailEl.style.opacity = "0";
+            continue;
+          }
+
+          trailEl.setAttribute("d", pathData(slice));
+          trailEl.style.opacity = String(TRAIL_HEAD_OPACITY * (1 - i / TRAIL_SEGMENTS));
+        }
+      });
+
+      if (
+        options.allowSpawn &&
+        packetsRef.current.size < IDLE_PACKET_MAX_CONCURRENT &&
+        freeSlotsRef.current.length > 0 &&
+        now - lastPacketSpawnAtRef.current > PACKET_SPAWN_INTERVAL_MS + Math.random() * 400
+      ) {
+        const leaf = graph.leaves[Math.floor(Math.random() * graph.leaves.length)];
+        if (leaf) {
+          const slot = freeSlotsRef.current.pop() as number;
+          packetsRef.current.set(slot, { slot, at: leaf, cameFrom: null, next: null, stepStart: now, hops: 0 });
+          lastPacketSpawnAtRef.current = now;
         }
       }
-
-      packetsRef.current.set(slot, result.packet);
-      if (el) {
-        el.setAttribute("x", String(result.point.x - 3));
-        el.setAttribute("y", String(result.point.y - 3));
-        el.style.opacity = "1";
-      }
-    });
-
-    if (
-      packetsRef.current.size < IDLE_PACKET_MAX_CONCURRENT &&
-      freeSlotsRef.current.length > 0 &&
-      now - lastPacketSpawnAtRef.current > PACKET_SPAWN_INTERVAL_MS + Math.random() * 400
-    ) {
-      const leaf = graph.leaves[Math.floor(Math.random() * graph.leaves.length)];
-      if (leaf) {
-        const slot = freeSlotsRef.current.pop() as number;
-        packetsRef.current.set(slot, { slot, at: leaf, cameFrom: null, next: null, stepStart: now, hops: 0 });
-        lastPacketSpawnAtRef.current = now;
-      }
-    }
-  }, []);
+    },
+    [hidePacketSlot],
+  );
 
   // The shared loop reschedules itself through this indirection rather than
   // through `runTick` directly. `runTick` closes over per-render values
@@ -397,6 +583,23 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
     };
   }, []);
 
+  // One pooled path per (slot, trail slice), same fixed-pool/direct-ref
+  // pattern as the packet rects themselves — never created per frame.
+  const trailSlotIds = React.useMemo(
+    () =>
+      Array.from({ length: IDLE_PACKET_POOL_SIZE }, (_, slot) =>
+        Array.from({ length: TRAIL_SEGMENTS }, (_, i) => ({ key: `t${slot}-${i}`, index: i })),
+      ).flat(),
+    [],
+  );
+
+  const trailRefCallback = React.useCallback((key: string) => {
+    return (el: SVGPathElement | null) => {
+      if (el) trailElRefs.current.set(key, el);
+      else trailElRefs.current.delete(key);
+    };
+  }, []);
+
   const applyIntersections = React.useCallback((points: Point[]) => {
     const poolSize = intersectionPoolSizeRef.current;
 
@@ -432,14 +635,52 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
     });
   }, [viaItems]);
 
-  const targetTraces = React.useMemo(() => {
-    if (!debouncedSize || traceCount === null) return null;
+  // Hard-barrier field derived from the structurally-committed occluder set
+  // (`useCircuitOccluderRects()`). Mid-scroll this context lags the real
+  // geometry (the scroll-delta path only commits once scrolling settles —
+  // see `circuit-occluder.tsx`'s provider doc comment), so
+  // `handleOccluderDelta` below builds its own barrier field from the
+  // scroll-fresh `liveOccluders` it receives instead of reading this memo.
+  //
+  // Occluders are shifted by `-gridPhase` on the way in, the exact inverse of
+  // the `+gridPhase` translate the rendered `<g>` applies: generation runs on
+  // the unphased `n * GRID` lattice it has always used (nothing in
+  // `trace-generation`/`route-engine`/`scroll-retarget` needs to learn about
+  // phase), and a trace that clears a shifted barrier in that space clears
+  // the real DOM rect once translated back. Exact, not approximate — the two
+  // shifts cancel.
+  const barriers: BarrierField = React.useMemo(
+    () => buildBarrierField(occluders.map((rect) => translateRect(rect, -gridPhase.x, -gridPhase.y))),
+    [occluders, gridPhase.x, gridPhase.y],
+  );
 
-    // Occluder rects feed weighting only, never the seed — a panel resize
-    // must not re-seed the whole field and blow away an in-flight crawl.
+  // The viewport box as generation sees it: shrunk by the phase the rendered
+  // `<g>` then adds back. Generation keeps everything within `GRID` of these
+  // bounds, so without the shrink the `+gridPhase` translate pushes the
+  // right/bottom-most traces past the real viewport edge, where the SVG
+  // clips them mid-run — they read as running off the page.
+  // Keyed on primitives, never the `debouncedSize`/`gridPhase` objects:
+  // `targetTraces` below depends on this, and a new object carrying identical
+  // numbers would regenerate the whole field and start a pointless crawl —
+  // exactly what that memo's own primitive deps exist to prevent.
+  const latticeSize = React.useMemo(
+    () =>
+      debouncedSize
+        ? { width: debouncedSize.width - gridPhase.x, height: debouncedSize.height - gridPhase.y }
+        : null,
+    [debouncedSize?.width, debouncedSize?.height, gridPhase.x, gridPhase.y],
+  );
+
+  const targetTraces = React.useMemo(() => {
+    if (!latticeSize || !debouncedSize || traceCount === null) return null;
+
+    // Occluder rects feed barrier geometry only, never the seed — a panel
+    // resize must not re-seed the whole field and blow away an in-flight
+    // crawl. Seeded off the unshrunk viewport so a phase change alone (which
+    // only ever accompanies a resize) isn't an extra source of re-seeding.
     const seed = hashString(`${routeKey}:${debouncedSize.width}x${debouncedSize.height}`);
-    return generateTraces(debouncedSize.width, debouncedSize.height, seed, occluders, traceCount);
-  }, [routeKey, debouncedSize?.width, debouncedSize?.height, traceCount, occluders]);
+    return generateTraces(latticeSize.width, latticeSize.height, seed, barriers, traceCount);
+  }, [routeKey, debouncedSize?.width, debouncedSize?.height, latticeSize, traceCount, barriers]);
 
   // The single shared rAF driving every in-flight transition. Reads
   // `transitionsRef` fresh each frame instead of closing over a fixed
@@ -460,21 +701,11 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
     // gating was built to avoid. Only idle producers run here.
     if (transitionsRef.current.size === 0) {
       if (idleEnabledRef.current && !staticModeRef.current && now >= idleReadyAtRef.current) {
-        advanceIdlePackets(now);
+        advanceIdlePackets(now, { allowSpawn: true, allowRebuild: true });
       }
       rafActiveRef.current = loopShouldRun() ? requestAnimationFrame(scheduleTick) : null;
       return;
     }
-
-    // A crawl is in flight, so every packet on screen is standing on geometry
-    // that is about to stop existing — `liveBodyRef` is mid-crawl
-    // `sliceWindow` output from here on. `advanceIdlePackets` is skipped for
-    // the whole crawl (idle producers only run on the fast path above), so
-    // without this the pool would sit frozen at its last position, visibly
-    // stranded off the moving lines until the last trace settles. Retire the
-    // pool once, the frame the crawl starts, and let idle respawn it fresh
-    // against the settled graph.
-    if (packetsRef.current.size > 0) retireAllPackets();
 
     const bodies = liveBodyRef.current;
     const currentBodies: { id: string; points: RoutePoint[] }[] = [];
@@ -533,6 +764,21 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
     });
     applyIntersections(findIntersections(cellAxisMap));
 
+    // A crawl is in flight, but existing packets keep running on their
+    // current route rather than being retired wholesale — they only
+    // disappear once the trace they're on is crawled past (see
+    // `packetsOffLiveGeometry`, driven by `cellAxisMap` above: exactly the
+    // cells currently drawn on screen this frame). No rebuild, no spawning,
+    // no forking while a crawl is in flight — surviving packets walk the
+    // graph frozen from before the crawl started.
+    if (idleEnabledRef.current && !staticModeRef.current && now >= idleReadyAtRef.current) {
+      advanceIdlePackets(now, {
+        isCellLive: (cell) => cellAxisMap.has(cell),
+        allowSpawn: false,
+        allowRebuild: false,
+      });
+    }
+
     // A via whose trace isn't in `windowBounds` this frame is either
     // settled (never touched here) or just finished (handled by the
     // settled-items commit below, which the viaItems layout effect then
@@ -571,19 +817,17 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
       });
 
       setViaItems([...carried, ...settled]);
+
+      // The last transition just settled this frame — mark the packet graph
+      // dirty so the next idle frame rebuilds it against the now-fully-
+      // settled geometry, culling any survivor left standing on a cell that
+      // no longer exists post-settle (the frozen pre-crawl graph it was
+      // walking may not exactly match the new one).
+      if (transitionsRef.current.size === 0) graphDirtyRef.current = true;
     }
 
     rafActiveRef.current = loopShouldRun() ? requestAnimationFrame(scheduleTick) : null;
-  }, [
-    advanceIdlePackets,
-    applyIntersections,
-    loopShouldRun,
-    retireAllPackets,
-    scheduleTick,
-    setTipPosition,
-    setViaItems,
-    traceIds,
-  ]);
+  }, [advanceIdlePackets, applyIntersections, loopShouldRun, scheduleTick, setTipPosition, setViaItems, traceIds]);
 
   // Layout effect, not passive: a passive effect would leave the frame
   // scheduled by this same commit's crawl/idle layout effects running the
@@ -722,12 +966,6 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
         return;
       }
 
-      // See the boot/crawl effect's identical call: retire synchronously as
-      // this crawl is seeded rather than waiting on runTick's next-frame
-      // check, so packets never stand frozen on geometry that's about to
-      // retarget out from under them.
-      if (packetsRef.current.size > 0) retireAllPackets();
-
       const initialCellAxisMap = buildCellAxisMap(entries.map((r) => ({ id: r.id, points: r.route.slice(0, r.lenO) })));
       const crawlItems: ViaItem[] = [];
 
@@ -779,7 +1017,7 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
 
       ensureLoop();
     },
-    [ensureLoop, retireAllPackets, setTipPosition, setViaItems, snapTransitionsToTarget],
+    [ensureLoop, setTipPosition, setViaItems, snapTransitionsToTarget],
   );
 
   // Used only by the frame-budget watchdog: snaps whatever is currently
@@ -810,6 +1048,9 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
     });
     previousTracesRef.current.forEach((_trace, id) => {
       if (!validIds.has(id)) previousTracesRef.current.delete(id);
+    });
+    lastRetargetAtRef.current.forEach((_at, id) => {
+      if (!validIds.has(id)) lastRetargetAtRef.current.delete(id);
     });
 
     // A trace-count change invalidates the packet graph (it's built from
@@ -939,7 +1180,7 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
     const transitions = existingTraces.map((trace) => {
       const from = liveBodies.get(trace.id) ?? recomputeCorners(densify(trace.points));
       const to = recomputeCorners(densify(trace.points));
-      const route = buildRoute(from, to);
+      const route = buildRoute(from, to, barriers);
 
       return { id: trace.id, route, lenO: from.length, lenN: to.length, toBody: to };
     });
@@ -949,12 +1190,11 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
       return;
     }
 
-    // Retire idle packets here, synchronously as this crawl is seeded,
-    // rather than only relying on runTick's next-frame check — that check
-    // still runs (defense in depth), but waiting for it left a one-frame
-    // window (occasionally more, under load) where packets stood frozen on
-    // geometry that was about to move out from under them.
-    if (packetsRef.current.size > 0) retireAllPackets();
+    // Packets already running keep running through this crawl — see
+    // `runTick`'s own `advanceIdlePackets(..., { isCellLive, allowSpawn:
+    // false, allowRebuild: false })` call, which culls them individually as
+    // the trace each one is on gets crawled past, rather than retiring the
+    // whole pool the instant a crawl is seeded.
 
     const initialCellAxisMap = buildCellAxisMap(
       transitions.map((transition) => ({ id: transition.id, points: transition.route.slice(0, transition.lenO) })),
@@ -1000,8 +1240,9 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
       }
     });
 
+    const crawlingIds = new Set(existingTraces.map((trace) => trace.id));
     const untouched = Array.from(viaItemIndexRef.current.values()).filter(
-      (item) => !existingTraces.some((trace) => trace.id === item.traceId),
+      (item) => !crawlingIds.has(item.traceId),
     );
     setViaItems([...untouched, ...crawlItems]);
 
@@ -1026,7 +1267,7 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
     ensureLoop();
     // Only the target trace identity should retrigger this effect — the
     // refs and callbacks it closes over are stable across renders.
-  }, [applyIntersections, ensureLoop, retireAllPackets, setTipPosition, setViaItems, snapTransitionsToTarget, targetTraces]);
+  }, [applyIntersections, barriers, ensureLoop, setTipPosition, setViaItems, snapTransitionsToTarget, targetTraces]);
 
   // Scroll-driven retarget: nudges a live trace's tip away from an occluder
   // that just moved under it, using Session B's per-trace transition engine
@@ -1039,7 +1280,7 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
   // approach `runTick` already uses.
   const handleOccluderDelta = React.useCallback(
     (dirtyRects: Rect[], liveOccluders: Occluder[]) => {
-      if (!debouncedSize) return;
+      if (!debouncedSize || !latticeSize) return;
       const now = performance.now();
 
       const tips: { id: string; point: Point }[] = [];
@@ -1049,13 +1290,40 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
         if (last) tips.push({ id, point: last });
       });
 
-      const candidateIds = findAffectedTraceIds(tips, dirtyRects, OCCLUDER_AFFECT_MARGIN_PX)
+      // Built from `liveOccluders` (the scroll-fresh full set this delta
+      // callback receives), not the `barriers` memo above — that memo only
+      // updates on a structural commit, which the scroll path deliberately
+      // never triggers (see `circuit-occluder.tsx`'s provider doc comment).
+      // Built before `candidateIds` below: the barrier-membership filter
+      // needs it ahead of the `slice`, not after.
+      // Shifted by `-gridPhase` for the same reason the `barriers` memo above
+      // is: `tips` are in the unphased generation lattice, so every rect
+      // compared against them — barriers *and* `dirtyRects` — has to be
+      // pulled into that same space first.
+      const liveBarriers = buildBarrierField(
+        liveOccluders.map((rect) => translateRect(rect, -gridPhase.x, -gridPhase.y)),
+      );
+      const shiftedDirtyRects = dirtyRects.map((rect) => translateRect(rect, -gridPhase.x, -gridPhase.y));
+      const tipById = new Map(tips.map((tip) => [tip.id, tip.point]));
+
+      const candidateIds = findAffectedTraceIds(tips, shiftedDirtyRects, OCCLUDER_AFFECT_MARGIN_PX)
         // A trace already mid-crawl has a `liveBodyRef` entry that's a
         // `sliceWindow(...)` partial window (old body + connector + new
         // body) — retargeting off that would truncate it and abandon its
         // real target, so never interrupt one.
         .filter((id) => !transitionsRef.current.has(id))
         .filter((id) => now - (lastRetargetAtRef.current.get(id) ?? 0) >= RETARGET_COOLDOWN_MS)
+        // `retargetTip` only ever fires as a genuine barrier escape (never
+        // an ambient nudge — see its own doc comment), so a tip that isn't
+        // actually swallowed by a barrier can never produce a retarget.
+        // This must run *before* the slice below: `findAffectedTraceIds`'s
+        // 160px margin can easily surface more than
+        // `MAX_SCROLL_RETARGETS_PER_EVENT` nearby tips, and the one that's
+        // actually blocked isn't guaranteed to be among the first few.
+        .filter((id) => {
+          const tip = tipById.get(id);
+          return tip ? isCellBlocked(liveBarriers, tip) : false;
+        })
         .slice(0, MAX_SCROLL_RETARGETS_PER_EVENT);
 
       if (candidateIds.length === 0) return;
@@ -1069,17 +1337,21 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
       // could pick the same cell.
       const pendingCells = new Set<string>();
 
+      // Loop-invariant: `transitionsRef` is not written until `applyRetargets`
+      // below, well after this loop, so rebuilding this per candidate was
+      // pure repeated work.
+      const inFlightToBodies = new Map(
+        Array.from(transitionsRef.current.entries()).map(([tid, t]) => [tid, t.toBody] as const),
+      );
+
       candidateIds.forEach((id) => {
         const liveBody = liveBodyRef.current.get(id);
         const trace = previousTracesRef.current.get(id);
         if (!liveBody || !trace) return;
 
-        const inFlightToBodies = new Map(
-          Array.from(transitionsRef.current.entries()).map(([tid, t]) => [tid, t.toBody] as const),
-        );
         const occupied = buildOccupiedFootprint(liveBodyRef.current, id, inFlightToBodies);
         pendingCells.forEach((cell) => occupied.add(cell));
-        const newTip = retargetTip(liveBody, occupied, liveOccluders, debouncedSize.width, debouncedSize.height);
+        const newTip = retargetTip(liveBody, occupied, liveBarriers, latticeSize.width, latticeSize.height);
         if (!newTip) return;
         pendingCells.add(cellKey(newTip));
 
@@ -1087,7 +1359,7 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
         const toBody = recomputeCorners(
           densify(sparsePoints).map((point) => ({ ...point, x: snap(point.x), y: snap(point.y) })),
         );
-        const route = buildRoute(liveBody, toBody);
+        const route = buildRoute(liveBody, toBody, liveBarriers);
 
         // The sparse point list, not the densified body — writing the dense
         // body here would make the next legitimate regeneration's
@@ -1101,7 +1373,7 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
 
       applyRetargets(retargets, now);
     },
-    [applyRetargets, debouncedSize, traceIds],
+    [applyRetargets, debouncedSize, gridPhase, latticeSize, traceIds],
   );
 
   useCircuitOccluderDelta(handleOccluderDelta);
@@ -1250,92 +1522,130 @@ export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.El
     [],
   );
 
+  // Installs `window.__circuitField.debug(...)` once per app (idempotent
+  // across every `CircuitField` mount) — the only way to toggle the barrier
+  // debug overlay below. Never a UI control; see `circuit-debug.ts`.
+  React.useEffect(() => {
+    installCircuitDebugConsoleApi();
+  }, []);
+
   if (!size) {
     return null;
   }
 
   return (
-    <svg
-      aria-hidden="true"
-      className={
-        staticMode
-          ? `circuit-field circuit-field-static${idleGlowEligible ? " circuit-field-idle-glow" : ""}`
-          : "circuit-field"
-      }
-      height={size.height}
-      style={{ position: "fixed", inset: 0, zIndex: -1, pointerEvents: "none" }}
-      width={size.width}
-    >
-      <g
-        className="circuit-field-glow"
-        fill="none"
-        stroke="color-mix(in oklab, var(--primary) 60%, var(--background))"
-        strokeLinecap="square"
-        strokeWidth={1.5}
+    <>
+      <svg
+        aria-hidden="true"
+        className={
+          staticMode
+            ? `circuit-field circuit-field-static${idleGlowEligible ? " circuit-field-idle-glow" : ""}`
+            : "circuit-field"
+        }
+        height={size.height}
+        style={{ position: "fixed", inset: 0, zIndex: -1, pointerEvents: "none" }}
+        width={size.width}
       >
-        {traceIds.map((id) => (
-          <path key={id} ref={pathRefCallbacks.get(id)} />
-        ))}
-      </g>
-      <g className="circuit-field-glow" fill="color-mix(in oklab, var(--primary) 60%, var(--background))">
-        {viaItems.map((item) => (
-          <rect
-            className={item.boot ? "circuit-field-via" : undefined}
-            height={6}
-            key={item.key}
-            ref={viaRefCallback(item.key)}
-            style={item.boot ? { animationDelay: `${item.delay}ms` } : { opacity: item.initiallyVisible ? 1 : 0 }}
-            width={6}
-            x={item.x - 3}
-            y={item.y - 3}
-          />
-        ))}
-        {traceIds.flatMap((id) => [
-          <rect
-            height={6}
-            key={`${id}-tail`}
-            ref={tipRefCallback(`${id}-tail`)}
-            style={{ opacity: 0 }}
-            width={6}
-            x={-3}
-            y={-3}
-          />,
-          <rect
-            height={6}
-            key={`${id}-head`}
-            ref={tipRefCallback(`${id}-head`)}
-            style={{ opacity: 0 }}
-            width={6}
-            x={-3}
-            y={-3}
-          />,
-        ])}
-        {intersectionSlotIds.map((key) => (
-          <rect
-            height={6}
-            key={key}
-            ref={intersectionRefCallback(key)}
-            style={{ opacity: 0 }}
-            width={6}
-            x={-3}
-            y={-3}
-          />
-        ))}
-      </g>
-      <g className="circuit-field-glow" fill="var(--primary)">
-        {packetSlotIds.map((key) => (
-          <rect
-            className="circuit-field-packet"
-            height={6}
-            key={key}
-            ref={packetRefCallback(key)}
-            style={{ opacity: 0 }}
-            width={6}
-            x={-3}
-            y={-3}
-          />
-        ))}
-      </g>
-    </svg>
+        {/* The one place the lattice phase is applied to rendered output.
+            Everything inside is generated on the unphased `n * GRID` lattice
+            against `-gridPhase`-shifted barriers, so this translate is what
+            puts traces back in real viewport coordinates — aligned with the
+            equally-phased background grid, and still clear of the real
+            occluder rects the sibling debug overlay draws unshifted. */}
+        <g transform={`translate(${gridPhase.x} ${gridPhase.y})`}>
+          <g
+            className="circuit-field-glow"
+            fill="none"
+            stroke="color-mix(in oklab, var(--primary) 60%, var(--background))"
+            strokeLinecap="square"
+            strokeWidth={1.5}
+          >
+            {traceIds.map((id) => (
+              <path key={id} ref={pathRefCallbacks.get(id)} />
+            ))}
+          </g>
+          <g className="circuit-field-glow" fill="color-mix(in oklab, var(--primary) 60%, var(--background))">
+            {viaItems.map((item) => (
+              <rect
+                className={item.boot ? "circuit-field-via" : undefined}
+                height={6}
+                key={item.key}
+                ref={viaRefCallback(item.key)}
+                style={item.boot ? { animationDelay: `${item.delay}ms` } : { opacity: item.initiallyVisible ? 1 : 0 }}
+                width={6}
+                x={item.x - 3}
+                y={item.y - 3}
+              />
+            ))}
+            {traceIds.flatMap((id) => [
+              <rect
+                height={6}
+                key={`${id}-tail`}
+                ref={tipRefCallback(`${id}-tail`)}
+                style={{ opacity: 0 }}
+                width={6}
+                x={-3}
+                y={-3}
+              />,
+              <rect
+                height={6}
+                key={`${id}-head`}
+                ref={tipRefCallback(`${id}-head`)}
+                style={{ opacity: 0 }}
+                width={6}
+                x={-3}
+                y={-3}
+              />,
+            ])}
+            {intersectionSlotIds.map((key) => (
+              <rect
+                height={6}
+                key={key}
+                ref={intersectionRefCallback(key)}
+                style={{ opacity: 0 }}
+                width={6}
+                x={-3}
+                y={-3}
+              />
+            ))}
+          </g>
+          {/* Tapering glow trails, drawn under the packets so a packet always
+              sits on top of its own tail. Each slice gets a fixed width from
+              its index (widest at the packet, narrowing toward the tail); `d`
+              and opacity are written per frame by `advanceIdlePackets`. */}
+          <g
+            className="circuit-field-glow"
+            fill="none"
+            stroke="var(--primary)"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            {trailSlotIds.map(({ key, index }) => (
+              <path
+                key={key}
+                ref={trailRefCallback(key)}
+                strokeWidth={TRAIL_HEAD_WIDTH * (1 - index / (TRAIL_SEGMENTS + 1))}
+                style={{ opacity: 0 }}
+              />
+            ))}
+          </g>
+          <g className="circuit-field-glow" fill="var(--primary)">
+            {packetSlotIds.map((key) => (
+              <rect
+                className="circuit-field-packet"
+                height={6}
+                key={key}
+                ref={packetRefCallback(key)}
+                style={{ opacity: 0 }}
+                width={6}
+                x={-3}
+                y={-3}
+              />
+            ))}
+          </g>
+        </g>
+      </svg>
+      <CircuitDebugOverlay gridPhase={gridPhase} occluders={occluders} />
+    </>
   );
 }

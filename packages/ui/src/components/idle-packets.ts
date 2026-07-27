@@ -8,7 +8,13 @@ import { GRID, type Point, type RoutePoint, cellKey } from "./grid-math.js";
 export type PacketGraph = {
   neighbors: ReadonlyMap<string, ReadonlySet<string>>;
   leaves: readonly string[];
-  junctions: readonly string[];
+  /**
+   * Cells with three or more neighbours. A `Set`, not an array: this is
+   * membership-tested once per live packet per frame in `CircuitField`'s
+   * fork check, and a linear scan there scales with junction count on the
+   * hot path for no reason.
+   */
+  junctions: ReadonlySet<string>;
 };
 
 /**
@@ -36,10 +42,10 @@ export function buildPacketGraph(bodies: ReadonlyMap<string, readonly RoutePoint
   });
 
   const leaves: string[] = [];
-  const junctions: string[] = [];
+  const junctions = new Set<string>();
   neighbors.forEach((set, key) => {
     if (set.size === 1) leaves.push(key);
-    else if (set.size >= 3) junctions.push(key);
+    else if (set.size >= 3) junctions.add(key);
   });
 
   return { neighbors, leaves, junctions };
@@ -101,6 +107,30 @@ export type Packet = {
   stepStart: number;
   hops: number;
 };
+
+/**
+ * Slots to retire because the cell a packet is walking toward (or, absent a
+ * `next`, standing on) no longer exists on screen — the cull that lets a
+ * packet keep running through a page transition instead of being retired
+ * wholesale the instant a crawl starts: it disappears exactly when the
+ * trace it's on is crawled past, not on the transition event itself.
+ * Checks `next` before `at` deliberately — a packet mid-hop toward a cell
+ * that's about to vanish should retire at that vanishing edge rather than
+ * visibly interpolating one more hop toward cells that no longer render.
+ */
+export function packetsOffLiveGeometry(
+  packets: ReadonlyMap<number, Packet>,
+  isCellLive: (cell: string) => boolean,
+): number[] {
+  const stale: number[] = [];
+
+  packets.forEach((packet, slot) => {
+    const cell = packet.next ?? packet.at;
+    if (!isCellLive(cell)) stale.push(slot);
+  });
+
+  return stale;
+}
 
 /**
  * One frame's worth of packet advancement. Returns the packet's current

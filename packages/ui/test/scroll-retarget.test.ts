@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { GRID, type RoutePoint } from "../src/components/grid-math.js";
-import type { Occluder } from "../src/components/occlusion.js";
+import { type Occluder, buildBarrierField } from "../src/components/occlusion.js";
 import { buildOccupiedFootprint, findAffectedTraceIds, retargetTip } from "../src/components/scroll-retarget.js";
 
 function rp(x: number, y: number, corner = true): RoutePoint {
@@ -65,23 +65,37 @@ describe("buildOccupiedFootprint", () => {
 describe("retargetTip", () => {
   const width = 2000;
   const height = 2000;
+  // Blocks lattice cells 10-12 on the row y = 10*GRID (buffer-inflated) —
+  // the tip below always sits at cell 10, inside this barrier.
+  const blockingOccluder: Occluder = { x0: 9.5 * GRID, y0: 9 * GRID, x1: 12 * GRID, y1: 11 * GRID };
+  const blockingBarriers = buildBarrierField([blockingOccluder]);
+  const emptyBarriers = buildBarrierField([]);
 
-  it("returns a lattice-snapped point strictly improving occlusion weight when open space exists", () => {
-    // Horizontal final leg: pivot -> tip both at y = 10*GRID, tip sits just
-    // inside an occluder; open space to extend further along the same line.
+  it("escapes along its own line, away from the barrier, when the tip is inside one", () => {
     const pivot = rp(9 * GRID, 10 * GRID);
     const tip = rp(10 * GRID, 10 * GRID);
-    const body = [rp(8 * GRID, 10 * GRID), pivot, tip];
-    const occluders: Occluder[] = [{ x0: 9.5 * GRID, y0: 9 * GRID, x1: 12 * GRID, y1: 11 * GRID }];
-
-    const result = retargetTip(body, new Set(), occluders, width, height, () => 1);
+    const body = [rp(6 * GRID, 10 * GRID), pivot, tip];
+    // steps = round((0*2 - 1) * 3) = -3 every attempt: candidate always
+    // lands 3 cells behind the tip (cell 7), clear of both the barrier
+    // (cells 10-12) and the trace's own body (cells 6, 9).
+    const result = retargetTip(body, new Set(), blockingBarriers, width, height, () => 0);
 
     expect(result).not.toBeNull();
     expect(result?.y).toBe(10 * GRID);
-    expect((result?.x ?? 0) % GRID).toBe(0);
+    expect(result?.x).toBe(7 * GRID);
   });
 
-  it("returns null when boxed in on all sides along its own line", () => {
+  it("returns null — nothing to fix — when the tip isn't inside any barrier", () => {
+    const pivot = rp(9 * GRID, 10 * GRID);
+    const tip = rp(10 * GRID, 10 * GRID);
+    const body = [pivot, tip];
+
+    const result = retargetTip(body, new Set(), emptyBarriers, width, height, () => 1);
+
+    expect(result).toBeNull();
+  });
+
+  it("returns null when every reachable cell along the line is occupied by another trace", () => {
     const pivot = rp(9 * GRID, 10 * GRID);
     const tip = rp(10 * GRID, 10 * GRID);
     const body = [pivot, tip];
@@ -91,25 +105,7 @@ describe("retargetTip", () => {
     }
     occupied.delete("10,10"); // the tip's own cell isn't "occupied by another trace"
 
-    const result = retargetTip(body, occupied, [], width, height, () => 1);
-
-    expect(result).toBeNull();
-  });
-
-  it("returns null when no candidate strictly improves weight (open field, no occluders)", () => {
-    const pivot = rp(9 * GRID, 10 * GRID);
-    const tip = rp(10 * GRID, 10 * GRID);
-    const body = [pivot, tip];
-    // With no occluders `occlusionWeightAt` is 1 everywhere — every examined
-    // candidate ties the current tip's weight, never strictly beats it.
-    // Cycle through a few distinct non-zero step counts so this actually
-    // exercises multiple real candidates rather than degenerating to
-    // "nothing was ever examined."
-    const values = [0.9, 0.2, 0.7, 0.4];
-    let i = 0;
-    const rand = () => values[i++ % values.length] as number;
-
-    const result = retargetTip(body, new Set(), [], width, height, rand);
+    const result = retargetTip(body, occupied, blockingBarriers, width, height, () => 1);
 
     expect(result).toBeNull();
   });
@@ -119,29 +115,26 @@ describe("retargetTip", () => {
     const tip = rp(10 * GRID, 10 * GRID);
     const body = [pivot, tip];
     const occupied = new Set(["10,10"]);
-    const occluders: Occluder[] = [{ x0: 9.5 * GRID, y0: 9 * GRID, x1: 12 * GRID, y1: 11 * GRID }];
 
-    const result = retargetTip(body, occupied, occluders, width, height, () => 1);
+    const result = retargetTip(body, occupied, blockingBarriers, width, height, () => 1);
 
     expect(result).toBeNull();
   });
 
   it("rejects a candidate whose connecting segment would retrace the trace's own body", () => {
-    // Body folds back on itself one step short of the tip, so any
-    // extension along the line immediately re-enters the trace's own cells.
+    // Own cells are 7 (the escape target every attempt below lands on) and
+    // 9 (pivot) — the escape direction is otherwise clear of both the
+    // barrier and any other-trace occupancy.
     const pivot = rp(9 * GRID, 10 * GRID);
     const tip = rp(10 * GRID, 10 * GRID);
-    const body = [rp(11 * GRID, 10 * GRID), pivot, tip];
-    const occluders: Occluder[] = [{ x0: 9.5 * GRID, y0: 9 * GRID, x1: 12 * GRID, y1: 11 * GRID }];
+    const body = [rp(7 * GRID, 10 * GRID), pivot, tip];
 
-    // Force the RNG to only ever propose "extend toward x=11*GRID" (steps
-    // that land back on the trace's own prior segment).
-    const result = retargetTip(body, new Set(), occluders, width, height, () => 1);
+    const result = retargetTip(body, new Set(), blockingBarriers, width, height, () => 0);
 
     expect(result).toBeNull();
   });
 
   it("returns null for a body shorter than 2 points", () => {
-    expect(retargetTip([rp(0, 0)], new Set(), [], width, height)).toBeNull();
+    expect(retargetTip([rp(0, 0)], new Set(), emptyBarriers, width, height)).toBeNull();
   });
 });

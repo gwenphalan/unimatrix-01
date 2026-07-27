@@ -5,6 +5,8 @@ import { useRef } from "react";
 
 import { useCircuitOccluder } from "@unimatrix/ui/public";
 
+import { OccludingCluster } from "@/features/cube-trainer-site/components";
+
 export const Route = createLazyFileRoute("/")({
   component: IndexRoute,
 });
@@ -15,7 +17,12 @@ const MODES = [
 ];
 
 // Each tile registers itself as an occluder — a hook can't be called per
-// iteration of a `.map()`, so this is its own component instead.
+// iteration of a `.map()`, so this is its own component instead. The
+// occluder ref lives on the wrapping `div`, not the `Link` itself: circuit
+// occluders are meant for non-interactive surfaces (panels, cards,
+// footers), never for interactive elements like links/buttons, even one
+// that's visually a card. The `Link` stays the full-size click target
+// inside it.
 function ModeTile({
   icon: Icon,
   label,
@@ -25,27 +32,34 @@ function ModeTile({
   label: string;
   to: "/learn" | "/drill";
 }) {
-  const ref = useRef<HTMLAnchorElement | null>(null);
+  const ref = useRef<HTMLDivElement | null>(null);
   useCircuitOccluder(ref);
 
   return (
-    <Link
-      className="site-panel site-panel-strong flex h-40 flex-col items-center justify-center gap-3 text-center transition-colors hover:bg-primary/8"
-      ref={ref}
-      to={to}
-    >
-      <Icon aria-hidden="true" className="size-6 text-muted-foreground" />
-      <span className="text-lg font-medium tracking-[-0.02em] text-foreground">{label}</span>
-    </Link>
+    <div className="site-panel site-panel-strong h-40" ref={ref}>
+      <Link
+        className="flex h-full w-full flex-col items-center justify-center gap-3 text-center transition-colors hover:bg-primary/8"
+        to={to}
+      >
+        <Icon aria-hidden="true" className="size-6 text-muted-foreground" />
+        <span className="text-lg font-medium tracking-[-0.02em] text-foreground">{label}</span>
+      </Link>
+    </div>
   );
 }
 
 function IndexRoute() {
   return (
     <div className="space-y-10">
-      <div className="flex items-center justify-center gap-3 text-center">
-        <img alt="" className="size-9 shrink-0 opacity-90" src="/favicon.svg" />
-        <h1 className="text-3xl font-medium tracking-[-0.03em] text-foreground">Cube Trainer</h1>
+      <div className="flex items-center justify-center text-center">
+        {/* The logo + wordmark occlude too, so traces never run through the
+            title. The cluster wrapper is what carries the ref: this row is
+            full-width, and registering it would carve a full-width band out
+            of the field instead of a box around the words. */}
+        <OccludingCluster>
+          <img alt="" className="size-9 shrink-0 opacity-90" src="/favicon.svg" />
+          <h1 className="text-3xl font-medium tracking-[-0.03em] text-foreground">Cube Trainer</h1>
+        </OccludingCluster>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">

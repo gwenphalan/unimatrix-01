@@ -188,6 +188,21 @@
       40px 40px,
       40px 40px,
       100% 100%;
+    /* Each tiled layer is phased so one of its lines lands exactly on the
+       page's centerline: the 240px tier (bold lines + intersection dots) by
+       `--grid-bold-phase-*`, the 40px tier by `--grid-phase-*`. Both are
+       written by `CircuitField`, which translates its own traces by the
+       same fine phase so the drawn circuit sits on this very lattice; the
+       two tiers stay seam-locked because 240 is a whole multiple of 40. The
+       last layer is the full-size vignette, which has no lattice. Falls
+       back to the plain `0 0` origin without JS. */
+    background-position:
+      var(--grid-bold-phase-x, 0px) var(--grid-bold-phase-y, 0px),
+      var(--grid-bold-phase-x, 0px) var(--grid-bold-phase-y, 0px),
+      var(--grid-bold-phase-x, 0px) var(--grid-bold-phase-y, 0px),
+      var(--grid-phase-x, 0px) var(--grid-phase-y, 0px),
+      var(--grid-phase-x, 0px) var(--grid-phase-y, 0px),
+      0 0;
     background-attachment: fixed;
   }
 

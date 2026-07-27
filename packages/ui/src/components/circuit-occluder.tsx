@@ -9,10 +9,10 @@ export type RegistrantOptions = {
    * registrants (cards, panels, headers, footers) are already self-bounded
    * to their own real height and never need this. It exists for a content
    * panel taller than a viewport (e.g. a long markdown article) — an
-   * uncapped rect like that blankets the entire viewport for most of the
-   * scroll range (`occlusionWeightAt`'s min-combine treats "anywhere inside
-   * a rect" as one flat floor regardless of depth), leaving nothing for
-   * scroll-driven retargeting to react to. Capping the registered height
+   * uncapped rect like that would barricade the entire viewport for most of
+   * the scroll range as one hard barrier regardless of depth, leaving
+   * nothing but the panel's own edges for scroll-driven retargeting to
+   * react to. Capping the registered height
    * keeps the occluder's top edge tracking the real DOM (still moves with
    * scroll) while letting its bottom edge open up once you've scrolled past
    * the cap — a deliberate, documented departure from "occluder rect ==
@@ -41,15 +41,66 @@ type DeltaSubscribe = (listener: DeltaListener) => () => void;
 // materially different occlusion-weight zone.
 const OCCLUDER_SCROLL_DELTA_PX = GRID;
 
+// How long scrolling must be quiet before the provider forces a structural
+// `RectsContext` commit of the settled rects. The scroll path's own
+// `handleOccluderDelta`/`retargetTip` nudge mechanism is bounded (a fixed
+// attempt count, a small search radius) and exists only to keep a crawling
+// trace visually escaping a moving occluder mid-scroll — it is not
+// guaranteed to fully clear every tip, and a fast or large scroll gesture
+// can outrun it, leaving a trace stranded inside an occluder's final
+// settled bounds (confirmed live on a tall article panel: scrolling to the
+// bottom and back left 11 path points inside the panel). A settle-triggered
+// structural commit is the correctness backstop: once scrolling actually
+// stops, `barriers`/`generateTraces` recompute against the real final
+// geometry, guaranteeing zero occluder violations regardless of how the
+// scroll gesture itself was handled.
+const SCROLL_SETTLE_MS = 200;
+
 // Suggested `maxHeightPx` for a content panel taller than a viewport (e.g. a
 // long markdown article) — generous vs typical viewport heights; needs a
 // real-browser visual pass to tune further.
 export const TALL_OCCLUDER_MAX_HEIGHT_PX = 900;
 
+// A registrant narrower or shorter than this on either side never registers
+// as a hard-barrier occluder. Hard barriers snap outward to whole lattice
+// cells (see `occlusion.ts`'s `buildBarrierField`), so even a small
+// registrant blocks a multi-cell span — a stray badge/button-sized element
+// would otherwise carve a hole in the trace field several times its own
+// size. One grid cell, not two: a real full-width header/footer bar is
+// routinely 60-80px tall (well under two cells) while still being exactly
+// the kind of surface that should occlude — confirmed live, where an
+// earlier two-cell floor silently dropped both this site's header (76px)
+// and footer (66px) from registering at all. A single grid cell still
+// excludes badges/buttons/titles (routinely under 40px on their short
+// side) while clearing genuine bars/cards/panels.
+export const MIN_OCCLUDER_SIDE_PX = GRID;
+
+// Registration stays explicit opt-in (no DOM-scanning heuristic) — this is
+// a dev-only warn, not a rejection, for the common mistake of registering
+// an interactive element (a link/button) instead of the non-interactive
+// surface around it. Occluders are meant for panels/cards/footers, never
+// for titles, badges, buttons, or other interactive/decorative elements.
+const INTERACTIVE_OCCLUDER_SELECTOR = 'button, a[href], input, select, textarea, [role="button"], [role="link"]';
+
 const RegistryContext = React.createContext<OccluderRegistry | null>(null);
 const RectsContext = React.createContext<Occluder[]>([]);
 const DeltaContext = React.createContext<DeltaSubscribe>(() => () => {});
 
+// Warn-once bookkeeping for the size floor below, which is now re-evaluated
+// on every measurement pass — a `WeakSet` so an unmounted registrant's
+// element doesn't stay reachable from module scope.
+const undersizedWarned = new WeakSet<Element>();
+
+/**
+ * The `MIN_OCCLUDER_SIDE_PX` floor is enforced here, per measurement pass,
+ * rather than once at registration time. A surface can legitimately measure
+ * 0-sized on the first passive effect after mount (a font or image still
+ * loading, a collapsed accordion, an animated-in panel, anything behind a
+ * suspense boundary that just resolved); rejecting at registration would drop
+ * it permanently, since the `ResizeObserver` only ever watches elements that
+ * did register and could therefore never notice it reaching its real size.
+ * Re-checking here keeps the same rejection semantics but self-corrects.
+ */
 function measureRegistrants(targets: Map<symbol, Registrant>): Map<symbol, Occluder> {
   const measured = new Map<symbol, Occluder>();
 
@@ -58,6 +109,27 @@ function measureRegistrants(targets: Map<symbol, Registrant>): Map<symbol, Occlu
     if (!el) return;
 
     const rect = el.getBoundingClientRect();
+    // `right - left` / `bottom - top`, not `.width`/`.height` — matches how
+    // the bounds below are derived from the same rect, and is robust to a
+    // `getBoundingClientRect` stub (e.g. in tests) that sets the edges but
+    // not the derived size.
+    const width = rect.right - rect.left;
+    const height = rect.bottom - rect.top;
+    if (width < MIN_OCCLUDER_SIDE_PX || height < MIN_OCCLUDER_SIDE_PX) {
+      // A fully-collapsed rect is the "not laid out yet" case this pass
+      // exists to keep recoverable, not a mis-registered element — stay
+      // quiet about it and only warn once a real, genuinely-too-small
+      // measurement lands.
+      if (width > 0 && height > 0 && !undersizedWarned.has(el)) {
+        undersizedWarned.add(el);
+        console.warn(
+          "[CircuitField] useCircuitOccluder skipped a registrant smaller than MIN_OCCLUDER_SIDE_PX on one side — register the surrounding surface instead.",
+          { width, height },
+        );
+      }
+      return;
+    }
+
     const y1 = options.maxHeightPx !== undefined ? Math.min(rect.bottom, rect.top + options.maxHeightPx) : rect.bottom;
 
     measured.set(id, { x0: rect.left, y0: rect.top, x1: rect.right, y1 });
@@ -129,17 +201,27 @@ function diffMeasurements(previous: Map<symbol, Occluder>, next: Map<symbol, Occ
  * commits a fresh `Occluder[]` via `RectsContext` (feeds `CircuitField`'s
  * `targetTraces`/`traceCount` — a real spanning-tree rebuild, so this stays
  * exactly as expensive/rare as before). A `scroll` event is measured too
- * (rects go stale the instant the page scrolls otherwise) but never commits
- * `RectsContext` on its own — it only notifies `DeltaContext` subscribers
- * with whatever rects actually moved, so a full re-render/regeneration can
- * never be triggered by scrolling alone.
+ * (rects go stale the instant the page scrolls otherwise) and, while
+ * actively scrolling, only notifies `DeltaContext` subscribers with
+ * whatever rects actually moved — it does not commit `RectsContext` on
+ * every tick, so a full re-render/regeneration is never triggered mid-
+ * gesture. But `SCROLL_SETTLE_MS` after the last scroll event, the provider
+ * forces one structural commit of the settled rects — the bounded per-tip
+ * scroll-delta nudge (`handleOccluderDelta`/`retargetTip`) is best-effort
+ * and can leave a trace stranded inside an occluder's final position after
+ * a fast/large scroll, so the settled geometry always gets one authoritative
+ * `barriers`/`generateTraces` recompute to guarantee zero occluder
+ * violations once scrolling actually stops.
  */
 export function CircuitOccluderProvider({ children }: { children: React.ReactNode }): React.JSX.Element {
   const targetsRef = React.useRef(new Map<symbol, Registrant>());
   const observerRef = React.useRef<ResizeObserver | null>(null);
   const rafRef = React.useRef<number | null>(null);
+  const scrollSettleTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const resizeSettleTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const structuralPendingRef = React.useRef(true); // first measurement pass is always a commit
   const measuredRef = React.useRef(new Map<symbol, Occluder>());
+  const committedRef = React.useRef(new Map<symbol, Occluder>());
   const deltaListenersRef = React.useRef(new Set<DeltaListener>());
   const [rects, setRects] = React.useState<Occluder[]>([]);
 
@@ -149,16 +231,27 @@ export function CircuitOccluderProvider({ children }: { children: React.ReactNod
     if (structuralPendingRef.current) {
       structuralPendingRef.current = false;
       // Skip the commit when this structural pass measured to the same
-      // rects as last time — e.g. a card-dense route with several
-      // independently-async registrants (a per-card live-status badge
-      // resolving at its own time) each trigger their own structural flush,
-      // but most of those passes measure identically to what's already
-      // committed. Suppressing the no-op commit avoids a needless
-      // `targetTraces` recompute (a real spanning-tree rebuild) per
-      // registrant instead of per actual layout change.
-      const unchanged = measurementsEqual(measuredRef.current, next);
+      // rects as what's currently *committed* — e.g. a card-dense route
+      // with several independently-async registrants (a per-card
+      // live-status badge resolving at its own time) each trigger their own
+      // structural flush, but most of those passes measure identically to
+      // what's already committed. Suppressing the no-op commit avoids a
+      // needless `targetTraces` recompute (a real spanning-tree rebuild)
+      // per registrant instead of per actual layout change.
+      //
+      // Deliberately compared against `committedRef`, not `measuredRef` —
+      // the scroll path below overwrites `measuredRef` on every scroll
+      // flush (it needs the freshest snapshot for its own delta diff), so
+      // comparing a settle-triggered structural pass against `measuredRef`
+      // would always read "unchanged" (scroll already measured the same
+      // settled rects seconds earlier) and silently swallow the commit this
+      // whole settle mechanism exists to force.
+      const unchanged = measurementsEqual(committedRef.current, next);
       measuredRef.current = next;
-      if (!unchanged) setRects(Array.from(next.values()));
+      if (!unchanged) {
+        committedRef.current = next;
+        setRects(Array.from(next.values()));
+      }
       return;
     }
 
@@ -211,14 +304,69 @@ export function CircuitOccluderProvider({ children }: { children: React.ReactNod
 
     const onScroll = () => {
       scheduleMeasure("scroll");
+
+      if (scrollSettleTimerRef.current !== null) clearTimeout(scrollSettleTimerRef.current);
+      scrollSettleTimerRef.current = setTimeout(() => {
+        scrollSettleTimerRef.current = null;
+        // Settled: force the structural commit the lightweight scroll path
+        // deliberately skips (see the provider doc comment above) so
+        // `barriers`/`generateTraces` land on the real final geometry.
+        scheduleMeasure("structural");
+      }, SCROLL_SETTLE_MS);
     };
     window.addEventListener("scroll", onScroll, { passive: true, capture: true });
+
+    // A viewport resize routinely *moves* a registrant without changing its
+    // own box — a `max-w-*` panel keeps the same width and height while the
+    // centering margins around it shift — and `ResizeObserver` never fires on
+    // a position-only change. Without this the committed rects stay pinned to
+    // pre-resize geometry, and since `CircuitField` regenerates on its own
+    // resize handler, it rebuilds against those stale barriers and lays
+    // traces straight across the surface. Same immediate-plus-settle shape as
+    // the scroll path: resize arrives as a burst, and the last event is the
+    // one whose geometry has to be committed.
+    const onResize = () => {
+      scheduleMeasure("structural");
+
+      if (resizeSettleTimerRef.current !== null) clearTimeout(resizeSettleTimerRef.current);
+      resizeSettleTimerRef.current = setTimeout(() => {
+        resizeSettleTimerRef.current = null;
+        scheduleMeasure("structural");
+      }, SCROLL_SETTLE_MS);
+    };
+    window.addEventListener("resize", onResize, { passive: true });
 
     return () => {
       observer.disconnect();
       observerRef.current = null;
       window.removeEventListener("scroll", onScroll, { capture: true });
-      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+      window.removeEventListener("resize", onResize);
+      if (resizeSettleTimerRef.current !== null) {
+        clearTimeout(resizeSettleTimerRef.current);
+        resizeSettleTimerRef.current = null;
+      }
+      if (scrollSettleTimerRef.current !== null) {
+        clearTimeout(scrollSettleTimerRef.current);
+        scrollSettleTimerRef.current = null;
+      }
+      // Reset to `null` after cancelling, not just cancel — a dead
+      // (already-cancelled) handle left sitting in `rafRef.current` reads as
+      // "a frame is still pending" to every future `scheduleMeasure()` call
+      // (`rafRef.current === null` is its only signal to schedule a new
+      // one), permanently wedging this provider's measurement pipeline.
+      // React 18/19 StrictMode's simulated mount->unmount->remount runs this
+      // exact cleanup right after the first mount's own `scheduleMeasure`
+      // call already scheduled a frame — without resetting the ref here,
+      // that first frame is cancelled but never forgotten, so the remount's
+      // own `scheduleMeasure` call sees a non-null `rafRef.current` and
+      // silently no-ops forever: `flush()` never runs again, `rects` never
+      // leaves its initial `[]`, and every consumer's occlusion is
+      // permanently empty. Same hazard class, same fix, as
+      // `circuit-field.tsx`'s own unmount-cleanup effect.
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
     };
   }, [scheduleMeasure]);
 
@@ -259,13 +407,20 @@ export function CircuitOccluderProvider({ children }: { children: React.ReactNod
 }
 
 /**
- * Registers `ref`'s element as a soft occluder for any `CircuitField`
- * beneath the nearest `CircuitOccluderProvider`. Takes an existing ref
- * rather than owning one, so a consumer that already has a ref for other
- * purposes (e.g. web's `headerRef`, used for scroll-condense detection)
- * reuses it instead of duplicating it.
+ * Registers `ref`'s element as a hard-barrier occluder for any
+ * `CircuitField` beneath the nearest `CircuitOccluderProvider` — traces and
+ * packets are kept out of its (buffered) bounds entirely, not merely
+ * steered around it. Takes an existing ref rather than owning one, so a
+ * consumer that already has a ref for other purposes (e.g. web's
+ * `headerRef`, used for scroll-condense detection) reuses it instead of
+ * duplicating it.
  *
- * Occlusion is a soft visual enhancement, not a correctness requirement —
+ * Intended only for genuine surfaces — panels, cards, footers, and other
+ * solid rectangular containers — never for titles, badges, buttons, or
+ * other interactive/decorative elements; register the surrounding
+ * non-interactive surface instead of the interactive element itself.
+ *
+ * Occlusion is a visual enhancement, not a correctness requirement —
  * calling this outside a `CircuitOccluderProvider` no-ops (with a dev-mode
  * warning) rather than throwing, so a missing provider degrades to "no
  * occlusion" instead of crashing the app.
@@ -288,9 +443,29 @@ export function useCircuitOccluder(
       return;
     }
 
+    // Deliberately no size check here: `MIN_OCCLUDER_SIDE_PX` is enforced in
+    // `measureRegistrants`, on every structural pass, so an element that
+    // simply hasn't been laid out yet at this (first passive effect) moment
+    // still gets observed and recovers once it reaches its real size.
+    const el = ref.current;
+    if (el) {
+      if (el.matches(INTERACTIVE_OCCLUDER_SELECTOR)) {
+        console.warn(
+          "[CircuitField] useCircuitOccluder was called with an interactive element (button/link/input) as the ref — register the surrounding non-interactive surface instead.",
+          el,
+        );
+      }
+
+      el.setAttribute("data-circuit-occluder", "surface");
+    }
+
     const id = idRef.current;
     registry.register(id, ref, maxHeightPx !== undefined ? { maxHeightPx } : undefined);
     return () => {
+      // `el`, not `ref.current` — React nulls the ref during unmount's
+      // mutation phase before this (passive-effect) cleanup runs, so
+      // reading `ref.current` here would already be `null`.
+      el?.removeAttribute("data-circuit-occluder");
       registry.unregister(id);
     };
   }, [registry, ref, enabled, maxHeightPx]);

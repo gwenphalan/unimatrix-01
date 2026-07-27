@@ -20,16 +20,28 @@ function setHidden(hidden: boolean): void {
 }
 
 /**
- * jsdom has no `matchMedia`/reports `hardwareConcurrency: undefined`, so
- * `decideMotionMode` resolves to `full` here by default (see capability.ts's
- * decision order) — this suite relies on that to exercise Session E2's
- * idle-loop lifecycle without needing to stub media queries.
+ * Every test here needs `motionMode === "full"`, since that is the only mode
+ * with idle producers. jsdom has no `matchMedia`, so the media-query signals
+ * all read false — but it *does* implement `navigator.hardwareConcurrency`,
+ * reporting the host's real core count, and `decideMotionMode` demotes to
+ * `transitions-only` at four cores or fewer (see capability.ts's decision
+ * order). That made the whole suite depend on how many cores the machine
+ * running it happens to have: fine on a developer workstation, silently
+ * `transitions-only` on a 4-core CI runner, where the idle loop never starts
+ * and no packet ever spawns. Stubbed to a high count so the mode is decided
+ * by this file, not by the host.
  */
 describe("CircuitField idle loop (full mode)", () => {
   const originalRAF = window.requestAnimationFrame.bind(window);
+  const originalPerformanceNow = performance.now.bind(performance);
+  const originalHardwareConcurrency = Object.getOwnPropertyDescriptor(
+    Object.getPrototypeOf(navigator) as object,
+    "hardwareConcurrency",
+  );
   let rafCallCount = 0;
 
   beforeEach(() => {
+    Object.defineProperty(navigator, "hardwareConcurrency", { value: 16, configurable: true });
     rafCallCount = 0;
     window.requestAnimationFrame = ((callback: FrameRequestCallback) => {
       rafCallCount += 1;
@@ -38,9 +50,78 @@ describe("CircuitField idle loop (full mode)", () => {
   });
 
   afterEach(() => {
+    if (originalHardwareConcurrency) {
+      Object.defineProperty(navigator, "hardwareConcurrency", originalHardwareConcurrency);
+    } else {
+      Reflect.deleteProperty(navigator as unknown as Record<string, unknown>, "hardwareConcurrency");
+    }
     window.requestAnimationFrame = originalRAF;
+    performance.now = originalPerformanceNow;
     Object.defineProperty(document, "hidden", { value: false, configurable: true });
   });
+
+  /**
+   * Replaces wall-clock time with a clock the test steps by hand, for the one
+   * case below that has to cross real `CircuitField` time thresholds
+   * (`IDLE_READY_DELAY_MS`, `PACKET_SPAWN_INTERVAL_MS`) rather than just
+   * counting frames.
+   *
+   * Everything that reads time — `performance.now()` and the timestamp handed
+   * to rAF callbacks (which is what the boot frame-budget probe samples) —
+   * comes from this one counter, so every consumer sees a strictly
+   * increasing, exactly-`FRAME_MS` delta no matter how long the machine
+   * actually took or how jsdom batched the callbacks. That uniformity is the
+   * whole point: on a loaded CI runner real jsdom deltas blow past the
+   * probe's outlier threshold, it reaches an `over` verdict, `demoteToStatic`
+   * fires, and idle packets are retired and never spawn again — which is
+   * exactly how this test failed in CI (reproducible locally by feeding rAF
+   * timestamps 300ms apart).
+   *
+   * The counter advances once per real animation frame, keyed off the
+   * timestamp jsdom hands out (fixed for all callbacks in one frame, per
+   * spec) — *not* once per callback. `CircuitField`'s loop, the watchdog
+   * probe, and this file's own frame pump are three independent rAF
+   * consumers sharing each frame; stepping per callback made every consumer
+   * see a 3x-inflated delta, which tripped the probe's `SLOW_BASELINE_MS`
+   * arm and demoted to static just as surely as the real jank did. Per-frame
+   * stepping gives every consumer exactly `FRAME_MS`, since a callback
+   * registered during a frame runs in the *next* one and so no consumer can
+   * be called twice per frame.
+   *
+   * `FRAME_MS` is deliberately well under `SLOW_BASELINE_MS` (40ms) rather
+   * than a realistic 16ms, so even if that per-frame grouping degraded and
+   * several steps landed between one consumer's callbacks, the probe would
+   * still read the field as comfortably fast.
+   *
+   * Starts well past zero so `lastPacketSpawnAtRef`'s initial `0` is already
+   * more than `PACKET_SPAWN_INTERVAL_MS` in the past: the first spawn is then
+   * gated purely on idle-readiness, not on an extra interval wait.
+   */
+  function installVirtualClock(): (frames: number) => Promise<void> {
+    const FRAME_MS = 8;
+    let clock = 10_000;
+    let lastRealTimestamp: number | null = null;
+
+    performance.now = () => clock;
+    window.requestAnimationFrame = ((callback: FrameRequestCallback) => {
+      rafCallCount += 1;
+      return originalRAF((realTimestamp) => {
+        if (lastRealTimestamp === null || realTimestamp !== lastRealTimestamp) {
+          lastRealTimestamp = realTimestamp;
+          clock += FRAME_MS;
+        }
+        callback(clock);
+      });
+    }) as typeof window.requestAnimationFrame;
+
+    return async (frames: number) => {
+      for (let i = 0; i < frames; i += 1) {
+        await act(async () => {
+          await nextFrame();
+        });
+      }
+    };
+  }
 
   it("keeps scheduling frames once boot settles, with zero in-flight transitions", async () => {
     render(<CircuitField routeKey="route-idle" />);
@@ -145,6 +226,60 @@ describe("CircuitField idle loop (full mode)", () => {
    * is what actually caught and confirmed the bug, not this file. Left in
    * only as basic "loop starts under StrictMode" coverage.
    */
+  /**
+   * Regression guard for the page-transition packet lifecycle: packets
+   * already running when a route change starts a crawl must keep running
+   * on their current route until the trace they're on is crawled past,
+   * not be retired outright the instant the transition is seeded. Prior
+   * behavior retired the whole pool synchronously inside the same layout
+   * effect that seeds the crawl — this test fails against that behavior,
+   * since it asserts survivors immediately after the route change, before
+   * any further frame has a chance to run.
+   */
+  it("keeps packets running immediately after a route change instead of retiring them at the transition", async () => {
+    // Installed before mount so the component's own idle-ready deadline is
+    // stamped from the virtual clock, not from real time.
+    const advanceFrames = installVirtualClock();
+    const { container, rerender } = render(<CircuitField routeKey="route-transition-a" />);
+
+    const visiblePacketCount = () =>
+      Array.from(container.querySelectorAll(".circuit-field-packet")).filter(
+        (el) => (el as SVGRectElement).style.opacity === "1",
+      ).length;
+
+    // Idle packets only become eligible after IDLE_READY_DELAY_MS
+    // (BOOT_STAGGER_MAX_MS + TRACE_DRAW_MS = 1150ms), and then spawn on their
+    // own PACKET_SPAWN_INTERVAL_MS cadence. Bounded by frame count, not by
+    // elapsed wall time — with the virtual clock those frames are the only
+    // thing that moves time forward, so this stays deterministic while not
+    // depending on exactly how many ticks the field's loop wins per frame.
+    for (let i = 0; i < 400 && visiblePacketCount() === 0; i += 1) {
+      await advanceFrames(1);
+    }
+
+    const visibleBeforeTransition = visiblePacketCount();
+    expect(visibleBeforeTransition).toBeGreaterThan(0);
+
+    rerender(<CircuitField routeKey="route-transition-b" />);
+
+    // No additional frame yet — this is exactly the instant the old
+    // synchronous `retireAllPackets()` call used to wipe the pool.
+    expect(visiblePacketCount()).toBe(visibleBeforeTransition);
+
+    // Across the next several frames of the crawl, the visible count must
+    // never increase (allowSpawn: false while transitionsRef is non-empty)
+    // — it only ever holds steady or drops as traces get crawled past.
+    const counts: number[] = [visiblePacketCount()];
+    for (let i = 0; i < 10; i += 1) {
+      await advanceFrames(1);
+      counts.push(visiblePacketCount());
+    }
+
+    for (let i = 1; i < counts.length; i += 1) {
+      expect(counts[i]).toBeLessThanOrEqual(counts[i - 1] as number);
+    }
+  }, 10000);
+
   it("still starts the idle loop under React.StrictMode's double-invoke mount", async () => {
     render(
       <React.StrictMode>

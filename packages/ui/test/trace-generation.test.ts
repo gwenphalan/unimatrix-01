@@ -1,8 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { GridGraph } from "../src/components/grid-graph.js";
 import { cellKey, densify, recomputeCorners } from "../src/components/grid-math.js";
-import type { Occluder } from "../src/components/occlusion.js";
+import { type Occluder, buildBarrierField, isCellBlocked } from "../src/components/occlusion.js";
 import { generateTraces } from "../src/components/trace-generation.js";
 
 // Reuses the old single hardcoded keep-out rect (pre-Session-C's fixed
@@ -32,10 +32,11 @@ const SCENARIOS: { width: number; height: number; seed: number; count: number; o
   { width: 1440, height: 900, seed: 6, count: 2, occluders: [] },
 ];
 
-describe("generateTraces invariants (circuit-field-plan.md 'Hard invariants')", () => {
+describe("generateTraces invariants", () => {
   for (const { width, height, seed, count, occluders } of SCENARIOS) {
     const label = `${width}x${height} seed=${seed} count=${count} occluders=${occluders.length}`;
-    const { traces, adjacency } = generateTraces(width, height, seed, occluders, count);
+    const barriers = buildBarrierField(occluders);
+    const { traces, adjacency, roots } = generateTraces(width, height, seed, barriers, count);
 
     describe(label, () => {
       it("returns exactly `count` traces with stable slot identity", () => {
@@ -67,7 +68,16 @@ describe("generateTraces invariants (circuit-field-plan.md 'Hard invariants')", 
         });
       });
 
-      it("never closes a loop, and forms a single connected component", () => {
+      it("never routes a vertex or densified segment cell inside a barrier", () => {
+        traces.forEach((trace) => {
+          const dense = densify(trace.points);
+          dense.forEach((point) => {
+            expect(isCellBlocked(barriers, point)).toBe(false);
+          });
+        });
+      });
+
+      it("never closes a loop, and forms exactly one connected component per tree", () => {
         // Replays every trace's edges through a fresh GridGraph — if this
         // ever returns null, a cycle slipped past construction (a trace
         // retracing itself, two traces retracing the same stretch, or a
@@ -81,15 +91,16 @@ describe("generateTraces invariants (circuit-field-plan.md 'Hard invariants')", 
         });
 
         if (traces.length > 0) {
-          expect(graph.componentCount()).toBe(1);
+          expect(graph.componentCount()).toBe(roots.length);
         }
       });
 
-      it("forms a single spanning tree: edges == vertices - 1", () => {
+      it("forms a forest: edges == vertices - treeCount", () => {
         // A guarantee the old greedy/rejection-based generator could never
         // make (it could produce disconnected forests via fallback stubs) —
         // acyclic-by-construction generation should satisfy this exactly,
-        // every time, for any occluder configuration.
+        // every time, for any barrier configuration, now generalized from a
+        // single spanning tree to one tree per free component.
         const vertices = new Set<string>();
         let edges = 0;
 
@@ -100,7 +111,7 @@ describe("generateTraces invariants (circuit-field-plan.md 'Hard invariants')", 
         });
 
         if (traces.length > 0) {
-          expect(edges).toBe(vertices.size - 1);
+          expect(edges).toBe(vertices.size - roots.length);
         }
       });
 
@@ -121,9 +132,11 @@ describe("generateTraces invariants (circuit-field-plan.md 'Hard invariants')", 
         });
       });
 
-      it("has non-negative depth, rooted at branch 0", () => {
+      it("has non-negative depth, each tree rooted at depth 0", () => {
         if (traces.length === 0) return;
-        expect(traces[0]!.depth).toBe(0);
+        roots.forEach((rootIndex) => {
+          expect(traces[rootIndex]!.depth).toBe(0);
+        });
         traces.forEach((trace) => {
           expect(trace.depth).toBeGreaterThanOrEqual(0);
         });
@@ -146,18 +159,74 @@ describe("generateTraces invariants (circuit-field-plan.md 'Hard invariants')", 
   }
 });
 
-describe("regression: near-total occlusion no longer produces degenerate stubs", () => {
+describe("forest generation under a partitioned viewport", () => {
   const width = 1440;
   const height = 900;
-  // Covers nearly the entire viewport — the scenario that used to starve the
-  // old rejection-based generator into fallback stubs/degenerates.
-  const occluders: Occluder[] = [{ x0: 10, y0: 10, x1: width - 10, y1: height - 10 }];
-  const { traces } = generateTraces(width, height, 7, occluders, 24);
+  // A full-width bar across the middle severs the canvas into two disjoint
+  // free regions under 4-connectivity — no single tree can reach both, so
+  // this is the scenario a single-spanning-tree generator could never
+  // satisfy the count contract on.
+  const occluders: Occluder[] = [{ x0: 0, y0: 400, x1: width, y1: 500 }];
+  const barriers = buildBarrierField(occluders);
+  const { traces, roots } = generateTraces(width, height, 9, barriers, 24);
+
+  it("still yields exactly `count` traces", () => {
+    expect(traces).toHaveLength(24);
+  });
+
+  it("grows at least two independent trees, one per side of the bar", () => {
+    expect(roots.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("never routes a vertex inside the barrier", () => {
+    traces.forEach((trace) => {
+      densify(trace.points).forEach((point) => {
+        expect(isCellBlocked(barriers, point)).toBe(false);
+      });
+    });
+  });
+});
+
+describe("regression: heavy (but not total) occlusion no longer produces degenerate stubs", () => {
+  const width = 1440;
+  const height = 900;
+  // A large central occluder leaving a real free border on every edge
+  // (unlike a near-total occluder, which would legitimately barricade the
+  // entire lattice under hard barriers — see the "fully barricaded canvas"
+  // case below) — the scenario that used to starve the old rejection-based
+  // generator into fallback stubs/degenerates.
+  const occluders: Occluder[] = [{ x0: 120, y0: 120, x1: width - 120, y1: height - 120 }];
+  const barriers = buildBarrierField(occluders);
+  const { traces } = generateTraces(width, height, 7, barriers, 24);
 
   it("still yields exactly `count` traces with no zero-length degenerate stubs", () => {
     expect(traces).toHaveLength(24);
     traces.forEach((trace) => {
       expect(trace.length).toBeGreaterThan(0);
     });
+  });
+});
+
+describe("regression: a fully barricaded canvas degrades gracefully", () => {
+  let warnSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    warnSpy.mockRestore();
+  });
+
+  it("returns no traces and warns, rather than routing through a barrier", () => {
+    const width = 400;
+    const height = 300;
+    const occluders: Occluder[] = [{ x0: -100, y0: -100, x1: width + 100, y1: height + 100 }];
+    const barriers = buildBarrierField(occluders);
+    const { traces, roots } = generateTraces(width, height, 11, barriers, 24);
+
+    expect(traces).toHaveLength(0);
+    expect(roots).toHaveLength(0);
+    expect(warnSpy).toHaveBeenCalled();
   });
 });
