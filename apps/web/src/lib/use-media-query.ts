@@ -36,7 +36,7 @@ function subscribe(query: string, onStoreChange: () => void): () => void {
  * effect-corrected value renders the wide-viewport branch for one frame on a
  * narrow viewport, which is a visible flash for anything gated on it.
  */
-export function useMediaQuery(query: string): boolean {
+function useMediaQuery(query: string): boolean {
   return useSyncExternalStore(
     (onStoreChange) => subscribe(query, onStoreChange),
     () => getMediaQueryList(query)?.matches ?? false,
