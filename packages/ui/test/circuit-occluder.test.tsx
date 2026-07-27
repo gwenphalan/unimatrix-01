@@ -461,6 +461,42 @@ describe("CircuitOccluderProvider / useCircuitOccluder", () => {
     expect(latestRects).toEqual([{ x0: 0, y0: 0, x1: 1392, y1: 76 }]);
   });
 
+  /**
+   * A viewport resize moves registrants without necessarily resizing them —
+   * a `max-w-*` panel keeps its width and height while the centering margins
+   * around it shift — and `ResizeObserver` fires on size changes only. Left
+   * unhandled, the committed rects stay pinned to pre-resize geometry and
+   * `CircuitField` (which regenerates on its own resize handler) rebuilds
+   * against stale barriers, laying traces straight across the surface.
+   */
+  it("remeasures on a window resize that moves a registrant without resizing it", async () => {
+    let latestRects: readonly { x0: number; y0: number; x1: number; y1: number }[] = [];
+    const rect = makeRect({ left: 100, top: 200, right: 500, bottom: 400 });
+
+    render(
+      <CircuitOccluderProvider>
+        <Registrant rect={rect} />
+        <RectsProbe onRects={(r) => (latestRects = r)} />
+      </CircuitOccluderProvider>,
+    );
+
+    await flushRaf();
+    expect(latestRects).toEqual([{ x0: 100, y0: 200, x1: 500, y1: 400 }]);
+
+    // Same 400x200 box, moved — exactly what ResizeObserver stays silent on.
+    rect.left = 100;
+    rect.right = 500;
+    rect.top = 40;
+    rect.bottom = 240;
+
+    await act(async () => {
+      window.dispatchEvent(new Event("resize"));
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+    });
+
+    expect(latestRects).toEqual([{ x0: 100, y0: 40, x1: 500, y1: 240 }]);
+  });
+
   it("stamps data-circuit-occluder on register and removes it on unregister", async () => {
     const rect = makeRect({ left: 0, top: 0, right: 100, bottom: 100 });
     let registrantEl: HTMLDivElement | undefined;
