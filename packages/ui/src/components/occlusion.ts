@@ -11,14 +11,23 @@ export type Occluder = Rect;
 // retuning one must never resize the other.
 export const OCCLUDER_AFFECT_MARGIN_PX = GRID * 4;
 // Hard-barrier clearance (px) beyond an occluder's own edge. Cell blocking
-// uses the "inside" rounding rule (ceil the min edge, floor the max edge)
-// so effective clearance lands in [OCCLUDER_BUFFER_PX, OCCLUDER_BUFFER_PX +
-// GRID) rather than snapping outward to the next full cell on both sides —
-// the outward-snap alternative was measured to turn an 8px buffer into
-// 48-88px of real clearance, several times the stated 5-10px ask. A rect
-// whose inflated span contains no lattice point on an axis (thinner than one
-// grid cell, or straddling a cell boundary) falls back to blocking the
-// single nearest cell on that axis instead of blocking nothing.
+// snaps *outward* (floor the min edge, ceil the max edge), so the first
+// lattice line outside the inflated rect is blocked too and effective
+// clearance lands in (OCCLUDER_BUFFER_PX + GRID, OCCLUDER_BUFFER_PX + 2 *
+// GRID] — roughly 48-88px at the current grid.
+//
+// The inward rule this replaces (ceil/floor) was tuned to keep clearance
+// near a stated 5-10px ask, but a px-level buffer can't actually control
+// clearance when the lattice pitch is 40px: it only decides *which side* of
+// the buffer the nearest usable lattice line falls on. In practice that let
+// a trace run 16px from a panel edge on one side and 79px on the other
+// (measured live on cube-trainer's drill panel) — the tight edges read as
+// the surface having no buffer at all. Outward snapping trades some usable
+// canvas for a clearance that is both guaranteed and near-uniform per edge.
+//
+// A rect whose inflated span contains no lattice point on an axis (thinner
+// than one grid cell, or straddling a cell boundary) falls back to blocking
+// the single nearest cell on that axis instead of blocking nothing.
 export const OCCLUDER_BUFFER_PX = 8;
 
 export function inflateRect(rect: Rect, buffer: number): Rect {
@@ -37,14 +46,12 @@ export type BarrierField = {
 };
 
 function axisRange(min: number, max: number): [number, number] {
-  const cMin = Math.ceil(min / GRID);
-  const cMax = Math.floor(max / GRID);
-  if (cMin <= cMax) return [cMin, cMax];
-
-  // No lattice point falls inside this axis's inflated span — block the
-  // single nearest cell instead of leaving the axis unblocked.
-  const nearest = Math.round((min + max) / 2 / GRID);
-  return [nearest, nearest];
+  // Outward snap: the first lattice line on each side of the inflated span is
+  // blocked as well, so nothing can be laid flush against a surface edge that
+  // happens to fall just inside a cell. `floor`/`ceil` can never invert, so
+  // unlike the inward rule this needs no nearest-cell fallback — a span
+  // thinner than one cell still yields the pair straddling it.
+  return [Math.floor(min / GRID), Math.ceil(max / GRID)];
 }
 
 /**

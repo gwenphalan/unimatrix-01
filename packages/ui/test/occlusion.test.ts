@@ -18,44 +18,48 @@ describe("inflateRect", () => {
 });
 
 describe("buildBarrierField cell blocking", () => {
-  it("blocks lattice cells strictly inside the buffered rect (inside rounding rule)", () => {
+  it("blocks the first lattice line outside the buffered rect too (outward rounding rule)", () => {
     // Rect spans x in [0, GRID*4], buffer 8px -> inflated x in [-8, 168].
-    // ceil(-8/40)=0, floor(168/40)=4 -> cells 0..4 blocked on x.
+    // floor(-8/40)=-1, ceil(168/40)=5 -> cells -1..5 blocked on x.
     const rect: Occluder = { x0: 0, y0: 0, x1: GRID * 4, y1: GRID };
     const field = buildBarrierField([rect], 8);
 
-    for (let cx = 0; cx <= 4; cx += 1) {
+    for (let cx = -1; cx <= 5; cx += 1) {
       expect(field.cells.has(`${cx},0`)).toBe(true);
     }
-    expect(field.cells.has("5,0")).toBe(false);
-    expect(field.cells.has("-1,0")).toBe(false);
+    expect(field.cells.has("6,0")).toBe(false);
+    expect(field.cells.has("-2,0")).toBe(false);
   });
 
-  it("keeps clearance within (buffer, buffer + GRID] rather than snapping outward a full cell on both sides", () => {
-    // Edge at x=300, buffer=8 -> inflated edge at 308. floor(308/40)=7, so
-    // lattice column 7 (x=280) is the last blocked one; column 8 (x=320) is
-    // the first free one — 20px of real clearance from the rect's true
-    // edge, inside the (8, 48] band, not the [48, 88] band an
-    // outward-snap-on-both-sides rule would produce.
+  /**
+   * The inward rule this replaced could leave a trace flush against a
+   * surface: a px-level buffer can't control clearance at a 40px lattice
+   * pitch, it only decides which side of the buffer the nearest usable
+   * lattice line lands on. Measured live, that let traces run 16px from one
+   * panel edge and 79px from the opposite one.
+   */
+  it("guarantees at least a full grid cell of clearance past the buffer", () => {
+    // Edge at x=300, buffer=8 -> inflated edge at 308. ceil(308/40)=8, so
+    // lattice column 8 (x=320) is blocked as well and column 9 (x=360) is
+    // the first free one — 60px of real clearance from the rect's true edge,
+    // inside the (48, 88] band.
     const rect: Occluder = { x0: 0, y0: 0, x1: 300, y1: GRID };
     const field = buildBarrierField([rect], 8);
 
-    expect(field.cells.has("7,0")).toBe(true);
-    expect(field.cells.has("8,0")).toBe(false);
+    expect(field.cells.has("8,0")).toBe(true);
+    expect(field.cells.has("9,0")).toBe(false);
   });
 
-  it("blocks the single nearest cell for a rect thinner than one grid cell", () => {
-    // A rect entirely within one cell's span, even after inflation, must
-    // still block something rather than silently vanishing. `buffer: 0`
-    // deliberately: `axisRange(41, 43)` then yields `cMin = 2 > cMax = 1`,
-    // which is the nearest-cell fallback this covers — inflating by even 1px
-    // pulls a real lattice multiple of GRID into the span and takes the
-    // ordinary branch instead.
+  it("blocks the cells straddling a rect thinner than one grid cell", () => {
+    // A rect entirely within one cell's span must still block something
+    // rather than silently vanishing. Outward snapping handles this without
+    // a special case: floor/ceil can't invert, so the pair of lattice lines
+    // straddling the span comes back.
     const rect: Occluder = { x0: 41, y0: 41, x1: 43, y1: 43 };
     const field = buildBarrierField([rect], 0);
 
-    const blockedCells = Array.from(field.cells);
-    expect(blockedCells.length).toBeGreaterThan(0);
+    expect(field.cells.has("1,1")).toBe(true);
+    expect(field.cells.has("2,2")).toBe(true);
   });
 });
 

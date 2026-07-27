@@ -47,11 +47,22 @@ function ModeTile({
 }
 
 function IndexRoute() {
+  // The logo + wordmark occlude too, so traces never run through the title.
+  // The ref goes on an `inline-flex` wrapper rather than the centering row:
+  // that row is full-width, and registering it would carve a full-width band
+  // out of the field instead of a box around the words. `py-1` is load
+  // bearing — the bare 36px title line is under `MIN_OCCLUDER_SIDE_PX` (one
+  // grid cell) and would be rejected as too small to be a real surface.
+  const titleRef = useRef<HTMLDivElement | null>(null);
+  useCircuitOccluder(titleRef);
+
   return (
     <div className="space-y-10">
-      <div className="flex items-center justify-center gap-3 text-center">
-        <img alt="" className="size-9 shrink-0 opacity-90" src="/favicon.svg" />
-        <h1 className="text-3xl font-medium tracking-[-0.03em] text-foreground">Cube Trainer</h1>
+      <div className="flex items-center justify-center text-center">
+        <div className="inline-flex items-center gap-3 px-2 py-1" ref={titleRef}>
+          <img alt="" className="size-9 shrink-0 opacity-90" src="/favicon.svg" />
+          <h1 className="text-3xl font-medium tracking-[-0.03em] text-foreground">Cube Trainer</h1>
+        </div>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
