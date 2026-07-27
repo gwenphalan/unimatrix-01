@@ -287,6 +287,9 @@ importers:
       '@unimatrix/auth':
         specifier: workspace:*
         version: link:../../packages/auth
+      '@unimatrix/content':
+        specifier: workspace:*
+        version: link:../../packages/content
       '@unimatrix/ui':
         specifier: workspace:^
         version: link:../../packages/ui
