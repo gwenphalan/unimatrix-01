@@ -1,6 +1,7 @@
 import { fileURLToPath, URL } from "node:url";
 
 import react from "@vitejs/plugin-react";
+import { createCoverageConfig } from "@unimatrix/config-vitest";
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
@@ -45,6 +46,9 @@ export default defineConfig({
     dedupe: ["react", "react-dom"],
   },
   test: {
+    coverage: createCoverageConfig({
+      thresholds: { statements: 53, functions: 58 },
+    }),
     environment: "jsdom",
     include: ["test/**/*.test.ts", "test/**/*.test.tsx"],
     setupFiles: ["./test/setup.ts"],

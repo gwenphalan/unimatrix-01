@@ -33,6 +33,14 @@ const ALLOWED_PACKAGE_IMPORTS = {
   "packages/auth": [],
 };
 
+/**
+ * Build-tooling packages every workspace may import. They carry no runtime code
+ * — they are consumed by `eslint.config.mjs`, `tsconfig.json`, and
+ * `vitest.config.ts` — so an edge to one says nothing about the runtime
+ * coupling this rule exists to constrain.
+ */
+const SHARED_CONFIG_PACKAGES = ["config-eslint", "config-typescript", "config-vitest"];
+
 function toElement(workspace) {
   const [group, name] = workspace.split("/");
   return { type: group === "apps" ? "app" : "pkg", name };
@@ -47,7 +55,9 @@ function buildPolicies() {
       allow: [
         // A workspace's own relative imports are same-element and must stay legal.
         { to: { element: { type: from.type, captured: { name: from.name } } } },
-        ...allowed.map((name) => ({ to: { element: { type: "pkg", captured: { name } } } })),
+        ...[...allowed, ...SHARED_CONFIG_PACKAGES].map((name) => ({
+          to: { element: { type: "pkg", captured: { name } } },
+        })),
       ],
     };
   });
