@@ -8,11 +8,11 @@
 - Be conservative wherever a mistake would fail silently rather than loudly
 
 ## Package Manager
-- Use **pnpm** with Node `22.22.1` and pnpm `10.30.3`
+- Use **pnpm** with Node `24.18.0` and pnpm `10.30.3`
 - Canonical root commands: `pnpm install`, `pnpm dev`, `pnpm setup:local`, `pnpm setup:worktree`, `pnpm check`, `pnpm verify`
 - Full root surface: `pnpm build`, `pnpm lint`, `pnpm test`, `pnpm typecheck`, `pnpm db:migrate`, `pnpm db:generate`
 - Repro install: `pnpm install --frozen-lockfile`
-- If host Node/pnpm mismatch: `./infra/scripts/pnpm-with-node22.sh <pnpm-args>`
+- If host Node/pnpm mismatch: `./infra/scripts/pnpm-with-pinned-node.sh <pnpm-args>`
 
 ## Workspace
 - Monorepo: `apps/*` and `packages/*` from `pnpm-workspace.yaml`; root scripts fan out through Turbo

@@ -8,7 +8,7 @@ and database operations.
 
 Use the pinned local toolchain for local work, automation, and CI.
 
-- Node `22.22.1` is pinned in `.node-version`.
+- Node `24.18.0` is pinned in `.node-version`.
 - pnpm `10.30.3` is pinned in the root `package.json`
   `packageManager` field.
 - `.npmrc` keeps engine checks strict and workspace dependency resolution
@@ -27,7 +27,7 @@ correctly.
 5. Run `pnpm dev`.
 
 For a freshly created worktree or other automation, use
-`./infra/scripts/pnpm-with-node22.sh setup:worktree` to install workspace
+`./infra/scripts/pnpm-with-pinned-node.sh setup:worktree` to install workspace
 dependencies with a frozen lockfile, bootstrap local env files, and run the
 default database migrations in one step.
 
@@ -196,12 +196,12 @@ Use the checked-in wrapper when the host does not already have compatible
 local Node and pnpm versions active.
 
 ```bash
-./infra/scripts/pnpm-with-node22.sh install --frozen-lockfile
-./infra/scripts/pnpm-with-node22.sh setup:worktree
-./infra/scripts/pnpm-with-node22.sh check
-./infra/scripts/pnpm-with-node22.sh verify
+./infra/scripts/pnpm-with-pinned-node.sh install --frozen-lockfile
+./infra/scripts/pnpm-with-pinned-node.sh setup:worktree
+./infra/scripts/pnpm-with-pinned-node.sh check
+./infra/scripts/pnpm-with-pinned-node.sh verify
 ```
 
 When the host already matches Node `22.x` and pnpm `10.30.3`, the wrapper
-takes a fast path and reuses them. Otherwise it bootstraps `node@22.22.1`
+takes a fast path and reuses them. Otherwise it bootstraps `node@24.18.0`
 and `pnpm@10.30.3` through `npm exec`.
