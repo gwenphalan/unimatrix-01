@@ -4,7 +4,7 @@ import {
   expectCircuitFieldRespectsOccluders,
   expectNoTracesOverSelectors,
   waitForSettledCircuitField,
-} from "./helpers/circuit-occlusion";
+} from "@unimatrix/e2e-helpers";
 
 /**
  * The circuit field discovers its own occluders by walking the DOM and

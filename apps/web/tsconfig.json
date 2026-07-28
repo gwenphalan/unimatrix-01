@@ -5,6 +5,12 @@
     "paths": {
       "@/*": ["./src/*"],
       "@unimatrix/api-client": ["../../packages/api-client/src/index.ts"],
+      // Load-bearing, and it does not degrade gracefully. Playwright refuses to
+      // transpile any file whose path contains `/node_modules/`, so without this
+      // mapping the import resolves through the pnpm symlink to raw TypeScript
+      // Playwright will not compile, and the e2e run dies on a syntax error that
+      // says nothing about the cause.
+      "@unimatrix/e2e-helpers": ["../../packages/e2e-helpers/src/index.ts"],
       "@unimatrix/auth/react": ["../../packages/auth/src/react.tsx"],
       "@unimatrix/auth": ["../../packages/auth/src/index.ts"],
       "@unimatrix/content": ["../../packages/content/src/index.ts"],

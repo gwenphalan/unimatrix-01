@@ -1,26 +1,33 @@
 import { expect, test, type Page } from "@playwright/test";
 
-import { expectNoAccessibilityViolations } from "./helpers/accessibility";
+import {
+  collectPageErrors,
+  expectNoAccessibilityViolations,
+  expectNoPageErrors,
+  gotoRoute,
+} from "@unimatrix/e2e-helpers";
 
-function collectPageErrors(page: Page): Error[] {
-  const pageErrors: Error[] = [];
+/**
+ * Empty, and meant to stay that way. This list held `region`, `heading-order`,
+ * and `landmark-unique`; all three are fixed, so the baseline is now a hard
+ * floor rather than a backlog.
+ *
+ * A fourth, `page-has-heading-one`, was never in the list and was failing
+ * anyway — `/projects` and `/blog` were visited by the smoke flow but never
+ * scanned. Both are scanned now.
+ *
+ * Adding an entry here should be a deliberate, explained edit. It means
+ * shipping a known structural problem, and it is the kind of change that is
+ * easy to make quietly to turn a build green.
+ *
+ * It stays app-local rather than moving into `@unimatrix/e2e-helpers` alongside
+ * the scanner: a baseline shared with cube-trainer would let a suppression added
+ * for one app silently lower the floor for the other.
+ */
+const KNOWN_BEST_PRACTICE_VIOLATIONS: readonly string[] = [];
 
-  page.on("pageerror", (error) => {
-    pageErrors.push(error);
-  });
-
-  return pageErrors;
-}
-
-function expectNoPageErrors(pageErrors: Error[]) {
-  expect(
-    pageErrors.map((error) => error.message),
-    "Expected the route interaction to finish without uncaught page errors.",
-  ).toEqual([]);
-}
-
-async function gotoRoute(page: Page, url: string) {
-  await page.goto(url, { waitUntil: "domcontentloaded" });
+async function scanAccessibility(page: Page, routeLabel: string) {
+  await expectNoAccessibilityViolations(page, routeLabel, KNOWN_BEST_PRACTICE_VIOLATIONS);
 }
 
 test("homepage load", async ({ page }) => {
@@ -35,7 +42,7 @@ test("homepage load", async ({ page }) => {
   await expect(main.getByRole("link", { name: "View all projects" })).toBeVisible();
   await expect(main.getByRole("link", { name: "View all blog posts" })).toBeVisible();
 
-  await expectNoAccessibilityViolations(page, "/");
+  await scanAccessibility(page, "/");
   expectNoPageErrors(pageErrors);
 });
 
@@ -51,7 +58,7 @@ test("navigation smoke flow", async ({ page }) => {
 
   // The list routes were previously visited here but never scanned, so
   // `page-has-heading-one` failed on both of them without failing the build.
-  await expectNoAccessibilityViolations(page, "/projects");
+  await scanAccessibility(page, "/projects");
 
   await page.getByRole("link", { name: "Open project Cube Trainer" }).click();
   await expect(page).toHaveURL(/\/projects\/cube-trainer$/u);
@@ -68,14 +75,14 @@ test("navigation smoke flow", async ({ page }) => {
     }),
   ).toBeVisible();
 
-  await expectNoAccessibilityViolations(page, "/blog");
+  await scanAccessibility(page, "/blog");
 
   await gotoRoute(page, "/about");
   await expect(page).toHaveURL(/\/about$/u);
   await expect(page.getByRole("heading", { name: "About" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Draft an email" })).toBeVisible();
 
-  await expectNoAccessibilityViolations(page, "/about");
+  await scanAccessibility(page, "/about");
   expectNoPageErrors(pageErrors);
 });
 
@@ -100,7 +107,7 @@ test("project page render", async ({ page }) => {
   await expect(page.getByRole("link", { name: "Back to projects" })).toBeVisible();
   await expect(page.getByText(/^(Checking|Live|Offline)$/u)).toBeVisible();
 
-  await expectNoAccessibilityViolations(page, "/projects/cube-trainer");
+  await scanAccessibility(page, "/projects/cube-trainer");
   expectNoPageErrors(pageErrors);
 });
 
@@ -123,6 +130,6 @@ test("blog page render", async ({ page }) => {
   ).toBeVisible();
   await expect(page.getByRole("link", { name: "Back to blog" })).toBeVisible();
 
-  await expectNoAccessibilityViolations(page, "/blog/placeholder-post");
+  await scanAccessibility(page, "/blog/placeholder-post");
   expectNoPageErrors(pageErrors);
 });

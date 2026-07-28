@@ -4,6 +4,12 @@
     "jsx": "react-jsx",
     "paths": {
       "@/*": ["./src/*"],
+      // Load-bearing, and it does not degrade gracefully. Playwright refuses to
+      // transpile any file whose path contains `/node_modules/`, so without this
+      // mapping the import resolves through the pnpm symlink to raw TypeScript
+      // Playwright will not compile, and the e2e run dies on a syntax error that
+      // says nothing about the cause.
+      "@unimatrix/e2e-helpers": ["../../packages/e2e-helpers/src/index.ts"],
       "@unimatrix/ui/public": ["../../packages/ui/src/public.ts"],
       "@unimatrix/ui": ["../../packages/ui/src/index.ts"]
     },

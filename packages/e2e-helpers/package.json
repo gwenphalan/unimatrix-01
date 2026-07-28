@@ -1,0 +1,27 @@
+{
+  "name": "@unimatrix/e2e-helpers",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Shared Playwright assertion helpers for the Unimatrix end-to-end suites.",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "peerDependencies": {
+    "@axe-core/playwright": ">=4.12.1",
+    "@playwright/test": ">=1.54.2"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.12.1",
+    "@playwright/test": "^1.54.2",
+    "@unimatrix/config-eslint": "workspace:*",
+    "@unimatrix/config-typescript": "workspace:*",
+    "eslint": "^10.0.0",
+    "typescript": "^6.0.3"
+  }
+}

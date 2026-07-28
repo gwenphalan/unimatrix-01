@@ -1,0 +1,12 @@
+{
+  "extends": "@unimatrix/config-typescript/base.json",
+  "compilerOptions": {
+    // Not `library.json`: that preset stays on base's `lib: ["ES2023"]`, and these helpers
+    // are built around `page.evaluate(...)` callbacks whose bodies execute in the browser
+    // and reference `document`, `getComputedStyle`, `Element`, and `DOMRect`. It also turns
+    // on `composite`/`declaration`, which are dead weight for a package that never emits —
+    // consumers resolve `src/*.ts` directly through their own tsconfig `paths`.
+    "lib": ["ES2023", "DOM", "DOM.Iterable"]
+  },
+  "include": ["src/**/*.ts"]
+}

@@ -4,7 +4,7 @@ import {
   expectCircuitFieldRespectsOccluders,
   expectNoTracesOverSelectors,
   waitForSettledCircuitField,
-} from "./helpers/circuit-occlusion";
+} from "@unimatrix/e2e-helpers";
 
 /**
  * The `apps/web` mirror of this spec explains the invariant; this one exists
