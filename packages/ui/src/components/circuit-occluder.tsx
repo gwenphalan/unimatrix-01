@@ -9,27 +9,8 @@ import {
 } from "./occluder-scan.js";
 import { type Occluder, type Rect, clampRectToViewport } from "./occlusion.js";
 
-export type RegistrantOptions = {
-  /**
-   * Caps how much of the registrant's real height counts as occluder. Most
-   * registrants (cards, panels, headers, footers) are already self-bounded
-   * to their own real height and never need this. It exists for a content
-   * panel taller than a viewport (e.g. a long markdown article) — an
-   * uncapped rect like that would barricade the entire viewport for most of
-   * the scroll range as one hard barrier regardless of depth, leaving
-   * nothing but the panel's own edges for scroll-driven retargeting to
-   * react to. Capping the registered height
-   * keeps the occluder's top edge tracking the real DOM (still moves with
-   * scroll) while letting its bottom edge open up once you've scrolled past
-   * the cap — a deliberate, documented departure from "occluder rect ==
-   * literal DOM bounds" for tall panels.
-   */
-  maxHeightPx?: number;
-};
-
 type Registrant = {
   ref: React.RefObject<Element | null>;
-  options: RegistrantOptions;
 };
 
 /**
@@ -41,7 +22,7 @@ type Registrant = {
 type OccluderId = symbol | string;
 
 type OccluderRegistry = {
-  register: (id: symbol, ref: React.RefObject<Element | null>, options?: RegistrantOptions) => void;
+  register: (id: symbol, ref: React.RefObject<Element | null>) => void;
   unregister: (id: symbol) => void;
 };
 
@@ -69,11 +50,6 @@ const OCCLUDER_SCROLL_DELTA_PX = GRID;
 // geometry, guaranteeing zero occluder violations regardless of how the
 // scroll gesture itself was handled.
 const SCROLL_SETTLE_MS = 200;
-
-// Suggested `maxHeightPx` for a content panel taller than a viewport (e.g. a
-// long markdown article) — generous vs typical viewport heights; needs a
-// real-browser visual pass to tune further.
-export const TALL_OCCLUDER_MAX_HEIGHT_PX = 900;
 
 // A registrant narrower or shorter than this on either side never registers
 // as a hard-barrier occluder. Hard barriers snap outward to whole lattice
@@ -165,7 +141,7 @@ function measureRegistrants(
 ): Map<OccluderId, Occluder> {
   const measured = new Map<OccluderId, Occluder>();
 
-  targets.forEach(({ ref, options }, id) => {
+  targets.forEach(({ ref }, id) => {
     const el = ref.current;
     if (!el) return;
 
@@ -191,17 +167,20 @@ function measureRegistrants(
       return;
     }
 
-    const y1 =
-      options.maxHeightPx !== undefined
-        ? Math.min(rect.bottom, rect.top + options.maxHeightPx)
-        : rect.bottom;
-
     // No explicit `kind`: absent means hard (see `Occluder`), and a manual
     // registration is always a hard surface — that is what the override is for.
     // Keeping it absent also means `measurementsEqual` never sees a spurious
     // `undefined` vs `"hard"` difference between passes.
+    //
+    // The full DOM height registers, however tall. A panel taller than the
+    // viewport used to be capped (`maxHeightPx`) so its bottom edge opened up
+    // past the cap, which meant traces ran behind the lower half of a long
+    // article — the opposite of what an opaque article panel should do. The
+    // viewport clamp below is the whole bound now: it keeps the cell loop from
+    // walking 150 lattice rows for a 6000px article without letting any part of
+    // the panel stop occluding.
     const clamped = clampRectToViewport(
-      { x0: rect.left, y0: rect.top, x1: rect.right, y1 },
+      { x0: rect.left, y0: rect.top, x1: rect.right, y1: rect.bottom },
       viewport.width,
       viewport.height,
     );
@@ -614,8 +593,8 @@ export function CircuitOccluderProvider({
 
   const registry = React.useMemo<OccluderRegistry>(
     () => ({
-      register: (id, ref, options = {}) => {
-        targetsRef.current.set(id, { ref, options });
+      register: (id, ref) => {
+        targetsRef.current.set(id, { ref });
         if (ref.current) observerRef.current?.observe(ref.current);
         scheduleMeasure("structural");
       },
@@ -669,11 +648,10 @@ export function CircuitOccluderProvider({
  */
 export function useCircuitOccluder(
   ref: React.RefObject<Element | null>,
-  options?: { enabled?: boolean } & RegistrantOptions,
+  options?: { enabled?: boolean },
 ): void {
   const registry = React.useContext(RegistryContext);
   const enabled = options?.enabled ?? true;
-  const maxHeightPx = options?.maxHeightPx;
   const idRef = React.useRef<symbol>(undefined as unknown as symbol);
   if (idRef.current === undefined) idRef.current = Symbol("circuit-occluder");
 
@@ -704,7 +682,7 @@ export function useCircuitOccluder(
     }
 
     const id = idRef.current;
-    registry.register(id, ref, maxHeightPx !== undefined ? { maxHeightPx } : undefined);
+    registry.register(id, ref);
     return () => {
       // `el`, not `ref.current` — React nulls the ref during unmount's
       // mutation phase before this (passive-effect) cleanup runs, so
@@ -712,7 +690,7 @@ export function useCircuitOccluder(
       el?.removeAttribute("data-circuit-occluder");
       registry.unregister(id);
     };
-  }, [registry, ref, enabled, maxHeightPx]);
+  }, [registry, ref, enabled]);
 }
 
 /** Package-internal — `CircuitField`'s own consumption of the registered

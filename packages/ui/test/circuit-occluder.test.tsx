@@ -195,32 +195,26 @@ describe("CircuitOccluderProvider / useCircuitOccluder", () => {
     expect(latestRects).toEqual([{ x0: 0, y0: 0, x1: 200, y1: 100 }]);
   });
 
-  it("clamps a registrant's measured height to maxHeightPx", async () => {
+  it("clamps a taller-than-viewport registrant to the viewport, keeping it fully occluding", async () => {
+    // Replaces an earlier `maxHeightPx` cap that let a long article panel stop
+    // occluding past a fixed height — traces then ran behind its lower half.
+    // The viewport is now the only bound: everything on screen occludes, and
+    // the clamp exists purely to keep the lattice loop from walking rows that
+    // aren't visible anyway.
+    stubViewport(1024, 768);
     let latestRects: readonly { x0: number; y0: number; x1: number; y1: number }[] = [];
     const rect = makeRect({ left: 0, top: 100, right: 100, bottom: 3000 });
 
-    function CappedRegistrant() {
-      const ref = React.useRef<HTMLDivElement>(null);
-      useCircuitOccluder(ref, { maxHeightPx: 900 });
-
-      React.useLayoutEffect(() => {
-        if (ref.current)
-          ref.current.getBoundingClientRect = () => ({ ...rect, toJSON: () => ({}) });
-      }, []);
-
-      return <div ref={ref} />;
-    }
-
     render(
       <CircuitOccluderProvider>
-        <CappedRegistrant />
+        <Registrant rect={rect} />
         <RectsProbe onRects={(r) => (latestRects = r)} />
       </CircuitOccluderProvider>,
     );
 
     await flushRaf();
 
-    expect(latestRects).toEqual([{ x0: 0, y0: 100, x1: 100, y1: 1000 }]);
+    expect(latestRects).toEqual([{ x0: 0, y0: 100, x1: 100, y1: 768 }]);
   });
 
   it("a scroll event beyond the delta threshold notifies useCircuitOccluderDelta with the moved rect", async () => {
