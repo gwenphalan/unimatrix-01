@@ -186,14 +186,19 @@ describe("AdminPage", () => {
     expect(within(dialog).getByText(/"A post" will be removed/u)).toBeInTheDocument();
   });
 
-  it("reports a failed load instead of rendering an empty table", async () => {
+  it("reports a failed load in both panels instead of rendering an empty table", async () => {
     apiClient.adminListPosts.mockRejectedValue(new Error("network down"));
 
     const { AdminPage } = await import("@/features/admin/admin-page");
 
     renderInRouter(<AdminPage />);
 
-    expect(await screen.findByText("Posts could not be loaded.")).toBeInTheDocument();
+    // One request backs both collections, but the failure is reported inside
+    // each panel: collapsing to a single combined card would change the shape
+    // of the dashboard whenever the API blips.
+    expect(await screen.findAllByText("Posts could not be loaded.")).toHaveLength(2);
+    expect(screen.getByRole("region", { name: "Blog posts" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Projects" })).toBeInTheDocument();
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
   });
 

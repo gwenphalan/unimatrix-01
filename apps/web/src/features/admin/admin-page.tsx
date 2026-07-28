@@ -66,19 +66,12 @@ export function AdminPage() {
 
   const posts = useMemo(() => data?.posts ?? [], [data]);
 
-  if (error !== null) {
-    return (
-      <AdminPanel title="Content">
-        <Empty>
-          <EmptyHeader>
-            <EmptyTitle>Posts could not be loaded.</EmptyTitle>
-            <EmptyDescription>{describeAdminError(error)}</EmptyDescription>
-          </EmptyHeader>
-        </Empty>
-      </AdminPanel>
-    );
-  }
-
+  // The failure is reported inside both panels rather than replacing them with
+  // one combined card. One request backs both collections, so a single error
+  // card is the honest description of what happened — but it collapses the
+  // page to a layout that appears nowhere else, so a transient API failure
+  // reads as the dashboard having changed shape. Keeping the two panels means
+  // the only thing that changes is what is inside them.
   return (
     <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto pb-2 xl:grid-cols-2 xl:items-start">
       {COLLECTIONS.map((collection) => (
@@ -95,6 +88,7 @@ export function AdminPage() {
           title={collection.title}
         >
           <PostBulkTable
+            error={error}
             isPending={isPending}
             posts={posts.filter((post) => post.type === collection.type)}
           />
@@ -109,9 +103,11 @@ export function AdminPage() {
  * confirmation. Nothing here is shared with the sibling table.
  */
 function PostBulkTable({
+  error,
   isPending,
   posts,
 }: {
+  error: Error | null;
   isPending: boolean;
   posts: readonly ContentPostSummary[];
 }) {
@@ -142,6 +138,17 @@ function PostBulkTable({
 
       return next;
     });
+  }
+
+  if (error !== null) {
+    return (
+      <Empty>
+        <EmptyHeader>
+          <EmptyTitle>Posts could not be loaded.</EmptyTitle>
+          <EmptyDescription>{describeAdminError(error)}</EmptyDescription>
+        </EmptyHeader>
+      </Empty>
+    );
   }
 
   if (isPending) {
