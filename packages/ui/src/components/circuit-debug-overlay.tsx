@@ -7,6 +7,7 @@ import { GRID, type Point } from "./grid-math.js";
 import {
   OCCLUDER_BUFFER_PX,
   type Occluder,
+  SOFT_OCCLUDER_BUFFER_PX,
   buildBarrierField,
   inflateRect,
   translateRect,
@@ -18,6 +19,11 @@ const RAW_STROKE = "#ff00d0";
 const BUFFERED_STROKE = "#ffb000";
 const BUFFERED_FILL = "rgba(255, 176, 0, 0.15)";
 const CELL_FILL = "rgba(255, 176, 0, 0.35)";
+// The third colour the ink channel gets. Distinct hue rather than a lighter
+// amber, because the whole point of looking at the overlay is telling apart a
+// rect that blocks lattice cells from one that only blocks exact segments.
+const SOFT_STROKE = "#00e5ff";
+const SOFT_FILL = "rgba(0, 229, 255, 0.12)";
 
 export type CircuitDebugOverlayProps = {
   occluders: readonly Occluder[];
@@ -31,10 +37,16 @@ export type CircuitDebugOverlayProps = {
 };
 
 /**
- * Draws every registered occluder's raw measured rect (thin dashed magenta
- * stroke) and buffer-inflated barrier rect (solid amber stroke + fill) on
- * top of everything, so the hard-barrier geometry `generateTraces`/
- * `buildRoute`/`retargetTip` actually enforce can be visually inspected.
+ * Draws every occluder's raw measured rect (thin dashed magenta stroke), each
+ * hard rect's buffer-inflated barrier (solid amber stroke + fill), and each
+ * ink rect's barrier (cyan stroke + fill) on top of everything, so the
+ * geometry `generateTraces`/`buildRoute`/`retargetTip` actually enforce can be
+ * visually inspected. Amber means "blocks lattice cells too"; cyan means
+ * "exact-segment rejection only, cells stay passable".
+ *
+ * The overlay is a visual aid, not a measurement: for the precise sets, read
+ * `window.__circuitField.occluders()`, which returns the committed `{hard,
+ * soft}` rects the field was generated from.
  * Never rendered unless toggled on via `window.__circuitField.debug(true)`
  * in a browser console — see `circuit-debug.ts`. Renders through a portal
  * to `document.body` to escape any transformed/stacked ancestor.
@@ -77,7 +89,14 @@ export function CircuitDebugOverlay({
   if (typeof document === "undefined") return null;
 
   const active = liveOccluders ?? occluders;
-  const buffered = active.map((rect) => inflateRect(rect, OCCLUDER_BUFFER_PX));
+  // Split by kind before inflating. Drawing every rect with the hard buffer
+  // was wrong in both directions: it overstated an ink rect's clearance by
+  // 8px against 10px, and it drew ink as though it blocked lattice cells,
+  // which it deliberately does not.
+  const hard = active.filter((rect) => rect.kind !== "soft");
+  const soft = active.filter((rect) => rect.kind === "soft");
+  const buffered = hard.map((rect) => inflateRect(rect, OCCLUDER_BUFFER_PX));
+  const bufferedSoft = soft.map((rect) => inflateRect(rect, SOFT_OCCLUDER_BUFFER_PX));
   // Built from `-gridPhase`-shifted rects and drawn back at `+gridPhase`,
   // the exact round trip `CircuitField` does — the raw and buffered rect
   // outlines below stay in plain viewport coordinates (they *are* element
@@ -85,7 +104,7 @@ export function CircuitDebugOverlay({
   // screen is phase-shifted.
   const blockedCells = debugState.cells
     ? Array.from(
-        buildBarrierField(active.map((rect) => translateRect(rect, -gridPhase.x, -gridPhase.y)))
+        buildBarrierField(hard.map((rect) => translateRect(rect, -gridPhase.x, -gridPhase.y)))
           .cells,
       )
     : [];
@@ -126,6 +145,18 @@ export function CircuitDebugOverlay({
           key={`buffered-${i}`}
           stroke={BUFFERED_STROKE}
           strokeWidth={1.5}
+          width={Math.max(0, rect.x1 - rect.x0)}
+          x={rect.x0}
+          y={rect.y0}
+        />
+      ))}
+      {bufferedSoft.map((rect, i) => (
+        <rect
+          fill={SOFT_FILL}
+          height={Math.max(0, rect.y1 - rect.y0)}
+          key={`soft-${i}`}
+          stroke={SOFT_STROKE}
+          strokeWidth={1}
           width={Math.max(0, rect.x1 - rect.x0)}
           x={rect.x0}
           y={rect.y0}
