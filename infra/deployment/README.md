@@ -238,11 +238,19 @@ App's installation token drives the webhook, the build, the PR comment, and
 the teardown.
 
 The setting defaults below were verified on 2026-07-27 against
-`packages/server/src/db/schema/application.ts` on Dokploy `canary`, and the
-Compose limitation against Dokploy issue #2028 (open, unassigned, no linked PR,
-opened 2025-06-11). What remains unverified is this instance: the *current*
-values of these settings live in Dokploy's database, not in this repo, so a
-default being wrong for us says nothing about what is actually configured.
+`packages/server/src/db/schema/application.ts` on Dokploy `canary`, against
+Dokploy issue #2028 for the Compose limitation (open, unassigned, no linked PR,
+opened 2025-06-11), and then against the live instance: creating an application
+over the API returns `previewPort: 3000`, `previewHttps: false`,
+`previewCertificateType: "none"`, `previewLimit: 3`, and
+`isPreviewDeploymentsActive: false` on the fresh record.
+
+The two preview services described here now exist (`web-preview` and
+`cube-trainer-preview`, in the `Unimatrix-01` project's `production`
+environment) and are configured as below. Their settings still live in
+Dokploy's database rather than in this repo, so this document describes intent
+and can drift from the instance — read the instance, not this file, when the
+two disagree.
 
 ### Previews need Application services, not the existing Compose apps
 
@@ -368,11 +376,20 @@ survivable here, so do not disable it.
 ### Doing it over the API instead of the UI
 
 Every step above is reachable through Dokploy's REST API, so this setup can be
-scripted or handed to an agent rather than clicked. Generate a key under
-Settings -> Profile (API/CLI section); it is sent as an `x-api-key` header. The
-instance publishes its own OpenAPI document at
-`https://<dokploy-host>/api/openapi.json`, which is the authoritative field
-list — prefer it over any documentation, including this file.
+scripted or handed to an agent rather than clicked — that is how the current
+services were created. Generate a key under Settings -> Profile (API/CLI
+section); it is sent as an `x-api-key` header.
+
+Two things that cost time when scripting it:
+
+- **`/api/openapi.json` returns 404 on this instance.** Swagger is restricted to
+  authenticated administrators by default, so the machine-readable field list is
+  not available to a key alone. Discover shapes from validation errors instead —
+  a `400` returns a `zodError.fieldErrors` map naming exactly what is missing.
+- **`application.saveBuildType` requires `herokuVersion` and `railpackVersion`**
+  even for a Dockerfile build. They are non-optional but nullable, so pass
+  `null`. Omitting them fails with
+  `"expected nonoptional, received undefined"`.
 
 The relevant endpoints are `POST /api/application.create` (needs `name` and
 `environmentId` — read the latter from `project.all`),
