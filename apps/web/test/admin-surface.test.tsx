@@ -27,9 +27,9 @@ vi.mock("@unimatrix/auth/react", () => ({
 /**
  * Mounts a node under a router of its own rather than the app's.
  *
- * `AdminSurface`'s nav-link case renders a `<Link to="/admin">`, which needs a
- * router in context and a matching route to resolve an href against — but the
- * app router would route past the component under test rather than render it.
+ * The admin surface renders TanStack `<Link>`s, which need a router in context
+ * and a matching route to resolve an href against — but the app router would
+ * route past the component under test rather than render it.
  */
 function renderInRouter(children: ReactNode) {
   const rootRoute = createRootRoute({ component: () => children });
@@ -54,16 +54,6 @@ function renderInRouter(children: ReactNode) {
 }
 
 describe("AdminSurface", () => {
-  it("points the nav link at /admin", async () => {
-    const { AdminSurface } = await import("@/features/admin/admin-surface");
-
-    renderInRouter(<AdminSurface kind="nav-link" />);
-
-    // The only route to /admin an admin is ever given: nothing links there from
-    // the public navigation, and the route is `noindex`.
-    expect(await screen.findByRole("link", { name: "Admin" })).toHaveAttribute("href", "/admin");
-  });
-
   it("mounts the toast region that every admin action reports through", async () => {
     const { AdminSurface } = await import("@/features/admin/admin-surface");
     const { toast } = await import("@unimatrix/ui/editor");

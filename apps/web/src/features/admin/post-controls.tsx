@@ -29,7 +29,7 @@ export function NewPostButton({ type }: { type: ContentPostType }) {
           setIsOpen(true);
         }}
         size="sm"
-        variant="secondary"
+        variant="outline"
       >
         <RiAddLine aria-hidden="true" className="size-4" />
         New {TYPE_LABELS[type]}

@@ -41,8 +41,6 @@ export type AdminSlotProps =
   | { kind: "toaster" }
   /** The whole `/admin` page. */
   | { kind: "page" }
-  /** Header link to `/admin`. The only way an admin discovers the page exists. */
-  | { kind: "nav-link" }
   /** A "New blog post" / "New project" button for one collection. */
   | { kind: "new-post"; type: ContentPostType }
   /** Per-item edit / publish / delete controls, addressed the way a public page knows a post. */

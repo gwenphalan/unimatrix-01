@@ -7,11 +7,12 @@ import {
   RiFolderLine,
   RiHome5Line,
   RiLoginBoxLine,
+  RiShieldUserLine,
   RiUserLine,
 } from "@remixicon/react";
 import { SignedIn, SignedOut, UserButton } from "@unimatrix/auth/react";
 
-import { AdminSlot } from "@/features/admin/admin-slot";
+import { AdminSlot, useAdminAccess } from "@/features/admin/admin-slot";
 import { PublicPageContainer, PublicSiteFooter } from "@/features/public-site/components";
 import { isAuthEnabled, loadWebRuntimeConfig } from "@/lib/config";
 import { CircuitField, CircuitOccluderProvider, cn } from "@unimatrix/ui/public";
@@ -147,8 +148,28 @@ function buildSignInHref(): string {
  * (the default for this public site) — `SignedIn`/`SignedOut` are Clerk
  * components that require a mounted `AuthProvider`, so they must never be
  * rendered when one isn't present.
+ *
+ * The admin entry point lives in the `UserButton` menu rather than beside it:
+ * it is an account-scoped affordance, not a site section, and the header
+ * already carries four nav items.
+ *
+ * This is the one admin control that is **not** routed through `AdminSlot`.
+ * Clerk resolves `UserButton`'s menu by inspecting its direct children for its
+ * own `MenuItems`/`Link` component types, so the `Suspense` + error boundary
+ * `AdminSlot` wraps everything in would leave the item silently undetected.
+ * The cost is that the literal `"Admin"` and `/admin` ship in the public
+ * bundle, which reveals nothing: `routeTree.gen.ts` is not lazy, so the
+ * `/admin` route is already in every visitor's bundle. No admin *code* moves —
+ * the page, controls, dialogs and editor all stay behind `AdminSlot`'s single
+ * dynamic import.
+ *
+ * `useAdminAccess()` is called above the `authEnabled` early return so the hook
+ * order is identical in both builds; in the no-Clerk build it resolves to a
+ * hookless constant.
  */
 function AuthHeaderAction() {
+  const { isAdmin } = useAdminAccess();
+
   if (!authEnabled) {
     return null;
   }
@@ -156,7 +177,17 @@ function AuthHeaderAction() {
   return (
     <>
       <SignedIn>
-        <UserButton afterSignOutUrl="/" />
+        <UserButton afterSignOutUrl="/">
+          {isAdmin ? (
+            <UserButton.MenuItems>
+              <UserButton.Link
+                href="/admin"
+                label="Admin"
+                labelIcon={<RiShieldUserLine aria-hidden="true" className="size-4" />}
+              />
+            </UserButton.MenuItems>
+          ) : null}
+        </UserButton>
       </SignedIn>
       <SignedOut>
         <a
@@ -315,7 +346,6 @@ function AppShellContent({ children }: AppShellProps) {
 
           {authEnabled ? (
             <div className="flex shrink-0 items-center justify-end gap-2">
-              <AdminSlot kind="nav-link" />
               <AuthHeaderAction />
             </div>
           ) : null}
@@ -381,7 +411,6 @@ function AppShellContent({ children }: AppShellProps) {
 
               {authEnabled ? (
                 <div className="flex shrink-0 items-center justify-end gap-2">
-                  <AdminSlot kind="nav-link" />
                   <AuthHeaderAction />
                 </div>
               ) : null}
