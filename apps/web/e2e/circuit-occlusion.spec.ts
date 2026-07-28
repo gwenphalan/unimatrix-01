@@ -68,13 +68,11 @@ for (const width of WIDTHS) {
  * `SCROLL_SETTLE_MS` structural commit is the backstop that regenerates against
  * the new geometry.
  *
- * Only the hard invariant is asserted after scrolling. Measured by hand on
- * `/projects/cube-trainer` at 1440 after a 200px scroll: zero hard violations
- * and zero panel intrusions, but ~40 sample points inside ink rects at up to
- * 15px depth into a 39px rect (a 19px line box plus its 10px buffers) — traces
- * grazing a text band, and in a couple of places clipping it. That is the
- * tier-3 ink-blind routing fallback behaving as designed, so pinning it to a
- * number here would encode a value nobody chose.
+ * Only the surface invariant is asserted after scrolling. A block of text is a
+ * cell-blocking barrier now, so `expectCircuitFieldRespectsOccluders` already
+ * covers it through the strict channel; what stays best-effort is the *soft*
+ * remainder — single short lines and icons, which the routing ladder's last tier
+ * may clip. Pinning a sample count for those would encode a value nobody chose.
  */
 test("scrolling does not leave traces inside a surface", async ({ page }) => {
   await page.setViewportSize({ height: 900, width: 1440 });

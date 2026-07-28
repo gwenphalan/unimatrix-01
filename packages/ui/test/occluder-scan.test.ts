@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import type { OccluderStyle } from "../src/components/occluder-classify.js";
 import {
@@ -6,6 +6,7 @@ import {
   type DiscoveredSurface,
   scanOccluders,
 } from "../src/components/occluder-scan.js";
+import type { Rect } from "../src/components/occlusion.js";
 
 const VIEWPORT = { width: 1440, height: 900 };
 
@@ -52,6 +53,21 @@ function panel(x0: number, y0: number, x1: number, y1: number): HTMLElement {
 function plain(x0: number, y0: number, x1: number, y1: number): HTMLElement {
   const el = document.createElement("div");
   withBox(el, x0, y0, x1, y1);
+
+  return el;
+}
+
+/**
+ * Viewport-coordinate ink rects per text node, for the `Range.getClientRects`
+ * stub the ink-tiering block installs. Keyed by the text node because
+ * `selectNodeContents` makes it the range's `startContainer`.
+ */
+const INK = new WeakMap<Node, Rect[]>();
+
+function inked(el: HTMLElement, rects: Rect[]): HTMLElement {
+  const node = document.createTextNode("copy");
+  el.append(node);
+  INK.set(node, rects);
 
   return el;
 }
@@ -152,6 +168,77 @@ describe("scanOccluders", () => {
     container.append(panel(100, 100, 103, 103));
 
     expect(scan(container)).toEqual([]);
+  });
+
+  /**
+   * The tier text lands in is the whole reason this change exists. Soft is
+   * advisory — the routing ladder's hard-only fallback may ignore it — so a
+   * paragraph or heading big enough to claim lattice cells has to reach the hard
+   * channel or traces run right up against the glyphs.
+   */
+  describe("ink tiering", () => {
+    beforeEach(() => {
+      Range.prototype.getClientRects = function getClientRects(this: Range) {
+        const rects = (INK.get(this.startContainer) ?? []).map((rect) => ({
+          left: rect.x0,
+          top: rect.y0,
+          right: rect.x1,
+          bottom: rect.y1,
+        }));
+
+        return Object.assign(rects, {
+          item: (i: number) => rects[i] ?? null,
+        }) as unknown as DOMRectList;
+      };
+    });
+
+    afterEach(() => {
+      delete (Range.prototype as { getClientRects?: unknown }).getClientRects;
+    });
+
+    it("routes ink at least one grid cell on both axes into the cell-blocking channel", () => {
+      const container = root();
+      // `apps/web` `/about`'s intro paragraph: two merged 19px lines, 47px tall.
+      container.append(
+        inked(plain(227, 163, 1031, 210), [{ x0: 227, y0: 163, x1: 1031, y1: 210 }]),
+      );
+
+      const surfaces = scan(container);
+
+      expect(surfaces).toHaveLength(1);
+      expect(surfaces[0]!.kind).toBe("ink");
+      expect(surfaces[0]!.localRects).toEqual([{ x0: 0, y0: 0, x1: 804, y1: 47 }]);
+    });
+
+    it("keeps a lone line of ink too short for the lattice soft", () => {
+      const container = root();
+      container.append(inked(plain(227, 219, 566, 238), [{ x0: 227, y0: 219, x1: 566, y1: 238 }]));
+
+      const surfaces = scan(container);
+
+      expect(surfaces).toHaveLength(1);
+      expect(surfaces[0]!.kind).toBe("soft");
+    });
+
+    /**
+     * One element, both channels. The rect index in the provider's discovered key
+     * is per-surface, so pushing the same element twice stays collision-free.
+     */
+    it("splits one element's ink across both channels by size", () => {
+      const container = root();
+      container.append(
+        inked(plain(227, 163, 1031, 500), [
+          { x0: 227, y0: 163, x1: 1031, y1: 210 },
+          { x0: 227, y0: 480, x1: 566, y1: 499 },
+        ]),
+      );
+
+      const surfaces = scan(container);
+
+      expect(surfaces.map((surface) => surface.kind)).toEqual(["ink", "soft"]);
+      expect(surfaces[0]!.localRects).toEqual([{ x0: 0, y0: 0, x1: 804, y1: 47 }]);
+      expect(surfaces[1]!.localRects).toEqual([{ x0: 0, y0: 317, x1: 339, y1: 336 }]);
+    });
   });
 
   describe("directives", () => {

@@ -218,11 +218,12 @@ function measureDiscovered(
         x1: box.left + local.x1,
         y1: box.top + local.y1,
       };
-      // `kind` marks ink only. Hard is the absent-tag default, so setting it
-      // explicitly here would just make every hard rect compare unequal to the
-      // plain-literal form the manual path and every existing test produce.
+      // Only the non-default kinds are tagged. `"hard"` is the absent-tag
+      // default, so setting it explicitly would make every surface rect compare
+      // unequal to the plain-literal form the manual path and every existing test
+      // produce.
       const clamped = clampRectToViewport(
-        surface.kind === "soft" ? { ...base, kind: "soft" as const } : base,
+        surface.kind === "hard" ? base : { ...base, kind: surface.kind },
         viewport.width,
         viewport.height,
       );

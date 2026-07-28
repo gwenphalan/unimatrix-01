@@ -89,10 +89,12 @@ export function CircuitDebugOverlay({
   if (typeof document === "undefined") return null;
 
   const active = liveOccluders ?? occluders;
-  // Split by kind before inflating. Drawing every rect with the hard buffer
-  // was wrong in both directions: it overstated an ink rect's clearance by
-  // 8px against 10px, and it drew ink as though it blocked lattice cells,
-  // which it deliberately does not.
+  // Split by *channel*, not by kind: `"hard"` and `"ink"` both block cells and
+  // share the hard buffer, so both belong in the amber group, and a block of text
+  // is drawn exactly like the panel beside it because it behaves exactly like it.
+  // Only `"soft"` differs, and drawing it with the hard buffer was wrong in both
+  // directions — it overstated its clearance and implied cell blocking it does not
+  // do. `window.__circuitField.occluders()` is where a `kind` breakdown lives.
   const hard = active.filter((rect) => rect.kind !== "soft");
   const soft = active.filter((rect) => rect.kind === "soft");
   const buffered = hard.map((rect) => inflateRect(rect, OCCLUDER_BUFFER_PX));

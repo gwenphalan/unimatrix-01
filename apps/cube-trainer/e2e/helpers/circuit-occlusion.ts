@@ -19,12 +19,29 @@ import { type Page, expect } from "@playwright/test";
  * which is the failure mode this note exists to delay.
  */
 
-export type MeasuredRect = { x0: number; y0: number; x1: number; y1: number };
+export type OccluderKind = "hard" | "ink" | "soft";
+
+/**
+ * `kind` rides along from the app: `inflateRect`/`translateRect` are
+ * tag-preserving, so the rects the debug snapshot publishes still carry it. An
+ * absent tag means `"hard"`, exactly as in `packages/ui`.
+ */
+export type MeasuredRect = {
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+  kind?: OccluderKind;
+};
 
 type CircuitSample = {
-  /** Hard barrier rects, buffer-inflated, in viewport coordinates. */
+  /**
+   * Cell-blocking barrier rects, buffer-inflated, in viewport coordinates —
+   * painting surfaces (`kind` absent or `"hard"`) *and* blocks of text
+   * (`kind: "ink"`). Both are strict: nothing may be generated inside either.
+   */
   hard: MeasuredRect[];
-  /** Ink (soft) barrier rects, buffer-inflated, in viewport coordinates. */
+  /** Soft rects: ink too small to claim a lattice cell. Advisory, best-effort. */
   soft: MeasuredRect[];
   /** Every trace vertex plus samples along each segment, viewport coordinates. */
   pathPoints: { x: number; y: number }[];
@@ -251,13 +268,15 @@ function contains(rect: MeasuredRect, point: { x: number; y: number }): boolean 
 }
 
 /**
- * Ink violations tolerated per page. Not zero on principle: the routing ladder
- * degrades to an ink-blind tier rather than dropping a trace, so a trace *may*
- * legally clip a glyph when a component's free space is entirely covered in
- * text (`route-engine.ts` documents this as tier 3). Measured at 0 across the
- * whole matrix, so this budget exists to absorb a single tangency, not to paper
- * over a channel that stopped working — `soft.length > 0` below is what proves
- * ink is still being discovered.
+ * Soft-channel violations tolerated per page. Not zero on principle: the routing
+ * ladder degrades to a text-blind tier rather than dropping a trace, so a trace
+ * *may* legally clip a glyph when a component's free space is entirely covered in
+ * text (`route-engine.ts` documents this as tier 3). This budget absorbs a
+ * tangency rather than papering over a dead channel — the `textRects` check below
+ * is what proves text is still being discovered.
+ *
+ * It applies to the soft remainder only. Text large enough for the lattice is
+ * `"ink"`, which the hard assertions above hold to zero.
  *
  * A genuine crossing yields ten or more samples at `SAMPLE_STEP_PX`, so 3
  * cannot hide one.
@@ -300,10 +319,17 @@ export async function expectCircuitFieldRespectsOccluders(
     `${label}: a via/tip sits inside a hard occluder (${hardRectViolations.length} rects)`,
   ).toEqual([]);
 
-  // Ink discovery is a first-class part of this change: every one of these
-  // routes renders text, so an empty soft set means the ink channel died
-  // silently rather than that the page has nothing to avoid.
-  expect(sample.soft.length, `${label}: no ink rects were discovered`).toBeGreaterThan(0);
+  // Text discovery is a first-class part of this change: every one of these
+  // routes renders text, so finding none means the ink channel died silently
+  // rather than that the page has nothing to avoid.
+  //
+  // Deliberately not `soft.length > 0`, which is what this checked while all text
+  // was soft. A block of text large enough for the lattice is `"ink"` now and
+  // lands in the strict channel, so a route whose text all merged into blocks
+  // would legitimately report an empty soft set and fail an assertion about the
+  // wrong thing.
+  const textRects = [...sample.hard.filter((rect) => rect.kind === "ink"), ...sample.soft];
+  expect(textRects.length, `${label}: no ink rects were discovered`).toBeGreaterThan(0);
 
   const softPathViolations = sample.pathPoints.filter((point) =>
     sample.soft.some((rect) => contains(rect, point)),

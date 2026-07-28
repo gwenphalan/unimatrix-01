@@ -9,6 +9,7 @@ import {
   isCellBlocked,
   pointInSoftBarrier,
   segmentCrossesBarrier,
+  surfaceOnlyBarriers,
 } from "../src/components/occlusion.js";
 import { generateTraces } from "../src/components/trace-generation.js";
 
@@ -391,5 +392,70 @@ describe("soft barriers degrade silently rather than warning", () => {
 
     expect(traces).toHaveLength(24);
     expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  /**
+   * The same guarantee for `"ink"`, and this one is the regression test for a
+   * measured storm rather than a hypothetical. Text used to be soft-only, which
+   * left traces running 13-23px from an `<h1>`'s glyphs; making it cell-blocking
+   * fixed that and immediately produced **~300** `buildRoute` canary warnings on
+   * one `apps/web` `/` load, against 10-13 before. Cause: every tier that is
+   * allowed to clip text still had text in `cells`, so the tier stayed
+   * lattice-blocked by the thing it was supposed to ignore and failed anyway.
+   * `surfaceOnlyBarriers` is the fix, and this is what proves it holds — swept
+   * over seeds because a single seed can get lucky on anchor choice.
+   */
+  it("adds no warnings that the surfaces alone would not have caused", () => {
+    const width = 1440;
+    const height = 900;
+    // An `apps/web` article-ish layout: two painting panels plus a heading and a
+    // three-line paragraph between them.
+    const surfaces: Occluder[] = [
+      { x0: 240, y0: 16, x1: 1200, y1: 108, kind: "hard" },
+      { x0: 240, y0: 420, x1: 1200, y1: height, kind: "hard" },
+    ];
+    const text: Occluder[] = [
+      { x0: 250, y0: 120, x1: 420, y1: 180, kind: "ink" },
+      { x0: 250, y0: 200, x1: 1010, y1: 275, kind: "ink" },
+    ];
+
+    const warnsFor = (occluders: Occluder[]) => {
+      warnSpy.mockClear();
+      const barriers = buildBarrierField(occluders);
+
+      for (const seed of [21, 22, 23, 24, 25]) {
+        const { traces } = generateTraces(width, height, seed, barriers, 24);
+        expect(traces.length, `seed ${seed} produced no traces`).toBeGreaterThan(0);
+      }
+
+      return warnSpy.mock.calls.length;
+    };
+
+    // Asserted as a *difference*, not as zero. Surfaces can legitimately strand
+    // an endpoint pair, and pinning an absolute count here would make this test
+    // fail for reasons that have nothing to do with text. The invariant is that
+    // adding text changes nothing.
+    expect(warnsFor([...surfaces, ...text])).toBe(warnsFor(surfaces));
+  });
+
+  /**
+   * The projection the tier above depends on, pinned directly: text has to leave
+   * *both* channels. Dropping it from the exact rects while leaving it in `cells`
+   * is the exact half-fix that caused the storm, and it is invisible — the field
+   * still type-checks and every route still comes back hard-clear.
+   */
+  it("strips text from the lattice as well as the exact rects", () => {
+    const barriers = buildBarrierField([
+      { x0: 400, y0: 400, x1: 600, y1: 600, kind: "hard" },
+      { x0: 800, y0: 400, x1: 1000, y1: 600, kind: "ink" },
+    ]);
+    const surfaceOnly = surfaceOnlyBarriers(barriers);
+
+    expect(barriers.buffered).toHaveLength(2);
+    expect(surfaceOnly.buffered).toHaveLength(1);
+    expect(isCellBlocked(barriers, { x: 880, y: 480 })).toBe(true);
+    expect(isCellBlocked(surfaceOnly, { x: 880, y: 480 })).toBe(false);
+    // The surface half is untouched by the projection.
+    expect(isCellBlocked(surfaceOnly, { x: 480, y: 480 })).toBe(true);
   });
 });

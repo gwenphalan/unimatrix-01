@@ -18,6 +18,7 @@ import {
   isCellBlocked,
   pointInSoftBarrier,
   segmentCrossesBarrier,
+  surfaceOnlyBarriers,
 } from "./occlusion.js";
 import { bfsConnectorCells, cellOf, connectorViaElbow } from "./route-engine.js";
 
@@ -423,11 +424,16 @@ function attachRoute(
    * segments are clear.
    *
    * Tier 3 (`avoidInk: false`, only after every anchor has failed tiers 1-2) —
-   * this function's behaviour before ink existed. Guaranteed hard-clear, may
-   * clip a glyph, and accepted **silently**. The silence is deliberate: ink can
-   * make a corridor genuinely impossible, and the warn at the end means "a
-   * component's own footprint was unreachable from itself", a real defect that
-   * a text-dense page would otherwise bury under a storm of cosmetic misses.
+   * this function's behaviour before text was a barrier at all: tested against
+   * `surfaceOnlyBarriers`, so text is gone from the lattice *and* the exact rects.
+   * Guaranteed surface-clear, may clip a glyph, and accepted **silently**. The
+   * silence is deliberate: text can make a corridor genuinely impossible, and the
+   * warn at the end means "a component's own footprint was unreachable from
+   * itself", a real defect that a text-dense page would otherwise bury.
+   *
+   * Narrowing only the exact rects here and leaving text in `cells` is the
+   * specific mistake to avoid — the tier then fails on the text it was meant to
+   * ignore, which is invisible in review and shows up as a warning storm.
    */
   const attemptFrom = (
     candidate: (typeof nearest)[number],
@@ -435,21 +441,26 @@ function attachRoute(
   ): { ownerIndex: number; body: Point[] } | null => {
     const anchor: Point = { x: candidate.cx * GRID, y: candidate.cy * GRID };
     const allowed = new Set([candidate.key, targetKey]);
+    // The blind tier tests against a field with text removed from the lattice as
+    // well as from the exact rects. Text is cell-blocking now, so leaving
+    // `barriers` in place here would make this tier no more permissive than the
+    // one above it and the warn below would fire on ordinary prose.
+    const field = avoidInk ? barriers : surfaceOnlyBarriers(barriers);
 
     const collides = (points: Point[]) =>
       points.some((point) => {
         const key = cellKey(point);
         if (allowed.has(key)) return false;
-        return footprint.has(key) || isCellBlocked(barriers, point);
+        return footprint.has(key) || isCellBlocked(field, point);
       });
 
     const crossesBarrier = (points: Point[]) => {
       let prev = anchor;
       for (const point of points) {
-        if (segmentCrossesBarrier(barriers, prev, point)) return true;
+        if (segmentCrossesBarrier(field, prev, point)) return true;
         prev = point;
       }
-      return segmentCrossesBarrier(barriers, prev, target);
+      return segmentCrossesBarrier(field, prev, target);
     };
 
     const elbowCandidates = [
@@ -479,7 +490,7 @@ function attachRoute(
 
     if (!interior) {
       const corridorOccupied = new Set(footprint);
-      barriers.cells.forEach((key) => corridorOccupied.add(key));
+      field.cells.forEach((key) => corridorOccupied.add(key));
       if (avoidInk) barriers.softCells.forEach((key) => corridorOccupied.add(key));
       // After the barrier unions, not before: an anchor or target cell may
       // itself sit on ink, and re-adding it here is what lets a route escape.

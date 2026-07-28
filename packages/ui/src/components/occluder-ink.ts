@@ -20,8 +20,19 @@ export const MIN_INK_SIDE_PX = 6;
  */
 const INK_LINE_MERGE_PX = 2;
 
-/** Maximum vertical gap between lines that still merges into one block. */
-const INK_BLOCK_MERGE_PX = 6;
+/**
+ * Maximum vertical gap between lines that still merges into one block.
+ *
+ * 12, not the 6 it started at, and the number is set by this repo's body text
+ * rather than by taste. Measured on `apps/web` `/about`: consecutive paragraph
+ * line boxes are 19px of ink on a 28px pitch, so every normal line pair leaves a
+ * 9px gap and 6px rejected all of them — one paragraph came back as three
+ * separate rects. Merging matters more than it looks: a merged 3-line block is
+ * ~75px tall and clears `occluder-scan.ts`'s 40px hard floor, while each
+ * unmerged 19px line falls under it and lands on the soft channel, which the
+ * routing ladder's fallback tier is allowed to ignore.
+ */
+const INK_BLOCK_MERGE_PX = 12;
 
 /**
  * Minimum horizontal overlap ratio for two stacked lines to merge into a

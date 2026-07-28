@@ -30,6 +30,29 @@ import type { OccluderKind, Rect } from "./occlusion.js";
 /** Minimum side for a *hard* rect. Below it, an element demotes to ink. */
 const MIN_HARD_SIDE_PX = GRID;
 
+/**
+ * Whether a rect is big enough to be a hard barrier.
+ *
+ * Applied to ink as well as to painting boxes, and that is the load-bearing
+ * decision in this module. Ink started out unconditionally soft, on the reasoning
+ * that a paragraph in `cells` could split the canvas into disconnected free
+ * regions. It can, and a page of prose does get sparser for it — but soft is
+ * advisory: the routing ladder's third tier is hard-only by design, so on a page
+ * with an empty half a trace still ran 13-23px from an `<h1>`'s glyphs, at glyph
+ * height, and no soft buffer can prevent that (see `SOFT_OCCLUDER_BUFFER_PX`).
+ * Hard is the only tier nothing is allowed to ignore, and it is the tier the
+ * lattice snap applies to, which is where real clearance comes from.
+ *
+ * The floor is what keeps this from being reckless: a block of ink has to be at
+ * least one grid cell on both axes before it can claim lattice cells, so a merged
+ * paragraph or a display heading qualifies while a lone 19px line of small text
+ * or a 20px icon stays soft. One element can produce both kinds at once — its
+ * sized ink and its stray fragments are pushed as two separate surfaces.
+ */
+function isHardSized(rect: Rect): boolean {
+  return rect.x1 - rect.x0 >= MIN_HARD_SIDE_PX && rect.y1 - rect.y0 >= MIN_HARD_SIDE_PX;
+}
+
 const MAX_SCAN_ELEMENTS = 4000;
 const MAX_SCAN_DEPTH = 40;
 const MAX_HARD_RECTS = 64;
@@ -164,7 +187,7 @@ export function scanOccluders(
     if (directive !== "none" && paintsSurface(style, el.tagName)) {
       const local: Rect = { x0: 0, y0: 0, x1: width, y1: height };
 
-      if (width >= MIN_HARD_SIDE_PX && height >= MIN_HARD_SIDE_PX) {
+      if (isHardSized(local)) {
         hard.push({ el, kind: "hard", localRects: [local] });
       } else if (width >= MIN_INK_SIDE_PX && height >= MIN_INK_SIDE_PX) {
         // Demoted, not dropped. A 14px icon or a 36px-tall input paints, but a
@@ -182,7 +205,14 @@ export function scanOccluders(
     // are `SVGElement` path/g nodes rather than layout boxes.
     if (el.tagName.toUpperCase() !== "SVG") {
       const inkRects = measureInkRects(el, { left: box.left, top: box.top });
-      if (inkRects.length > 0) soft.push({ el, kind: "soft", localRects: inkRects });
+
+      if (inkRects.length > 0) {
+        const hardInk = inkRects.filter(isHardSized);
+        const softInk = inkRects.filter((rect) => !isHardSized(rect));
+
+        if (hardInk.length > 0) hard.push({ el, kind: "ink", localRects: hardInk });
+        if (softInk.length > 0) soft.push({ el, kind: "soft", localRects: softInk });
+      }
 
       pushChildren(el, depth + 1, stack);
     }

@@ -8,16 +8,29 @@ export type Rect = { x0: number; y0: number; x1: number; y1: number };
  * - `"hard"` — the rect paints a surface over the background (a panel, card,
  *   header, image). Blocks lattice cells *and* exact segments, so nothing is
  *   generated inside it and nothing routes through it.
- * - `"soft"` — the rect is *ink*: a glyph line box, an icon, a sub-grid-cell
- *   control. Blocks exact segments only, never lattice cells. Ink is far
- *   smaller than the 40px lattice pitch, so letting it block cells would
- *   quantise a 24px line of text up to a 40-80px band and a paragraph would
- *   split the canvas into disconnected flood-fill regions. Exact
- *   (`segmentCrossesBarrier`) tests are real-coordinate Liang-Barsky and have
- *   no such quantisation, which is why ink can be enforced precisely while
+ * - `"ink"` — the rect is a *block of text* at least one grid cell on both axes:
+ *   a paragraph, a heading. Blocks cells and segments exactly like `"hard"`, and
+ *   is only tagged apart so the fallback ladders in `buildRoute` / `attachRoute`
+ *   can drop it. That distinction is the whole point: a tier that ignores ink has
+ *   to ignore it in `cells` as well, or the lattice stays blocked and the tier
+ *   fails anyway. Measured on `apps/web` `/` with text merged into plain
+ *   `"hard"`: ~300 `buildRoute` canary warnings in one load, against 10-13 with
+ *   this split.
+ * - `"soft"` — ink too small to claim a lattice cell: a single 19px line, an
+ *   icon, a sub-grid-cell control. Blocks exact segments only, never cells.
+ *   Quantising a 19px line up to a 40-80px band would cost far more canvas than
+ *   the thing it protects, and exact (`segmentCrossesBarrier`) tests are
+ *   real-coordinate Liang-Barsky, so this channel is enforced precisely while
  *   staying invisible to `findFreeComponents` and every BFS occupancy check.
+ *
+ * Text was `"soft"` outright at first, and that is the mistake this three-way
+ * split fixes. Soft is advisory by construction — the hard-only fallback tier may
+ * ignore it — so on a page with a whole empty half a trace still ran 13-23px from
+ * an `<h1>`'s glyphs, at glyph height, and no amount of soft buffer could stop it
+ * (see `SOFT_OCCLUDER_BUFFER_PX`). Clearance comes from the lattice snap, and the
+ * lattice snap only applies to cell-blocking kinds.
  */
-export type OccluderKind = "hard" | "soft";
+export type OccluderKind = "hard" | "ink" | "soft";
 
 /**
  * A DOM-measured rect, in viewport coordinates.
@@ -59,11 +72,22 @@ export const OCCLUDER_BUFFER_PX = 8;
 // does not apply to this channel — it is the one buffer in the file that
 // translates 1:1 into visible clearance.
 //
-// 10px, not the 4px first tried: 4 is enough to clear a glyph's antialiased
-// edge but reads as a trace touching the text. This is the knob to turn when
-// traces look too close to content; raising `OCCLUDER_BUFFER_PX` instead only
-// changes *which* lattice line a trace snaps to, so it buys clearance in
-// non-uniform 40px jumps or not at all.
+// **This is not the knob to turn when traces look too close to text.** That was
+// tried and it does not work, which is worth recording because the 1:1 property
+// above makes it look like it should. 4px, then 10px, then 24px: at 24 a probe on
+// `apps/web` `/about` still found 37-42 densified trace samples *inside* ink
+// rects — 44 of them in one rect, running 13-23px to the right of the `<h1>`
+// glyphs at glyph height. Points inside a soft rect are not a clearance
+// shortfall, they are the routing ladder's hard-only fallback tier winning, and
+// that tier ignores this constant by construction. Widening the band only makes
+// the tier fire more often, so the traces move *onto* the glyphs.
+//
+// Text clearance is bought by classifying text as hard instead (see
+// `occluder-scan.ts`), where the lattice snap applies and the fallback tier
+// cannot ignore it. What is left on this channel is what genuinely cannot be
+// hard: sub-40px painting elements (icons, small inputs) and single-line ink too
+// short to clear the hard floor. 10px is sized for those — 24px around a 20x26
+// icon is a 68x74 rect, several times the thing it protects.
 export const SOFT_OCCLUDER_BUFFER_PX = 10;
 
 // `<T extends Rect>` with a spread, not a fresh 4-key literal: these run over
@@ -118,13 +142,29 @@ export function clampRectToViewport<T extends Rect>(
 }
 
 export type BarrierField = {
-  /** Buffer-inflated **hard** rects, for exact (non-lattice-snapped) segment tests. */
+  /**
+   * Buffer-inflated cell-blocking rects — `"hard"` **and** `"ink"` — for exact
+   * (non-lattice-snapped) segment tests. This is the strict channel every default
+   * path enforces.
+   */
   readonly buffered: readonly Rect[];
   /**
-   * Lattice cells blocked by an inflated **hard** rect — the cheap point/BFS
-   * test. Ink deliberately never lands here; see `OccluderKind`.
+   * Lattice cells blocked by an inflated `"hard"` or `"ink"` rect — the cheap
+   * point/BFS test. Only `"soft"` stays out; see `OccluderKind`.
    */
   readonly cells: ReadonlySet<string>;
+  /**
+   * `buffered` with text excluded — painting surfaces only.
+   *
+   * The pair below exists for exactly one purpose: the last-resort tiers in
+   * `buildRoute` and `attachRoute` are allowed to clip text but never a surface,
+   * and they need a field where text is absent from *both* the exact rects and the
+   * lattice. Dropping ink from only one of the two leaves the tier blocked by the
+   * other, which is how a text-dense page turns into a canary-warning storm.
+   */
+  readonly surfaceBuffered: readonly Rect[];
+  /** Lattice cells blocked by a painting surface only — never by text. */
+  readonly surfaceCells: ReadonlySet<string>;
   /** Buffer-inflated **soft** (ink) rects. Exact segment/point tests only. */
   readonly soft: readonly Rect[];
   /**
@@ -202,24 +242,56 @@ export function buildBarrierField(
   buffer: number = OCCLUDER_BUFFER_PX,
   softBuffer: number = SOFT_OCCLUDER_BUFFER_PX,
 ): BarrierField {
-  const buffered: Rect[] = [];
+  const surfaceBuffered: Rect[] = [];
+  const inkBuffered: Rect[] = [];
   const soft: Rect[] = [];
 
   occluders.forEach((rect) => {
     if (rect.kind === "soft") soft.push(inflateRect(rect, softBuffer));
-    else buffered.push(inflateRect(rect, buffer));
+    else if (rect.kind === "ink") inkBuffered.push(inflateRect(rect, buffer));
+    else surfaceBuffered.push(inflateRect(rect, buffer));
   });
+
+  // Ink shares the hard buffer, not the soft one: it is lattice-snapped like a
+  // surface, so a px-level buffer only decides which lattice line it snaps to —
+  // the same reasoning as `OCCLUDER_BUFFER_PX`'s own comment.
+  const buffered = [...surfaceBuffered, ...inkBuffered];
 
   return {
     buffered,
     cells: blockedCells(buffered, axisRange),
+    surfaceBuffered,
+    surfaceCells: blockedCells(surfaceBuffered, axisRange),
     soft,
     softCells: blockedCells(soft, innerAxisRange),
   };
 }
 
+const NO_CELLS: ReadonlySet<string> = new Set();
+
 /**
- * **Hard channel only.** A soft rect never blocks a cell — `findFreeComponents`'
+ * `field` with every trace of text removed — no soft rects, and the strict
+ * channel narrowed to painting surfaces.
+ *
+ * The field the last-resort tiers of `buildRoute` and `attachRoute` test against.
+ * It is a projection rather than something the caller assembles inline because
+ * getting it wrong is silent: drop text from the exact rects but leave it in
+ * `cells` and the tier is still lattice-blocked by the text it was meant to
+ * ignore, so it fails, and the canary warning it exists to prevent fires anyway.
+ */
+export function surfaceOnlyBarriers(field: BarrierField): BarrierField {
+  return {
+    buffered: field.surfaceBuffered,
+    cells: field.surfaceCells,
+    surfaceBuffered: field.surfaceBuffered,
+    surfaceCells: field.surfaceCells,
+    soft: [],
+    softCells: NO_CELLS,
+  };
+}
+
+/**
+ * **Cell-blocking channel only** (`"hard"` and `"ink"`). A soft rect never blocks a cell — `findFreeComponents`'
  * flood fill and every BFS occupancy check must stay open across ink, or a
  * paragraph would split the canvas into disconnected regions and starve whole
  * trees for the sake of a line of text. Use `pointInSoftBarrier` for the

@@ -8,7 +8,7 @@ import {
   recomputeCorners,
   snap,
 } from "./grid-math.js";
-import { type BarrierField, segmentCrossesBarrier } from "./occlusion.js";
+import { type BarrierField, segmentCrossesBarrier, surfaceOnlyBarriers } from "./occlusion.js";
 
 const MS_PER_STEP = 150;
 const MIN_TRAVEL_MS = 4000;
@@ -228,11 +228,20 @@ function countRouteCollisions(points: Point[]): number {
  * compiling; omitting it reproduces the pre-barrier collision-only
  * behavior exactly.
  *
- * Barriers come in two kinds and the fallback ladder treats them differently:
- * an elbow or corridor is tried first against hard ∪ ink, then — if that
- * fails — against hard alone. So the invariant is that ink never causes a
- * hard-barrier violation and never causes a console warning; it only ever
- * costs a route its ink clearance.
+ * The fallback ladder treats the three barrier kinds differently: an elbow or
+ * corridor is tried first against everything, then — if that fails — against
+ * painting surfaces alone, with both the exact rects *and* the lattice narrowed
+ * (`surfaceOnlyBarriers`). So a route may clip text but never a surface.
+ *
+ * That is weaker than "text never causes a console warning", and deliberately so.
+ * Text blocks lattice cells now, which means it genuinely removes free space the
+ * way a panel does, so it can genuinely make a pair of endpoints unreachable.
+ * Measured on `apps/web` `/`, one load: 24 canary warnings with text
+ * cell-blocking, 10-13 with text confined to the advisory soft channel, and 39 on
+ * `main` before any of this work. What the ladder guarantees is that no tier is
+ * *blocked by text it was supposed to ignore* — the failure mode that took the
+ * same page to ~300 warnings when text first became cell-blocking while
+ * `surfaceOnlyBarriers` still left it in `cells`.
  */
 export function buildRoute(
   from: RoutePoint[],
@@ -257,12 +266,18 @@ export function buildRoute(
   const fullRouteCollisions = (connector: RoutePoint[]) =>
     countRouteCollisions([...from, ...leadIn, ...connector, ...to]);
 
-  // The same field with the ink channel emptied. Every tier below that is
-  // allowed to clip ink but never a surface tests against this instead of
-  // `barriers`, which is what keeps the two invariants separable: ink can
-  // degrade a route's aesthetics, only a hard surface can make it *wrong*.
-  const hardOnly: BarrierField | undefined = barriers
-    ? { buffered: barriers.buffered, cells: barriers.cells, soft: [], softCells: new Set() }
+  // The same field with **all** text removed — the soft channel emptied and the
+  // strict channel narrowed to painting surfaces. Every tier below that is
+  // allowed to clip text but never a surface tests against this instead of
+  // `barriers`, which is what keeps the two invariants separable: text can
+  // degrade a route's aesthetics, only a surface can make it *wrong*.
+  //
+  // Both halves matter. Leaving `cells` as the full union here (which it was,
+  // while text lived only in the soft channel) silently re-blocks the lattice for
+  // every tier meant to ignore text, and the storm this function's canary is
+  // supposed to flag becomes routine: ~300 warnings on one `apps/web` `/` load.
+  const surfaceOnly: BarrierField | undefined = barriers
+    ? surfaceOnlyBarriers(barriers)
     : undefined;
 
   const crossesBarrier = (connector: RoutePoint[], field = barriers) => {
@@ -299,19 +314,30 @@ export function buildRoute(
     const toCell = cellOf(toStart);
     // Cells of slack outside the endpoints' bounding box the corridor may use
     // to detour. 12, not the 6 it started at: measured on `apps/web` `/`, 6
-    // left 12 `buildRoute` canary warnings per load and 12 left 10 — and 10 is
-    // also exactly what the same page produces with the ink channel disabled
-    // outright, so at this margin ink costs zero warnings. The residual 10 are
-    // surface-blocked endpoint pairs that predate this change: the same page on
-    // `main`, same viewport, warns 39 times per load. Only the fallback path
-    // pays for the wider window.
+    // left 12 `buildRoute` canary warnings per load and 12 left 10. The residual
+    // 10 are surface-blocked endpoint pairs that predate the text work: the same
+    // page on `main`, same viewport, warns 39 times per load. Only the fallback
+    // path pays for the wider window.
     const margin = 12;
-    const bounds = {
-      minX: Math.min(fromCell.cx, toCell.cx) - margin,
-      maxX: Math.max(fromCell.cx, toCell.cx) + margin,
-      minY: Math.min(fromCell.cy, toCell.cy) - margin,
-      maxY: Math.max(fromCell.cy, toCell.cy) + margin,
-    };
+    // The window the *text-blind* pass gets, deliberately far larger. A bounded
+    // window is a second reason a corridor can fail, independent of what is
+    // blocking it, and this pass is the one that must not fail for reasons
+    // unrelated to a surface. 64 cells is 2560px at the current pitch, past any
+    // desktop viewport, so it is "unbounded" in practice while still terminating
+    // on a finite grid — the same reasoning by which `attachRoute`'s equivalent
+    // tier searches its whole canvas.
+    //
+    // Worth 4 warnings, measured, not more: `apps/web` `/`, one load, 28 with
+    // margin 12 on both passes and 24 with this. It runs only on the fallback
+    // path, so the wider BFS costs nothing in the common case, but do not expect
+    // it to drive the count to zero — see the canary's own comment for why.
+    const blindMargin = 64;
+    const boundsWithin = (slack: number) => ({
+      minX: Math.min(fromCell.cx, toCell.cx) - slack,
+      maxX: Math.max(fromCell.cx, toCell.cx) + slack,
+      minY: Math.min(fromCell.cy, toCell.cy) - slack,
+      maxY: Math.max(fromCell.cy, toCell.cy) + slack,
+    });
     // Two attempts, ink-avoiding first. `avoidInk` additionally treats every
     // lattice cell sitting on a glyph as occupied and re-checks the result
     // against the exact hard-union-soft test, since `softCells` only
@@ -321,6 +347,7 @@ export function buildRoute(
     // corridor genuinely impossible, and the canary below must keep meaning
     // "no route at all was reachable".
     const corridorCandidate = (avoidInk: boolean): RoutePoint[] | null => {
+      const bounds = boundsWithin(avoidInk ? margin : blindMargin);
       const corridorOccupied = new Set(occupied);
 
       if (barriers) {
@@ -331,7 +358,11 @@ export function buildRoute(
         // treatment — text can appear over an existing trace exactly as a
         // panel can.
         const fromFootprint = new Set(from.map((point) => cellKey(point)));
-        barriers.cells.forEach((key) => {
+        // `cells` on the text-avoiding pass, `surfaceCells` on the blind one.
+        // Blocking the full union on both passes would make the blind pass no
+        // more permissive than the first, defeating the point of having two.
+        const blocked = avoidInk ? barriers.cells : barriers.surfaceCells;
+        blocked.forEach((key) => {
           if (!fromFootprint.has(key)) corridorOccupied.add(key);
         });
         if (avoidInk) {
@@ -368,16 +399,16 @@ export function buildRoute(
     }
   }
 
-  if (best === null && hardOnly) {
-    // Ink-blind elbow retry, and the tier that stops this function from
+  if (best === null && surfaceOnly) {
+    // Text-blind elbow retry, and the tier that stops this function from
     // warning on an ordinary text-dense page. Measured on `apps/web` `/`
     // before it existed: ~100 warnings per load. Both elbows commonly clip a
-    // glyph, and the BFS below them searches only a ±6-cell window around the
+    // glyph, and the BFS below them searches only a ±12-cell window around the
     // endpoints, so a wide panel between them defeats it — the pair fails
     // together, routinely, on nothing worse than a paragraph in the way.
-    // Accepted silently: guaranteed hard-clear, may clip ink, which is the
-    // documented ink trade-off rather than a defect worth a console line.
-    best = elbows.find((candidate) => !crossesBarrier(candidate, hardOnly)) ?? null;
+    // Accepted silently: guaranteed surface-clear, may clip text, which is the
+    // documented text trade-off rather than a defect worth a console line.
+    best = elbows.find((candidate) => !crossesBarrier(candidate, surfaceOnly)) ?? null;
   }
 
   if (best === null) {

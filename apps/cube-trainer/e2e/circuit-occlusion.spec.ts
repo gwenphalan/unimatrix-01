@@ -59,8 +59,10 @@ for (const width of WIDTHS) {
  * The plan's manual checklist called for a scroll gesture through a case grid,
  * because `/learn` is where scrolling moves the most surfaces at once — every
  * `CasePreviewCard` is its own hard rect. Same shape as the `apps/web` scroll
- * case: only the hard invariant is asserted, since ink clipping via the tier-3
- * routing fallback is accepted behaviour.
+ * case: only the surface invariant is asserted, since clipping the *soft*
+ * remainder — a lone short line, an icon — via the routing ladder's last tier is
+ * accepted behaviour. Text blocks big enough for the lattice are not soft and are
+ * covered by the strict channel.
  */
 test("scrolling a case grid does not leave traces inside a card", async ({ page }) => {
   await page.setViewportSize({ height: 900, width: 1440 });

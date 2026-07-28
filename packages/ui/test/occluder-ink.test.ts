@@ -42,6 +42,30 @@ describe("coalesceInkRects", () => {
   });
 
   /**
+   * The same collapse at this repo's *measured* body-text geometry, which the
+   * case above does not reach: `apps/web` `/about` reports 19px of ink on a 28px
+   * line pitch, a 9px gap. The original 6px merge threshold rejected that, so a
+   * three-line paragraph stayed three 19px rects — each one under
+   * `occluder-scan.ts`'s 40px hard floor, and therefore on the soft channel the
+   * routing fallback is allowed to ignore. The merge is what makes body text a
+   * hard barrier, so it is pinned to real numbers rather than round ones.
+   */
+  it("collapses lines at the real 19px-ink-on-28px-pitch body geometry", () => {
+    const rects = coalesceInkRects([
+      line(227, 163, 1013, 182),
+      line(227, 191, 1031, 210),
+      line(227, 219, 566, 238),
+    ]);
+
+    // The two full-width lines merge to 47px tall — over the 40px floor, so this
+    // block claims lattice cells. The ragged last line is only 42% as wide as the
+    // block above it, so `INK_BLOCK_OVERLAP_RATIO` keeps it separate and it stays
+    // soft. That is not a gap in coverage: the merged block's buffered span snaps
+    // outward to whole grid rows, which already covers the short line's band.
+    expect(rects).toEqual([line(227, 163, 1031, 210), line(227, 219, 566, 238)]);
+  });
+
+  /**
    * The asymmetry that makes ink worth measuring at all: a short heading above
    * wide body text keeps its tight width instead of being unioned out to the
    * paragraph's full span.
