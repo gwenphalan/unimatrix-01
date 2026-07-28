@@ -18,7 +18,7 @@ function ProjectDetailRoute() {
   const project = Route.useLoaderData();
 
   return (
-    <div className="space-y-8 lg:space-y-10">
+    <div className="space-y-6 sm:space-y-8 lg:space-y-10">
       <header className="space-y-5 border-b border-border/70 pb-8">
         <Button asChild className="w-fit gap-2" variant="outline">
           <Link to="/projects">
@@ -30,7 +30,6 @@ function ProjectDetailRoute() {
         <div className="space-y-4">
           <div className="flex flex-wrap items-center gap-2">
             <ProjectStatusBadge frontmatter={project.frontmatter} />
-            <Badge variant="secondary">{project.frontmatter.publishedAt}</Badge>
           </div>
 
           <h1 className="max-w-4xl text-3xl leading-[0.92] font-medium tracking-[-0.06em] text-foreground sm:text-4xl lg:text-[3.2rem]">

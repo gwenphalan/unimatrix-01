@@ -28,8 +28,7 @@ export interface PublicProjectEntry {
   frontmatter: {
     title: string;
     summary: string;
-    publishedAt: string;
-    status: string;
+    status?: string;
     repoUrl?: string;
     liveUrl?: string;
   };
@@ -40,20 +39,18 @@ export interface PublicProjectDetail extends PublicProjectEntry {
 }
 
 /**
- * Shown when a project row carries no status. Projects seeded from the
- * repository all have one and the admin form requires one, so this is the
- * honest label for a gap rather than a guess like "active".
- */
-const UNSPECIFIED_PROJECT_STATUS = "unspecified";
-
-/**
- * Renders a stored publication date as `YYYY-MM-DD`.
+ * Renders a stored publication date as `MM-DD-YY`.
  *
  * Values are not uniform: entries seeded from the repository keep the plain
  * date their frontmatter declared, while anything published through the CMS
  * carries a full ISO timestamp. Both display as a date. An unparseable or
  * absent value falls back to the raw string rather than showing "Invalid
  * Date".
+ *
+ * Read in UTC, not local time. A stored `2026-03-17` parses as midnight UTC,
+ * and reading it back through the viewer's timezone would show the 16th to
+ * anyone west of Greenwich — the date a post carries is a label, not an
+ * instant, so it must render the same everywhere.
  */
 export function formatPublishedDate(value: string | null): string {
   if (value === null) {
@@ -62,7 +59,16 @@ export function formatPublishedDate(value: string | null): string {
 
   const parsed = Date.parse(value);
 
-  return Number.isNaN(parsed) ? value : new Date(parsed).toISOString().slice(0, 10);
+  if (Number.isNaN(parsed)) {
+    return value;
+  }
+
+  const date = new Date(parsed);
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(date.getUTCDate()).padStart(2, "0");
+  const year = String(date.getUTCFullYear()).slice(-2);
+
+  return `${month}-${day}-${year}`;
 }
 
 function optional<TKey extends string>(
@@ -97,8 +103,15 @@ export function toProjectEntry(post: ContentPostSummary): PublicProjectEntry {
     frontmatter: {
       title: post.title,
       summary: post.summary,
-      publishedAt: formatPublishedDate(post.publishedAt),
-      status: post.projectStatus ?? UNSPECIFIED_PROJECT_STATUS,
+      // No `publishedAt`. Projects are persistent rather than sequential, so
+      // nothing on the public side renders a project's date — the admin table
+      // still shows it, where it describes the row rather than the project.
+      //
+      // `status` is absent rather than a placeholder label: the admin form no
+      // longer sets one — a project's status is the live-URL check — so the
+      // only rows carrying it are those seeded from the repository, and
+      // inventing an "unspecified" badge for the rest would be furniture.
+      ...optional("status", post.projectStatus),
       ...optional("repoUrl", post.repoUrl),
       ...optional("liveUrl", post.liveUrl),
     },
