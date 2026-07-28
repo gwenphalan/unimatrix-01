@@ -8,9 +8,21 @@ import { apiClient } from "@/lib/api-client";
  * Retries transport and server failures, never client ones. A 404 for a slug
  * that does not exist is a final answer, and retrying it three times with
  * backoff would delay the not-found page by seconds for no benefit.
+ *
+ * An allowlist rather than "anything that is not a 4xx". `@unimatrix/api-client`
+ * validates every response against its contract schema, and a mismatch throws a
+ * Zod error rather than an `ApiClientError` — so a deny-list shape retries a
+ * completely deterministic failure three times, adding two pointless requests
+ * and 800 ms to a page that was always going to fail. Retrying too much is the
+ * failure being guarded against here, so an unrecognised error is treated as
+ * final. `TypeError` is how `fetch` reports a transport failure.
  */
 function isRetryable(error: unknown): boolean {
-  return !(error instanceof ApiClientError && error.status >= 400 && error.status < 500);
+  if (error instanceof ApiClientError) {
+    return error.status >= 500;
+  }
+
+  return error instanceof TypeError;
 }
 
 const RETRY_DELAYS_MS = [200, 600] as const;

@@ -93,6 +93,34 @@ describe("retry policy", () => {
     expect(publishedPostQueryOptions("blog", "a-post").retry).toBe(false);
   });
 
+  /**
+   * The client validates every response against its contract schema, and a
+   * mismatch throws a Zod error, not an `ApiClientError`. That is deterministic
+   * — a second identical response fails identically — so retrying it only
+   * delays the error by two requests and 800 ms of backoff.
+   */
+  it("does not retry a response that fails contract validation", async () => {
+    const schemaError = Object.assign(new Error("invalid_type"), { name: "ZodError" });
+    const listPosts = vi.fn().mockRejectedValue(schemaError);
+    const options = publishedPostsQueryOptions("blog", createStubClient({ listPosts }));
+
+    await expect(createSilentQueryClient().ensureQueryData(options)).rejects.toThrow(
+      "invalid_type",
+    );
+    expect(listPosts).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries a transport failure, which fetch reports as a TypeError", async () => {
+    const listPosts = vi
+      .fn()
+      .mockRejectedValueOnce(new TypeError("Failed to fetch"))
+      .mockResolvedValue(emptyList);
+    const options = publishedPostsQueryOptions("blog", createStubClient({ listPosts }));
+
+    await expect(createSilentQueryClient().ensureQueryData(options)).resolves.toEqual(emptyList);
+    expect(listPosts).toHaveBeenCalledTimes(2);
+  });
+
   it("gives up and rejects once the retries are exhausted", async () => {
     const listPosts = vi.fn().mockRejectedValue(new ApiClientError("still down", { status: 502 }));
     const options = publishedPostsQueryOptions("blog", createStubClient({ listPosts }));
