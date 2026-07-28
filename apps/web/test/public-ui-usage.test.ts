@@ -142,6 +142,36 @@ describe("public UI package usage", () => {
     expect(missing).toEqual([]);
   });
 
+  it("keeps the editor in its own entry point, out of the public site's graph", () => {
+    const editorSource = readRepositoryFile("packages/ui/src/editor.ts");
+    const publicSource = readRepositoryFile("packages/ui/src/public.ts");
+    const rootSource = readRepositoryFile("packages/ui/src/index.ts");
+    const uiPackageJson = readRepositoryFile("packages/ui/package.json");
+    const webViteConfig = readRepositoryFile("apps/web/vite.config.ts");
+
+    expect(editorSource).toMatch(/MarkdownEditor/u);
+    expect(uiPackageJson).toContain('"./editor"');
+
+    // Not a style rule, and not a hypothetical. A barrel's whole re-export
+    // graph lands in the chunk importing it regardless of what is actually
+    // used: adding `MarkdownEditor` to `./public` was measured at +497.6 kB
+    // (+169.3 kB gzip) on the set `index.html` eagerly preloads, with no
+    // importer anywhere in apps/web. `./public` is what every public route
+    // imports and the root barrel is banned from apps/web outright (asserted
+    // above), so neither may name the editor. Full measurement, including the
+    // alternative causes ruled out, is in `packages/ui/src/editor.ts`.
+    expect(publicSource).not.toMatch(/MarkdownEditor/u);
+    expect(publicSource).not.toMatch(/markdown-editor/u);
+    expect(rootSource).not.toMatch(/MarkdownEditor/u);
+
+    // Vite matches these prefix-anchored aliases in order: the bare
+    // `@unimatrix/ui` entry would swallow the subpath if it came first.
+    expect(webViteConfig.indexOf("@unimatrix\\/ui\\/editor")).toBeGreaterThan(-1);
+    expect(webViteConfig.indexOf("@unimatrix\\/ui\\/editor")).toBeLessThan(
+      webViteConfig.indexOf("find: /^@unimatrix\\/ui$/"),
+    );
+  });
+
   it("packages/ui owns the canonical shadcn config and shared stylesheet export", () => {
     expect(existsSync(join(repositoryRoot, "packages/ui/components.json"))).toBe(true);
     expect(existsSync(join(repositoryRoot, "apps/web/components.json"))).toBe(false);

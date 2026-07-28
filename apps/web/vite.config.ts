@@ -65,6 +65,13 @@ export function createWebViteConfig(mode: string): UserConfig {
             new URL("../../packages/shared/src/index.ts", import.meta.url),
           ),
         },
+        // Ordered before the bare `@unimatrix/ui` entry below: these are
+        // prefix-anchored regexes evaluated in order, and the bare one would
+        // otherwise never let a subpath through.
+        {
+          find: /^@unimatrix\/ui\/editor$/,
+          replacement: fileURLToPath(new URL("../../packages/ui/src/editor.ts", import.meta.url)),
+        },
         {
           find: /^@unimatrix\/ui\/public$/,
           replacement: fileURLToPath(new URL("../../packages/ui/src/public.ts", import.meta.url)),
