@@ -2,17 +2,18 @@ import { useEffect, useRef, useState } from "react";
 import { RiArrowLeftLine, RiArrowRightLine } from "@remixicon/react";
 import { Card, Kbd, useCircuitOccluder } from "@unimatrix/ui/public";
 
+import { CaseDiagramView } from "@/features/algorithms/components/case-diagram-view";
+import type { DiagramPreviewMode } from "@/features/algorithms/preview-mode";
 import type { AlgorithmSetId } from "@/features/algorithms/types";
-import { LastLayerDiagramView } from "@/features/cube/components/last-layer-diagram-view";
 import { useLearnSession } from "@/features/learn/use-learn-session";
 
 export interface LearnPanelProps {
-  previewVisible: boolean;
+  previewMode: DiagramPreviewMode;
   setId: AlgorithmSetId;
 }
 
-export function LearnPanel({ previewVisible, setId }: LearnPanelProps) {
-  const { back, currentCase, diagram, markLearned, next, setupMoves } = useLearnSession(setId);
+export function LearnPanel({ previewMode, setId }: LearnPanelProps) {
+  const { back, cube, currentCase, markLearned, next, setupMoves } = useLearnSession(setId);
   const [showAlternates, setShowAlternates] = useState(false);
   const panelRef = useRef<HTMLDivElement | null>(null);
   useCircuitOccluder(panelRef);
@@ -39,7 +40,7 @@ export function LearnPanel({ previewVisible, setId }: LearnPanelProps) {
     };
   }, [back, markLearned, next]);
 
-  if (!currentCase || !diagram) {
+  if (!currentCase || !cube) {
     return (
       <Card
         className="site-panel site-panel-strong flex min-h-96 flex-col items-center justify-center gap-3 px-6 py-10 text-center"
@@ -57,11 +58,12 @@ export function LearnPanel({ previewVisible, setId }: LearnPanelProps) {
       className="site-panel site-panel-strong flex flex-col items-center gap-6 px-6 py-10 text-center"
       ref={panelRef}
     >
-      <LastLayerDiagramView
-        diagram={diagram}
+      <CaseDiagramView
+        cube={cube}
         label={currentCase.displayName}
+        mode={previewMode}
+        setId={setId}
         size={180}
-        visible={previewVisible}
       />
 
       <div className="space-y-1.5">

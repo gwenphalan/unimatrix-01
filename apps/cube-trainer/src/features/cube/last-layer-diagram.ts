@@ -66,6 +66,40 @@ export function derivePllDiagram(cube: FaceletCube): LastLayerDiagram {
   return buildDiagram(cube, colorSticker);
 }
 
+/**
+ * The isometric two-sided view: the whole U face plus the last-layer row of F and R, drawn as
+ * a cube corner. Unlike `LastLayerDiagram`, whose `right` row is reversed to read outward from
+ * the flat net, both rows here are in `extractLastLayer`'s own slice order, which is already
+ * left-to-right on screen for a viewer facing the U-F-R corner: F's col 0 touches L (screen
+ * left) and R's col 0 touches F (also screen left, since +z projects leftward).
+ */
+export interface CornerDiagram {
+  /** 9 stickers in the same row-major U order as `LastLayerDiagram.top` (row 0 touches B). */
+  top: DiagramSticker[];
+  /** 3 stickers, screen left-to-right. */
+  front: DiagramSticker[];
+  /** 3 stickers, screen left-to-right (F-adjacent first). */
+  right: DiagramSticker[];
+}
+
+function buildCornerDiagram(
+  cube: FaceletCube,
+  sideSticker: (facelet: FaceLetter) => DiagramSticker,
+): CornerDiagram {
+  const { sideRows, top } = extractLastLayer(cube);
+
+  return {
+    front: sideRows.front.map(sideSticker),
+    right: sideRows.right.map(sideSticker),
+    top: top.map(orientedOrUnknown),
+  };
+}
+
+/** Only PLL offers the two-sided view (see `previewModesForSet`), so only its derivation exists. */
+export function derivePllCornerDiagram(cube: FaceletCube): CornerDiagram {
+  return buildCornerDiagram(cube, colorSticker);
+}
+
 export const DIAGRAM_PALETTE: Record<FaceLetter, string> = {
   B: "#3b82f6",
   D: "#f8fafc",
@@ -76,6 +110,13 @@ export const DIAGRAM_PALETTE: Record<FaceLetter, string> = {
 };
 
 export const DIAGRAM_UNKNOWN_COLOR = "#52525b";
+
+/**
+ * The two layers below the last layer in the two-sided view. Deliberately darker than
+ * `DIAGRAM_UNKNOWN_COLOR` so "this facelet is irrelevant to the case" never reads the same as
+ * OLL's "this facelet's color is unknown".
+ */
+export const DIAGRAM_LOWER_LAYER_COLOR = "#3f3f46";
 
 export function diagramStickerColor(sticker: DiagramSticker): string {
   if (sticker.kind === "unknown") return DIAGRAM_UNKNOWN_COLOR;

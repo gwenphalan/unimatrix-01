@@ -1,13 +1,16 @@
 import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { RiArrowLeftLine, RiEyeLine, RiEyeOffLine } from "@remixicon/react";
+import { RiArrowLeftLine } from "@remixicon/react";
 import { Button } from "@unimatrix/ui/public";
 
 import { getAlgorithmSet } from "@/features/algorithms/algorithm-sets";
 import { AlgorithmSetToggle } from "@/features/algorithms/components/algorithm-set-toggle";
 import type { CaseFilterMode } from "@/features/algorithms/components/case-category-filter";
 import { CaseCategoryFilter } from "@/features/algorithms/components/case-category-filter";
+import { PreviewModeToggle } from "@/features/algorithms/components/preview-mode-toggle";
+import { resolvePreviewMode } from "@/features/algorithms/preview-mode";
 import type { AlgorithmSetId } from "@/features/algorithms/types";
+import { usePreviewMode } from "@/features/algorithms/use-preview-mode";
 import { OccludingCluster } from "@/features/cube-trainer-site/components";
 import { DrillCasesGrid } from "@/features/trainer/components/drill-cases-grid";
 import { TrainerPanel } from "@/features/trainer/components/trainer-panel";
@@ -17,9 +20,12 @@ type ViewMode = "drill" | "cases";
 export function DrillSetView() {
   const [setId, setSetId] = useState<AlgorithmSetId>("oll");
   const [mode, setMode] = useState<ViewMode>("drill");
-  const [previewVisible, setPreviewVisible] = useState(true);
   const [caseFilterMode, setCaseFilterMode] = useState<CaseFilterMode>("all");
   const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
+  const { previewMode, setPreviewMode } = usePreviewMode("drill");
+  // The stored preference is kept as-is so "two-sided" survives a trip through OLL, but
+  // everything that renders - the toggle's own value included - must use the resolved mode.
+  const resolvedPreviewMode = resolvePreviewMode(setId, previewMode);
   const algorithmSet = getAlgorithmSet(setId);
 
   useEffect(() => {
@@ -91,7 +97,7 @@ export function DrillSetView() {
       <TrainerPanel
         cases={algorithmSet.cases}
         key={setId}
-        previewVisible={previewVisible}
+        previewMode={resolvedPreviewMode}
         setId={setId}
       />
 
@@ -100,21 +106,7 @@ export function DrillSetView() {
           <AlgorithmSetToggle onChange={setSetId} setId={setId} />
         </OccludingCluster>
         <OccludingCluster>
-          <Button
-            aria-label={previewVisible ? "Hide cube preview" : "Show cube preview"}
-            aria-pressed={previewVisible}
-            onClick={() => {
-              setPreviewVisible((visible) => !visible);
-            }}
-            size="icon"
-            variant="outline"
-          >
-            {previewVisible ? (
-              <RiEyeLine aria-hidden="true" className="size-4" />
-            ) : (
-              <RiEyeOffLine aria-hidden="true" className="size-4" />
-            )}
-          </Button>
+          <PreviewModeToggle mode={resolvedPreviewMode} onChange={setPreviewMode} setId={setId} />
         </OccludingCluster>
       </div>
     </div>
