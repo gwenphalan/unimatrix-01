@@ -4,6 +4,7 @@ import {
   HEIGHT_JITTER_IGNORE_PX,
   RESIZE_SETTLE_MS,
   useDebouncedSize,
+  useIsNarrowViewport,
   useMotionMode,
   useViewportSize,
 } from "./circuit-field-hooks.js";
@@ -76,6 +77,81 @@ function measureGridPhase(): Point {
 
   const root = document.documentElement;
   return { x: latticePhase(root.clientWidth, GRID), y: latticePhase(root.clientHeight, GRID) };
+}
+
+/**
+ * How far the whole lattice — background grid *and* rendered traces — is
+ * offset from the 0,0 origin so a grid line lands exactly on the page's
+ * centerline. Without it the lattice is lopsided against centered content
+ * on any viewport whose half-extent isn't a whole number of cells: the
+ * content edges sit at different distances from their nearest lines.
+ * Content is centered in the viewport here — measured live, the `mx-auto
+ * max-w-[92rem]` shell's rect center equals `clientWidth / 2` — so the
+ * viewport centerline *is* the content centerline.
+ *
+ * Both background tiers get a phase (`--grid-phase-*` for the 40px tier,
+ * `--grid-bold-phase-*` for the 240px one). They stay seam-locked because
+ * 240 is a whole multiple of GRID, so `center % 240 ≡ center % GRID`.
+ *
+ * Called from `CircuitField` *above* its narrow-viewport gate, so the CSS
+ * vars keep being written on mobile even though no traces render:
+ * `.grid-backdrop` is the only reader of them, it paints at every width, and
+ * without this it would fall back to the plain `0 0` origin and sit visibly
+ * off-center on exactly the viewports the gate applies to.
+ *
+ * `ResizeObserver` on `documentElement`, not a `size`/`useViewportSize`
+ * (`window.innerWidth/innerHeight`) dependency — this centers against
+ * `clientWidth/clientHeight` (excludes the scrollbar gutter), which can
+ * change from a vertical scrollbar toggling on/off, with no matching
+ * `innerWidth/innerHeight` change to re-trigger a `size`-keyed effect.
+ * That gap left the phase permanently stale at whatever it computed
+ * before the first scrollbar appeared — confirmed live. `clientHeight` on
+ * `documentElement` is the *viewport* height, not the content height, so
+ * this fires on real viewport changes only and never thrashes.
+ *
+ * Seeded synchronously from the real document rather than starting at 0,0
+ * and being corrected by the effect below: generation routes against
+ * `-gridPhase`-shifted barriers but renders `+gridPhase`, so a first pass
+ * at a stale zero phase draws every trace offset from the barriers it was
+ * routed around — traces sat behind the footer and ran past the bottom of
+ * the viewport until something else happened to force a regeneration.
+ */
+function useGridPhase(): Point {
+  const [gridPhase, setGridPhase] = React.useState<Point>(measureGridPhase);
+
+  React.useEffect(() => {
+    const root = document.documentElement;
+
+    const apply = () => {
+      const { x, y } = measureGridPhase();
+      root.style.setProperty("--grid-phase-x", `${x}px`);
+      root.style.setProperty("--grid-phase-y", `${y}px`);
+      root.style.setProperty(
+        "--grid-bold-phase-x",
+        `${latticePhase(root.clientWidth, BOLD_GRID)}px`,
+      );
+      root.style.setProperty(
+        "--grid-bold-phase-y",
+        `${latticePhase(root.clientHeight, BOLD_GRID)}px`,
+      );
+      // Traces are generated on the unphased `n * GRID` lattice and shifted
+      // into place at render time (see the translated `<g>` in the canvas
+      // below), so the fine phase has to reach the render as state, not just
+      // as a CSS var.
+      setGridPhase((previous) => (previous.x === x && previous.y === y ? previous : { x, y }));
+    };
+
+    apply();
+    const observer = new ResizeObserver(() => {
+      apply();
+    });
+    observer.observe(root);
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
+
+  return gridPhase;
 }
 
 // Opacity of the trail slice nearest the packet; the rest fade linearly to
@@ -188,74 +264,42 @@ function pointsEqual(a: readonly Point[], b: readonly Point[]): boolean {
  * write) — occlusion-driven regeneration is expected to be small/frequent,
  * so most traces on most updates are untouched. Skips the crawl (snaps
  * immediately) under `prefers-reduced-motion`.
+ *
+ * Renders nothing below the narrow-viewport breakpoint (see
+ * `useIsNarrowViewport`) — the whole canvas is *unmounted*, not CSS-hidden,
+ * so no traces are generated, no observers are attached, and no animation
+ * loop runs. `useGridPhase` still runs above that gate, so the `.grid-backdrop`
+ * CSS grid stays centered at every width.
  */
 export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.Element | null {
+  const gridPhase = useGridPhase();
+  const isNarrowViewport = useIsNarrowViewport();
+
+  if (isNarrowViewport) {
+    return null;
+  }
+
+  return <CircuitFieldCanvas gridPhase={gridPhase} routeKey={routeKey} />;
+}
+
+/**
+ * Everything `CircuitField` does once it has decided to render: all of the
+ * generation, animation, and observer machinery lives here so the gate above
+ * can mount and unmount it wholesale. Never exported — `CircuitField` is the
+ * only legitimate way in, and rendering this directly would bypass the gate.
+ */
+function CircuitFieldCanvas({
+  gridPhase,
+  routeKey,
+}: {
+  gridPhase: Point;
+  routeKey: string;
+}): React.JSX.Element | null {
   const size = useViewportSize();
   const debouncedSize = useDebouncedSize(size, RESIZE_SETTLE_MS, {
     heightJitterIgnorePx: HEIGHT_JITTER_IGNORE_PX,
   });
 
-  // How far the whole lattice — background grid *and* rendered traces — is
-  // offset from the 0,0 origin so a grid line lands exactly on the page's
-  // centerline. Without it the lattice is lopsided against centered content
-  // on any viewport whose half-extent isn't a whole number of cells: the
-  // content edges sit at different distances from their nearest lines.
-  // Content is centered in the viewport here — measured live, the `mx-auto
-  // max-w-[92rem]` shell's rect center equals `clientWidth / 2` — so the
-  // viewport centerline *is* the content centerline.
-  //
-  // Both background tiers get a phase (`--grid-phase-*` for the 40px tier,
-  // `--grid-bold-phase-*` for the 240px one). They stay seam-locked because
-  // 240 is a whole multiple of GRID, so `center % 240 ≡ center % GRID`.
-  //
-  // `ResizeObserver` on `documentElement`, not a `size`/`useViewportSize`
-  // (`window.innerWidth/innerHeight`) dependency — this centers against
-  // `clientWidth/clientHeight` (excludes the scrollbar gutter), which can
-  // change from a vertical scrollbar toggling on/off, with no matching
-  // `innerWidth/innerHeight` change to re-trigger a `size`-keyed effect.
-  // That gap left the phase permanently stale at whatever it computed
-  // before the first scrollbar appeared — confirmed live. `clientHeight` on
-  // `documentElement` is the *viewport* height, not the content height, so
-  // this fires on real viewport changes only and never thrashes.
-  //
-  // Seeded synchronously from the real document rather than starting at 0,0
-  // and being corrected by the effect below: generation routes against
-  // `-gridPhase`-shifted barriers but renders `+gridPhase`, so a first pass
-  // at a stale zero phase draws every trace offset from the barriers it was
-  // routed around — traces sat behind the footer and ran past the bottom of
-  // the viewport until something else happened to force a regeneration.
-  const [gridPhase, setGridPhase] = React.useState<Point>(measureGridPhase);
-
-  React.useEffect(() => {
-    const root = document.documentElement;
-
-    const apply = () => {
-      const { x, y } = measureGridPhase();
-      root.style.setProperty("--grid-phase-x", `${x}px`);
-      root.style.setProperty("--grid-phase-y", `${y}px`);
-      root.style.setProperty(
-        "--grid-bold-phase-x",
-        `${latticePhase(root.clientWidth, BOLD_GRID)}px`,
-      );
-      root.style.setProperty(
-        "--grid-bold-phase-y",
-        `${latticePhase(root.clientHeight, BOLD_GRID)}px`,
-      );
-      // Traces are generated on the unphased `n * GRID` lattice and shifted
-      // into place at render time (see the translated `<g>` below), so the
-      // fine phase has to reach the render as state, not just as a CSS var.
-      setGridPhase((previous) => (previous.x === x && previous.y === y ? previous : { x, y }));
-    };
-
-    apply();
-    const observer = new ResizeObserver(() => {
-      apply();
-    });
-    observer.observe(root);
-    return () => {
-      observer.disconnect();
-    };
-  }, []);
   const { mode: motionMode, demoteToStatic, idleGlowEligible } = useMotionMode();
   const occluders = useCircuitOccluderRects();
 

@@ -2,51 +2,7 @@ import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useDebouncedSize, useMotionMode } from "../src/components/circuit-field-hooks.js";
-
-class FakeMediaQueryList {
-  matches: boolean;
-  private readonly listeners = new Set<() => void>();
-
-  constructor(
-    public readonly media: string,
-    matches: boolean,
-  ) {
-    this.matches = matches;
-  }
-
-  addEventListener(type: string, listener: () => void): void {
-    if (type === "change") this.listeners.add(listener);
-  }
-
-  removeEventListener(type: string, listener: () => void): void {
-    if (type === "change") this.listeners.delete(listener);
-  }
-
-  setMatches(value: boolean): void {
-    this.matches = value;
-    this.listeners.forEach((listener) => {
-      listener();
-    });
-  }
-}
-
-function stubMatchMedia(initial: Record<string, boolean>): Map<string, FakeMediaQueryList> {
-  const registry = new Map<string, FakeMediaQueryList>();
-  Object.entries(initial).forEach(([query, matches]) =>
-    registry.set(query, new FakeMediaQueryList(query, matches)),
-  );
-
-  window.matchMedia = ((query: string) => {
-    let mql = registry.get(query);
-    if (!mql) {
-      mql = new FakeMediaQueryList(query, false);
-      registry.set(query, mql);
-    }
-    return mql;
-  }) as unknown as typeof window.matchMedia;
-
-  return registry;
-}
+import { type FakeMediaQueryList, stubMatchMedia } from "./helpers/match-media.js";
 
 describe("useDebouncedSize", () => {
   beforeEach(() => {
