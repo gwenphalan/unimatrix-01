@@ -237,9 +237,40 @@ Previews are entirely Dokploy-side. **Nothing in this repository is required**
 App's installation token drives the webhook, the build, the PR comment, and
 the teardown.
 
-Nothing here has been verified against the live Dokploy instance; every claim
-below is read from Dokploy's schema and handlers, and the current values of
-these settings live in Dokploy's database rather than in this repo.
+The setting defaults below were verified on 2026-07-27 against
+`packages/server/src/db/schema/application.ts` on Dokploy `canary`, against
+Dokploy issue #2028 for the Compose limitation (open, unassigned, no linked PR,
+opened 2025-06-11), and then against the live instance: creating an application
+over the API returns `previewPort: 3000`, `previewHttps: false`,
+`previewCertificateType: "none"`, `previewLimit: 3`, and
+`isPreviewDeploymentsActive: false` on the fresh record.
+
+The two preview services described here now exist (`web-preview` and
+`cube-trainer-preview`, in the `Unimatrix-01` project's `production`
+environment) and are configured as below. Their settings still live in
+Dokploy's database rather than in this repo, so this document describes intent
+and can drift from the instance — read the instance, not this file, when the
+two disagree.
+
+> **Previews do not currently work, and the cause is upstream.** The services
+> are configured correctly but no preview has ever built. On Dokploy v0.29.13,
+> a `pull_request` webhook for `synchronize`/`reopened` gets as far as
+> `✅ SECURITY: Preview deployment authorized ... Permission: admin` and then
+> dies with `TRPCError: Github Account not configured correctly`
+> (`code: NOT_FOUND`) from `apps/dokploy/pages/api/deploy/github`, returning
+> HTTP 500 to GitHub. `push`, `opened`, and `closed` deliveries return 200.
+>
+> The credentials are **not** actually missing: the same provider record clones
+> fine for all four production Compose services, and `authGithub` succeeds
+> earlier in that very request — it is what emits the SECURITY line. A second
+> provider lookup later in the preview path resolves to nothing. Ruled out by
+> testing: webhook signature, `previewWildcard` format (the `*.` prefix is
+> required, not wrong), `previewCertificateType`, `previewBuildArgs`, and
+> git-provider ownership/sharing.
+>
+> Do **not** "fix" this by recreating the GitHub provider — that would re-point
+> all four production services for no reason. Next step is a Dokploy upgrade
+> past v0.29.13 and, failing that, an upstream bug report.
 
 ### Previews need Application services, not the existing Compose apps
 
@@ -261,14 +292,34 @@ unchanged:
 
 ### Settings whose defaults are wrong for this repo
 
+Defaults quoted verbatim from the schema (see the verification note above).
+
 | Setting | Dokploy default | Needs to be | Why |
 | --- | --- | --- | --- |
-| `previewPort` | `3000` | `8080` | Both previewable images serve on 8080. Leaving the default produces a domain that resolves and then dead-ends. |
-| `previewHttps` | `false` | `true` | An `http://` preview origin is rejected by the API's CORS rule, and `safe-redirect.ts` requires `protocol === "https:"`. With HTTPS on, the existing `https://*.unimatrix-01.dev` CORS entry already matches preview hosts, so no repo change is needed. |
-| `previewCertificateType` | `"none"` | issue certs | TLS is not automatic. Needs either per-host Let's Encrypt or a wildcard cert covering the preview domain. |
-| `isPreviewDeploymentsActive` | `false` | `true` | Off until switched on per application. |
+| `previewPort` | `.default(3000)` | `8080` | Both previewable images serve on 8080 (`listen 8080` in all three `nginx.conf` files). Leaving the default produces a domain that resolves and then dead-ends. |
+| `previewHttps` | `.notNull().default(false)` | `true` | An `http://` preview origin is rejected by the API's CORS rule — every entry in `DEFAULT_API_CORS_ALLOWED_ORIGINS` (`apps/api/src/config.ts:5`) is scheme-qualified `https://` for the public domains. With HTTPS on, the existing `https://*.unimatrix-01.dev` entry already matches preview hosts, so no repo change is needed. |
+| `previewCertificateType` | `.notNull().default("none")` | issue certs | TLS is not automatic. Needs either per-host Let's Encrypt or a wildcard cert covering the preview domain. |
+| `isPreviewDeploymentsActive` | `.default(false)` | `true` | Off until switched on per application. |
+| `previewRequireCollaboratorPermissions` | `.default(true)` | leave `true` | The public-repo guard. See "Fork PRs" below. |
 
-### Two behaviours that are invisible from the UI
+`apps/auth/src/features/auth/safe-redirect.ts:28` also requires
+`protocol === "https:"` for any `unimatrix-01.dev` host, but that is the auth
+app, which is deliberately not previewed — it is not what forces `previewHttps`
+here. The CORS rule is.
+
+### The preview domain is a prerequisite, not polish
+
+Dokploy's default preview domain is an auto-generated `*.traefik.me` host. For
+`apps/web` that is not a cosmetic choice: a `.traefik.me` origin matches no
+entry in `DEFAULT_API_CORS_ALLOWED_ORIGINS`, so the preview loads and then
+fails every API call. A half-working preview is worse than a broken one.
+
+Set `previewWildcard` to a wildcard under `unimatrix-01.dev` (e.g.
+`*.preview.unimatrix-01.dev`) and point a wildcard `A`/`CNAME` record at the
+Dokploy server before enabling previews. `apps/cube-trainer` would survive the
+default (no API dependency), but there is no reason to split them.
+
+### Three behaviours that are invisible from the UI
 
 - **Watch paths do not apply to pull requests.** The `push` handler filters by
   watch path; the `pull_request` handler does not. Every PR against `main`
@@ -281,6 +332,12 @@ unchanged:
 - **`previewLimit` (default 3) fails silently.** Exceeding it skips the
   deployment with no PR comment and no error, so a missing preview is not
   evidence that something broke.
+- **Web previews run the new frontend against the *production* API.** Only web
+  and cube-trainer are previewed, and web's preview build arg points
+  `VITE_API_BASE_URL` at the live API. A PR that changes both `apps/web` and
+  `apps/api` therefore previews the new UI against the old backend: a contract
+  change can look broken in preview when it is fine, and — the dangerous
+  direction — can look fine when it is not.
 
 Preview target-branch matching uses `pull_request.base.ref`, so only PRs
 targeting `main` produce previews. Teardown is automatic on PR `closed`, which
@@ -335,6 +392,49 @@ survivable here, so do not disable it.
 10. For `apps/web`, set preview build args to the production
     `VITE_API_BASE_URL` and leave `VITE_CLERK_PUBLISHABLE_KEY` unset.
 11. Optionally add a `preview` label gate if per-PR build load is a problem.
+
+### Doing it over the API instead of the UI
+
+Every *Dokploy-side* step above is reachable through its REST API, so the
+service creation and preview configuration can be scripted or handed to an
+agent rather than clicked — that is how the current services were created. The
+two prerequisites that live outside Dokploy are not scriptable with a key; see
+below. Generate a key under Settings -> Profile (API/CLI section); it is sent
+as an `x-api-key` header.
+
+Two things that cost time when scripting it:
+
+- **`/api/openapi.json` returns 404 on this instance.** Swagger is restricted to
+  authenticated administrators by default, so the machine-readable field list is
+  not available to a key alone. Discover shapes from validation errors instead —
+  a `400` returns a `zodError.fieldErrors` map naming exactly what is missing.
+- **`application.saveBuildType` requires `herokuVersion` and `railpackVersion`**
+  even for a Dockerfile build. They are non-optional but nullable, so pass
+  `null`. Omitting them fails with
+  `"expected nonoptional, received undefined"`.
+
+The relevant endpoints are `POST /api/application.create` (needs `name` and
+`environmentId` — read the latter from `project.all`),
+`POST /api/application.saveGithubProvider`, `POST /api/application.saveBuildType`,
+`POST /api/application.update`, and `POST /api/application.deploy`. Every
+preview column is writable through `application.update`:
+`isPreviewDeploymentsActive`, `previewPort`, `previewHttps`, `previewWildcard`,
+`previewLimit`, `previewCertificateType` (`"letsencrypt" | "none" | "custom"`),
+`previewRequireCollaboratorPermissions`, `previewBuildArgs`, plus `previewEnv`,
+`previewBuildSecrets`, `previewLabels`, `previewPath`, and
+`previewCustomCertResolver`.
+
+Two things this does not remove: installing the GitHub App is an OAuth consent
+flow that cannot be done with the key, and the wildcard DNS record lives at the
+registrar.
+
+Treat the key accordingly. It is a bearer credential with no scoping and no
+expiry, granting instance-wide administrative control: it can create, mutate,
+and delete every application on the Dokploy instance — not only this project's
+— and trigger builds. Since a build runs a Dockerfile of the holder's choosing
+on the host, treat that reach as host-level in practice even though the key
+itself is not an OS credential. Issue one for the task, keep it out of the repo
+and out of CI, and revoke it when the setup is done.
 
 ## Verification after deploy
 
