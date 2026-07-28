@@ -1,13 +1,12 @@
 import { RiAddLine, RiEditLine, RiEyeLine, RiEyeOffLine } from "@remixicon/react";
 import { useQuery } from "@tanstack/react-query";
-import type { ContentPost, ContentPostSummary, ContentPostType } from "@unimatrix/shared";
-import { Badge, Button, toast } from "@unimatrix/ui/editor";
-import { useState } from "react";
+import { Link } from "@tanstack/react-router";
+import type { ContentPostSummary, ContentPostType } from "@unimatrix/shared";
+import { Badge, Button } from "@unimatrix/ui/editor";
 
 import { useApiClient } from "@/lib/api-client";
 
-import { describeAdminError, useSetPostsState } from "./mutations";
-import { PostFormDialog } from "./post-form-dialog";
+import { useSetPostsState } from "./mutations";
 import { adminPostsQueryOptions, findPostBySlug } from "./queries";
 
 const TYPE_LABELS: Record<ContentPostType, string> = {
@@ -17,28 +16,19 @@ const TYPE_LABELS: Record<ContentPostType, string> = {
 
 /**
  * "New blog post" / "New project", rendered beside a collection's heading.
+ *
+ * A link into the admin subtree rather than a dialog: writing a post happens on
+ * its own full-height page now, so there is one editor to maintain and the
+ * public listing pages stay free of form state.
  */
 export function NewPostButton({ type }: { type: ContentPostType }) {
-  const [isOpen, setIsOpen] = useState(false);
-
   return (
-    <>
-      <Button
-        className="w-fit gap-2"
-        onClick={() => {
-          setIsOpen(true);
-        }}
-        size="sm"
-        variant="outline"
-      >
+    <Button asChild className="w-fit gap-2" size="sm" variant="outline">
+      <Link search={{ type }} to="/admin/posts/new">
         <RiAddLine aria-hidden="true" className="size-4" />
         New {TYPE_LABELS[type]}
-      </Button>
-
-      {isOpen ? (
-        <PostFormDialog onOpenChange={setIsOpen} open={isOpen} post={null} type={type} />
-      ) : null}
-    </>
+      </Link>
+    </Button>
   );
 }
 
@@ -68,42 +58,21 @@ export function PostControls({ type, slug }: { type: ContentPostType; slug: stri
 }
 
 function PostControlsBar({ post }: { post: ContentPostSummary }) {
-  const client = useApiClient();
   const setPostsState = useSetPostsState();
-  const [editing, setEditing] = useState<ContentPost | null>(null);
-  const [isLoadingBody, setIsLoadingBody] = useState(false);
 
   const isPublished = post.publicationState === "published";
-
-  async function handleEdit() {
-    setIsLoadingBody(true);
-
-    try {
-      // The list carries summaries only, so the body is fetched when the form
-      // is actually opened rather than for every row on the page.
-      setEditing(await client.adminGetPost({ type: post.type, slug: post.slug }));
-    } catch (error) {
-      toast.error(describeAdminError(error));
-    } finally {
-      setIsLoadingBody(false);
-    }
-  }
 
   return (
     <div className="flex flex-wrap items-center gap-2 border-t border-border/60 pt-3">
       <Badge variant={isPublished ? "secondary" : "outline"}>{post.publicationState}</Badge>
 
-      <Button
-        className="gap-2"
-        disabled={isLoadingBody}
-        onClick={() => {
-          void handleEdit();
-        }}
-        size="sm"
-        variant="outline"
-      >
-        <RiEditLine aria-hidden="true" className="size-4" />
-        Edit
+      {/* The body is not fetched here any more — the editor route loads it.
+          That takes a request off every listing page that shows these. */}
+      <Button asChild className="gap-2" size="sm" variant="outline">
+        <Link search={{ id: post.id }} to="/admin/posts/edit">
+          <RiEditLine aria-hidden="true" className="size-4" />
+          Edit
+        </Link>
       </Button>
 
       <Button
@@ -125,19 +94,6 @@ function PostControlsBar({ post }: { post: ContentPostSummary }) {
         )}
         {isPublished ? "Unpublish" : "Publish"}
       </Button>
-
-      {editing === null ? null : (
-        <PostFormDialog
-          onOpenChange={(open) => {
-            if (!open) {
-              setEditing(null);
-            }
-          }}
-          open
-          post={editing}
-          type={editing.type}
-        />
-      )}
     </div>
   );
 }

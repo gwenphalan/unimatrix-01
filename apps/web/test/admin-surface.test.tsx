@@ -1,15 +1,8 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import {
-  RouterProvider,
-  createMemoryHistory,
-  createRootRoute,
-  createRoute,
-  createRouter,
-} from "@tanstack/react-router";
 import type { ApiClient } from "@unimatrix/api-client";
 import { act, render, screen } from "@testing-library/react";
-import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
+
+import { renderInRouter } from "./helpers/render-in-router";
 
 const apiClient = {
   adminListPosts: vi.fn().mockResolvedValue({ posts: [] }),
@@ -23,35 +16,6 @@ vi.mock("@/lib/api-client", () => ({
 vi.mock("@unimatrix/auth/react", () => ({
   useAuth: () => ({ getToken: () => Promise.resolve("token-123") }),
 }));
-
-/**
- * Mounts a node under a router of its own rather than the app's.
- *
- * The admin surface renders TanStack `<Link>`s, which need a router in context
- * and a matching route to resolve an href against — but the app router would
- * route past the component under test rather than render it.
- */
-function renderInRouter(children: ReactNode) {
-  const rootRoute = createRootRoute({ component: () => children });
-  const routeTree = rootRoute.addChildren([
-    createRoute({ getParentRoute: () => rootRoute, path: "/", component: () => null }),
-    createRoute({ getParentRoute: () => rootRoute, path: "/admin", component: () => null }),
-  ]);
-  const router = createRouter({
-    history: createMemoryHistory({ initialEntries: ["/"] }),
-    routeTree,
-  });
-  const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-  });
-
-  return render(
-    <QueryClientProvider client={queryClient}>
-      {/* The test router is deliberately not the app's registered tree. */}
-      <RouterProvider router={router as never} />
-    </QueryClientProvider>,
-  );
-}
 
 describe("AdminSurface", () => {
   it("mounts the toast region that every admin action reports through", async () => {
@@ -87,8 +51,9 @@ describe("AdminSurface", () => {
       </>,
     );
 
-    expect(await screen.findByRole("button", { name: "New blog post" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "New project" })).toBeInTheDocument();
+    // Links, not buttons: creating a post navigates to its own route now.
+    expect(await screen.findByRole("link", { name: "New blog post" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "New project" })).toBeInTheDocument();
   });
 
   it("dispatches the page and post-controls cases to their own components", async () => {
@@ -103,7 +68,8 @@ describe("AdminSurface", () => {
 
     // Both cases read the admin list; reaching the API at all is what proves
     // the switch landed on them rather than falling through to `undefined`.
-    expect(await screen.findByText("Select posts to manage them in bulk.")).toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: "Blog posts" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Projects" })).toBeInTheDocument();
     expect(apiClient.adminListPosts).toHaveBeenCalled();
   });
 });

@@ -58,7 +58,7 @@ function type(label: RegExp | string, value: string) {
   fireEvent.change(screen.getByLabelText(label), { target: { value } });
 }
 
-describe("PostFormDialog", () => {
+describe("PostForm", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -66,9 +66,9 @@ describe("PostFormDialog", () => {
   it("creates a blog post as a draft without any project-only fields", async () => {
     apiClient.createPost.mockResolvedValue({ ...PROJECT, title: "New post" });
 
-    const { PostFormDialog } = await import("@/features/admin/post-form-dialog");
+    const { PostForm } = await import("@/features/admin/post-form");
 
-    renderForm(<PostFormDialog onOpenChange={() => {}} open post={null} type="blog" />);
+    renderForm(<PostForm onDone={() => {}} post={null} type="blog" />);
 
     type("Title", "New post");
     type("Slug", "new-post");
@@ -97,9 +97,9 @@ describe("PostFormDialog", () => {
   });
 
   it("derives the slug from the title until the slug is typed in", async () => {
-    const { PostFormDialog } = await import("@/features/admin/post-form-dialog");
+    const { PostForm } = await import("@/features/admin/post-form");
 
-    renderForm(<PostFormDialog onOpenChange={() => {}} open post={null} type="blog" />);
+    renderForm(<PostForm onDone={() => {}} post={null} type="blog" />);
 
     type("Title", "A Post About Things");
     expect(screen.getByLabelText("Slug")).toHaveValue("a-post-about-things");
@@ -122,9 +122,9 @@ describe("PostFormDialog", () => {
    * rewrite it, so derivation starts off rather than on when editing.
    */
   it("never rewrites an existing post's slug from its title", async () => {
-    const { PostFormDialog } = await import("@/features/admin/post-form-dialog");
+    const { PostForm } = await import("@/features/admin/post-form");
 
-    renderForm(<PostFormDialog onOpenChange={() => {}} open post={PROJECT} type="project" />);
+    renderForm(<PostForm onDone={() => {}} post={PROJECT} type="project" />);
 
     type("Title", "Cube Trainer Renamed");
 
@@ -132,9 +132,9 @@ describe("PostFormDialog", () => {
   });
 
   it("offers no project fields on a blog post", async () => {
-    const { PostFormDialog } = await import("@/features/admin/post-form-dialog");
+    const { PostForm } = await import("@/features/admin/post-form");
 
-    renderForm(<PostFormDialog onOpenChange={() => {}} open post={null} type="blog" />);
+    renderForm(<PostForm onDone={() => {}} post={null} type="blog" />);
 
     expect(screen.queryByLabelText("Repository URL")).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/Feature on the homepage/u)).not.toBeInTheDocument();
@@ -143,9 +143,9 @@ describe("PostFormDialog", () => {
   it("loads an existing project into the form and sends an update keyed by id", async () => {
     apiClient.updatePost.mockResolvedValue(PROJECT);
 
-    const { PostFormDialog } = await import("@/features/admin/post-form-dialog");
+    const { PostForm } = await import("@/features/admin/post-form");
 
-    renderForm(<PostFormDialog onOpenChange={() => {}} open post={PROJECT} type="project" />);
+    renderForm(<PostForm onDone={() => {}} post={PROJECT} type="project" />);
 
     expect(screen.getByLabelText("Title")).toHaveValue("Cube Trainer");
     expect(screen.getByLabelText("Repository URL")).toHaveValue("https://example.com/repo");
@@ -170,13 +170,13 @@ describe("PostFormDialog", () => {
   });
 
   it("keeps the dialog open and reports the failure when a save is rejected", async () => {
-    const onOpenChange = vi.fn();
+    const onDone = vi.fn();
 
     apiClient.createPost.mockRejectedValue(new Error("nope"));
 
-    const { PostFormDialog } = await import("@/features/admin/post-form-dialog");
+    const { PostForm } = await import("@/features/admin/post-form");
 
-    renderForm(<PostFormDialog onOpenChange={onOpenChange} open post={null} type="blog" />);
+    renderForm(<PostForm onDone={onDone} post={null} type="blog" />);
 
     type("Title", "New post");
     type("Slug", "new-post");
@@ -188,6 +188,6 @@ describe("PostFormDialog", () => {
       expect(toastError).toHaveBeenCalled();
     });
     // Closing on failure would discard whatever the admin had typed.
-    expect(onOpenChange).not.toHaveBeenCalledWith(false);
+    expect(onDone).not.toHaveBeenCalled();
   });
 });

@@ -371,12 +371,33 @@ export const MarkdownEditor = React.forwardRef<MarkdownEditorHandle, MarkdownEdi
             ))}
 
             {actions}
+
+            <ToggleGroup
+              aria-label={`${label} view mode`}
+              className="ml-1"
+              onValueChange={handleModeChange}
+              size="sm"
+              type="single"
+              value={mode}
+              variant="outline"
+            >
+              {MARKDOWN_EDITOR_MODES.map((editorMode) => (
+                <ToggleGroupItem key={editorMode} value={editorMode}>
+                  {MODE_LABELS[editorMode]}
+                </ToggleGroupItem>
+              ))}
+            </ToggleGroup>
           </div>
         </div>
 
+        {/* `flex-1 min-h-0` rather than a fixed height: in a plain block parent
+            it collapses to the content and `min-h-64` holds the floor, and in a
+            height-constrained flex column — the full-page editor route — it
+            takes whatever is left. The container owns the height; the editor
+            has no opinion about it. */}
         <div
           className={cn(
-            "min-h-64 overflow-auto border border-input bg-background",
+            "min-h-64 flex-1 overflow-auto border border-input bg-background",
             editorClassName,
           )}
         >
@@ -392,26 +413,6 @@ export const MarkdownEditor = React.forwardRef<MarkdownEditorHandle, MarkdownEdi
               <PublicMarkdown markdown={value} />
             </div>
           ) : null}
-        </div>
-
-        {/* Below the surface it switches, not above it: the toolbar row is the
-            field's header, and putting a second control strip up there made the
-            editing area start two rows down from its own label. */}
-        <div className="flex items-center justify-end gap-3">
-          <ToggleGroup
-            aria-label={`${label} view mode`}
-            onValueChange={handleModeChange}
-            size="sm"
-            type="single"
-            value={mode}
-            variant="outline"
-          >
-            {MARKDOWN_EDITOR_MODES.map((editorMode) => (
-              <ToggleGroupItem key={editorMode} value={editorMode}>
-                {MODE_LABELS[editorMode]}
-              </ToggleGroupItem>
-            ))}
-          </ToggleGroup>
         </div>
       </div>
     );

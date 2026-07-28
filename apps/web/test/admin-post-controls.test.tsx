@@ -1,10 +1,10 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ApiClient } from "@unimatrix/api-client";
 import type { ContentPostSummary } from "@unimatrix/shared";
 import type * as EditorModule from "@unimatrix/ui/editor";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import type { ReactNode } from "react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
+import { renderInRouter } from "./helpers/render-in-router";
 
 const apiClient = {
   adminListPosts: vi.fn(),
@@ -47,14 +47,6 @@ const DRAFT: ContentPostSummary = {
 
 const PUBLISHED: ContentPostSummary = { ...DRAFT, publicationState: "published" };
 
-function renderControls(node: ReactNode) {
-  const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-  });
-
-  return render(<QueryClientProvider client={queryClient}>{node}</QueryClientProvider>);
-}
-
 describe("PostControls", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -64,7 +56,7 @@ describe("PostControls", () => {
     apiClient.adminListPosts.mockResolvedValue({ posts: [] });
 
     const { PostControls } = await import("@/features/admin/post-controls");
-    const { container } = renderControls(<PostControls slug="a-post" type="blog" />);
+    const { container } = renderInRouter(<PostControls slug="a-post" type="blog" />);
 
     await waitFor(() => {
       expect(apiClient.adminListPosts).toHaveBeenCalled();
@@ -78,7 +70,7 @@ describe("PostControls", () => {
 
     const { PostControls } = await import("@/features/admin/post-controls");
 
-    renderControls(<PostControls slug="a-post" type="blog" />);
+    renderInRouter(<PostControls slug="a-post" type="blog" />);
 
     fireEvent.click(await screen.findByRole("button", { name: "Publish" }));
 
@@ -96,7 +88,7 @@ describe("PostControls", () => {
 
     const { PostControls } = await import("@/features/admin/post-controls");
 
-    renderControls(<PostControls slug="a-post" type="blog" />);
+    renderInRouter(<PostControls slug="a-post" type="blog" />);
 
     fireEvent.click(await screen.findByRole("button", { name: "Unpublish" }));
 
@@ -113,7 +105,7 @@ describe("PostControls", () => {
 
     const { PostControls } = await import("@/features/admin/post-controls");
 
-    renderControls(<PostControls slug="a-post" type="blog" />);
+    renderInRouter(<PostControls slug="a-post" type="blog" />);
 
     await screen.findByRole("button", { name: "Publish" });
     // Irreversible and the database is the only copy: delete lives on /admin,
@@ -121,40 +113,21 @@ describe("PostControls", () => {
     expect(screen.queryByRole("button", { name: /delete/iu })).not.toBeInTheDocument();
   });
 
-  it("fetches the body only when the editor is opened", async () => {
+  it("links Edit at the editor route and fetches no bodies from a listing", async () => {
     apiClient.adminListPosts.mockResolvedValue({ posts: [DRAFT] });
-    apiClient.adminGetPost.mockResolvedValue({ ...DRAFT, body: "# Body\n" });
 
     const { PostControls } = await import("@/features/admin/post-controls");
 
-    renderControls(<PostControls slug="a-post" type="blog" />);
+    renderInRouter(<PostControls slug="a-post" type="blog" />);
 
-    await screen.findByRole("button", { name: "Publish" });
-    // The list carries summaries only, so a twenty-row page does not fetch
-    // twenty bodies.
+    // Addressed by id, which is the only handle that survives the slug being
+    // edited in the very form this links to.
+    expect(await screen.findByRole("link", { name: "Edit" })).toHaveAttribute(
+      "href",
+      `/admin/posts/edit?id=${DRAFT.id}`,
+    );
+    // The list carries summaries only, and the editor route loads the body, so
+    // a twenty-row page fetches no bodies at all.
     expect(apiClient.adminGetPost).not.toHaveBeenCalled();
-
-    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
-
-    await waitFor(() => {
-      expect(apiClient.adminGetPost).toHaveBeenCalledWith({ type: "blog", slug: "a-post" });
-    });
-    expect(await screen.findByRole("dialog")).toBeInTheDocument();
-  });
-
-  it("reports a failed body fetch instead of opening an empty editor", async () => {
-    apiClient.adminListPosts.mockResolvedValue({ posts: [DRAFT] });
-    apiClient.adminGetPost.mockRejectedValue(new Error("network down"));
-
-    const { PostControls } = await import("@/features/admin/post-controls");
-
-    renderControls(<PostControls slug="a-post" type="blog" />);
-
-    fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
-
-    await waitFor(() => {
-      expect(toastError).toHaveBeenCalled();
-    });
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 });

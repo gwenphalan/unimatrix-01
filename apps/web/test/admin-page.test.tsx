@@ -1,10 +1,10 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ApiClient } from "@unimatrix/api-client";
 import type { ContentPostSummary } from "@unimatrix/shared";
 import type * as EditorModule from "@unimatrix/ui/editor";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import type { ReactNode } from "react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { renderInRouter } from "./helpers/render-in-router";
 
 const apiClient = {
   adminListPosts: vi.fn(),
@@ -58,12 +58,9 @@ const PUBLISHED = summary({
   publishedAt: "2026-07-01T00:00:00.000Z",
 });
 
-function renderAdminPage(node: ReactNode) {
-  const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-  });
-
-  return render(<QueryClientProvider client={queryClient}>{node}</QueryClientProvider>);
+/** The panel for one collection — each owns its own selection and controls. */
+function panel(name: "Blog posts" | "Projects") {
+  return within(screen.getByRole("region", { name }));
 }
 
 describe("AdminPage", () => {
@@ -79,7 +76,7 @@ describe("AdminPage", () => {
   it("lists every post in every publication state", async () => {
     const { AdminPage } = await import("@/features/admin/admin-page");
 
-    renderAdminPage(<AdminPage />);
+    renderInRouter(<AdminPage />);
 
     expect(await screen.findByText("A post")).toBeInTheDocument();
     expect(screen.getByText("Shipped project")).toBeInTheDocument();
@@ -94,9 +91,10 @@ describe("AdminPage", () => {
   it("keeps bulk actions hidden until something is selected", async () => {
     const { AdminPage } = await import("@/features/admin/admin-page");
 
-    renderAdminPage(<AdminPage />);
+    renderInRouter(<AdminPage />);
 
-    expect(await screen.findByText(/Select posts to manage them in bulk/u)).toBeInTheDocument();
+    // One prompt per collection, because each manages its own selection.
+    expect(await screen.findAllByText(/Select rows to manage them in bulk/u)).toHaveLength(2);
     expect(screen.queryByRole("button", { name: "Publish" })).not.toBeInTheDocument();
   });
 
@@ -105,7 +103,7 @@ describe("AdminPage", () => {
 
     const { AdminPage } = await import("@/features/admin/admin-page");
 
-    renderAdminPage(<AdminPage />);
+    renderInRouter(<AdminPage />);
 
     fireEvent.click(await screen.findByRole("checkbox", { name: "Select A post" }));
     fireEvent.click(screen.getByRole("button", { name: "Publish" }));
@@ -119,16 +117,26 @@ describe("AdminPage", () => {
     expect(toastSuccess).toHaveBeenCalledWith("1 post published.");
   });
 
-  it("selects and clears every row through the header checkbox", async () => {
+  it("keeps each collection's select-all to its own rows", async () => {
     const { AdminPage } = await import("@/features/admin/admin-page");
 
-    renderAdminPage(<AdminPage />);
+    renderInRouter(<AdminPage />);
 
-    fireEvent.click(await screen.findByRole("checkbox", { name: "Select all posts" }));
-    expect(screen.getByText("2 posts selected")).toBeInTheDocument();
+    await screen.findByText("A post");
+    fireEvent.click(panel("Blog posts").getByRole("checkbox", { name: "Select all rows" }));
 
-    fireEvent.click(screen.getByRole("checkbox", { name: "Select all posts" }));
-    expect(screen.getByText(/Select posts to manage them in bulk/u)).toBeInTheDocument();
+    // The project row is in the sibling table and must be untouched: a shared
+    // selection would make a bulk action reach into a collection the admin was
+    // not looking at.
+    expect(panel("Blog posts").getByText("1 selected")).toBeInTheDocument();
+    expect(
+      panel("Projects").getByText(/Select rows to manage them in bulk/u),
+    ).toBeInTheDocument();
+
+    fireEvent.click(panel("Blog posts").getByRole("checkbox", { name: "Select all rows" }));
+    expect(
+      panel("Blog posts").getByText(/Select rows to manage them in bulk/u),
+    ).toBeInTheDocument();
   });
 
   it("names the count in the delete confirmation and deletes nothing until it is confirmed", async () => {
@@ -136,35 +144,38 @@ describe("AdminPage", () => {
 
     const { AdminPage } = await import("@/features/admin/admin-page");
 
-    renderAdminPage(<AdminPage />);
+    renderInRouter(<AdminPage />);
 
-    fireEvent.click(await screen.findByRole("checkbox", { name: "Select all posts" }));
-    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    await screen.findByText("A post");
+    fireEvent.click(panel("Blog posts").getByRole("checkbox", { name: "Select A post" }));
+    fireEvent.click(panel("Projects").getByRole("checkbox", { name: "Select Shipped project" }));
+    fireEvent.click(panel("Blog posts").getByRole("button", { name: "Delete" }));
 
     const dialog = await screen.findByRole("alertdialog");
 
     // The count is the single fact that decides whether this is the intended
-    // action, and the database is the only copy of the content now.
-    expect(within(dialog).getByText("Delete 2 posts?")).toBeInTheDocument();
+    // action, and the database is the only copy of the content now. Scoped to
+    // one collection: the sibling's selection must not be counted here.
+    expect(within(dialog).getByText("Delete 1 post?")).toBeInTheDocument();
     expect(apiClient.deletePosts).not.toHaveBeenCalled();
 
     fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
     expect(apiClient.deletePosts).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    fireEvent.click(panel("Blog posts").getByRole("button", { name: "Delete" }));
     fireEvent.click(
       within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Delete" }),
     );
 
     await waitFor(() => {
-      expect(apiClient.deletePosts).toHaveBeenCalledWith({ ids: [DRAFT.id, PUBLISHED.id] });
+      expect(apiClient.deletePosts).toHaveBeenCalledWith({ ids: [DRAFT.id] });
     });
   });
 
   it("uses the singular in the confirmation for one post and names it", async () => {
     const { AdminPage } = await import("@/features/admin/admin-page");
 
-    renderAdminPage(<AdminPage />);
+    renderInRouter(<AdminPage />);
 
     fireEvent.click(await screen.findByRole("checkbox", { name: "Select A post" }));
     fireEvent.click(screen.getByRole("button", { name: "Delete" }));
@@ -180,7 +191,7 @@ describe("AdminPage", () => {
 
     const { AdminPage } = await import("@/features/admin/admin-page");
 
-    renderAdminPage(<AdminPage />);
+    renderInRouter(<AdminPage />);
 
     expect(await screen.findByText("Posts could not be loaded.")).toBeInTheDocument();
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
@@ -191,8 +202,8 @@ describe("AdminPage", () => {
 
     const { AdminPage } = await import("@/features/admin/admin-page");
 
-    renderAdminPage(<AdminPage />);
+    renderInRouter(<AdminPage />);
 
-    expect(await screen.findByText("No posts yet.")).toBeInTheDocument();
+    expect(await screen.findAllByText("Nothing here yet.")).toHaveLength(2);
   });
 });

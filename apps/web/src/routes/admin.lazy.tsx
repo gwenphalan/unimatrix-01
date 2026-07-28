@@ -1,34 +1,47 @@
-import { createLazyFileRoute } from "@tanstack/react-router";
+import { Outlet, createLazyFileRoute } from "@tanstack/react-router";
 
 import { AdminSlot, useAdminAccess } from "@/features/admin/admin-slot";
 import { PublicNotice, PublicSectionHeading } from "@/features/public-site/components";
 
 export const Route = createLazyFileRoute("/admin")({
-  component: AdminRoute,
+  component: AdminLayout,
 });
 
 /**
- * `/admin` is a normal route that renders nothing of substance for anyone
- * without `auth:admin`. The gate cannot live in `beforeLoad` — reading the
- * permission is a hook — and it does not need to: the admin UI is behind
- * `AdminSlot`'s dynamic import, so a non-admin never downloads it.
+ * Layout for the whole `/admin` subtree.
+ *
+ * Everything under `/admin` renders inside the admin dashboard chrome rather
+ * than the public site's header and footer — see `AdminShell`. That chrome
+ * lives in the admin chunk, so a non-admin never downloads it; they get the
+ * public shell (chosen in `__root.tsx`) around the notice below instead.
+ *
+ * The gate cannot live in `beforeLoad` — reading the permission is a hook — and
+ * it does not need to: nothing of substance is reachable without rendering
+ * `AdminSlot`'s dynamic import.
  */
-function AdminRoute() {
+function AdminLayout() {
   const { isLoaded, isAdmin } = useAdminAccess();
+
+  if (isAdmin) {
+    return (
+      <AdminSlot kind="shell">
+        <Outlet />
+      </AdminSlot>
+    );
+  }
+
+  if (!isLoaded) {
+    return null;
+  }
 
   return (
     <div className="space-y-6">
       <PublicSectionHeading headingLevel={1} title="Admin" />
-
-      {isAdmin ? (
-        <AdminSlot kind="page" />
-      ) : isLoaded ? (
-        <PublicNotice
-          description="This page manages the site's blog posts and projects. Sign in with an admin account to use it."
-          label="Restricted"
-          title="You do not have access to this page."
-        />
-      ) : null}
+      <PublicNotice
+        description="This page manages the site's blog posts and projects. Sign in with an admin account to use it."
+        label="Restricted"
+        title="You do not have access to this page."
+      />
     </div>
   );
 }

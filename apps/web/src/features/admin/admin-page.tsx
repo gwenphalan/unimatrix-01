@@ -1,6 +1,14 @@
-import { RiDeleteBinLine, RiEditLine, RiEyeLine, RiEyeOffLine } from "@remixicon/react";
+import {
+  RiAddLine,
+  RiDeleteBinLine,
+  RiEditLine,
+  RiExternalLinkLine,
+  RiEyeLine,
+  RiEyeOffLine,
+} from "@remixicon/react";
 import { useQuery } from "@tanstack/react-query";
-import type { ContentPost, ContentPostSummary, ContentPostType } from "@unimatrix/shared";
+import { Link } from "@tanstack/react-router";
+import type { ContentPostSummary, ContentPostType } from "@unimatrix/shared";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -17,7 +25,6 @@ import {
   EmptyDescription,
   EmptyHeader,
   EmptyTitle,
-  Separator,
   Skeleton,
   Table,
   TableBody,
@@ -25,40 +32,93 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-  toast,
 } from "@unimatrix/ui/editor";
 import { useMemo, useState } from "react";
 
 import { formatPublishedDate } from "@/features/content/entries";
 import { useApiClient } from "@/lib/api-client";
 
+import { AdminPanel } from "./admin-shell";
 import { describeAdminError, useDeletePosts, useSetPostsState } from "./mutations";
-import { NewPostButton } from "./post-controls";
-import { PostFormDialog } from "./post-form-dialog";
 import { adminPostsQueryOptions } from "./queries";
 
-const TYPE_LABELS: Record<ContentPostType, string> = {
-  blog: "Blog",
-  project: "Project",
-};
+const COLLECTIONS: readonly { type: ContentPostType; title: string; newLabel: string }[] = [
+  { type: "blog", title: "Blog posts", newLabel: "New blog post" },
+  { type: "project", title: "Projects", newLabel: "New project" },
+];
 
 /**
- * Bulk management for every post in every publication state.
+ * Bulk management, one table per collection.
  *
- * Fetched with the unfiltered admin list rather than one request per
- * collection: the table shows both collections together, and filtering
- * client-side keeps switching the filter instant and free.
+ * Blog posts and projects are managed separately because they are managed
+ * differently: a bulk publish is a decision about one collection, and a shared
+ * "select all" across a combined table would sweep up rows from the other.
+ * Each {@link PostBulkTable} therefore owns its own selection and its own
+ * confirmation — a single shared `selectedIds` would make the delete dialog's
+ * count lie about what is being deleted.
+ *
+ * Still one request: the unfiltered admin list is fetched once here and
+ * partitioned by type, so splitting the UI costs no extra round trip.
  */
 export function AdminPage() {
   const client = useApiClient();
   const { data, error, isPending } = useQuery(adminPostsQueryOptions(client));
+
+  const posts = useMemo(() => data?.posts ?? [], [data]);
+
+  if (error !== null) {
+    return (
+      <AdminPanel title="Content">
+        <Empty>
+          <EmptyHeader>
+            <EmptyTitle>Posts could not be loaded.</EmptyTitle>
+            <EmptyDescription>{describeAdminError(error)}</EmptyDescription>
+          </EmptyHeader>
+        </Empty>
+      </AdminPanel>
+    );
+  }
+
+  return (
+    <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto pb-2 xl:grid-cols-2 xl:items-start">
+      {COLLECTIONS.map((collection) => (
+        <AdminPanel
+          actions={
+            <Button asChild className="gap-2" size="sm" variant="outline">
+              <Link search={{ type: collection.type }} to="/admin/posts/new">
+                <RiAddLine aria-hidden="true" className="size-4" />
+                {collection.newLabel}
+              </Link>
+            </Button>
+          }
+          key={collection.type}
+          title={collection.title}
+        >
+          <PostBulkTable
+            isPending={isPending}
+            posts={posts.filter((post) => post.type === collection.type)}
+          />
+        </AdminPanel>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * One collection's rows, with its own selection, bulk actions and delete
+ * confirmation. Nothing here is shared with the sibling table.
+ */
+function PostBulkTable({
+  isPending,
+  posts,
+}: {
+  isPending: boolean;
+  posts: readonly ContentPostSummary[];
+}) {
   const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(new Set());
-  const [editing, setEditing] = useState<ContentPost | null>(null);
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
   const setPostsState = useSetPostsState();
   const deletePosts = useDeletePosts();
-
-  const posts = useMemo(() => data?.posts ?? [], [data]);
 
   // A row that disappeared between renders — deleted in another tab, say —
   // must not keep contributing to the selection count the confirmation names.
@@ -84,48 +144,39 @@ export function AdminPage() {
     });
   }
 
-  function toggleAll(checked: boolean) {
-    setSelectedIds(checked ? new Set(posts.map((post) => post.id)) : new Set());
+  if (isPending) {
+    return (
+      <div className="grid gap-2">
+        <Skeleton className="h-10 w-full" />
+        <Skeleton className="h-10 w-full" />
+        <Skeleton className="h-10 w-full" />
+      </div>
+    );
   }
 
-  async function handleEdit(post: ContentPostSummary) {
-    try {
-      setEditing(await client.adminGetPost({ type: post.type, slug: post.slug }));
-    } catch (caught) {
-      toast.error(describeAdminError(caught));
-    }
-  }
-
-  if (error !== null) {
+  if (posts.length === 0) {
     return (
       <Empty>
         <EmptyHeader>
-          <EmptyTitle>Posts could not be loaded.</EmptyTitle>
-          <EmptyDescription>{describeAdminError(error)}</EmptyDescription>
+          <EmptyTitle>Nothing here yet.</EmptyTitle>
+          <EmptyDescription>Create one to see it listed here.</EmptyDescription>
         </EmptyHeader>
       </Empty>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center gap-2">
-        <NewPostButton type="blog" />
-        <NewPostButton type="project" />
-      </div>
-
-      <Separator />
-
+    <div className="space-y-3">
       <div
         aria-live="polite"
         className="flex min-h-9 flex-wrap items-center gap-2 text-sm text-muted-foreground"
       >
         {selected.length === 0 ? (
-          <span>Select posts to manage them in bulk.</span>
+          <span>Select rows to manage them in bulk.</span>
         ) : (
           <>
             <span>
-              {selected.length} {selected.length === 1 ? "post" : "posts"} selected
+              {selected.length} selected
             </span>
             <Button
               className="gap-2"
@@ -173,103 +224,77 @@ export function AdminPage() {
         )}
       </div>
 
-      {isPending ? (
-        <div className="grid gap-2">
-          <Skeleton className="h-10 w-full" />
-          <Skeleton className="h-10 w-full" />
-          <Skeleton className="h-10 w-full" />
-        </div>
-      ) : posts.length === 0 ? (
-        <Empty>
-          <EmptyHeader>
-            <EmptyTitle>No posts yet.</EmptyTitle>
-            <EmptyDescription>
-              Create a blog post or a project to see it listed here.
-            </EmptyDescription>
-          </EmptyHeader>
-        </Empty>
-      ) : (
-        // `site-panel` rather than a bare table: every other content surface on
-        // this site sits on one, and without it the circuit-field background
-        // paints straight through the rows.
-        <div className="site-panel overflow-x-auto px-2 py-2 lg:px-4 lg:py-3">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-10">
+      <div className="overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-10">
+                <Checkbox
+                  aria-label="Select all rows"
+                  checked={allSelected}
+                  onCheckedChange={(checked) => {
+                    setSelectedIds(
+                      checked === true ? new Set(posts.map((post) => post.id)) : new Set(),
+                    );
+                  }}
+                />
+              </TableHead>
+              <TableHead>Title</TableHead>
+              <TableHead>State</TableHead>
+              <TableHead>Published</TableHead>
+              <TableHead className="w-24 text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {posts.map((post) => (
+              <TableRow key={post.id}>
+                <TableCell>
                   <Checkbox
-                    aria-label="Select all posts"
-                    checked={allSelected}
+                    aria-label={`Select ${post.title}`}
+                    checked={selectedIds.has(post.id)}
                     onCheckedChange={(checked) => {
-                      toggleAll(checked === true);
+                      toggle(post.id, checked === true);
                     }}
                   />
-                </TableHead>
-                <TableHead>Title</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>State</TableHead>
-                <TableHead>Published</TableHead>
-                <TableHead className="w-24 text-right">Edit</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {posts.map((post) => (
-                <TableRow key={post.id}>
-                  <TableCell>
-                    <Checkbox
-                      aria-label={`Select ${post.title}`}
-                      checked={selectedIds.has(post.id)}
-                      onCheckedChange={(checked) => {
-                        toggle(post.id, checked === true);
-                      }}
-                    />
-                  </TableCell>
-                  <TableCell className="font-medium">
-                    <span className="block">{post.title}</span>
-                    <span className="block text-xs text-muted-foreground">{post.slug}</span>
-                  </TableCell>
-                  <TableCell>{TYPE_LABELS[post.type]}</TableCell>
-                  <TableCell>
-                    <Badge
-                      variant={post.publicationState === "published" ? "secondary" : "outline"}
-                    >
-                      {post.publicationState}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {formatPublishedDate(post.publishedAt) || "—"}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Button
-                      aria-label={`Edit ${post.title}`}
-                      onClick={() => {
-                        void handleEdit(post);
-                      }}
-                      size="sm"
-                      variant="outline"
-                    >
-                      <RiEditLine aria-hidden="true" className="size-4" />
+                </TableCell>
+                <TableCell className="font-medium">
+                  <span className="block">{post.title}</span>
+                  <span className="block text-xs text-muted-foreground">{post.slug}</span>
+                </TableCell>
+                <TableCell>
+                  <Badge variant={post.publicationState === "published" ? "secondary" : "outline"}>
+                    {post.publicationState}
+                  </Badge>
+                </TableCell>
+                <TableCell className="text-muted-foreground">
+                  {formatPublishedDate(post.publishedAt) || "—"}
+                </TableCell>
+                <TableCell>
+                  <div className="flex items-center justify-end gap-1">
+                    <Button aria-label={`Edit ${post.title}`} asChild size="sm" variant="outline">
+                      <Link search={{ id: post.id }} to="/admin/posts/edit">
+                        <RiEditLine aria-hidden="true" className="size-4" />
+                      </Link>
                     </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      )}
-
-      {editing === null ? null : (
-        <PostFormDialog
-          onOpenChange={(open) => {
-            if (!open) {
-              setEditing(null);
-            }
-          }}
-          open
-          post={editing}
-          type={editing.type}
-        />
-      )}
+                    {/* The exit that actually gets used: after publishing, the
+                        next thing an admin wants is that post on the site. A
+                        plain anchor, because it leaves the admin subtree.
+                        Absent for a draft, which has no public URL to open —
+                        the public routes 404 on anything unpublished. */}
+                    {post.publicationState === "published" ? (
+                      <Button aria-label={`View ${post.title}`} asChild size="sm" variant="ghost">
+                        <a href={`/${post.type === "blog" ? "blog" : "projects"}/${post.slug}`}>
+                          <RiExternalLinkLine aria-hidden="true" className="size-4" />
+                        </a>
+                      </Button>
+                    ) : null}
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
 
       <AlertDialog onOpenChange={setIsConfirmingDelete} open={isConfirmingDelete}>
         <AlertDialogContent>

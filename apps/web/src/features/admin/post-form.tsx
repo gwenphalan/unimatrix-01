@@ -10,11 +10,6 @@ import type {
 import {
   Button,
   Checkbox,
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
   Input,
   Label,
   MarkdownEditor,
@@ -137,24 +132,30 @@ function toUpdateBody(form: PostFormState, post: ContentPost): UpdatePostBody {
   };
 }
 
-export interface PostFormDialogProps {
+export interface PostFormProps {
   /** The post being edited, or `null` to create a new one. */
   post: ContentPost | null;
   /** Collection the created post belongs to. Ignored when editing. */
   type: ContentPostType;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
+  /** Leave the form — called after a successful save and on cancel. */
+  onDone: () => void;
 }
 
 /**
  * Create/edit form for one post, with the markdown body edited in place.
+ *
+ * A page rather than a dialog: writing a post is the longest-running thing an
+ * admin does here, and a modal caps the editor at a fraction of the viewport
+ * while trapping focus. The form is height-agnostic — it fills whatever column
+ * it is given and hands the leftover space to the editor — so the route decides
+ * how tall it is.
  *
  * Slug is editable while creating and while editing: changing it is a real
  * thing an admin needs to do, and the API enforces `(type, slug)` uniqueness,
  * so a collision comes back as a 400 with a message rather than being
  * prevented by a guess here.
  */
-export function PostFormDialog({ post, type, open, onOpenChange }: PostFormDialogProps) {
+export function PostForm({ post, type, onDone }: PostFormProps) {
   const effectiveType = post?.type ?? type;
   const [form, setForm] = useState<PostFormState>(() =>
     post === null ? EMPTY_FORM : toFormState(post),
@@ -208,39 +209,26 @@ export function PostFormDialog({ post, type, open, onOpenChange }: PostFormDialo
         await updatePost.mutateAsync(toUpdateBody(form, post));
       }
 
-      onOpenChange(false);
+      onDone();
     } catch {
       // The mutation's `onError` already raised a toast naming the failure,
-      // and the dialog stays open so the admin keeps what they typed.
+      // and the form stays put so the admin keeps what they typed.
     }
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      {/* Radix warns about a dialog with no description and points at
-          `aria-describedby`; opting out explicitly is how it wants that said.
-          The title names the action and every field is labelled, so there is
-          nothing left for a description to add. */}
-      <DialogContent
-        aria-describedby={undefined}
-        className="max-h-[90vh] gap-4 overflow-y-auto sm:max-w-3xl"
-      >
-        <DialogHeader>
-          <DialogTitle>
-            {post === null
-              ? `New ${effectiveType === "blog" ? "blog post" : "project"}`
-              : `Edit ${post.title}`}
-          </DialogTitle>
-        </DialogHeader>
-
-        <form
-          className="grid gap-4"
-          onSubmit={(event) => {
-            // `onSubmit` expects a void return, so the promise is deliberately
-            // not handed to React. `handleSubmit` settles its own failures.
-            void handleSubmit(event);
-          }}
-        >
+    <form
+      // `min-h-0` on a flex child is what lets the editor below actually
+      // shrink; without it the column's implicit `min-height: auto` makes the
+      // editor push the page taller instead of scrolling inside its own box.
+      className="flex min-h-0 flex-1 flex-col gap-4"
+      onSubmit={(event) => {
+        // `onSubmit` expects a void return, so the promise is deliberately
+        // not handed to React. `handleSubmit` settles its own failures.
+        void handleSubmit(event);
+      }}
+    >
+      <div className="grid gap-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="grid gap-2">
               <Label htmlFor={`${fieldPrefix}-title`}>Title</Label>
@@ -357,14 +345,16 @@ export function PostFormDialog({ post, type, open, onOpenChange }: PostFormDialo
               </div>
             </>
           ) : null}
+      </div>
 
-          <Separator />
+      <Separator />
 
-          {/* "Body" and "Insert image" are handed to the editor's own toolbar
-              row rather than rendered above it, so the label sits immediately
-              on top of the editing surface and the upload button lines up with
-              the formatting controls it belongs beside. */}
-          <MarkdownEditor
+      {/* "Body" and "Insert image" are handed to the editor's own toolbar
+          row rather than rendered above it, so the label sits immediately
+          on top of the editing surface and the upload button lines up with
+          the formatting controls it belongs beside. */}
+      <MarkdownEditor
+            className="min-h-0 flex-1"
             actions={
               <>
                 <Button
@@ -415,48 +405,39 @@ export function PostFormDialog({ post, type, open, onOpenChange }: PostFormDialo
             value={form.body}
           />
 
-          <DialogFooter className="items-center gap-3 sm:justify-between">
-            <div className="flex items-center gap-2">
-              <Label className="text-muted-foreground" htmlFor={`${fieldPrefix}-state`}>
-                State
-              </Label>
-              <Select
-                onValueChange={(next) => {
-                  update("publicationState", next as ContentPublicationState);
-                }}
-                value={form.publicationState}
-              >
-                <SelectTrigger className="w-40" id={`${fieldPrefix}-state`}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {PUBLICATION_STATES.map((state) => (
-                    <SelectItem key={state} value={state}>
-                      {STATE_LABELS[state]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <Label className="text-muted-foreground" htmlFor={`${fieldPrefix}-state`}>
+            State
+          </Label>
+          <Select
+            onValueChange={(next) => {
+              update("publicationState", next as ContentPublicationState);
+            }}
+            value={form.publicationState}
+          >
+            <SelectTrigger className="w-40" id={`${fieldPrefix}-state`}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {PUBLICATION_STATES.map((state) => (
+                <SelectItem key={state} value={state}>
+                  {STATE_LABELS[state]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
 
-            <div className="flex gap-2">
-              <Button
-                disabled={isSaving}
-                onClick={() => {
-                  onOpenChange(false);
-                }}
-                type="button"
-                variant="outline"
-              >
-                Cancel
-              </Button>
-              <Button disabled={isSaving} type="submit">
-                {isSaving ? "Saving" : post === null ? "Create" : "Save"}
-              </Button>
-            </div>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+        <div className="flex gap-2">
+          <Button disabled={isSaving} onClick={onDone} type="button" variant="outline">
+            Cancel
+          </Button>
+          <Button disabled={isSaving} type="submit">
+            {isSaving ? "Saving" : post === null ? "Create" : "Save"}
+          </Button>
+        </div>
+      </div>
+    </form>
   );
 }

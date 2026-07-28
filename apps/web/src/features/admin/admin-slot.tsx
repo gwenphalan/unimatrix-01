@@ -37,10 +37,14 @@ const AdminSurface = lazy(async () => {
  * about when asking what lands in the admin chunk.
  */
 export type AdminSlotProps =
-  /** Mounted once, in the app shell: the toast host every admin action uses. */
+  /** Mounted once, in the public app shell: the toast host every admin action uses. */
   | { kind: "toaster" }
-  /** The whole `/admin` page. */
+  /** Chrome for the whole `/admin` subtree, wrapped around the routed page. */
+  | { kind: "shell"; children: ReactNode }
+  /** The `/admin` index: bulk management of both collections. */
   | { kind: "page" }
+  /** The full-page create/edit form. `postId` is `null` when creating. */
+  | { kind: "post-form"; postId: string | null; type: ContentPostType }
   /** A "New blog post" / "New project" button for one collection. */
   | { kind: "new-post"; type: ContentPostType }
   /** Per-item edit / publish / delete controls, addressed the way a public page knows a post. */
