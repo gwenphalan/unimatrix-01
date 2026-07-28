@@ -55,12 +55,10 @@ export function PostFormPage({ postId, type }: { postId: string | null; type: Co
     void navigate({ to: "/admin" });
   }
 
+  // `PostForm` renders its own panel — the publication state lives in the panel
+  // header and has to stay inside the `<form>`.
   if (postId === null) {
-    return (
-      <AdminPanel className="flex min-h-0 flex-1 flex-col" title={`New ${TYPE_LABELS[type]}`}>
-        <PostForm onDone={leave} post={null} type={type} />
-      </AdminPanel>
-    );
+    return <PostForm onDone={leave} post={null} title={`New ${TYPE_LABELS[type]}`} type={type} />;
   }
 
   const error = list.error ?? detail.error;
@@ -106,8 +104,11 @@ export function PostFormPage({ postId, type }: { postId: string | null; type: Co
   }
 
   return (
-    <AdminPanel className="flex min-h-0 flex-1 flex-col" title={`Edit ${detail.data.title}`}>
-      <PostForm onDone={leave} post={detail.data} type={detail.data.type} />
-    </AdminPanel>
+    <PostForm
+      onDone={leave}
+      post={detail.data}
+      title={`Edit ${detail.data.title}`}
+      type={detail.data.type}
+    />
   );
 }

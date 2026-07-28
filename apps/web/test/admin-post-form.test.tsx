@@ -68,7 +68,7 @@ describe("PostForm", () => {
 
     const { PostForm } = await import("@/features/admin/post-form");
 
-    renderForm(<PostForm onDone={() => {}} post={null} type="blog" />);
+    renderForm(<PostForm title="Edit post" onDone={() => {}} post={null} type="blog" />);
 
     type("Title", "New post");
     type("Slug", "new-post");
@@ -99,7 +99,7 @@ describe("PostForm", () => {
   it("derives the slug from the title until the slug is typed in", async () => {
     const { PostForm } = await import("@/features/admin/post-form");
 
-    renderForm(<PostForm onDone={() => {}} post={null} type="blog" />);
+    renderForm(<PostForm title="Edit post" onDone={() => {}} post={null} type="blog" />);
 
     type("Title", "A Post About Things");
     expect(screen.getByLabelText("Slug")).toHaveValue("a-post-about-things");
@@ -124,7 +124,7 @@ describe("PostForm", () => {
   it("never rewrites an existing post's slug from its title", async () => {
     const { PostForm } = await import("@/features/admin/post-form");
 
-    renderForm(<PostForm onDone={() => {}} post={PROJECT} type="project" />);
+    renderForm(<PostForm title="Edit post" onDone={() => {}} post={PROJECT} type="project" />);
 
     type("Title", "Cube Trainer Renamed");
 
@@ -134,7 +134,7 @@ describe("PostForm", () => {
   it("offers no project fields on a blog post", async () => {
     const { PostForm } = await import("@/features/admin/post-form");
 
-    renderForm(<PostForm onDone={() => {}} post={null} type="blog" />);
+    renderForm(<PostForm title="Edit post" onDone={() => {}} post={null} type="blog" />);
 
     expect(screen.queryByLabelText("Repository URL")).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/Feature on the homepage/u)).not.toBeInTheDocument();
@@ -145,7 +145,7 @@ describe("PostForm", () => {
 
     const { PostForm } = await import("@/features/admin/post-form");
 
-    renderForm(<PostForm onDone={() => {}} post={PROJECT} type="project" />);
+    renderForm(<PostForm title="Edit post" onDone={() => {}} post={PROJECT} type="project" />);
 
     expect(screen.getByLabelText("Title")).toHaveValue("Cube Trainer");
     expect(screen.getByLabelText("Repository URL")).toHaveValue("https://example.com/repo");
@@ -176,7 +176,7 @@ describe("PostForm", () => {
 
     const { PostForm } = await import("@/features/admin/post-form");
 
-    renderForm(<PostForm onDone={onDone} post={null} type="blog" />);
+    renderForm(<PostForm onDone={onDone} post={null} title="Edit post" type="blog" />);
 
     type("Title", "New post");
     type("Slug", "new-post");

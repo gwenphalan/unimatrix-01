@@ -135,9 +135,20 @@ const baseTheme = EditorView.theme({
     fontSize: "0.875rem",
     backgroundColor: "transparent",
     color: "var(--foreground)",
+    // Fill the host rather than the document. Paired with the `flex-1` host
+    // element, this is what makes the whole visible box clickable: without it
+    // CodeMirror ends at the last line and every click below that lands on a
+    // plain `div` that cannot take focus.
+    height: "100%",
   },
   "&.cm-focused": { outline: "none" },
-  ".cm-content": { padding: "0.75rem", caretColor: "var(--foreground)" },
+  ".cm-content": {
+    padding: "0.75rem",
+    caretColor: "var(--foreground)",
+    // `.cm-content` is the element that actually takes the click, so it has to
+    // grow too — `.cm-editor` filling the box is not enough on its own.
+    minHeight: "100%",
+  },
   ".cm-line": { padding: "0 0.25rem" },
   ".cm-cursor, .cm-dropCursor": { borderLeftColor: "var(--foreground)" },
   "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection": {
@@ -397,7 +408,7 @@ export const MarkdownEditor = React.forwardRef<MarkdownEditorHandle, MarkdownEdi
             has no opinion about it. */}
         <div
           className={cn(
-            "min-h-64 flex-1 overflow-auto border border-input bg-background",
+            "flex min-h-64 flex-1 flex-col overflow-auto border border-input bg-background",
             editorClassName,
           )}
         >
@@ -405,8 +416,15 @@ export const MarkdownEditor = React.forwardRef<MarkdownEditorHandle, MarkdownEdi
            * The editor host stays mounted in every mode. Unmounting it for the
            * preview would destroy the view, and with it the undo history and
            * cursor position.
+           *
+           * `flex-1` on the host, and `height: 100%` on `.cm-editor` inside it,
+           * are what make a click land on the editor rather than on dead space.
+           * CodeMirror sizes itself to its content by default, so in a box this
+           * tall — a full-page editor with a short draft in it — most of what
+           * looks like the writing surface belongs to this container, and
+           * clicking it does nothing at all.
            */}
-          <div className={cn(mode === "preview" && "hidden")} ref={hostRef} />
+          <div className={cn("flex-1", mode === "preview" && "hidden")} ref={hostRef} />
 
           {mode === "preview" ? (
             <div className="public-markdown px-4 py-3">

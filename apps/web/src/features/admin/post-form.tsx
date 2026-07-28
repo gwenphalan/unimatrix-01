@@ -24,6 +24,7 @@ import {
 } from "@unimatrix/ui/editor";
 import { useId, useRef, useState } from "react";
 
+import { AdminPanel } from "./admin-shell";
 import { ASSET_ACCEPT, assetUrl, uploadAsset } from "./asset-upload";
 import { useCreatePost, useUpdatePost } from "./mutations";
 import { slugifyTitle } from "./slugify";
@@ -137,6 +138,8 @@ export interface PostFormProps {
   post: ContentPost | null;
   /** Collection the created post belongs to. Ignored when editing. */
   type: ContentPostType;
+  /** Heading for the panel this form renders as. */
+  title: string;
   /** Leave the form — called after a successful save and on cancel. */
   onDone: () => void;
 }
@@ -154,8 +157,13 @@ export interface PostFormProps {
  * thing an admin needs to do, and the API enforces `(type, slug)` uniqueness,
  * so a collision comes back as a 400 with a message rather than being
  * prevented by a guess here.
+ *
+ * The form owns its {@link AdminPanel} rather than being placed inside one by
+ * the route: the publication state belongs in the panel header, beside the
+ * title, and it has to stay inside the `<form>` element to be part of the same
+ * submission and to keep its `<label for>` association.
  */
-export function PostForm({ post, type, onDone }: PostFormProps) {
+export function PostForm({ post, type, title, onDone }: PostFormProps) {
   const effectiveType = post?.type ?? type;
   const [form, setForm] = useState<PostFormState>(() =>
     post === null ? EMPTY_FORM : toFormState(post),
@@ -221,13 +229,45 @@ export function PostForm({ post, type, onDone }: PostFormProps) {
       // `min-h-0` on a flex child is what lets the editor below actually
       // shrink; without it the column's implicit `min-height: auto` makes the
       // editor push the page taller instead of scrolling inside its own box.
-      className="flex min-h-0 flex-1 flex-col gap-4"
+      className="flex min-h-0 flex-1 flex-col"
       onSubmit={(event) => {
         // `onSubmit` expects a void return, so the promise is deliberately
         // not handed to React. `handleSubmit` settles its own failures.
         void handleSubmit(event);
       }}
     >
+      <AdminPanel
+        // The publication state sits with the panel title rather than down by
+        // the submit buttons: it is the one field that decides what saving
+        // actually *does*, and it reads as a property of the post being edited
+        // rather than as one more input in the column of inputs.
+        actions={
+          <div className="flex items-center gap-2">
+            <Label className="text-muted-foreground" htmlFor={`${fieldPrefix}-state`}>
+              State
+            </Label>
+            <Select
+              onValueChange={(next) => {
+                update("publicationState", next as ContentPublicationState);
+              }}
+              value={form.publicationState}
+            >
+              <SelectTrigger className="w-40" id={`${fieldPrefix}-state`}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {PUBLICATION_STATES.map((state) => (
+                  <SelectItem key={state} value={state}>
+                    {STATE_LABELS[state]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        }
+        className="flex min-h-0 flex-1 flex-col"
+        title={title}
+      >
       <div className="grid gap-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="grid gap-2">
@@ -405,39 +445,15 @@ export function PostForm({ post, type, onDone }: PostFormProps) {
             value={form.body}
           />
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <Label className="text-muted-foreground" htmlFor={`${fieldPrefix}-state`}>
-            State
-          </Label>
-          <Select
-            onValueChange={(next) => {
-              update("publicationState", next as ContentPublicationState);
-            }}
-            value={form.publicationState}
-          >
-            <SelectTrigger className="w-40" id={`${fieldPrefix}-state`}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {PUBLICATION_STATES.map((state) => (
-                <SelectItem key={state} value={state}>
-                  {STATE_LABELS[state]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="flex gap-2">
-          <Button disabled={isSaving} onClick={onDone} type="button" variant="outline">
-            Cancel
-          </Button>
-          <Button disabled={isSaving} type="submit">
-            {isSaving ? "Saving" : post === null ? "Create" : "Save"}
-          </Button>
-        </div>
+      <div className="flex justify-end gap-2">
+        <Button disabled={isSaving} onClick={onDone} type="button" variant="outline">
+          Cancel
+        </Button>
+        <Button disabled={isSaving} type="submit">
+          {isSaving ? "Saving" : post === null ? "Create" : "Save"}
+        </Button>
       </div>
+      </AdminPanel>
     </form>
   );
 }

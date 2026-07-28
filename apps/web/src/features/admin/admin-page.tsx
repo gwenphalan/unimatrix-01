@@ -278,16 +278,17 @@ function PostBulkTable({
                 </TableCell>
                 <TableCell>
                   <div className="flex items-center justify-end gap-1">
-                    <Button aria-label={`Edit ${post.title}`} asChild size="sm" variant="outline">
-                      <Link search={{ id: post.id }} to="/admin/posts/edit">
-                        <RiEditLine aria-hidden="true" className="size-4" />
-                      </Link>
-                    </Button>
-                    {/* The exit that actually gets used: after publishing, the
-                        next thing an admin wants is that post on the site. A
-                        plain anchor, because it leaves the admin subtree.
-                        Absent for a draft, which has no public URL to open —
-                        the public routes 404 on anything unpublished. */}
+                    {/* View first, Edit last. Edit is on every row and View is
+                        not, so putting the optional control on the outside
+                        keeps Edit in the same place whether or not the post is
+                        published — otherwise it slides across as you read down
+                        a mixed list.
+
+                        View is the exit that actually gets used: after
+                        publishing, the next thing an admin wants is that post
+                        on the site. A plain anchor, because it leaves the admin
+                        subtree. Absent for a draft, which has no public URL to
+                        open — the public routes 404 on anything unpublished. */}
                     {post.publicationState === "published" ? (
                       <Button aria-label={`View ${post.title}`} asChild size="sm" variant="ghost">
                         <a href={`/${post.type === "blog" ? "blog" : "projects"}/${post.slug}`}>
@@ -295,6 +296,11 @@ function PostBulkTable({
                         </a>
                       </Button>
                     ) : null}
+                    <Button aria-label={`Edit ${post.title}`} asChild size="sm" variant="outline">
+                      <Link search={{ id: post.id }} to="/admin/posts/edit">
+                        <RiEditLine aria-hidden="true" className="size-4" />
+                      </Link>
+                    </Button>
                   </div>
                 </TableCell>
               </TableRow>
