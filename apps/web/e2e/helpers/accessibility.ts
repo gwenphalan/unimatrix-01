@@ -9,10 +9,9 @@ const WCAG_TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"];
 
 /**
  * axe's `best-practice` set. These are not WCAG failures; they are structural
- * recommendations, and the site currently violates three of them. Rather than
- * drop the whole tag set (which would stop reporting them) or fail the build on
- * day one, the *set of rule ids* is compared against a known baseline: existing
- * findings stay visible, and a new one fails.
+ * recommendations. The *set of rule ids* is compared against a baseline rather
+ * than the violation count, so a new kind of problem fails even if an old one
+ * is still present.
  *
  * AGENTS.md claims ADHD-accessible UX. That claim is about design judgement
  * automated tooling cannot check, but landmark structure and heading order are
@@ -22,15 +21,19 @@ const WCAG_TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"];
 const BEST_PRACTICE_TAGS = ["best-practice"];
 
 /**
- * Best-practice rules the public site violates today, as measured. Removing an
- * entry once it is genuinely fixed is the intended direction; adding one should
- * be a deliberate, explained edit.
+ * Empty, and meant to stay that way. This list held `region`, `heading-order`,
+ * and `landmark-unique`; all three are fixed, so the baseline is now a hard
+ * floor rather than a backlog.
  *
- * - `region`: some page content sits outside any landmark element.
- * - `heading-order`: at least one heading skips a level.
- * - `landmark-unique`: two landmarks share a role without distinguishing labels.
+ * A fourth, `page-has-heading-one`, was never in the list and was failing
+ * anyway — `/projects` and `/blog` were visited by the smoke flow but never
+ * scanned. Both are scanned now.
+ *
+ * Adding an entry here should be a deliberate, explained edit. It means
+ * shipping a known structural problem, and it is the kind of change that is
+ * easy to make quietly to turn a build green.
  */
-const KNOWN_BEST_PRACTICE_VIOLATIONS = ["heading-order", "landmark-unique", "region"];
+const KNOWN_BEST_PRACTICE_VIOLATIONS: string[] = [];
 
 interface ViolationSummary {
   id: string;

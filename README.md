@@ -16,13 +16,13 @@ Use the pinned toolchain from `.node-version` and the root
 5. Run `pnpm dev`.
 
 For a freshly created worktree or other automation, you can replace the
-manual bootstrap steps with `./infra/scripts/pnpm-with-node22.sh
+manual bootstrap steps with `./infra/scripts/pnpm-with-pinned-node.sh
 setup:worktree`. That command installs workspace dependencies with a frozen
 lockfile, bootstraps local env files, and runs database migrations.
 
 If your host runtime does not already match the pinned Node and pnpm
-versions, use `./infra/scripts/pnpm-with-node22.sh install
---frozen-lockfile` and `./infra/scripts/pnpm-with-node22.sh dev`.
+versions, use `./infra/scripts/pnpm-with-pinned-node.sh install
+--frozen-lockfile` and `./infra/scripts/pnpm-with-pinned-node.sh dev`.
 
 ## What lives here
 

@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -6,18 +6,25 @@ import { fileURLToPath } from "node:url";
 import { bootstrapLocalEnvFiles, printBootstrapLocalEnvFiles } from "./setup-local.mjs";
 
 const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
-const REQUIRED_NODE_MAJOR = "22";
 const PNPM_COMMAND = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
 
+// Derived from `.node-version` rather than duplicated. This guard used to carry
+// its own literal `"22"`, which means a toolchain bump that missed this line
+// would have rejected the very runtime the repo had just standardised on.
+function requiredNodeMajor() {
+  return readFileSync(resolve(REPO_ROOT, ".node-version"), "utf8").trim().split(".")[0];
+}
+
 function ensureSupportedNodeVersion() {
+  const required = requiredNodeMajor();
   const nodeMajor = process.versions.node.split(".")[0];
 
-  if (nodeMajor === REQUIRED_NODE_MAJOR) {
+  if (nodeMajor === required) {
     return;
   }
 
   console.error(
-    `pnpm dev requires Node ${REQUIRED_NODE_MAJOR}.x. See .node-version or run ./infra/scripts/pnpm-with-node22.sh dev.`,
+    `pnpm dev requires Node ${required}.x (running ${process.versions.node}). See .node-version or run ./infra/scripts/pnpm-with-pinned-node.sh dev.`,
   );
   process.exit(1);
 }

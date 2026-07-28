@@ -29,11 +29,17 @@ import lighthouse from "lighthouse";
  * against regression rather than demanding an improvement. Lighthouse scores
  * vary a few points run to run even on identical input — the margin absorbs
  * that, and anything larger is a real regression.
+ *
+ * `seo` is the exception and carries no margin, because it does not need one:
+ * unlike performance it is a fixed set of pass/fail audits with no timing
+ * component, so it does not drift between runs. Both apps score 1.00 on every
+ * route, and any drop means an audit genuinely started failing — a page with no
+ * meta description, a non-crawlable link, an image without alt text.
  */
 const APPS = {
   // Measured 2026-07-27 against a build with no `VITE_CLERK_PUBLISHABLE_KEY`,
   // which is what CI produces: performance 0.90-0.94, accessibility 0.98-1.00,
-  // best-practices 1.00, seo 0.83.
+  // best-practices 1.00, seo 1.00.
   //
   // Measure it the same way. A local `.env.local` carrying a Clerk key drops
   // best-practices to 0.73-0.77, because Clerk's telemetry call is blocked by
@@ -42,14 +48,14 @@ const APPS = {
   // loose for the site CI actually builds.
   "apps/web": {
     routes: ["/", "/about", "/projects", "/blog"],
-    budgets: { performance: 0.85, accessibility: 0.95, "best-practices": 0.95, seo: 0.8 },
+    budgets: { performance: 0.85, accessibility: 0.95, "best-practices": 0.95, seo: 1 },
   },
   // Measured 2026-07-27: performance 0.95-0.97, accessibility 1.00,
-  // best-practices 1.00, seo 0.82-0.83. No env of any kind, so local and CI
-  // builds are identical.
+  // best-practices 1.00, seo 1.00. No env of any kind, so local and CI builds
+  // are identical.
   "apps/cube-trainer": {
     routes: ["/", "/learn", "/drill"],
-    budgets: { performance: 0.9, accessibility: 0.95, "best-practices": 0.95, seo: 0.8 },
+    budgets: { performance: 0.9, accessibility: 0.95, "best-practices": 0.95, seo: 1 },
   },
 };
 

@@ -18,6 +18,45 @@ updates:
     cooldown:
       default-days: 14
 
+    # Five packages are held below `latest` on purpose, each for a reason
+    # recorded in the root AGENTS.md under "Dependency Ceilings". Without these
+    # rules Dependabot re-proposes all five every day, and a standing pile of
+    # PRs that must always be closed is how a PR that should NOT be closed gets
+    # closed with them.
+    #
+    # Only the major is ignored in every case. Minor and patch keep flowing, so
+    # a security fix on the current line still arrives normally — the point is
+    # to suppress a known-bad jump, not to stop watching the package.
+    #
+    # Re-check the reason before deleting an entry; none of these are permanent.
+    ignore:
+      # typescript-eslint peers on `>=4.8.4 <6.1.0`. TypeScript 7 breaks lint in
+      # every workspace at once. Lift when typescript-eslint widens its range.
+      - dependency-name: typescript
+        update-types: [version-update:semver-major]
+
+      # Tracks the major in `.node-version` (24), not `latest`. A newer major
+      # describes APIs the runtime does not have. Lift with the runtime.
+      - dependency-name: "@types/node"
+        update-types: [version-update:semver-major]
+
+      # No prebuilt binaries published for the 13 line, so it compiles from
+      # source and the alpine image has no toolchain. See packages/db/AGENTS.md.
+      # Lift when upstream ships prebuilds. Note the new `Images` CI job would
+      # now catch this, so this entry is convenience rather than the guard.
+      - dependency-name: better-sqlite3
+        update-types: [version-update:semver-major]
+
+      # Imported only by packages/ui chart.tsx and calendar.tsx, which no app
+      # consumes and no route renders — so the real-browser check this repo
+      # requires for packages/ui changes cannot be run on them at all. Upgrading
+      # them is fine; upgrading them unverified is not. Lift by giving them a
+      # consumer, or drop the components and these entries together.
+      - dependency-name: recharts
+        update-types: [version-update:semver-major]
+      - dependency-name: react-day-picker
+        update-types: [version-update:semver-major]
+
     groups:
       # Minor and patch land as one PR and are eligible for auto-merge once CI is
       # green. Majors are deliberately left ungrouped so each arrives as its own
@@ -114,7 +153,9 @@ updates:
       timezone: America/Phoenix
     open-pull-requests-limit: 5
 
-    # Same 14 days as npm and github-actions, for the same reason.
+    # Same 14 days as npm, for the same reason. Not the same as github-actions,
+    # which is 7 — an action bump is a SHA change against a public, reviewable
+    # repo, whereas this pulls an opaque image the same way npm pulls a tarball.
     cooldown:
       default-days: 14
 

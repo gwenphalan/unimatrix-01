@@ -79,7 +79,7 @@ For this repo, v1-ready means the following baseline remains true.
 - [x] `apps/cube-trainer` is runnable as the canonical OLL/PLL trainer workspace.
 - [x] `apps/auth` is runnable as the canonical Clerk-backed accounts workspace.
 - [x] Root scripts are the canonical operating surface for local work and CI.
-- [x] The toolchain is pinned to Node `22.22.1` and pnpm `10.30.3`.
+- [x] The toolchain is pinned to Node `24.18.0` and pnpm `10.30.3`.
 - [x] Shared packages are typed and reusable across app boundaries.
 - [x] Git-backed typed content exists for `home`, `projects`, and `blog`.
 - [x] The deployment and environment contract is documented.

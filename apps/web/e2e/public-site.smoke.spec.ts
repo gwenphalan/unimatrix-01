@@ -49,6 +49,10 @@ test("navigation smoke flow", async ({ page }) => {
   await expect(page).toHaveURL(/\/projects$/u);
   await expect(page.getByRole("link", { name: "Open project Cube Trainer" })).toBeVisible();
 
+  // The list routes were previously visited here but never scanned, so
+  // `page-has-heading-one` failed on both of them without failing the build.
+  await expectNoAccessibilityViolations(page, "/projects");
+
   await page.getByRole("link", { name: "Open project Cube Trainer" }).click();
   await expect(page).toHaveURL(/\/projects\/cube-trainer$/u);
   await expect(page.getByRole("heading", { name: "Cube Trainer" })).toBeVisible();
@@ -63,6 +67,8 @@ test("navigation smoke flow", async ({ page }) => {
       name: "Open blog entry Placeholder blog",
     }),
   ).toBeVisible();
+
+  await expectNoAccessibilityViolations(page, "/blog");
 
   await gotoRoute(page, "/about");
   await expect(page).toHaveURL(/\/about$/u);

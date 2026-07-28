@@ -85,3 +85,42 @@ jobs:
           path: apps/*/.lighthouse/
           retention-days: 7
           if-no-files-found: ignore
+
+  # `Verify` builds with Vite and tsc; it never touches a Dockerfile. That left a
+  # whole class of breakage invisible: a dependency can pass every check on the
+  # runner while making the deployable image unbuildable.
+  #
+  # Not hypothetical. `better-sqlite3@13` publishes no prebuilt binaries at all
+  # (12.11.1 ships 138), so it falls through to `node-gyp rebuild` and dies on
+  # `node:*-alpine` with `gyp ERR! find Python` — while `pnpm verify` stays green
+  # on the glibc runner, because glibc has a prebuild. Caught by hand on
+  # 2026-07-27; nothing in CI would have caught it.
+  #
+  # Build only, no push and no registry credentials. The point is that the image
+  # still assembles, which is exactly the signal `Verify` cannot give.
+  images:
+    name: Images
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 20
+    permissions:
+      contents: read
+
+    strategy:
+      # Do not cancel the other three on the first failure — knowing whether a
+      # break is confined to one image or affects all of them is most of the
+      # diagnosis, and re-running to find out costs another full cycle.
+      fail-fast: false
+      matrix:
+        app: [api, auth, cube-trainer, web]
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Plain `docker build` against the runner's preinstalled Docker, rather
+      # than the buildx actions. It needs no third-party action to pin and no
+      # cache to invalidate, and the build context is the repo itself.
+      - name: Build ${{ matrix.app }} image
+        run: docker build --file "apps/${{ matrix.app }}/Dockerfile" --tag "unimatrix-${{ matrix.app }}:ci" .

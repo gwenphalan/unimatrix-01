@@ -7,7 +7,13 @@ import { Badge, Button, Card } from "@unimatrix/ui/public";
 export const Route = createRootRoute({
   component: RootComponent,
   head: () => ({
-    meta: [{ title: "Cube Trainer" }],
+    meta: [
+      { title: "Cube Trainer" },
+      {
+        name: "description",
+        content: "A flashcard trainer for memorizing every 3x3 Rubik's Cube OLL and PLL algorithm.",
+      },
+    ],
   }),
   notFoundComponent: RootNotFound,
 });

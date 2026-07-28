@@ -60,6 +60,7 @@ export function PublicSectionHeading({
   className,
   description,
   descriptionClassName,
+  headingLevel = 2,
   title,
   titleClassName,
   trailing,
@@ -68,10 +69,22 @@ export function PublicSectionHeading({
   className?: string;
   description?: React.ReactNode;
   descriptionClassName?: string;
+  /**
+   * Which heading element the title renders as. Defaults to `h2`, which is
+   * right when the page already has an `h1` above this section.
+   *
+   * Pass `1` on pages where this heading *is* the page title. `/projects` and
+   * `/blog` used the default and so had no `h1` at all, which axe reports as
+   * `page-has-heading-one` — a rule neither route was scanned against, because
+   * the smoke suite visited them without running an accessibility check.
+   */
+  headingLevel?: 1 | 2;
   title?: React.ReactNode;
   titleClassName?: string;
   trailing?: React.ReactNode;
 }) {
+  const Heading = headingLevel === 1 ? "h1" : "h2";
+
   return (
     <div
       className={cn(
@@ -82,14 +95,14 @@ export function PublicSectionHeading({
       <div className="space-y-3">
         {badges ? <div className="flex flex-wrap items-center gap-2">{badges}</div> : null}
         {title ? (
-          <h2
+          <Heading
             className={cn(
               "max-w-5xl text-2xl leading-[0.96] font-medium tracking-[-0.05em] text-foreground lg:text-3xl",
               titleClassName,
             )}
           >
             {title}
-          </h2>
+          </Heading>
         ) : null}
         {description ? (
           <p
@@ -292,15 +305,25 @@ export function ProjectStatusBadge({
 
 export function PublicProjectLedgerItem({
   actions,
+  headingLevel = 3,
   index,
   project,
   renderLink,
 }: {
   actions?: React.ReactNode;
+  /**
+   * Heading element for the item title. Defaults to `h3`, which is correct
+   * under a section that has its own `h2`. Pass `2` where the list sits
+   * directly beneath the page `h1` — `/projects` and `/blog` do — so the
+   * levels do not skip a step.
+   */
+  headingLevel?: 2 | 3;
   index: number;
   project: PublicProjectCardData;
   renderLink?: PublicCardLinkRenderer;
 }) {
+  const Heading = headingLevel === 2 ? "h2" : "h3";
+
   const linkProps = renderLink
     ? {
         linkLabel: `Open project ${project.frontmatter.title}`,
@@ -316,9 +339,9 @@ export function PublicProjectLedgerItem({
             <ProjectStatusBadge frontmatter={project.frontmatter} />
             <span className="text-xs text-muted-foreground">{project.frontmatter.publishedAt}</span>
           </div>
-          <h3 className="text-xl leading-tight font-medium tracking-[-0.04em] text-foreground lg:text-[1.5rem]">
+          <Heading className="text-xl leading-tight font-medium tracking-[-0.04em] text-foreground lg:text-[1.5rem]">
             {project.frontmatter.title}
-          </h3>
+          </Heading>
           <p className="max-w-3xl text-sm leading-7 text-foreground/88 lg:text-[0.95rem] lg:leading-7">
             {project.frontmatter.summary}
           </p>
@@ -345,13 +368,23 @@ type PublicPostListItemData = {
 
 export function PublicTransmissionListItem({
   entry,
+  headingLevel = 3,
   index,
   renderLink,
 }: {
   entry: PublicPostListItemData;
+  /**
+   * Heading element for the item title. Defaults to `h3`, which is correct
+   * under a section that has its own `h2`. Pass `2` where the list sits
+   * directly beneath the page `h1` — `/projects` and `/blog` do — so the
+   * levels do not skip a step.
+   */
+  headingLevel?: 2 | 3;
   index: number;
   renderLink?: PublicCardLinkRenderer;
 }) {
+  const Heading = headingLevel === 2 ? "h2" : "h3";
+
   const summary = entry.frontmatter.description ?? entry.frontmatter.summary;
   const linkProps = renderLink
     ? {
@@ -365,9 +398,9 @@ export function PublicTransmissionListItem({
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
         <div className="space-y-2.5">
           <span className="text-xs text-muted-foreground">{entry.frontmatter.publishedAt}</span>
-          <h3 className="text-xl leading-tight font-medium tracking-[-0.04em] text-foreground lg:text-[1.5rem]">
+          <Heading className="text-xl leading-tight font-medium tracking-[-0.04em] text-foreground lg:text-[1.5rem]">
             {entry.frontmatter.title}
-          </h3>
+          </Heading>
           <p className="max-w-3xl text-sm leading-7 text-foreground/88 lg:text-[0.95rem] lg:leading-7">
             {summary}
           </p>

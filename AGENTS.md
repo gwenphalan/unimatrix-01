@@ -8,11 +8,11 @@
 - Be conservative wherever a mistake would fail silently rather than loudly
 
 ## Package Manager
-- Use **pnpm** with Node `22.22.1` and pnpm `10.30.3`
+- Use **pnpm** with Node `24.18.0` and pnpm `10.30.3`
 - Canonical root commands: `pnpm install`, `pnpm dev`, `pnpm setup:local`, `pnpm setup:worktree`, `pnpm check`, `pnpm verify`
 - Full root surface: `pnpm build`, `pnpm lint`, `pnpm test`, `pnpm typecheck`, `pnpm db:migrate`, `pnpm db:generate`
 - Repro install: `pnpm install --frozen-lockfile`
-- If host Node/pnpm mismatch: `./infra/scripts/pnpm-with-node22.sh <pnpm-args>`
+- If host Node/pnpm mismatch: `./infra/scripts/pnpm-with-pinned-node.sh <pnpm-args>`
 
 ## Workspace
 - Monorepo: `apps/*` and `packages/*` from `pnpm-workspace.yaml`; root scripts fan out through Turbo
@@ -74,6 +74,14 @@ Package names: `apps/web`→`@unimatrix/web`, `apps/api`→`@unimatrix/api`, `ap
 - `packages/auth`: keep the three entry points separate — `.` stays framework-agnostic and dependency-free, `./server` is Node-only, `./react` is browser-only; never cross-import server and react; the package takes config as arguments and never reads `process.env`
 - `packages/user-data`: keep the account and guest adapters behind the same store interface so services stay storage-agnostic; do binary file I/O here (not in `@unimatrix/api-client`); key all account data by the caller's session, never by client-provided ids
 
+## Dependency Ceilings
+Four packages sit deliberately below `latest`. Each has a reason that is not "we have not got round to it", so do not merge a Dependabot PR proposing them without re-checking the reason still holds.
+
+- **`typescript` is capped at the 6 line.** 7.0.2 is `latest`, but the current `typescript-eslint` (8.65.0) declares `typescript: ">=4.8.4 <6.1.0"`. Installing 7 breaks lint in every workspace at once. The enforcement is the `^6.0.3` caret in each workspace, **not** the `>=5.0.0 <6.1.0` peer in `@unimatrix/config-eslint` — `.npmrc` does not set `strict-peer-dependencies` and pnpm 10 defaults it to false, so a peer mismatch installs silently. Verified, not assumed. Lift the cap when typescript-eslint widens its range.
+- **`@types/node` tracks the runtime, not `latest`.** It stays on the major in `.node-version` (24). 26.x describes APIs that do not exist in the Node actually running.
+- **`better-sqlite3` stays on the 12 line.** Upstream ships no prebuilds for 13, so it compiles from source and the alpine image has no toolchain. Full reasoning and the CI blind spot are in `packages/db/AGENTS.md`.
+- **`recharts` and `react-day-picker` are pinned and unexercised.** They are imported only by `packages/ui/src/components/ui/chart.tsx` and `calendar.tsx`, which no app consumes and no route renders — so the real-browser check this repo requires for `packages/ui` changes cannot be performed on them. `recharts@2.15.4` is additionally deprecated upstream ("1.x and 2.x branches are no longer active"). Upgrading, removing, or wiring them up are all defensible; upgrading them *quietly* is not.
+
 ## Key Conventions
 - TypeScript only; keep strict typing, named exports, and small composable modules
 - Keep package boundaries stable instead of duplicating logic app-locally
@@ -105,6 +113,9 @@ Package names: `apps/web`→`@unimatrix/web`, `apps/api`→`@unimatrix/api`, `ap
 - `main` accepts changes by pull request only, and the `Verify` CI job is a required status check; work on a branch and open a PR
 - Dependabot runs daily with a 14-day `cooldown`; `pnpm-workspace.yaml` sets `minimumReleaseAge` to 3 days. The pnpm value must stay **below** Dependabot's or updates fail with a misleading "no matching version" error
 - All three Dependabot ecosystems set a `cooldown`: 14 days for `npm` and `docker`, **7 days for `github-actions`** — an action bump is a SHA change against a public, reviewable repo rather than an opaque registry tarball, and frequent releasers like `github/codeql-action` make a long window costly. `github-actions` supports only `default-days`; the `semver-*-days` keys are not valid there, and an unsupported key makes Dependabot reject the whole file, silently disabling npm updates too. After editing `.github/dependabot.yml`, check `/network/updates` for a config error: a rejected file looks exactly like a quiet week
+- **Dependabot's npm updater runs inside its own image — Node 24, pnpm 10.16.0, npm 11.17.0** (`npm_and_yarn/Dockerfile` in dependabot-core). Root `engines.node` must stay satisfiable by *their* Node, not ours: it was `>=22 <23` with `engine-strict=true` in `.npmrc`, and every npm job errored with "Dependabot does not support your Node version" — no npm PR was ever opened, for the repo's entire life, while the github-actions ecosystem worked fine because it needs no Node. It is now `>=22`, an open-ended floor, so a future Dependabot Node bump cannot re-break it. The real pin for humans and CI is `.node-version` plus CI's `node-version-file`, not `engines`
+- `minimumReleaseAge` needs pnpm >= 10.16 and Dependabot ships exactly **10.16.0** — no margin. If they ever ship older, that setting silently becomes a no-op
+- Check `/network/updates` (Insights → Dependency graph → Dependabot) after touching anything Dependabot reads. The `.github/dependabot.yml` status check on a PR proves only that the *file parses*; it says nothing about whether the updater can run
 - Auto-merge is armed for grouped minor/patch Dependabot PRs only, and gates on CI rather than on any review
 - CodeRabbit is advisory and non-blocking: treat its comments as leads to verify against primary sources, never as conclusions to act on directly
 - Never add self-hosted Actions runners — this repo is public, so fork PRs would execute untrusted code on the owner's hardware
