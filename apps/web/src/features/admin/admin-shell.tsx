@@ -1,9 +1,14 @@
 import { RiArrowRightSLine } from "@remixicon/react";
+import { useQuery } from "@tanstack/react-query";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { UserButton } from "@unimatrix/auth/react";
 import { Toaster } from "@unimatrix/ui/editor";
 import { CircuitField, CircuitOccluderProvider } from "@unimatrix/ui/public";
 import { useId, type ReactNode } from "react";
+
+import { useApiClient } from "@/lib/api-client";
+
+import { adminPostsQueryOptions } from "./queries";
 
 /**
  * Chrome for the whole `/admin` subtree.
@@ -89,11 +94,25 @@ export function AdminShell({ children }: { children: ReactNode }) {
  */
 function AdminBreadcrumbs() {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const search = useRouterState({ select: (state) => state.location.search });
+  const client = useApiClient();
+
+  const isEditing = pathname.startsWith("/admin/posts/edit");
+  // The edited post's title names the crumb, so the editor panel below does not
+  // have to repeat it in a heading: the post's own Title field is right there.
+  // Read from the admin list the editor page is already using — cached on the
+  // common path in from the dashboard — so this costs no extra request, and
+  // falls back to the generic label while it loads.
+  const { data } = useQuery({ ...adminPostsQueryOptions(client), enabled: isEditing });
+  const editedId = (search as { id?: string }).id;
+  const editedTitle = data?.posts.find((post) => post.id === editedId)?.title;
 
   const trail = pathname.startsWith("/admin/posts/new")
     ? "New post"
-    : pathname.startsWith("/admin/posts/edit")
-      ? "Edit post"
+    : isEditing
+      ? editedTitle === undefined
+        ? "Edit post"
+        : `Edit ${editedTitle}`
       : null;
 
   return (
@@ -144,13 +163,24 @@ export function AdminPanel({
   children,
   className,
   description,
+  leading,
   title,
+  titleHidden = false,
 }: {
   actions?: ReactNode;
   children: ReactNode;
   className?: string;
   description?: string;
+  /** Rendered to the left of the heading, on the heading's own row. */
+  leading?: ReactNode;
   title: string;
+  /**
+   * Keeps the heading as the section's accessible name but takes it off the
+   * screen. For a panel whose title only repeats what the breadcrumb above and
+   * the content below already say — the post editor — where showing it costs a
+   * line of the viewport and tells a sighted reader nothing new.
+   */
+  titleHidden?: boolean;
 }) {
   const headingId = useId();
 
@@ -164,16 +194,23 @@ export function AdminPanel({
             small button's box do not start at the same y, so aligning their
             tops left them visibly a couple of pixels out of line. */}
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="space-y-1">
-            <h2
-              className="text-lg leading-tight font-medium tracking-[-0.03em] text-foreground"
-              id={headingId}
-            >
-              {title}
-            </h2>
-            {description === undefined ? null : (
-              <p className="text-sm text-muted-foreground">{description}</p>
-            )}
+          <div className="flex min-w-0 flex-wrap items-center gap-3">
+            {leading}
+            <div className="space-y-1">
+              <h2
+                className={
+                  titleHidden
+                    ? "sr-only"
+                    : "text-lg leading-tight font-medium tracking-[-0.03em] text-foreground"
+                }
+                id={headingId}
+              >
+                {title}
+              </h2>
+              {description === undefined ? null : (
+                <p className="text-sm text-muted-foreground">{description}</p>
+              )}
+            </div>
           </div>
           {actions}
         </div>

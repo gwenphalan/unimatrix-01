@@ -129,6 +129,12 @@ export interface MarkdownEditorProps {
   className?: string;
   editorClassName?: string;
   readOnly?: boolean;
+  /**
+   * Grow the editing surface with the document instead of scrolling inside a
+   * fixed box. The page becomes the scroll container, so this only makes sense
+   * where the editor's ancestors are not height-locked.
+   */
+  autoGrow?: boolean;
 }
 
 const editableCompartment = new Compartment();
@@ -204,6 +210,7 @@ export const MarkdownEditor = React.forwardRef<MarkdownEditorHandle, MarkdownEdi
   function MarkdownEditor(
     {
       actions,
+      autoGrow = false,
       className,
       defaultMode = "live",
       editorClassName,
@@ -356,7 +363,7 @@ export const MarkdownEditor = React.forwardRef<MarkdownEditorHandle, MarkdownEdi
     };
 
     return (
-      <div className={cn("flex flex-col gap-2", className)}>
+      <div className={cn("flex min-h-0 flex-col gap-2", className)}>
         {/* `label` is the accessible name only — it names the editing surface
             and the mode toggle for assistive technology, and is deliberately
             not painted. The visible name is whatever the consumer passes as
@@ -413,7 +420,11 @@ export const MarkdownEditor = React.forwardRef<MarkdownEditorHandle, MarkdownEdi
             has no opinion about it. */}
         <div
           className={cn(
-            "flex min-h-64 flex-1 flex-col overflow-auto border border-input bg-background",
+            "flex min-h-64 flex-col border border-input bg-background",
+            // Auto-grow leaves the box unconstrained so CodeMirror's own height
+            // is the document's; otherwise the box takes the leftover space and
+            // the document scrolls inside it.
+            autoGrow ? "h-auto" : "flex-1 overflow-auto",
             editorClassName,
           )}
         >

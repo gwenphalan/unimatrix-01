@@ -221,10 +221,10 @@ export function PostForm({ post, type, title, onDone }: PostFormProps) {
 
   return (
     <form
-      // `min-h-0` on a flex child is what lets the editor below actually
-      // shrink; without it the column's implicit `min-height: auto` makes the
-      // editor push the page taller instead of scrolling inside its own box.
-      className="flex min-h-0 flex-1 flex-col"
+      // No height constraint anywhere down this column. The body editor grows
+      // with the document and the page is the scroll container, so a `flex-1`
+      // here would fight that by handing the form a fixed share of the frame.
+      className="flex flex-col"
       onSubmit={(event) => {
         // `onSubmit` expects a void return, so the promise is deliberately
         // not handed to React. `handleSubmit` settles its own failures.
@@ -260,8 +260,23 @@ export function PostForm({ post, type, title, onDone }: PostFormProps) {
             </Select>
           </div>
         }
-        className="flex min-h-0 flex-1 flex-col"
+        // Save and Cancel sit on the title's row rather than at the foot of the
+        // form. The panel is height-locked from `lg` and the body pane fills
+        // whatever is left, so a footer under it was the row that got squeezed:
+        // up here the two controls that end the edit are always on screen, and
+        // the body can have the rest.
+        leading={
+          <div className="flex items-center gap-2">
+            <Button disabled={isSaving} type="submit">
+              {isSaving ? "Saving" : post === null ? "Create" : "Save"}
+            </Button>
+            <Button disabled={isSaving} onClick={onDone} type="button" variant="outline">
+              Cancel
+            </Button>
+          </div>
+        }
         title={title}
+        titleHidden
       >
         <div className="grid gap-4">
           <div className="grid gap-4 sm:grid-cols-2">
@@ -383,11 +398,11 @@ export function PostForm({ post, type, title, onDone }: PostFormProps) {
           on top of the editing surface and the upload button lines up with
           the formatting controls it belongs beside. */}
         <MarkdownEditor
-          // A floor rather than `min-h-0`: this is a flex column, so an item
-          // free to shrink below its content is free to shrink to nothing,
-          // and it does whenever the fields above are taller than the frame.
-          // `flex-1` still hands it the leftover space when there is any.
-          className="min-h-64 flex-1"
+          // The body grows with the post and the page scrolls, rather than the
+          // post scrolling inside a fixed box: a writer editing a long article
+          // should see the paragraph they are working on in the context of the
+          // ones around it, not through a 16rem window.
+          autoGrow
           actions={
             <>
               <Button
@@ -437,15 +452,6 @@ export function PostForm({ post, type, title, onDone }: PostFormProps) {
           ref={editorRef}
           value={form.body}
         />
-
-        <div className="flex justify-end gap-2">
-          <Button disabled={isSaving} onClick={onDone} type="button" variant="outline">
-            Cancel
-          </Button>
-          <Button disabled={isSaving} type="submit">
-            {isSaving ? "Saving" : post === null ? "Create" : "Save"}
-          </Button>
-        </div>
       </AdminPanel>
     </form>
   );
