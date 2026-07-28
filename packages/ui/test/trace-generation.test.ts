@@ -2,7 +2,14 @@ import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } fr
 
 import { GridGraph } from "../src/components/grid-graph.js";
 import { cellKey, densify, recomputeCorners } from "../src/components/grid-math.js";
-import { type Occluder, buildBarrierField, isCellBlocked } from "../src/components/occlusion.js";
+import { findFreeComponents } from "../src/components/free-space.js";
+import {
+  type Occluder,
+  buildBarrierField,
+  isCellBlocked,
+  pointInSoftBarrier,
+  segmentCrossesBarrier,
+} from "../src/components/occlusion.js";
 import { generateTraces } from "../src/components/trace-generation.js";
 
 // Reuses the old single hardcoded keep-out rect (pre-Session-C's fixed
@@ -237,5 +244,152 @@ describe("regression: a fully barricaded canvas degrades gracefully", () => {
     expect(traces).toHaveLength(0);
     expect(roots).toHaveLength(0);
     expect(warnSpy).toHaveBeenCalled();
+  });
+});
+
+describe("soft (ink) barriers", () => {
+  const width = 1440;
+  const height = 900;
+  // Eight scattered lines of text, each 24px tall — thinner than the 40px
+  // lattice pitch, so no lattice point sits inside most of them and only the
+  // exact segment test can enforce them.
+  const inkLines: Occluder[] = Array.from({ length: 8 }, (_, i) => ({
+    x0: 200 + (i % 2) * 320,
+    y0: 100 + i * 90,
+    x1: 700 + (i % 2) * 320,
+    y1: 124 + i * 90,
+    kind: "soft" as const,
+  }));
+  const barriers = buildBarrierField(inkLines);
+  const { traces } = generateTraces(width, height, 21, barriers, 24);
+
+  it("leaves the free-space flood fill untouched, so ink cannot split the canvas", () => {
+    expect(findFreeComponents(barriers, width, height)).toHaveLength(1);
+  });
+
+  it("still yields exactly `count` traces", () => {
+    expect(traces).toHaveLength(24);
+  });
+
+  /**
+   * The regression test for `walkFromStart`, which rejected only on
+   * self-collision and leaving the free component and never tested segments
+   * against the barrier field at all. Since soft rects deliberately never
+   * enter `cells`, branch 0 of every tree in every component would otherwise
+   * grow straight through ink on every page — and the bug would read as a
+   * classifier defect, nowhere near this file.
+   */
+  it("routes no segment through ink", () => {
+    traces.forEach((trace) => {
+      for (let i = 1; i < trace.points.length; i += 1) {
+        const prev = trace.points[i - 1]!;
+        const point = trace.points[i]!;
+        expect(segmentCrossesBarrier(barriers, prev, point)).toBe(false);
+      }
+    });
+  });
+
+  it("places no vertex on ink, so no pad or via lands on a glyph", () => {
+    traces.forEach((trace) => {
+      densify(trace.points).forEach((point) => {
+        expect(pointInSoftBarrier(barriers, point)).toBe(false);
+      });
+    });
+  });
+});
+
+/**
+ * The layout this repo actually ships on an article route: one hard panel
+ * (`.site-panel max-w-4xl`) with the page's remaining ink in the gutters beside
+ * it. Swept over seeds rather than pinned to one, because the anchor search is
+ * seed-sensitive and a single lucky seed would hide a regression.
+ *
+ * Two invariants, deliberately at different strengths. Hard-barrier clearance is
+ * absolute and must never regress. Ink clearance is best-effort by design — the
+ * ink-blind corridor tier exists so a trace is never dropped and no warning is
+ * emitted — but on this layout the tiered ladder reaches zero, so zero is what
+ * gets pinned. If a future change trades ink fidelity for something else, this
+ * is the test that should have to be edited deliberately.
+ */
+describe("article panel with gutter ink, swept across seeds", () => {
+  const width = 1440;
+  const height = 900;
+  const occluders: Occluder[] = [
+    { x0: 272, y0: 0, x1: 1168, y1: height, kind: "hard" },
+    ...Array.from({ length: 6 }, (_, i) => ({
+      x0: 40,
+      y0: 120 + i * 70,
+      x1: 240,
+      y1: 144 + i * 70,
+      kind: "soft" as const,
+    })),
+  ];
+  const barriers = buildBarrierField(occluders);
+
+  for (const seed of [31, 32, 33, 34, 35]) {
+    describe(`seed=${seed}`, () => {
+      const { traces } = generateTraces(width, height, seed, barriers, 24);
+
+      it("yields exactly `count` traces with no degenerate stubs", () => {
+        expect(traces).toHaveLength(24);
+        traces.forEach((trace) => {
+          expect(trace.length).toBeGreaterThan(0);
+        });
+      });
+
+      it("never violates a hard barrier", () => {
+        traces.forEach((trace) => {
+          densify(trace.points).forEach((point) => {
+            expect(isCellBlocked(barriers, point)).toBe(false);
+          });
+        });
+      });
+
+      it("stays clear of ink as well", () => {
+        traces.forEach((trace) => {
+          for (let i = 1; i < trace.points.length; i += 1) {
+            expect(segmentCrossesBarrier(barriers, trace.points[i - 1]!, trace.points[i]!)).toBe(
+              false,
+            );
+          }
+        });
+      });
+    });
+  }
+});
+
+describe("soft barriers degrade silently rather than warning", () => {
+  let warnSpy: MockInstance<typeof console.warn>;
+
+  beforeEach(() => {
+    warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    warnSpy.mockRestore();
+  });
+
+  /**
+   * Ink can make a corridor genuinely impossible, and the honest answer there
+   * is a route that clips a glyph — a cosmetic miss. It must never be a
+   * console warning: `attachRoute`'s canary means "a component's own footprint
+   * was unreachable from itself", which is a real defect, and a page dense
+   * enough in text would otherwise bury it under a warn storm.
+   */
+  it("produces traces without warning under near-total ink coverage", () => {
+    const width = 1440;
+    const height = 900;
+    const ink: Occluder[] = Array.from({ length: 20 }, (_, i) => ({
+      x0: 0,
+      y0: i * 45,
+      x1: width,
+      y1: i * 45 + 38,
+      kind: "soft" as const,
+    }));
+    const barriers = buildBarrierField(ink);
+    const { traces } = generateTraces(width, height, 23, barriers, 24);
+
+    expect(traces).toHaveLength(24);
+    expect(warnSpy).not.toHaveBeenCalled();
   });
 });

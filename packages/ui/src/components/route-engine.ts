@@ -289,25 +289,52 @@ export function buildRoute(
       minY: Math.min(fromCell.cy, toCell.cy) - margin,
       maxY: Math.max(fromCell.cy, toCell.cy) + margin,
     };
-    const corridorOccupied = new Set(occupied);
-    corridorOccupied.delete(cellKey(snappedFromEnd));
-    corridorOccupied.delete(cellKey(toStart));
+    // Two attempts, ink-avoiding first. `avoidInk` additionally treats every
+    // lattice cell sitting on a glyph as occupied and re-checks the result
+    // against the exact hard-union-soft test, since `softCells` only
+    // approximates geometry finer than the lattice. Its failure falls through
+    // to the ink-blind BFS — this function's behaviour before ink existed,
+    // still guaranteed hard-clear, and accepted **silently**: ink can make a
+    // corridor genuinely impossible, and the canary below must keep meaning
+    // "no route at all was reachable".
+    const corridorCandidate = (avoidInk: boolean): RoutePoint[] | null => {
+      const corridorOccupied = new Set(occupied);
 
-    if (barriers) {
-      // Escape rule: a cell already inside `from`'s own footprint stays
-      // passable even if it's now barrier-blocked (an occluder can appear
-      // on top of a trace that's already there), but no barrier-blocked
-      // cell outside that footprint is ever entered.
-      const fromFootprint = new Set(from.map((point) => cellKey(point)));
-      barriers.cells.forEach((key) => {
-        if (!fromFootprint.has(key)) corridorOccupied.add(key);
-      });
-    }
+      if (barriers) {
+        // Escape rule: a cell already inside `from`'s own footprint stays
+        // passable even if it's now barrier-blocked (an occluder can appear
+        // on top of a trace that's already there), but no barrier-blocked
+        // cell outside that footprint is ever entered. Ink gets the same
+        // treatment — text can appear over an existing trace exactly as a
+        // panel can.
+        const fromFootprint = new Set(from.map((point) => cellKey(point)));
+        barriers.cells.forEach((key) => {
+          if (!fromFootprint.has(key)) corridorOccupied.add(key);
+        });
+        if (avoidInk) {
+          barriers.softCells.forEach((key) => {
+            if (!fromFootprint.has(key)) corridorOccupied.add(key);
+          });
+        }
+      }
 
-    const corridor = bfsConnectorCells(fromCell, toCell, corridorOccupied, bounds);
+      // After the barrier unions, not before: either endpoint may itself sit
+      // on a barrier, and re-admitting it is what lets a route escape.
+      corridorOccupied.delete(cellKey(snappedFromEnd));
+      corridorOccupied.delete(cellKey(toStart));
 
-    if (corridor) {
+      const corridor = bfsConnectorCells(fromCell, toCell, corridorOccupied, bounds);
+      if (!corridor) return null;
+
       const candidate = densify([snappedFromEnd, ...corridor, toStart]).slice(1, -1);
+      if (avoidInk && crossesBarrier(candidate)) return null;
+
+      return candidate;
+    };
+
+    const candidate = corridorCandidate(true) ?? corridorCandidate(false);
+
+    if (candidate) {
       const collisions = fullRouteCollisions(candidate);
 
       // No write-back to `bestCollisions`: this branch runs once, not in a

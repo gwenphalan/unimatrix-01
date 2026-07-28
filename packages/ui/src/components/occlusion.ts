@@ -134,12 +134,34 @@ function axisRange(min: number, max: number): [number, number] {
   return [Math.floor(min / GRID), Math.ceil(max / GRID)];
 }
 
-function blockedCells(rects: readonly Rect[]): Set<string> {
+/**
+ * Lattice points strictly *inside* the span — the inverse of `axisRange`'s
+ * outward snap. Used for the soft channel only.
+ *
+ * Outward snapping exists to guarantee hard-barrier clearance, and it costs a
+ * cell on each side to do it. Ink needs no clearance guarantee — the exact
+ * `segmentCrossesBarrier` test is the enforcement, and `softCells` is only an
+ * advisory "this lattice point sits on a glyph" hint for corridor BFS. Snapping
+ * it outward would quantise a 24px line of text up into three 40px lattice rows
+ * and make every ink-avoiding corridor unroutable, which collapses the whole
+ * tiered ladder onto its ink-blind fallback. Verified: with outward snap, the
+ * scattered-ink scenario produced 28 ink violations because tier 2 never
+ * succeeded. Returns an empty range when no lattice point falls inside, which
+ * is correct here — nothing to avoid at lattice resolution.
+ */
+function innerAxisRange(min: number, max: number): [number, number] {
+  return [Math.ceil(min / GRID), Math.floor(max / GRID)];
+}
+
+function blockedCells(
+  rects: readonly Rect[],
+  range: (min: number, max: number) => [number, number],
+): Set<string> {
   const cells = new Set<string>();
 
   rects.forEach((rect) => {
-    const [cxMin, cxMax] = axisRange(rect.x0, rect.x1);
-    const [cyMin, cyMax] = axisRange(rect.y0, rect.y1);
+    const [cxMin, cxMax] = range(rect.x0, rect.x1);
+    const [cyMin, cyMax] = range(rect.y0, rect.y1);
 
     for (let cx = cxMin; cx <= cxMax; cx += 1) {
       for (let cy = cyMin; cy <= cyMax; cy += 1) {
@@ -177,9 +199,9 @@ export function buildBarrierField(
 
   return {
     buffered,
-    cells: blockedCells(buffered),
+    cells: blockedCells(buffered, axisRange),
     soft,
-    softCells: blockedCells(soft),
+    softCells: blockedCells(soft, innerAxisRange),
   };
 }
 
