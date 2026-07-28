@@ -13,7 +13,13 @@ import {
   cellKeyToPoint,
   findFreeComponents,
 } from "./free-space.js";
-import { type BarrierField, isCellBlocked, segmentCrossesBarrier } from "./occlusion.js";
+import {
+  type BarrierField,
+  isCellBlocked,
+  pointInSoftBarrier,
+  segmentCrossesBarrier,
+  surfaceOnlyBarriers,
+} from "./occlusion.js";
 import { bfsConnectorCells, cellOf, connectorViaElbow } from "./route-engine.js";
 
 export type Trace = {
@@ -140,31 +146,54 @@ function ringSearchInComponent(
   point: Point,
   component: FreeComponent,
   footprint: ReadonlySet<string>,
+  barriers: BarrierField,
 ): Point {
   const baseCx = Math.round(point.x / GRID);
   const baseCy = Math.round(point.y / GRID);
   const { minCx, maxCx, minCy, maxCy } = component.bounds;
   const maxRadius = maxCx - minCx + (maxCy - minCy) + 2;
 
-  for (let radius = 0; radius <= maxRadius; radius += 1) {
-    for (let dx = -radius; dx <= radius; dx += 1) {
-      const dyAbs = radius - Math.abs(dx);
-      const dys = dyAbs === 0 ? [0] : [-dyAbs, dyAbs];
+  const search = (rejectInk: boolean): Point | null => {
+    for (let radius = 0; radius <= maxRadius; radius += 1) {
+      for (let dx = -radius; dx <= radius; dx += 1) {
+        const dyAbs = radius - Math.abs(dx);
+        const dys = dyAbs === 0 ? [0] : [-dyAbs, dyAbs];
 
-      for (const dy of dys) {
-        const cx = baseCx + dx;
-        const cy = baseCy + dy;
-        const key = `${cx},${cy}`;
-        if (!component.cells.has(key)) continue;
-        if (!footprint.has(key)) return { x: cx * GRID, y: cy * GRID };
+        for (const dy of dys) {
+          const cx = baseCx + dx;
+          const cy = baseCy + dy;
+          const key = `${cx},${cy}`;
+          if (!component.cells.has(key)) continue;
+          if (footprint.has(key)) continue;
+
+          const candidate = { x: cx * GRID, y: cy * GRID };
+          if (rejectInk && pointInSoftBarrier(barriers, candidate)) continue;
+
+          return candidate;
+        }
       }
     }
-  }
+
+    return null;
+  };
+
+  // Two passes on purpose. A component whose free cells are all covered in ink
+  // (a dense text column) must still receive a pad: a via sitting on a glyph is
+  // a cosmetic miss, a component with no pad at all is a missing trace. So the
+  // ink-avoiding pass is a preference, not a requirement, and only its failure
+  // falls through to the original ink-blind search.
+  const inkFree = search(true);
+  if (inkFree) return inkFree;
+
+  const anyFree = search(false);
+  if (anyFree) return anyFree;
 
   console.warn(
     "[CircuitField] ringSearchInComponent exhausted its component — reusing the component center",
     point,
   );
+  // Guaranteed free of hard barriers (it is a component cell), but *not*
+  // guaranteed ink-free. Accepted in this pathological case.
   return cellKeyToPoint(component.centerCell);
 }
 
@@ -180,22 +209,31 @@ function pickTargetPointInComponent(
   cell: Cell,
   component: FreeComponent,
   footprint: ReadonlySet<string>,
+  barriers: BarrierField,
   rand: () => number,
 ): Point {
+  // Soft rects never reach `component.cells`, so the ink check has to be an
+  // explicit exact test here — this is the pad/via half of the ink invariant,
+  // the counterpart to `walkFromStart`/`attachRoute`'s segment tests.
+  const acceptable = (candidate: Point) => {
+    const key = cellKey(candidate);
+    return (
+      component.cells.has(key) && !footprint.has(key) && !pointInSoftBarrier(barriers, candidate)
+    );
+  };
+
   let point = jitterInCell(cell, rand);
 
   for (let attempt = 0; attempt < 8; attempt += 1) {
     const snapped = { x: snap(point.x), y: snap(point.y) };
-    const key = cellKey(snapped);
-    if (component.cells.has(key) && !footprint.has(key)) return snapped;
+    if (acceptable(snapped)) return snapped;
     point = jitterInCell(cell, rand);
   }
 
   const snapped = { x: snap(point.x), y: snap(point.y) };
-  const key = cellKey(snapped);
-  if (component.cells.has(key) && !footprint.has(key)) return snapped;
+  if (acceptable(snapped)) return snapped;
 
-  return ringSearchInComponent(snapped, component, footprint);
+  return ringSearchInComponent(snapped, component, footprint, barriers);
 }
 
 /**
@@ -208,12 +246,20 @@ function pickTargetPointInComponent(
  * `findFreeComponents`). Still tracks its own visited cells to avoid
  * self-collision, stopping the walk early (fewer than the intended segment
  * count) rather than ever forcing a collision or a barrier crossing.
+ *
+ * The component test is a *cell* test, so it cannot see ink: soft rects never
+ * enter `barriers.cells` by design. Without the explicit
+ * `segmentCrossesBarrier` reject below, branch 0 of every tree in every
+ * component would grow straight through text on every page — and because this
+ * is the only barrier-unaware step in the pipeline, the symptom would look like
+ * a classifier defect rather than a generation one.
  */
 function walkFromStart(
   start: Point,
   width: number,
   height: number,
   component: FreeComponent,
+  barriers: BarrierField,
   rand: () => number,
 ): Point[] {
   const points: Point[] = [start];
@@ -250,6 +296,7 @@ function walkFromStart(
       const leavesComponent = segmentCells.some((key) => !component.cells.has(key));
 
       if (revisits || leavesComponent) continue;
+      if (segmentCrossesBarrier(barriers, prev, next)) continue;
 
       segmentCells.forEach((key) => visited.add(key));
       points.push(next);
@@ -311,6 +358,26 @@ function doglegCandidates(anchor: Point, target: Point, rand: () => number): Poi
   return candidates;
 }
 
+// How many of the nearest footprint cells `attachRoute` will try as an anchor
+// before degrading to an ink-blind corridor.
+//
+// Whether a clean route exists depends mostly on which side of an ink line the
+// anchor sits on, and the single nearest cell is often the wrong side — so this
+// is the highest-leverage knob on ink violations by a wide margin. Measured
+// over 40 seeds x 24 traces on two layouts (scattered ink lines, and a hard
+// article panel with ink in the gutters), counting segments that cross ink:
+//
+//   K:        1     2     4     8    12    16    24
+//   scattered 198   137   80    45   21    9     5
+//   article   309   225   142   20   4     0     0
+//
+// 16 is where the realistic article layout reaches zero. Cost is a corridor
+// BFS per extra anchor, but only when the elbow/dogleg tier already failed:
+// 0.96ms/call at K=1 vs 1.29ms at K=16, on a function that runs once per
+// structural commit rather than per frame. Hard-barrier violations were zero at
+// every K — this knob only ever trades time for ink fidelity.
+const ANCHOR_CANDIDATES = 16;
+
 function attachRoute(
   target: Point,
   footprint: Set<string>,
@@ -320,113 +387,170 @@ function attachRoute(
   barriers: BarrierField,
   rand: () => number,
 ): { ownerIndex: number; body: Point[] } {
-  let anchorKey = "";
-  let anchorCx = 0;
-  let anchorCy = 0;
-  let bestDistance = Infinity;
+  const targetKey = cellKey(target);
+  const maxCx = Math.round(width / GRID);
+  const maxCy = Math.round(height / GRID);
+
+  // The nearest `ANCHOR_CANDIDATES` footprint cells, ascending — not just the
+  // nearest one. See that constant for why, and for the measurements.
+  const nearest: { key: string; cx: number; cy: number; distance: number }[] = [];
 
   for (const key of footprint) {
     const [cx, cy] = key.split(",").map(Number) as [number, number];
     const distance = Math.hypot(cx * GRID - target.x, cy * GRID - target.y);
 
-    if (distance < bestDistance) {
-      bestDistance = distance;
-      anchorKey = key;
-      anchorCx = cx;
-      anchorCy = cy;
+    if (nearest.length < ANCHOR_CANDIDATES) {
+      nearest.push({ key, cx, cy, distance });
+      nearest.sort((a, b) => a.distance - b.distance);
+      continue;
     }
+
+    const worst = nearest[nearest.length - 1] as (typeof nearest)[number];
+    if (distance >= worst.distance) continue;
+
+    nearest[nearest.length - 1] = { key, cx, cy, distance };
+    nearest.sort((a, b) => a.distance - b.distance);
   }
 
-  const anchor: Point = { x: anchorCx * GRID, y: anchorCy * GRID };
-  const ownerIndex = footprintOwner.get(anchorKey) as number;
-  const targetKey = cellKey(target);
-  const allowed = new Set([anchorKey, targetKey]);
+  /**
+   * One anchor's worth of the degradation ladder.
+   *
+   * Tier 1 — elbow/dogleg candidates, rejected on collision or on the full
+   * hard-union-soft segment test.
+   *
+   * Tier 2 — corridor BFS treating ink as occupied, with the densified result
+   * re-checked against the exact test: `softCells` is a lattice approximation
+   * of geometry finer than the lattice, so clearing it does not prove the
+   * segments are clear.
+   *
+   * Tier 3 (`avoidInk: false`, only after every anchor has failed tiers 1-2) —
+   * this function's behaviour before text was a barrier at all: tested against
+   * `surfaceOnlyBarriers`, so text is gone from the lattice *and* the exact rects.
+   * Guaranteed surface-clear, may clip a glyph, and accepted **silently**. The
+   * silence is deliberate: text can make a corridor genuinely impossible, and the
+   * warn at the end means "a component's own footprint was unreachable from
+   * itself", a real defect that a text-dense page would otherwise bury.
+   *
+   * Narrowing only the exact rects here and leaving text in `cells` is the
+   * specific mistake to avoid — the tier then fails on the text it was meant to
+   * ignore, which is invisible in review and shows up as a warning storm.
+   */
+  const attemptFrom = (
+    candidate: (typeof nearest)[number],
+    avoidInk: boolean,
+  ): { ownerIndex: number; body: Point[] } | null => {
+    const anchor: Point = { x: candidate.cx * GRID, y: candidate.cy * GRID };
+    const allowed = new Set([candidate.key, targetKey]);
+    // The blind tier tests against a field with text removed from the lattice as
+    // well as from the exact rects. Text is cell-blocking now, so leaving
+    // `barriers` in place here would make this tier no more permissive than the
+    // one above it and the warn below would fire on ordinary prose.
+    const field = avoidInk ? barriers : surfaceOnlyBarriers(barriers);
 
-  const collides = (points: Point[]) =>
-    points.some((point) => {
-      const key = cellKey(point);
-      if (allowed.has(key)) return false;
-      return footprint.has(key) || isCellBlocked(barriers, point);
-    });
+    const collides = (points: Point[]) =>
+      points.some((point) => {
+        const key = cellKey(point);
+        if (allowed.has(key)) return false;
+        return footprint.has(key) || isCellBlocked(field, point);
+      });
 
-  const crossesBarrier = (points: Point[]) => {
-    let prev = anchor;
-    for (const point of points) {
-      if (segmentCrossesBarrier(barriers, prev, point)) return true;
-      prev = point;
+    const crossesBarrier = (points: Point[]) => {
+      let prev = anchor;
+      for (const point of points) {
+        if (segmentCrossesBarrier(field, prev, point)) return true;
+        prev = point;
+      }
+      return segmentCrossesBarrier(field, prev, target);
+    };
+
+    const elbowCandidates = [
+      connectorViaElbow(anchor, target, { x: target.x, y: anchor.y }),
+      connectorViaElbow(anchor, target, { x: anchor.x, y: target.y }),
+    ];
+
+    const validElbowCandidates = elbowCandidates.filter(
+      (points) => !collides(points) && !crossesBarrier(points),
+    );
+    const validDoglegCandidates = doglegCandidates(anchor, target, rand).filter(
+      (points) => !collides(points) && !crossesBarrier(points),
+    );
+
+    // Favor a staggered dogleg over a plain single-bend elbow about a third of
+    // the time it's available — enough to break up long runs of identical
+    // L-shaped joints into something that reads as a denser, more branchy
+    // circuit, without replacing the elbow as the common case.
+    let interior: Point[] | null =
+      validDoglegCandidates.length > 0 && rand() < 0.35
+        ? (validDoglegCandidates[Math.floor(rand() * validDoglegCandidates.length)] as Point[])
+        : validElbowCandidates.length === 0
+          ? null
+          : validElbowCandidates.reduce((best, points) =>
+              points.length < best.length ? points : best,
+            );
+
+    if (!interior) {
+      const corridorOccupied = new Set(footprint);
+      field.cells.forEach((key) => corridorOccupied.add(key));
+      if (avoidInk) barriers.softCells.forEach((key) => corridorOccupied.add(key));
+      // After the barrier unions, not before: an anchor or target cell may
+      // itself sit on ink, and re-adding it here is what lets a route escape.
+      corridorOccupied.delete(candidate.key);
+      corridorOccupied.delete(targetKey);
+
+      const corridor = bfsConnectorCells(
+        { cx: candidate.cx, cy: candidate.cy },
+        cellOf(target),
+        corridorOccupied,
+        { minX: 0, maxX: maxCx, minY: 0, maxY: maxCy },
+      );
+
+      if (corridor) {
+        const viaCorridor = densify([anchor, ...corridor, target]).slice(1, -1);
+        if (!avoidInk || !crossesBarrier(viaCorridor)) interior = viaCorridor;
+      }
     }
-    return segmentCrossesBarrier(barriers, prev, target);
+
+    if (!interior) return null;
+
+    // `connectorViaElbow`/`bfsConnectorCells` route through `densify`, whose
+    // `prev + dx * (s / steps)` interpolation can drift a fractional epsilon
+    // off an exact GRID multiple — invisible for live-crawl rendering but not
+    // exact enough for generation output, which the "every vertex on the
+    // lattice" invariant checks precisely.
+    return {
+      ownerIndex: footprintOwner.get(candidate.key) as number,
+      body: [anchor, ...interior, target].map((point) => ({
+        x: snap(point.x),
+        y: snap(point.y),
+      })),
+    };
   };
 
-  const elbowCandidates = [
-    connectorViaElbow(anchor, target, { x: target.x, y: anchor.y }),
-    connectorViaElbow(anchor, target, { x: anchor.x, y: target.y }),
-  ];
-
-  const validElbowCandidates = elbowCandidates.filter(
-    (candidate) => !collides(candidate) && !crossesBarrier(candidate),
-  );
-  const validDoglegCandidates = doglegCandidates(anchor, target, rand).filter(
-    (candidate) => !collides(candidate) && !crossesBarrier(candidate),
-  );
-
-  // Favor a staggered dogleg over a plain single-bend elbow about a third of
-  // the time it's available — enough to break up long runs of identical
-  // L-shaped joints into something that reads as a denser, more branchy
-  // circuit, without replacing the elbow as the common case.
-  let interior: Point[] | null =
-    validDoglegCandidates.length > 0 && rand() < 0.35
-      ? (validDoglegCandidates[Math.floor(rand() * validDoglegCandidates.length)] as Point[])
-      : validElbowCandidates.length === 0
-        ? null
-        : validElbowCandidates.reduce((best, candidate) =>
-            candidate.length < best.length ? candidate : best,
-          );
-
-  if (!interior) {
-    const maxCx = Math.round(width / GRID);
-    const maxCy = Math.round(height / GRID);
-    const corridorOccupied = new Set(footprint);
-    corridorOccupied.delete(anchorKey);
-    corridorOccupied.delete(targetKey);
-    barriers.cells.forEach((key) => corridorOccupied.add(key));
-
-    const corridor = bfsConnectorCells(
-      { cx: anchorCx, cy: anchorCy },
-      cellOf(target),
-      corridorOccupied,
-      { minX: 0, maxX: maxCx, minY: 0, maxY: maxCy },
-    );
-
-    interior = corridor ? densify([anchor, ...corridor, target]).slice(1, -1) : null;
+  for (const candidate of nearest) {
+    const attached = attemptFrom(candidate, true);
+    if (attached) return attached;
   }
 
-  if (!interior) {
-    // Should essentially never happen: a component's own claimed footprint
-    // is always reachable from itself under BFS by construction. A canary,
-    // not an expected path — the direct elbow fallback here may cross a
-    // barrier, which the warning flags for investigation.
-    console.warn(
-      "[CircuitField] attachRoute found no barrier-clear corridor — falling back to a direct elbow",
-      {
-        anchor,
-        target,
-      },
-    );
-    interior = elbowCandidates[0] as Point[];
-  }
+  const fallbackAnchor = nearest[0] as (typeof nearest)[number];
+  const inkBlind = attemptFrom(fallbackAnchor, false);
+  if (inkBlind) return inkBlind;
 
-  // `connectorViaElbow`/`bfsConnectorCells` route through `densify`, whose
-  // `prev + dx * (s / steps)` interpolation can drift a fractional epsilon
-  // off an exact GRID multiple — invisible for live-crawl rendering but not
-  // exact enough for generation output, which the "every vertex on the
-  // lattice" invariant checks precisely.
-  const body = [anchor, ...interior, target].map((point) => ({
-    x: snap(point.x),
-    y: snap(point.y),
-  }));
+  // Should essentially never happen: a component's own claimed footprint is
+  // always reachable from itself under BFS by construction. A canary, not an
+  // expected path — the direct elbow fallback here may cross a barrier, which
+  // the warning flags for investigation.
+  const anchor: Point = { x: fallbackAnchor.cx * GRID, y: fallbackAnchor.cy * GRID };
+  console.warn(
+    "[CircuitField] attachRoute found no barrier-clear corridor — falling back to a direct elbow",
+    { anchor, target },
+  );
 
-  return { ownerIndex, body };
+  return {
+    ownerIndex: footprintOwner.get(fallbackAnchor.key) as number,
+    body: [anchor, ...connectorViaElbow(anchor, target, { x: target.x, y: anchor.y }), target].map(
+      (point) => ({ x: snap(point.x), y: snap(point.y) }),
+    ),
+  };
 }
 
 /**
@@ -501,11 +625,12 @@ export function generateTraces(
         targetCells[j] as Cell,
         component,
         localFootprint,
+        barriers,
         rand,
       );
 
       if (j === 0) {
-        const points = walkFromStart(target, width, height, component, rand);
+        const points = walkFromStart(target, width, height, component, barriers, rand);
         traces.push({
           id: `t${traceIndex}`,
           points,

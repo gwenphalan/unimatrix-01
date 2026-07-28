@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { GRID, type RoutePoint, densify, recomputeCorners } from "../src/components/grid-math.js";
 import { type Occluder, buildBarrierField, isCellBlocked } from "../src/components/occlusion.js";
@@ -48,5 +48,50 @@ describe("buildRoute barrier awareness", () => {
     // passable) rather than the function warning and falling back empty.
     expect(route.length).toBeGreaterThan(0);
     expect(route[route.length - 1]).toMatchObject({ x: 2 * GRID, y: 3 * GRID });
+  });
+});
+
+describe("buildRoute ink tiering", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("clips ink silently rather than warning when ink alone blocks every candidate", () => {
+    // A soft band spanning the full corridor: both elbows cross it, and so
+    // does every BFS detour, because `softCells` blocks the whole width. The
+    // only remaining tier is the ink-blind elbow — which must be taken with no
+    // console output, since a paragraph in the way is an ordinary page, not a
+    // pathological one. This is the assertion that would have caught the ~60
+    // warnings per load measured on `apps/web` `/` before the tier existed.
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const from = recomputeCorners(densify([rp(0, 0)]));
+    const to = recomputeCorners(densify([rp(4 * GRID, 0)]));
+    const ink: Occluder = {
+      x0: -GRID * 10,
+      y0: -GRID * 10,
+      x1: GRID * 14,
+      y1: GRID * 10,
+      kind: "soft",
+    };
+    const barriers = buildBarrierField([ink]);
+
+    const route = buildRoute(from, to, barriers);
+
+    expect(warn).not.toHaveBeenCalled();
+    expect(route[route.length - 1]).toMatchObject({ x: 4 * GRID, y: 0 });
+  });
+
+  it("still warns when a hard barrier blocks every candidate", () => {
+    // Same shape, `kind` omitted so the band is a surface. The canary has to
+    // keep firing here — that is the case it exists to report.
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const from = recomputeCorners(densify([rp(0, 0)]));
+    const to = recomputeCorners(densify([rp(4 * GRID, 0)]));
+    const wall: Occluder = { x0: -GRID * 10, y0: -GRID * 10, x1: GRID * 14, y1: GRID * 10 };
+    const barriers = buildBarrierField([wall]);
+
+    buildRoute(from, to, barriers);
+
+    expect(warn).toHaveBeenCalledTimes(1);
   });
 });

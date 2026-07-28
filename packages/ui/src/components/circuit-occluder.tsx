@@ -1,33 +1,28 @@
 import * as React from "react";
 
 import { GRID } from "./grid-math.js";
-import type { Occluder, Rect } from "./occlusion.js";
-
-export type RegistrantOptions = {
-  /**
-   * Caps how much of the registrant's real height counts as occluder. Most
-   * registrants (cards, panels, headers, footers) are already self-bounded
-   * to their own real height and never need this. It exists for a content
-   * panel taller than a viewport (e.g. a long markdown article) — an
-   * uncapped rect like that would barricade the entire viewport for most of
-   * the scroll range as one hard barrier regardless of depth, leaving
-   * nothing but the panel's own edges for scroll-driven retargeting to
-   * react to. Capping the registered height
-   * keeps the occluder's top edge tracking the real DOM (still moves with
-   * scroll) while letting its bottom edge open up once you've scrolled past
-   * the cap — a deliberate, documented departure from "occluder rect ==
-   * literal DOM bounds" for tall panels.
-   */
-  maxHeightPx?: number;
-};
+import {
+  CIRCUIT_FIELD_MARKER,
+  CIRCUIT_OVERLAY_MARKER,
+  type DiscoveredSurface,
+  scanOccluders,
+} from "./occluder-scan.js";
+import { type Occluder, type Rect, clampRectToViewport } from "./occlusion.js";
 
 type Registrant = {
   ref: React.RefObject<Element | null>;
-  options: RegistrantOptions;
 };
 
+/**
+ * Manual registrants are keyed by a per-hook-instance `symbol`; automatically
+ * discovered surfaces by a string derived from their walk position. One map
+ * holds both, so `measurementsEqual`/`diffMeasurements` need no per-source
+ * branch.
+ */
+type OccluderId = symbol | string;
+
 type OccluderRegistry = {
-  register: (id: symbol, ref: React.RefObject<Element | null>, options?: RegistrantOptions) => void;
+  register: (id: symbol, ref: React.RefObject<Element | null>) => void;
   unregister: (id: symbol) => void;
 };
 
@@ -56,11 +51,6 @@ const OCCLUDER_SCROLL_DELTA_PX = GRID;
 // scroll gesture itself was handled.
 const SCROLL_SETTLE_MS = 200;
 
-// Suggested `maxHeightPx` for a content panel taller than a viewport (e.g. a
-// long markdown article) — generous vs typical viewport heights; needs a
-// real-browser visual pass to tune further.
-export const TALL_OCCLUDER_MAX_HEIGHT_PX = 900;
-
 // A registrant narrower or shorter than this on either side never registers
 // as a hard-barrier occluder. Hard barriers snap outward to whole lattice
 // cells (see `occlusion.ts`'s `buildBarrierField`), so even a small
@@ -75,13 +65,91 @@ export const TALL_OCCLUDER_MAX_HEIGHT_PX = 900;
 // side) while clearing genuine bars/cards/panels.
 const MIN_OCCLUDER_SIDE_PX = GRID;
 
-// Registration stays explicit opt-in (no DOM-scanning heuristic) — this is
-// a dev-only warn, not a rejection, for the common mistake of registering
-// an interactive element (a link/button) instead of the non-interactive
-// surface around it. Occluders are meant for panels/cards/footers, never
-// for titles, badges, buttons, or other interactive/decorative elements.
+// Registration is no longer the primary path: `scanOccluders` discovers every
+// painting surface automatically, and `useCircuitOccluder` is now an override
+// for what a classifier cannot infer (forcing a surface that paints nothing to
+// occlude anyway). This dev-only warn survives for the case where someone
+// force-registers an interactive element instead of the surface around it.
+//
+// The scanner deliberately does *not* share this exclusion. Classification is
+// about paint, not interactivity, and this codebase's own `CasePreviewCard` is a
+// `<button class="site-panel">` — both fully interactive and one of the most
+// visually solid surfaces on the page.
 const INTERACTIVE_OCCLUDER_SELECTOR =
   'button, a[href], input, select, textarea, [role="button"], [role="link"]';
+
+// How long DOM mutations must be quiet before a rescan. Long enough to coalesce
+// a route change's burst of insertions into one scan, short enough that content
+// appearing asynchronously (a Clerk widget mounting, a lazy route resolving)
+// occludes before the eye settles on it.
+export const MUTATION_SETTLE_MS = 120;
+
+// Backpressure on the rescan path. `scanOccluders` reads computed style, so a
+// pathological mutation source could otherwise pin a core. Above this rate the
+// debounce stretches to `MUTATION_BACKOFF_MS`, bounding the worst case
+// regardless of what the page is doing.
+export const MAX_SCANS_PER_SECOND = 4;
+export const MUTATION_BACKOFF_MS = 500;
+
+// Attribute mutations worth rescanning for. An unfiltered `attributes: true`
+// would fire on every inline-style write on the page — including
+// `CircuitField`'s own per-frame `el.style.opacity` writes on its SVG children,
+// which is a rescan every animation frame.
+const WATCHED_ATTRIBUTES = ["class", "style", "hidden", "inert"];
+
+/**
+ * Transition property names worth rescanning for, i.e. the ones that can change
+ * an element's geometry or whether it is visible at all. Everything else is
+ * ignored, and the measured reason is mouse movement: `transition-colors
+ * hover:*` is all over these apps, so a capture-phase listener with no filter
+ * turns a pointer sweep into a stream of whole-document `getComputedStyle`
+ * walks. Measured on `apps/web` `/about` in Chromium — four hovers (two nav
+ * links, a contact card, a button) fired 38 `transitionend` events, 34 of them
+ * `background-color` / `border-*-color` / `color`, and drove 260
+ * `getComputedStyle` calls against an idle baseline of zero.
+ *
+ * A colour transition *can* change classification, since `paintsSurface` keys on
+ * `background-color` alpha — a ghost control fading in `hover:bg-accent` crosses
+ * the 0.05 threshold. Deliberately not covered: those controls are the small
+ * ones, so they land in the soft tier where the cost of missing them is a trace
+ * grazing a hovered button for as long as the pointer rests on it, against
+ * re-deriving the entire occluder set on every hover. The `class` mutation is
+ * still watched, so a hover state applied by *class* (rather than by a
+ * pre-declared transition) rescans as before.
+ *
+ * `animationend` carries no `propertyName`, so it passes this filter untouched —
+ * a keyframe animation can move anything and is not the hover-frequency event
+ * this exists to drop.
+ */
+const RESCAN_TRANSITION_PROPERTIES = new Set([
+  "opacity",
+  "visibility",
+  "transform",
+  "translate",
+  "scale",
+  "rotate",
+  "width",
+  "height",
+]);
+
+/**
+ * Whether a mutation originated inside one of our own SVG layers.
+ *
+ * This is what makes observing `style` attributes affordable at all:
+ * `CircuitField`'s animation loop writes `el.style.opacity` on its SVG children
+ * every single frame, so without this filter every rendered frame would queue a
+ * rescan and the debounce would never drain.
+ */
+function isIgnorableMutation(record: MutationRecord): boolean {
+  const target = record.target;
+  const el = target.nodeType === 1 ? (target as Element) : target.parentElement;
+
+  // An unresolvable target counts as *not* ignorable: erring toward one extra
+  // scan is cheap, while erring the other way silently drops a real change.
+  if (!el) return false;
+
+  return el.closest(`[${CIRCUIT_FIELD_MARKER}],[${CIRCUIT_OVERLAY_MARKER}]`) !== null;
+}
 
 const RegistryContext = React.createContext<OccluderRegistry | null>(null);
 const RectsContext = React.createContext<Occluder[]>([]);
@@ -102,10 +170,13 @@ const undersizedWarned = new WeakSet<Element>();
  * did register and could therefore never notice it reaching its real size.
  * Re-checking here keeps the same rejection semantics but self-corrects.
  */
-function measureRegistrants(targets: Map<symbol, Registrant>): Map<symbol, Occluder> {
-  const measured = new Map<symbol, Occluder>();
+function measureRegistrants(
+  targets: Map<symbol, Registrant>,
+  viewport: { width: number; height: number },
+): Map<OccluderId, Occluder> {
+  const measured = new Map<OccluderId, Occluder>();
 
-  targets.forEach(({ ref, options }, id) => {
+  targets.forEach(({ ref }, id) => {
     const el = ref.current;
     if (!el) return;
 
@@ -131,18 +202,95 @@ function measureRegistrants(targets: Map<symbol, Registrant>): Map<symbol, Occlu
       return;
     }
 
-    const y1 =
-      options.maxHeightPx !== undefined
-        ? Math.min(rect.bottom, rect.top + options.maxHeightPx)
-        : rect.bottom;
-
-    measured.set(id, { x0: rect.left, y0: rect.top, x1: rect.right, y1 });
+    // No explicit `kind`: absent means hard (see `Occluder`), and a manual
+    // registration is always a hard surface — that is what the override is for.
+    // Keeping it absent also means `measurementsEqual` never sees a spurious
+    // `undefined` vs `"hard"` difference between passes.
+    //
+    // The full DOM height registers, however tall. A panel taller than the
+    // viewport used to be capped (`maxHeightPx`) so its bottom edge opened up
+    // past the cap, which meant traces ran behind the lower half of a long
+    // article — the opposite of what an opaque article panel should do. The
+    // viewport clamp below is the whole bound now: it keeps the cell loop from
+    // walking 150 lattice rows for a 6000px article without letting any part of
+    // the panel stop occluding.
+    const clamped = clampRectToViewport(
+      { x0: rect.left, y0: rect.top, x1: rect.right, y1: rect.bottom },
+      viewport.width,
+      viewport.height,
+    );
+    if (clamped) measured.set(id, clamped);
   });
 
   return measured;
 }
 
-function measurementsEqual(a: Map<symbol, Occluder>, b: Map<symbol, Occluder>): boolean {
+/**
+ * Measures every automatically discovered surface, translating its cached
+ * element-local rects by one fresh `getBoundingClientRect`.
+ *
+ * This is the whole point of storing local rects: no `getComputedStyle` and no
+ * `Range` work happens here, so the scroll path — which runs this on every tick —
+ * costs one layout read per surface and nothing else.
+ *
+ * Unlike a manual registrant, an undersized discovered surface is never warned
+ * about. The scanner finds them by the hundred on a normal page; a warning would
+ * be noise, not a signal.
+ */
+function measureDiscovered(
+  discovered: readonly DiscoveredSurface[],
+  viewport: { width: number; height: number },
+): Map<OccluderId, Occluder> {
+  const measured = new Map<OccluderId, Occluder>();
+
+  discovered.forEach((surface, index) => {
+    const box = surface.el.getBoundingClientRect();
+
+    surface.localRects.forEach((local, rectIndex) => {
+      const base: Occluder = {
+        x0: box.left + local.x0,
+        y0: box.top + local.y0,
+        x1: box.left + local.x1,
+        y1: box.top + local.y1,
+      };
+      // Only the non-default kinds are tagged. `"hard"` is the absent-tag
+      // default, so setting it explicitly would make every surface rect compare
+      // unequal to the plain-literal form the manual path and every existing test
+      // produce.
+      const clamped = clampRectToViewport(
+        surface.kind === "hard" ? base : { ...base, kind: surface.kind },
+        viewport.width,
+        viewport.height,
+      );
+
+      if (clamped) measured.set(`d${index}#${rectIndex}`, clamped);
+    });
+  });
+
+  return measured;
+}
+
+/**
+ * `documentElement.clientWidth`/`clientHeight` first — a scrollbar appearing or
+ * disappearing changes those without changing `window.inner*`, and they describe
+ * the box rects are actually clamped against.
+ *
+ * `window.inner*` is the fallback rather than the primary because it includes
+ * the scrollbar gutter. Either can read 0 in a non-layout environment (jsdom
+ * reports 0 for `clientWidth` and 1024 for `innerWidth`), and
+ * `clampRectToViewport` treats 0 as "unbounded on that axis" rather than
+ * clamping everything away.
+ */
+function readViewport(): { width: number; height: number } {
+  const root = document.documentElement;
+
+  return {
+    width: root.clientWidth || window.innerWidth,
+    height: root.clientHeight || window.innerHeight,
+  };
+}
+
+function measurementsEqual(a: Map<OccluderId, Occluder>, b: Map<OccluderId, Occluder>): boolean {
   if (a.size !== b.size) return false;
 
   for (const [id, rect] of a) {
@@ -152,7 +300,13 @@ function measurementsEqual(a: Map<symbol, Occluder>, b: Map<symbol, Occluder>): 
       rect.x0 !== other.x0 ||
       rect.y0 !== other.y0 ||
       rect.x1 !== other.x1 ||
-      rect.y1 !== other.y1
+      rect.y1 !== other.y1 ||
+      // `kind` too: an element reclassified hard<->soft at identical geometry is
+      // a real change to the barrier field and must recommit. Deliberately *not*
+      // added to `rectChanged` below — a kind flip can only come from a
+      // structural rescan, which commits directly rather than going through the
+      // scroll delta path.
+      rect.kind !== other.kind
     )
       return false;
   }
@@ -176,7 +330,10 @@ function rectChanged(a: Rect, b: Rect): boolean {
  * that disappeared. Used only by the scroll-delta path; the structural path
  * doesn't need a diff, it just commits the fresh measurement outright.
  */
-function diffMeasurements(previous: Map<symbol, Occluder>, next: Map<symbol, Occluder>): Rect[] {
+function diffMeasurements(
+  previous: Map<OccluderId, Occluder>,
+  next: Map<OccluderId, Occluder>,
+): Rect[] {
   const dirty: Rect[] = [];
 
   previous.forEach((oldRect, id) => {
@@ -234,13 +391,33 @@ export function CircuitOccluderProvider({
   const scrollSettleTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const resizeSettleTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const structuralPendingRef = React.useRef(true); // first measurement pass is always a commit
-  const measuredRef = React.useRef(new Map<symbol, Occluder>());
-  const committedRef = React.useRef(new Map<symbol, Occluder>());
+  const measuredRef = React.useRef(new Map<OccluderId, Occluder>());
+  const committedRef = React.useRef(new Map<OccluderId, Occluder>());
   const deltaListenersRef = React.useRef(new Set<DeltaListener>());
+  const discoveredRef = React.useRef<DiscoveredSurface[]>([]);
+  const scanPendingRef = React.useRef(true); // first pass always discovers
+  const mutationTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scanTimestampsRef = React.useRef<number[]>([]);
   const [rects, setRects] = React.useState<Occluder[]>([]);
 
   const flush = React.useCallback(() => {
-    const next = measureRegistrants(targetsRef.current);
+    const viewport = readViewport();
+
+    // Discovery runs on the structural path only. It is the expensive half —
+    // a DOM walk reading computed style — while the scroll path below needs
+    // nothing but a fresh `getBoundingClientRect` per already-known surface.
+    if (scanPendingRef.current) {
+      scanPendingRef.current = false;
+      scanTimestampsRef.current = [...scanTimestampsRef.current, Date.now()].slice(
+        -MAX_SCANS_PER_SECOND,
+      );
+      discoveredRef.current = scanOccluders(document.body, viewport);
+    }
+
+    const next = measureRegistrants(targetsRef.current, viewport);
+    measureDiscovered(discoveredRef.current, viewport).forEach((rect, id) => {
+      next.set(id, rect);
+    });
 
     if (structuralPendingRef.current) {
       structuralPendingRef.current = false;
@@ -286,7 +463,13 @@ export function CircuitOccluderProvider({
 
   const scheduleMeasure = React.useCallback(
     (trigger: "structural" | "scroll") => {
-      if (trigger === "structural") structuralPendingRef.current = true;
+      if (trigger === "structural") {
+        structuralPendingRef.current = true;
+        // Every structural trigger is also a rediscovery trigger. Both flags
+        // ride the same rAF single-flight below, so N triggers in one layout
+        // pass still produce exactly one scan and one measurement.
+        scanPendingRef.current = true;
+      }
       if (rafRef.current !== null) return;
 
       rafRef.current = requestAnimationFrame(() => {
@@ -296,6 +479,24 @@ export function CircuitOccluderProvider({
     },
     [flush],
   );
+
+  /**
+   * Debounced rescan for DOM changes, with a token bucket behind it.
+   *
+   * Trailing rather than leading: a route change arrives as a burst of
+   * insertions, and only the settled tree is worth measuring.
+   */
+  const scheduleScan = React.useCallback(() => {
+    const now = Date.now();
+    const recent = scanTimestampsRef.current.filter((at) => now - at < 1000);
+    const delay = recent.length >= MAX_SCANS_PER_SECOND ? MUTATION_BACKOFF_MS : MUTATION_SETTLE_MS;
+
+    if (mutationTimerRef.current !== null) clearTimeout(mutationTimerRef.current);
+    mutationTimerRef.current = setTimeout(() => {
+      mutationTimerRef.current = null;
+      scheduleMeasure("structural");
+    }, delay);
+  }, [scheduleMeasure]);
 
   React.useEffect(() => {
     // One shared ResizeObserver for every registrant, batched through a
@@ -313,8 +514,45 @@ export function CircuitOccluderProvider({
       if (ref.current) observer.observe(ref.current);
     });
 
+    // `document.body` as well as the registrants: automatically discovered
+    // surfaces have no per-element observer, so this is what notices the
+    // document reflowing (a route change, lazy content resolving, an accordion
+    // opening) and changing every discovered rect at once.
+    observer.observe(document.body);
+
     observerRef.current = observer;
     scheduleMeasure("structural");
+
+    // Structural changes that no `ResizeObserver` reports: content appearing or
+    // being replaced without the body's own box changing.
+    const mutationObserver = new MutationObserver((records) => {
+      if (records.every(isIgnorableMutation)) return;
+      scheduleScan();
+    });
+    mutationObserver.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: WATCHED_ATTRIBUTES,
+    });
+
+    // A CSS transition mutates no attribute when it *finishes*, so neither
+    // observer above sees a settle. `apps/web`'s condensed header is the live
+    // case: its wrapper transitions opacity over 300ms, the `class` mutation
+    // fires at transition *start*, and the debounced scan 120ms later reads a
+    // mid-transition opacity around 0.4 — registering a surface that then fades
+    // to zero with nothing left to trigger a correction. Scroll settle
+    // (`SCROLL_SETTLE_MS`) does not cover it either, since the transition is
+    // still running at that point.
+    const onTransitionEnd = (event: Event) => {
+      const property = (event as TransitionEvent).propertyName;
+
+      if (property !== undefined && !RESCAN_TRANSITION_PROPERTIES.has(property)) return;
+
+      scheduleScan();
+    };
+    window.addEventListener("transitionend", onTransitionEnd, { passive: true, capture: true });
+    window.addEventListener("animationend", onTransitionEnd, { passive: true, capture: true });
 
     const onScroll = () => {
       scheduleMeasure("scroll");
@@ -352,9 +590,18 @@ export function CircuitOccluderProvider({
 
     return () => {
       observer.disconnect();
+      mutationObserver.disconnect();
       observerRef.current = null;
       window.removeEventListener("scroll", onScroll, { capture: true });
       window.removeEventListener("resize", onResize);
+      window.removeEventListener("transitionend", onTransitionEnd, { capture: true });
+      window.removeEventListener("animationend", onTransitionEnd, { capture: true });
+      // Same reset-to-null discipline as `rafRef` below, for the same reason: a
+      // stale handle left in the ref reads as "already scheduled".
+      if (mutationTimerRef.current !== null) {
+        clearTimeout(mutationTimerRef.current);
+        mutationTimerRef.current = null;
+      }
       if (resizeSettleTimerRef.current !== null) {
         clearTimeout(resizeSettleTimerRef.current);
         resizeSettleTimerRef.current = null;
@@ -382,12 +629,12 @@ export function CircuitOccluderProvider({
         rafRef.current = null;
       }
     };
-  }, [scheduleMeasure]);
+  }, [scheduleMeasure, scheduleScan]);
 
   const registry = React.useMemo<OccluderRegistry>(
     () => ({
-      register: (id, ref, options = {}) => {
-        targetsRef.current.set(id, { ref, options });
+      register: (id, ref) => {
+        targetsRef.current.set(id, { ref });
         if (ref.current) observerRef.current?.observe(ref.current);
         scheduleMeasure("structural");
       },
@@ -441,11 +688,10 @@ export function CircuitOccluderProvider({
  */
 export function useCircuitOccluder(
   ref: React.RefObject<Element | null>,
-  options?: { enabled?: boolean } & RegistrantOptions,
+  options?: { enabled?: boolean },
 ): void {
   const registry = React.useContext(RegistryContext);
   const enabled = options?.enabled ?? true;
-  const maxHeightPx = options?.maxHeightPx;
   const idRef = React.useRef<symbol>(undefined as unknown as symbol);
   if (idRef.current === undefined) idRef.current = Symbol("circuit-occluder");
 
@@ -476,7 +722,7 @@ export function useCircuitOccluder(
     }
 
     const id = idRef.current;
-    registry.register(id, ref, maxHeightPx !== undefined ? { maxHeightPx } : undefined);
+    registry.register(id, ref);
     return () => {
       // `el`, not `ref.current` — React nulls the ref during unmount's
       // mutation phase before this (passive-effect) cleanup runs, so
@@ -484,7 +730,7 @@ export function useCircuitOccluder(
       el?.removeAttribute("data-circuit-occluder");
       registry.unregister(id);
     };
-  }, [registry, ref, enabled, maxHeightPx]);
+  }, [registry, ref, enabled]);
 }
 
 /** Package-internal — `CircuitField`'s own consumption of the registered

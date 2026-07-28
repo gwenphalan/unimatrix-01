@@ -51,9 +51,30 @@ export function subscribeCircuitDebug(listener: () => void): () => void {
   };
 }
 
+/**
+ * The live occluder set, exposed for the e2e occlusion invariant and for
+ * eyeballing what discovery actually found. Published by `CircuitField` on every
+ * commit, so it is `null` until one has happened.
+ *
+ * The overlay cannot substitute for this: it inflates every rect with the hard
+ * buffer regardless of kind, so it is unable to say whether a given rect is a
+ * surface or ink — which is exactly the distinction worth checking.
+ */
+export type CircuitOccluderSnapshot = {
+  readonly hard: readonly { x0: number; y0: number; x1: number; y1: number }[];
+  readonly soft: readonly { x0: number; y0: number; x1: number; y1: number }[];
+};
+
+let snapshot: CircuitOccluderSnapshot | null = null;
+
+export function publishCircuitOccluders(next: CircuitOccluderSnapshot): void {
+  snapshot = next;
+}
+
 export type CircuitDebugConsoleApi = {
   debug: (on?: unknown, options?: unknown) => CircuitDebugState;
   state: () => CircuitDebugState;
+  occluders: () => CircuitOccluderSnapshot | null;
 };
 
 declare global {
@@ -109,5 +130,6 @@ export function installCircuitDebugConsoleApi(): void {
       return state;
     },
     state: () => state,
+    occluders: () => snapshot,
   };
 }

@@ -1,7 +1,3 @@
-import { useRef } from "react";
-
-import { useCircuitOccluder } from "@unimatrix/ui/public";
-
 import { CasePreviewCard } from "@/features/algorithms/components/case-preview-card";
 import type { AlgorithmCase, AlgorithmSetId } from "@/features/algorithms/types";
 import type { CaseProgress } from "@/lib/progress-storage";
@@ -23,15 +19,12 @@ export function AlgorithmGroupSection({
   progress: CaseProgress;
   setId: AlgorithmSetId;
 }) {
-  const sectionRef = useRef<HTMLElement | null>(null);
-  useCircuitOccluder(sectionRef, { enabled: cases.length > 0 });
-
   if (cases.length === 0) {
     return null;
   }
 
   return (
-    <section className="space-y-3" ref={sectionRef}>
+    <section className="space-y-3">
       <h2 className="text-xs font-medium tracking-[0.2em] text-muted-foreground uppercase">
         {group}
       </h2>

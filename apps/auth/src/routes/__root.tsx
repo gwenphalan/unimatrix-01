@@ -1,8 +1,7 @@
 import { HeadContent, Link, Outlet, createRootRouteWithContext } from "@tanstack/react-router";
 import { RiAlertLine } from "@remixicon/react";
-import { useRef } from "react";
 
-import { Badge, Button, Card, useCircuitOccluder } from "@unimatrix/ui/public";
+import { Badge, Button, Card } from "@unimatrix/ui/public";
 
 import { AppShell } from "@/app/app-shell";
 import type { AppRouterContext } from "@/app/router";
@@ -25,11 +24,8 @@ function RootComponent() {
 }
 
 function RootNotFound() {
-  const ref = useRef<HTMLDivElement | null>(null);
-  useCircuitOccluder(ref);
-
   return (
-    <Card className="w-full max-w-md px-6 py-8" ref={ref}>
+    <Card className="w-full max-w-md px-6 py-8">
       <div className="space-y-5">
         <Badge variant="destructive" className="gap-1.5">
           <RiAlertLine aria-hidden="true" className="size-3.5" />

@@ -9,7 +9,7 @@ import {
   useViewportSize,
 } from "./circuit-field-hooks.js";
 import { CircuitDebugOverlay } from "./circuit-debug-overlay.js";
-import { installCircuitDebugConsoleApi } from "./circuit-debug.js";
+import { installCircuitDebugConsoleApi, publishCircuitOccluders } from "./circuit-debug.js";
 import { useCircuitOccluderDelta, useCircuitOccluderRects } from "./circuit-occluder.js";
 import { createFrameBudgetProbe } from "./frame-budget.js";
 import {
@@ -754,6 +754,19 @@ function CircuitFieldCanvas({
       buildBarrierField(occluders.map((rect) => translateRect(rect, -gridPhase.x, -gridPhase.y))),
     [occluders, gridPhase.x, gridPhase.y],
   );
+
+  // Publish the buffered geometry generation actually avoided, translated back
+  // into viewport space, for `window.__circuitField.occluders()`. Not the raw
+  // `occluders` array: the whole point of the readout is to see the inflated,
+  // kind-separated field, which is the thing a trace either clears or does not.
+  // Cheap (two maps over ≤ a few hundred rects, only when `barriers` changes)
+  // and read by the e2e occlusion invariant as well as by hand.
+  React.useEffect(() => {
+    publishCircuitOccluders({
+      hard: barriers.buffered.map((rect) => translateRect(rect, gridPhase.x, gridPhase.y)),
+      soft: barriers.soft.map((rect) => translateRect(rect, gridPhase.x, gridPhase.y)),
+    });
+  }, [barriers, gridPhase.x, gridPhase.y]);
 
   // The viewport box as generation sees it: shrunk by the phase the rendered
   // `<g>` then adds back. Generation keeps everything within `GRID` of these
@@ -1718,6 +1731,13 @@ function CircuitFieldCanvas({
             ? `circuit-field circuit-field-static${idleGlowEligible ? " circuit-field-idle-glow" : ""}`
             : "circuit-field"
         }
+        // Marks this layer for `scanOccluders` to skip, and for the provider's
+        // `MutationObserver` to ignore. A dedicated attribute rather than
+        // `aria-hidden`, which every decorative icon on the page also carries —
+        // and those are legitimate ink. Load-bearing for performance too: the
+        // animation loop below writes `style.opacity` on these children every
+        // frame, and without this marker each write would queue a rescan.
+        data-circuit-field=""
         height={size.height}
         style={{ position: "fixed", inset: 0, zIndex: -1, pointerEvents: "none" }}
         width={size.width}

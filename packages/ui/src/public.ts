@@ -3,11 +3,7 @@ export { Button } from "./components/ui/button.js";
 export { Card } from "./components/ui/card.js";
 export { CircuitField } from "./components/circuit-field.js";
 export type { CircuitFieldProps } from "./components/circuit-field.js";
-export {
-  CircuitOccluderProvider,
-  TALL_OCCLUDER_MAX_HEIGHT_PX,
-  useCircuitOccluder,
-} from "./components/circuit-occluder.js";
+export { CircuitOccluderProvider, useCircuitOccluder } from "./components/circuit-occluder.js";
 export {
   DropdownMenu,
   DropdownMenuCheckboxItem,

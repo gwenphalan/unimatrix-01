@@ -14,12 +14,7 @@ import { SignedIn, SignedOut, UserButton } from "@unimatrix/auth/react";
 import { getBlogEntryBySlug, getProjectEntryBySlug } from "@/features/content/site-content";
 import { PublicPageContainer, PublicSiteFooter } from "@/features/public-site/components";
 import { isAuthEnabled, loadWebRuntimeConfig } from "@/lib/config";
-import {
-  CircuitField,
-  CircuitOccluderProvider,
-  cn,
-  useCircuitOccluder,
-} from "@unimatrix/ui/public";
+import { CircuitField, CircuitOccluderProvider, cn } from "@unimatrix/ui/public";
 
 const runtimeConfig = loadWebRuntimeConfig({
   VITE_API_BASE_URL: import.meta.env.VITE_API_BASE_URL,
@@ -176,28 +171,22 @@ function AuthHeaderAction() {
   );
 }
 
-// `useCircuitOccluder` calls must live in a component rendered *inside*
-// `CircuitOccluderProvider`, not the component that creates the provider —
-// a component can't consume a context it renders as its own descendant.
+// Nothing here registers a circuit occluder any more: `CircuitOccluderProvider`
+// scans the DOM and registers whatever visually paints over the background,
+// which covers this header, the condensed bar, the footer, and every card
+// without a per-component call. Two decisions that used to be spelled out here
+// now fall out of that scan: `main` still does not occlude (it paints nothing),
+// and the condensed bar occludes only while visible (its wrapper is `opacity-0`
+// and `inert` when hidden, so the scan prunes the subtree).
+//
+// `headerRef` survives for the scroll-condense measurement below, not for
+// occlusion.
 function AppShellContent({ children }: AppShellProps) {
   const headerRef = useRef<HTMLElement | null>(null);
-  const condensedHeaderRef = useRef<HTMLDivElement | null>(null);
   const [isCondensed, setIsCondensed] = useState(false);
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
   });
-  useCircuitOccluder(headerRef);
-  // `main` itself is no longer registered — it's a window-scrolling
-  // container spanning full page content, which would blanket most of the
-  // viewport at a flat weight regardless of what's actually on the page.
-  // Negative-space routing instead comes from registering the real
-  // rectangular content blocks inside it (cards, article panels, the
-  // footer) — see `PublicSiteFooter`/`PublicLinkedSurface` and the
-  // route-level article panels.
-  // Only occlude while the condensed bar is actually visible — it's always
-  // mounted (opacity-toggled, not conditionally rendered), so an
-  // unconditional registration would occlude this strip even when hidden.
-  useCircuitOccluder(condensedHeaderRef, { enabled: isCondensed });
 
   useEffect(() => {
     const updateCollapsedState = () => {
@@ -328,10 +317,7 @@ function AppShellContent({ children }: AppShellProps) {
         inert={!isCondensed}
       >
         <div className="mx-auto w-full max-w-[92rem] px-4 sm:px-6 lg:px-8 xl:px-10">
-          <div
-            className="site-panel site-shell overflow-hidden border-primary/45 shadow-[0_0_0_1px_color-mix(in_oklab,var(--primary)_35%,transparent),0_18px_48px_-32px_color-mix(in_oklab,var(--primary)_35%,transparent)] px-3 py-2 lg:px-4 lg:py-2"
-            ref={condensedHeaderRef}
-          >
+          <div className="site-panel site-shell overflow-hidden border-primary/45 shadow-[0_0_0_1px_color-mix(in_oklab,var(--primary)_35%,transparent),0_18px_48px_-32px_color-mix(in_oklab,var(--primary)_35%,transparent)] px-3 py-2 lg:px-4 lg:py-2">
             {/* This bar keeps an `lg` nav breakpoint while the main header
                 uses `sm`. Below `lg` the nav is already `order-last w-full`,
                 so the auth action sits on the title row at every stacked
