@@ -76,6 +76,15 @@ export function createWebViteConfig(mode: string): UserConfig {
           target: devProxyConfig.apiProxyTarget,
         },
       },
+      watch: {
+        // Vite's watcher ignores `node_modules` and `.git` and nothing else, so
+        // a `vitest run` beside a running dev server rewrites the hundreds of
+        // HTML files under `coverage/` and the page full-reloads once per file.
+        // Measured: 63 reloads from one test run, each one cancelling whatever
+        // requests were in flight — which reads as a request that hangs
+        // forever rather than as a reload storm.
+        ignored: ["**/coverage/**", "**/dist/**", "**/.turbo/**", "**/playwright-report/**"],
+      },
     },
     resolve: {
       alias: [
