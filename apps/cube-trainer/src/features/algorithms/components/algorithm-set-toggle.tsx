@@ -16,6 +16,7 @@ export interface AlgorithmSetToggleProps {
 export function AlgorithmSetToggle({ onChange, setId }: AlgorithmSetToggleProps) {
   return (
     <ToggleGroup
+      aria-label="Algorithm set"
       onValueChange={(value) => {
         if (value) onChange(value as AlgorithmSetId);
       }}

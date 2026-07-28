@@ -1,16 +1,16 @@
 import { useCallback, useMemo, useState } from "react";
 
 import { getAlgorithmSet, groupCasesByGroup } from "@/features/algorithms/algorithm-sets";
-import { deriveDiagramForSet } from "@/features/algorithms/derive-diagram";
 import type { AlgorithmCase, AlgorithmSetId } from "@/features/algorithms/types";
 import { useCaseProgress } from "@/features/algorithms/use-case-progress";
-import type { LastLayerDiagram } from "@/features/cube/last-layer-diagram";
+import type { FaceletCube } from "@/features/cube/model";
 import { orderedLearnCases } from "@/features/learn/learn-case-order";
 import { getCaseSetup } from "@/features/trainer/case-setup";
 
 export interface LearnSessionState {
   currentCase: AlgorithmCase | undefined;
-  diagram: LastLayerDiagram | undefined;
+  /** The case's cube state; the view derives whichever diagram the active preview mode needs. */
+  cube: FaceletCube | undefined;
   setupMoves: string | undefined;
   canGoBack: boolean;
   canGoNext: boolean;
@@ -36,10 +36,6 @@ export function useLearnSession(setId: AlgorithmSetId): LearnSessionState {
   const currentCase = orderedCases[clampedCursor];
 
   const setup = useMemo(() => (currentCase ? getCaseSetup(currentCase) : undefined), [currentCase]);
-  const diagram = useMemo(() => {
-    if (!setup) return undefined;
-    return deriveDiagramForSet(setId, setup.cube);
-  }, [setId, setup]);
 
   const next = useCallback(() => {
     setCursor((previous) => Math.min(previous + 1, orderedCases.length - 1));
@@ -61,12 +57,12 @@ export function useLearnSession(setId: AlgorithmSetId): LearnSessionState {
       back,
       canGoBack: clampedCursor > 0,
       canGoNext: clampedCursor < orderedCases.length - 1,
+      cube: setup?.cube,
       currentCase,
-      diagram,
       markLearned,
       next,
       setupMoves: setup?.setupMoves,
     }),
-    [back, clampedCursor, currentCase, diagram, markLearned, next, orderedCases.length, setup],
+    [back, clampedCursor, currentCase, markLearned, next, orderedCases.length, setup],
   );
 }

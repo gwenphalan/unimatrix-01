@@ -2,20 +2,21 @@ import { useEffect, useRef } from "react";
 
 import { Card, Kbd, useCircuitOccluder } from "@unimatrix/ui/public";
 
+import { CaseDiagramView } from "@/features/algorithms/components/case-diagram-view";
+import type { DiagramPreviewMode } from "@/features/algorithms/preview-mode";
 import type { AlgorithmCase, AlgorithmSetId } from "@/features/algorithms/types";
-import { LastLayerDiagramView } from "@/features/cube/components/last-layer-diagram-view";
 import { useAlgorithmTrainer } from "@/features/trainer/use-algorithm-trainer";
 
 export function TrainerPanel({
   cases,
-  previewVisible,
+  previewMode,
   setId,
 }: {
   cases: AlgorithmCase[];
-  previewVisible: boolean;
+  previewMode: DiagramPreviewMode;
   setId: AlgorithmSetId;
 }) {
-  const { currentCase, diagram, next, setupMoves } = useAlgorithmTrainer(setId, cases);
+  const { cube, currentCase, next, setupMoves } = useAlgorithmTrainer(setId, cases);
   const panelRef = useRef<HTMLDivElement | null>(null);
   useCircuitOccluder(panelRef);
 
@@ -37,13 +38,14 @@ export function TrainerPanel({
       className="site-panel site-panel-strong flex min-h-96 flex-col items-center justify-center gap-6 px-6 py-10 text-center"
       ref={panelRef}
     >
-      {currentCase && diagram ? (
+      {currentCase && cube ? (
         <>
-          <LastLayerDiagramView
-            diagram={diagram}
+          <CaseDiagramView
+            cube={cube}
             label={currentCase.displayName}
+            mode={previewMode}
+            setId={setId}
             size={180}
-            visible={previewVisible}
           />
 
           {setupMoves ? <p className="alg-move-string break-words">{setupMoves}</p> : null}
