@@ -19,6 +19,13 @@ export const adminQueryKeys = {
  * Never retried. Every admin call needs a valid `auth:admin` session, so a
  * failure here is a 401 or a 403 far more often than a blip, and retrying it
  * only delays telling the admin their session is the problem.
+ *
+ * A `retry` option is safe here, unlike on the public content queries, because
+ * these are read through `useQuery` inside components that render their own
+ * pending and error states. Do not move one of these into a route loader
+ * without also setting `retry: false` — awaited through `ensureQueryData`, any
+ * retry above `0` leaves the promise unsettled and the route renders nothing
+ * at all. The measurement is in `@/features/content/queries/content-posts`.
  */
 function retryUnlessClientError(failureCount: number, error: Error): boolean {
   if (error instanceof ApiClientError && error.status >= 400 && error.status < 500) {
