@@ -42,11 +42,7 @@ export function toggleInlineMarker(
   const selected = doc.slice(from, to);
   const width = marker.length;
 
-  if (
-    selected.length >= width * 2 &&
-    selected.startsWith(marker) &&
-    selected.endsWith(marker)
-  ) {
+  if (selected.length >= width * 2 && selected.startsWith(marker) && selected.endsWith(marker)) {
     const inner = selected.slice(width, selected.length - width);
 
     // `*` is a prefix of `**`, so italics over `**bold**` would otherwise strip
@@ -114,8 +110,7 @@ export function toggleLinePrefix(
   const blockEnd = lineEndAt(doc, to);
   const lines = doc.slice(blockStart, blockEnd).split("\n");
   const meaningful = lines.filter((line) => line.trim().length > 0);
-  const isPrefixed =
-    meaningful.length > 0 && meaningful.every((line) => line.startsWith(prefix));
+  const isPrefixed = meaningful.length > 0 && meaningful.every((line) => line.startsWith(prefix));
 
   const next = lines
     .map((line) => {

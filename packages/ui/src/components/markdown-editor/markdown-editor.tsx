@@ -18,7 +18,12 @@ import { PublicMarkdown } from "../public-markdown.js";
 import { Button } from "../ui/button.js";
 import { ToggleGroup, ToggleGroupItem } from "../ui/toggle-group.js";
 import { markdownLivePreview, markdownLivePreviewTheme } from "./live-preview.js";
-import { insertLink, toggleInlineMarker, toggleLinePrefix, type MarkdownEdit } from "./markdown-commands.js";
+import {
+  insertLink,
+  toggleInlineMarker,
+  toggleLinePrefix,
+  type MarkdownEdit,
+} from "./markdown-commands.js";
 
 /**
  * - `live`: markdown text with rendered styling and syntax hidden off-cursor.

@@ -71,6 +71,10 @@ export {
   SelectValue,
 } from "./components/ui/select.js";
 export { Separator } from "./components/ui/separator.js";
+// Not a Tailwind `sm:hidden` pair: a table and a compact list are different
+// markup for the same rows, and shipping both would put two controls with the
+// same accessible name in the tree at once.
+export { useIsMobile } from "./hooks/use-mobile.js";
 export { Skeleton } from "./components/ui/skeleton.js";
 export { Spinner } from "./components/ui/spinner.js";
 export {

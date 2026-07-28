@@ -129,9 +129,7 @@ describe("AdminPage", () => {
     // selection would make a bulk action reach into a collection the admin was
     // not looking at.
     expect(panel("Blog posts").getByText("1 selected")).toBeInTheDocument();
-    expect(
-      panel("Projects").getByText(/Select rows to manage them in bulk/u),
-    ).toBeInTheDocument();
+    expect(panel("Projects").getByText(/Select rows to manage them in bulk/u)).toBeInTheDocument();
 
     fireEvent.click(panel("Blog posts").getByRole("checkbox", { name: "Select all rows" }));
     expect(
@@ -184,6 +182,37 @@ describe("AdminPage", () => {
 
     expect(within(dialog).getByText("Delete 1 post?")).toBeInTheDocument();
     expect(within(dialog).getByText(/"A post" will be removed/u)).toBeInTheDocument();
+  });
+
+  /**
+   * The per-row control targets its own row. Reading the selection instead
+   * would make the button delete something the admin never pointed at.
+   */
+  it("deletes only the row its own delete button belongs to", async () => {
+    apiClient.deletePosts.mockResolvedValue({ affected: 1 });
+
+    const { AdminPage } = await import("@/features/admin/admin-page");
+
+    renderInRouter(<AdminPage />);
+
+    // A different row is ticked, so a selection-driven delete would take it.
+    fireEvent.click(await screen.findByRole("checkbox", { name: "Select A post" }));
+    fireEvent.click(panel("Projects").getByRole("button", { name: "Delete Shipped project" }));
+
+    const dialog = await screen.findByRole("alertdialog");
+
+    expect(within(dialog).getByText("Delete 1 post?")).toBeInTheDocument();
+    expect(within(dialog).getByText(/"Shipped project" will be removed/u)).toBeInTheDocument();
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Delete" }));
+
+    await waitFor(() => {
+      expect(apiClient.deletePosts).toHaveBeenCalledWith({ ids: [PUBLISHED.id] });
+    });
+
+    // The unrelated selection survives: deleting one row is not a reason to
+    // discard a bulk selection the admin is still building.
+    expect(screen.getByRole("checkbox", { name: "Select A post" })).toBeChecked();
   });
 
   it("reports a failed load in both panels instead of rendering an empty table", async () => {
