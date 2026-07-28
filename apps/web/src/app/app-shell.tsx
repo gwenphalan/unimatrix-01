@@ -365,9 +365,16 @@ function AppShellContent({ children }: AppShellProps) {
           moment it is shown. `aria-hidden` alone would be wrong here: it
           hides content from assistive technology while leaving it focusable,
           which is a WCAG 4.1.2 failure rather than a fix. */}
+      {/* Not shown on a phone. Its nav stacks two-up below `lg`, so the bar
+          lands about 110px tall over an 844px viewport — an eighth of the
+          screen, permanently, sitting on top of whatever is being read. The
+          header it condenses is one scroll away, which is where a phone
+          expects to find it. `hidden` also keeps it out of the tab order at
+          those widths, so the `inert` toggle below still describes the only
+          case where it exists. */}
       <div
         className={cn(
-          "fixed top-3 inset-x-0 z-40 transition-opacity duration-300 ease-out",
+          "fixed top-3 inset-x-0 z-40 hidden transition-opacity duration-300 ease-out sm:block",
           isCondensed ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0",
         )}
         inert={!isCondensed}

@@ -18,7 +18,7 @@ function BlogDetailRoute() {
   const entry = Route.useLoaderData();
 
   return (
-    <div className="space-y-8 lg:space-y-10">
+    <div className="space-y-6 sm:space-y-8 lg:space-y-10">
       <header className="space-y-5 border-b border-border/70 pb-8">
         <Button asChild className="w-fit gap-2" variant="outline">
           <Link to="/blog">

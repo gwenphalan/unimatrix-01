@@ -83,7 +83,10 @@ export function PublicSectionHeading({
   return (
     <div
       className={cn(
-        "grid gap-3 border-b border-border/70 pb-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end",
+        // Tighter below `sm`. The desktop rhythm reads as deliberate air; on a
+        // phone the same values put a heading and the thing it heads most of a
+        // thumb-scroll apart.
+        "grid gap-3 border-b border-border/70 pb-4 sm:pb-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end",
         className,
       )}
     >
@@ -218,7 +221,11 @@ function PublicLinkedSurface({
   return (
     <Card
       className={cn(
-        "site-panel site-panel-strong relative overflow-hidden",
+        // `gap-0 py-0` cancels the `Card` primitive's own `py-6`/`gap-6`. This
+        // surface sets its padding on the inner blocks, so the primitive's was
+        // added to it rather than replaced by it, and every entry on the home
+        // page carried 40px of dead space above and below its text.
+        "site-panel site-panel-strong relative gap-0 overflow-hidden py-0",
         interactive &&
           "transition-[border-color,background-color,transform,box-shadow] duration-200 hover:border-primary/45 hover:bg-secondary/26 hover:-translate-y-0.5 focus-within:border-primary/50 focus-within:shadow-[0_0_0_1px_color-mix(in_oklab,var(--primary)_35%,transparent)]",
         className,
@@ -276,9 +283,8 @@ export function PublicDecisionCard({
 type PublicProjectCardData = {
   frontmatter: {
     liveUrl?: string;
-    publishedAt: string;
     repoUrl?: string;
-    status: string;
+    status?: string;
     summary: string;
     title: string;
   };
@@ -309,8 +315,13 @@ export function ProjectStatusBadge({
     enabled: liveUrl !== undefined,
   });
 
+  // No live URL and no stored status: nothing to report, so nothing is shown.
+  // A project's status is the live check; the stored string only survives on
+  // rows seeded from the repository, and the admin form no longer writes one.
   if (liveUrl === undefined) {
-    return <Badge className={cn("border", getProjectStatusClassName(status))}>{status}</Badge>;
+    return status === undefined ? null : (
+      <Badge className={cn("border", getProjectStatusClassName(status))}>{status}</Badge>
+    );
   }
 
   if (liveStatusQuery.isPending) {
@@ -374,9 +385,12 @@ export function PublicProjectLedgerItem({
     <PublicLinkedSurface actions={actions} className="h-full overflow-hidden" {...linkProps}>
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
         <div className="space-y-2.5">
+          {/* No date. A project is a thing that exists or does not; the day
+              its row was written says nothing about it, unlike a blog entry
+              where the date is half the point. What it is instead is whether
+              it answers, which is what the badge reports. */}
           <div className="flex flex-wrap items-center gap-2">
             <ProjectStatusBadge frontmatter={project.frontmatter} />
-            <span className="text-xs text-muted-foreground">{project.frontmatter.publishedAt}</span>
           </div>
           <Heading className="text-xl leading-tight font-medium tracking-[-0.04em] text-foreground lg:text-[1.5rem]">
             {project.frontmatter.title}

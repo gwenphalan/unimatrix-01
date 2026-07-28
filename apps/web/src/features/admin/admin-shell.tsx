@@ -24,7 +24,14 @@ import { useId, type ReactNode } from "react";
 export function AdminShell({ children }: { children: ReactNode }) {
   return (
     <CircuitOccluderProvider>
-      <div className="relative mx-auto flex h-[100dvh] w-full max-w-[92rem] flex-col gap-4 px-4 py-4 sm:px-6 lg:px-8 lg:py-6 xl:px-10">
+      {/* Viewport-height only from `lg` up. The fill-the-viewport frame is what
+          makes this read as an application rather than a page, but it only
+          works while the content fits: on a phone the editor's fields alone are
+          taller than the viewport, and a fixed-height frame turns that into a
+          zero-height editor with the submit buttons painted over it. Below `lg`
+          the frame grows and the page scrolls, which is what a phone does
+          anyway. */}
+      <div className="relative mx-auto flex min-h-[100dvh] w-full max-w-[92rem] flex-col gap-4 px-4 py-4 sm:px-6 lg:h-[100dvh] lg:px-8 lg:py-6 xl:px-10">
         <CircuitField routeKey="admin" />
 
         {/* Carried over from the public shell rather than dropped with the rest
@@ -38,7 +45,11 @@ export function AdminShell({ children }: { children: ReactNode }) {
         </a>
 
         <header className="site-panel site-shell overflow-hidden px-5 py-4 lg:px-8 lg:py-5">
-          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+          {/* Deliberately not wrapping. The trail truncates instead, so the
+              account control stays on the title bar's own line at any width —
+              wrapping it onto a second row made the chrome taller than the
+              first field of the form below it on a phone. */}
+          <div className="flex items-center justify-between gap-4">
             <AdminBreadcrumbs />
             <UserButton afterSignOutUrl="/" />
           </div>
@@ -97,7 +108,12 @@ function AdminBreadcrumbs() {
         <img alt="" className="size-6 shrink-0" src="/logo.png" />
       </a>
       <span className="flex min-w-0 items-center gap-1">
-        <a className="truncate transition-colors hover:text-foreground" href="/">
+        {/* The site name never truncates and never hides. It is the way out of
+            the tool, and a trail whose every segment is clipped — "Unimatrix… ›
+            Adm… › New p…", which is what a phone gave — names nothing and
+            leads nowhere. What gives instead is the middle crumb, below `sm`:
+            the editor already has Cancel, so the dashboard is not stranded. */}
+        <a className="shrink-0 transition-colors hover:text-foreground" href="/">
           Unimatrix-01
         </a>
         <RiArrowRightSLine aria-hidden="true" className="size-3.5 shrink-0" />
@@ -105,10 +121,12 @@ function AdminBreadcrumbs() {
           <span className="truncate font-medium text-foreground">Admin</span>
         ) : (
           <>
-            <Link className="truncate transition-colors hover:text-foreground" to="/admin">
-              Admin
-            </Link>
-            <RiArrowRightSLine aria-hidden="true" className="size-3.5 shrink-0" />
+            <span className="hidden min-w-0 items-center gap-1 sm:flex">
+              <Link className="truncate transition-colors hover:text-foreground" to="/admin">
+                Admin
+              </Link>
+              <RiArrowRightSLine aria-hidden="true" className="size-3.5 shrink-0" />
+            </span>
             <span className="truncate font-medium text-foreground">{trail}</span>
           </>
         )}
@@ -142,7 +160,10 @@ export function AdminPanel({
     // they are in.
     <section aria-labelledby={headingId} className={className}>
       <div className="site-panel flex min-h-0 flex-col gap-4 px-5 py-5 lg:px-6 lg:py-6">
-        <div className="flex flex-wrap items-start justify-between gap-3">
+        {/* `items-center`, not `items-start`: the heading's cap height and a
+            small button's box do not start at the same y, so aligning their
+            tops left them visibly a couple of pixels out of line. */}
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="space-y-1">
             <h2
               className="text-lg leading-tight font-medium tracking-[-0.03em] text-foreground"
@@ -167,9 +188,7 @@ export function AdminPanel({
 export function AdminAccessDenied() {
   return (
     <div className="site-panel space-y-3 px-5 py-5 lg:px-6 lg:py-6">
-      <h2 className="text-lg font-medium text-foreground">
-        You do not have access to this page.
-      </h2>
+      <h2 className="text-lg font-medium text-foreground">You do not have access to this page.</h2>
       <p className="text-sm text-muted-foreground">
         This tool manages the site&rsquo;s blog posts and projects. Sign in with an admin account to
         use it.
