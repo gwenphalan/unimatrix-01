@@ -14,7 +14,6 @@ import { SignedIn, SignedOut, UserButton } from "@unimatrix/auth/react";
 import { getBlogEntryBySlug, getProjectEntryBySlug } from "@/features/content/site-content";
 import { PublicPageContainer, PublicSiteFooter } from "@/features/public-site/components";
 import { isAuthEnabled, loadWebRuntimeConfig } from "@/lib/config";
-import { useIsNarrowViewport } from "@/lib/use-media-query";
 import {
   CircuitField,
   CircuitOccluderProvider,
@@ -187,10 +186,6 @@ function AppShellContent({ children }: AppShellProps) {
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
   });
-  // Narrow viewports skip the circuit field entirely — unmounted, not
-  // CSS-hidden, so no traces are generated and no animation loop runs.
-  const isNarrowViewport = useIsNarrowViewport();
-
   useCircuitOccluder(headerRef);
   // `main` itself is no longer registered — it's a window-scrolling
   // container spanning full page content, which would blanket most of the
@@ -265,7 +260,7 @@ function AppShellContent({ children }: AppShellProps) {
 
   return (
     <PublicPageContainer>
-      {isNarrowViewport ? null : <CircuitField routeKey={pathname} />}
+      <CircuitField routeKey={pathname} />
 
       <a
         className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:border focus:border-primary/45 focus:bg-background focus:px-3 focus:py-2 focus:text-sm"

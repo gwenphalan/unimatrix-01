@@ -52,7 +52,13 @@ export default defineConfig({
       // runs when the router renders a route, which the Playwright smoke suite
       // does and the vitest unit suite does not. The statements are real and
       // shipped, they are simply unreachable from this suite.
-      thresholds: { statements: 58, functions: 53 },
+      //
+      // Both dropped ~2 points again when `src/lib/use-media-query.ts` was
+      // deleted (the circuit-field mobile gate moved into `@unimatrix/ui`).
+      // That file was 13 statements and 7 functions of *fully covered* code —
+      // every app-shell render exercised it — so removing it took more from
+      // the numerator than the denominator. Nothing became less tested.
+      thresholds: { statements: 56, functions: 51 },
     }),
     environment: "jsdom",
     include: ["test/**/*.test.ts", "test/**/*.test.tsx"],

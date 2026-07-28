@@ -25,6 +25,80 @@ const MOTION_MEDIA_QUERIES = [
 ] as const;
 
 /**
+ * The width below which `CircuitField` renders nothing at all. 640px is this
+ * repo's one "mobile format" line — the Tailwind `sm` breakpoint every app
+ * shell already reshapes its layout at — so the field disappears exactly
+ * where the surrounding page switches to its stacked narrow layout.
+ *
+ * Deliberately a *layout width*, not a device-class signal. Touch devices are
+ * already handled a tier down by `decideMotionMode` (see `capability.ts`),
+ * which drops any coarse pointer to `static`: one frozen frame, no animation
+ * loop. This gate is about a viewport too narrow for the traces to read as
+ * background rather than clutter, which a wide touchscreen is not.
+ *
+ * Not to be confused with `hooks/use-mobile.ts` (768px, effect-based). That
+ * one exists for the shadcn sidebar's off-canvas switch and is scoped to it;
+ * its effect-corrected value is fine there and wrong here (see below).
+ */
+const NARROW_VIEWPORT_QUERY = "(max-width: 639px)";
+
+function getMediaQueryList(query: string): MediaQueryList | null {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+    return null;
+  }
+
+  return window.matchMedia(query);
+}
+
+function subscribeToMediaQuery(query: string, onStoreChange: () => void): () => void {
+  const mql = getMediaQueryList(query);
+
+  if (!mql) {
+    return () => {};
+  }
+
+  mql.addEventListener("change", onStoreChange);
+
+  return () => {
+    mql.removeEventListener("change", onStoreChange);
+  };
+}
+
+/**
+ * Reads the match synchronously on first render (via `useSyncExternalStore`'s
+ * snapshot) rather than correcting from `false` inside an effect. The
+ * distinction is load-bearing for what this gates: an effect-corrected value
+ * mounts the whole field for one frame on a narrow viewport, which generates
+ * traces and starts the animation loop before unmounting them again — the
+ * exact work the gate exists to avoid.
+ */
+function useMediaQuery(query: string): boolean {
+  // `subscribe` needs a stable identity. `useSyncExternalStore` re-runs its
+  // subscription effect whenever this reference changes, so an inline arrow
+  // detaches and re-attaches the `change` listener on every render — including
+  // every render `useGridPhase` triggers while a window is being dragged,
+  // which is exactly when this hook is busiest.
+  const subscribe = React.useCallback(
+    (onStoreChange: () => void) => subscribeToMediaQuery(query, onStoreChange),
+    [query],
+  );
+
+  // `getSnapshot` is deliberately left inline. Its identity is not a
+  // subscription key: `useSyncExternalStore` calls it during every render and
+  // after every store change regardless, so wrapping it would add a hook
+  // without removing a single `matchMedia` call.
+  return React.useSyncExternalStore(
+    subscribe,
+    () => getMediaQueryList(query)?.matches ?? false,
+    () => false,
+  );
+}
+
+export function useIsNarrowViewport(): boolean {
+  return useMediaQuery(NARROW_VIEWPORT_QUERY);
+}
+
+/**
  * CircuitField's overall motion mode, folding capability signals (see
  * `capability.ts`) together with a one-way runtime demotion. Initialized
  * synchronously (not via an effect, unlike `useReducedMotion` above) so a
