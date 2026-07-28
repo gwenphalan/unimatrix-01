@@ -9,12 +9,49 @@ import { apiClient } from "@/lib/api-client";
  * that does not exist is a final answer, and retrying it three times with
  * backoff would delay the not-found page by seconds for no benefit.
  */
-function retryUnlessClientError(failureCount: number, error: Error): boolean {
-  if (error instanceof ApiClientError && error.status >= 400 && error.status < 500) {
-    return false;
+function isRetryable(error: unknown): boolean {
+  return !(error instanceof ApiClientError && error.status >= 400 && error.status < 500);
+}
+
+const RETRY_DELAYS_MS = [200, 600] as const;
+
+/**
+ * Retries inside the query function rather than through TanStack Query's own
+ * `retry` option, which cannot be used here.
+ *
+ * These queries are awaited by route loaders via `ensureQueryData`, and in that
+ * position any `retry` above `0` makes the returned promise never settle: the
+ * first attempt rejects, no second request is ever issued, and the loader's
+ * `await` hangs forever. The router then sits in its pending state with nothing
+ * to render, so an unreachable API produced a permanently blank document rather
+ * than the route's error component — on `/`, `/blog` and `/projects` alike.
+ *
+ * Verified by bisection against a running build with the API stopped:
+ * `retry: false` renders the error panel correctly, `retry: 1` (with an
+ * explicit 300 ms delay, ruling out backoff) and the previous predicate both
+ * hang indefinitely. Bypassing TanStack Query in the loader also renders
+ * correctly, which places the fault in the retryer rather than in the loader,
+ * the transport, or the router.
+ *
+ * Retrying here keeps the resilience the predicate was written for while
+ * TanStack Query sees exactly one attempt that either resolves or rejects.
+ */
+async function withRetry<T>(attempt: () => Promise<T>): Promise<T> {
+  for (const delayMs of RETRY_DELAYS_MS) {
+    try {
+      return await attempt();
+    } catch (error) {
+      if (!isRetryable(error)) {
+        throw error;
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
   }
 
-  return failureCount < 2;
+  // The final attempt is deliberately outside the loop: its rejection is the
+  // answer, not something to sleep after.
+  return attempt();
 }
 
 /**
@@ -48,9 +85,9 @@ export const contentQueryKeys = {
 export function publishedPostsQueryOptions(type: ContentPostType, client: ApiClient = apiClient) {
   return queryOptions<ListPostsResponse>({
     queryKey: contentQueryKeys.list(type),
-    queryFn: () => client.listPosts({ type }),
+    queryFn: () => withRetry(() => client.listPosts({ type })),
     staleTime: 60_000,
-    retry: retryUnlessClientError,
+    retry: false,
   });
 }
 
@@ -61,8 +98,8 @@ export function publishedPostQueryOptions(
 ) {
   return queryOptions<ContentPost>({
     queryKey: contentQueryKeys.detail(type, slug),
-    queryFn: () => client.getPost({ type, slug }),
+    queryFn: () => withRetry(() => client.getPost({ type, slug })),
     staleTime: 60_000,
-    retry: retryUnlessClientError,
+    retry: false,
   });
 }
