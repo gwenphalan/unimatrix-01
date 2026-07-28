@@ -107,7 +107,7 @@ export function PostFormPage({ postId, type }: { postId: string | null; type: Co
     <PostForm
       onDone={leave}
       post={detail.data}
-      title={`Edit ${detail.data.title}`}
+      title={`Edit ${TYPE_LABELS[detail.data.type]}`}
       type={detail.data.type}
     />
   );

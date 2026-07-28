@@ -52,7 +52,7 @@ describe("MarkdownEditor", () => {
     expect(getEditorContent()).not.toHaveTextContent("first");
   });
 
-  it("switches between live, raw, and preview without changing the document", () => {
+  it("switches between live and raw without changing the document", () => {
     const onChange = vi.fn();
 
     render(
@@ -62,11 +62,6 @@ describe("MarkdownEditor", () => {
     fireEvent.click(screen.getByRole("radio", { name: "Raw" }));
     expect(getEditorContent()).toHaveTextContent("## Heading");
 
-    fireEvent.click(screen.getByRole("radio", { name: "Preview" }));
-    // Preview renders through the same component the public site uses, so a
-    // heading becomes a real heading element.
-    expect(screen.getByRole("heading", { name: "Heading" })).toBeInTheDocument();
-
     fireEvent.click(screen.getByRole("radio", { name: "Live" }));
     expect(getEditorContent()).toHaveTextContent("## Heading");
 
@@ -74,13 +69,21 @@ describe("MarkdownEditor", () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 
-  it("keeps the editor mounted while previewing so history and cursor survive", () => {
+  // There is no read-only third mode: `live` already shows the post the way it
+  // reads, and the site renders it for real one click away.
+  it("offers only the two editable modes", () => {
     render(<MarkdownEditor label="Post body" onChange={vi.fn()} value="Body." />);
 
-    fireEvent.click(screen.getByRole("radio", { name: "Preview" }));
+    expect(screen.getAllByRole("radio").map((radio) => radio.textContent)).toEqual(["Live", "Raw"]);
+  });
 
-    // Hidden, not unmounted: destroying the view would discard undo history.
-    expect(getEditorContent()).toBeInTheDocument();
+  it("shows the expand control only once the body overflows its box", () => {
+    render(<MarkdownEditor expandable label="Post body" onChange={vi.fn()} value="Body." />);
+
+    // jsdom reports every element as zero-sized, so nothing overflows and the
+    // control has nothing to offer. The measured behaviour is checked in a real
+    // browser; this pins the "no scrollbar, no control" half of the rule.
+    expect(screen.queryByRole("button", { name: /the editor/u })).not.toBeInTheDocument();
   });
 
   it("reports mode changes to a controlled consumer without moving itself", () => {

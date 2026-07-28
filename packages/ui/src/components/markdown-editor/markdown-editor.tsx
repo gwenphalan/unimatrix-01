@@ -5,7 +5,9 @@ import { EditorView, keymap, placeholder as placeholderExtension } from "@codemi
 import {
   RiBold,
   RiCodeSSlashLine,
+  RiCollapseDiagonalLine,
   RiDoubleQuotesL,
+  RiExpandDiagonalLine,
   RiH1,
   RiItalic,
   RiLinkM,
@@ -14,7 +16,6 @@ import {
 import * as React from "react";
 
 import { cn } from "../../lib/utils.js";
-import { PublicMarkdown } from "../public-markdown.js";
 import { Button } from "../ui/button.js";
 import { ToggleGroup, ToggleGroupItem } from "../ui/toggle-group.js";
 import { markdownLivePreview, markdownLivePreviewTheme } from "./live-preview.js";
@@ -28,16 +29,19 @@ import {
 /**
  * - `live`: markdown text with rendered styling and syntax hidden off-cursor.
  * - `raw`: the same text with the decorations detached.
- * - `preview`: read-only render through the site's own markdown renderer.
+ *
+ * There is no read-only preview mode. `live` already shows the post the way it
+ * reads, and the site renders it for real one click away; a third mode that
+ * could not be typed into was a tab to leave and come back from rather than a
+ * way of working.
  */
-export const MARKDOWN_EDITOR_MODES = ["live", "raw", "preview"] as const;
+export const MARKDOWN_EDITOR_MODES = ["live", "raw"] as const;
 
 export type MarkdownEditorMode = (typeof MARKDOWN_EDITOR_MODES)[number];
 
 const MODE_LABELS: Record<MarkdownEditorMode, string> = {
   live: "Live",
   raw: "Raw",
-  preview: "Preview",
 };
 
 /**
@@ -130,11 +134,17 @@ export interface MarkdownEditorProps {
   editorClassName?: string;
   readOnly?: boolean;
   /**
-   * Grow the editing surface with the document instead of scrolling inside a
-   * fixed box. The page becomes the scroll container, so this only makes sense
-   * where the editor's ancestors are not height-locked.
+   * Show a control that grows the editing surface to the whole document
+   * instead of scrolling inside its box.
    */
-  autoGrow?: boolean;
+  expandable?: boolean;
+  /**
+   * Called when the expand control is used. Expanded, the editor stops
+   * scrolling internally and grows with the document, so a consumer whose
+   * layout is height-locked has to release that lock here — nothing above the
+   * editor can be reached from inside it.
+   */
+  onExpandedChange?: (expanded: boolean) => void;
 }
 
 const editableCompartment = new Compartment();
@@ -157,8 +167,13 @@ const baseTheme = EditorView.theme({
     padding: "0.75rem",
     caretColor: "var(--foreground)",
     // `.cm-content` is the element that actually takes the click, so it has to
-    // grow too — `.cm-editor` filling the box is not enough on its own.
-    minHeight: "100%",
+    // grow too — `.cm-editor` filling the box is not enough on its own. The
+    // 16rem is the editor's floor, and it lives here rather than on the box:
+    // on the box it was a hard minimum that overflowed a height-constrained
+    // column and painted over whatever sat under it, while here a short box
+    // simply scrolls, which is what the scrollbar and the expand control are
+    // for.
+    minHeight: "max(100%, 16rem)",
   },
   ".cm-line": { padding: "0 0.25rem" },
   ".cm-cursor, .cm-dropCursor": { borderLeftColor: "var(--foreground)" },
@@ -200,8 +215,7 @@ function buildExtensions(options: {
  * The document is always the raw markdown text — switching modes attaches or
  * detaches decorations, and never rewrites the document. There is no
  * HTML-to-markdown serialization step, so opening and saving a post cannot
- * reformat it, and `preview` renders through `PublicMarkdown`, the exact
- * component the public site uses.
+ * reformat it.
  *
  * Lives behind `@unimatrix/ui/editor` rather than `./public` so CodeMirror
  * stays out of the public site's dependency graph entirely.
@@ -210,14 +224,15 @@ export const MarkdownEditor = React.forwardRef<MarkdownEditorHandle, MarkdownEdi
   function MarkdownEditor(
     {
       actions,
-      autoGrow = false,
       className,
       defaultMode = "live",
       editorClassName,
+      expandable = false,
       header,
       label,
       mode: controlledMode,
       onChange,
+      onExpandedChange,
       onModeChange,
       placeholder,
       readOnly = false,
@@ -230,10 +245,45 @@ export const MarkdownEditor = React.forwardRef<MarkdownEditorHandle, MarkdownEdi
     const onChangeRef = React.useRef(onChange);
     const [uncontrolledMode, setUncontrolledMode] = React.useState<MarkdownEditorMode>(defaultMode);
     const mode = controlledMode ?? uncontrolledMode;
+    const [expanded, setExpanded] = React.useState(false);
+    // Whether the collapsed box is actually cutting the document off. The
+    // control is an answer to a scrollbar, so without one there is nothing for
+    // it to offer and it stays out of the toolbar's way.
+    const [overflowing, setOverflowing] = React.useState(false);
+    const boxRef = React.useRef<HTMLDivElement | null>(null);
 
     // The updateListener is installed once, so it must not close over a stale
     // callback when the consumer re-renders with a new one.
     onChangeRef.current = onChange;
+
+    // Measured rather than derived from the document length: what overflows
+    // depends on the box's height and the wrapped line count, and both change
+    // without the value changing at all — a window resize, a font load, the
+    // fields above growing by a row.
+    React.useEffect(() => {
+      const box = boxRef.current;
+
+      if (box === null || !expandable) {
+        return;
+      }
+
+      const measure = () => {
+        setOverflowing(box.scrollHeight > box.clientHeight + 1);
+      };
+
+      measure();
+
+      const observer = new ResizeObserver(measure);
+      observer.observe(box);
+
+      for (const child of box.children) {
+        observer.observe(child);
+      }
+
+      return () => {
+        observer.disconnect();
+      };
+    }, [expandable, expanded, value]);
 
     React.useEffect(() => {
       const host = hostRef.current;
@@ -373,13 +423,11 @@ export const MarkdownEditor = React.forwardRef<MarkdownEditorHandle, MarkdownEdi
           {header}
 
           <div className="flex flex-wrap items-center gap-1">
-            {/* Disabled in preview, where there is no caret to act on and the
-                document is not being edited. */}
             {TOOLBAR_ACTIONS.map((action) => (
               <Button
                 aria-label={action.label}
                 className="size-8"
-                disabled={readOnly || mode === "preview"}
+                disabled={readOnly}
                 key={action.key}
                 onClick={() => {
                   applyToolbarAction(action.apply);
@@ -413,26 +461,19 @@ export const MarkdownEditor = React.forwardRef<MarkdownEditorHandle, MarkdownEdi
           </div>
         </div>
 
-        {/* `flex-1 min-h-0` rather than a fixed height: in a plain block parent
-            it collapses to the content and `min-h-64` holds the floor, and in a
-            height-constrained flex column — the full-page editor route — it
-            takes whatever is left. The container owns the height; the editor
-            has no opinion about it. */}
+        {/* `relative` so the expand control can float over the bottom-right of
+            the writing surface. Collapsed, the box takes the leftover space and
+            the document scrolls inside it; expanded, `h-auto` lets CodeMirror's
+            own height be the document's and the page does the scrolling. */}
         <div
           className={cn(
-            "flex min-h-64 flex-col border border-input bg-background",
-            // Auto-grow leaves the box unconstrained so CodeMirror's own height
-            // is the document's; otherwise the box takes the leftover space and
-            // the document scrolls inside it.
-            autoGrow ? "h-auto" : "flex-1 overflow-auto",
+            "relative flex flex-col border border-input bg-background",
+            expanded ? "h-auto" : "flex-1 overflow-auto",
             editorClassName,
           )}
+          ref={boxRef}
         >
           {/*
-           * The editor host stays mounted in every mode. Unmounting it for the
-           * preview would destroy the view, and with it the undo history and
-           * cursor position.
-           *
            * `flex-1` on the host, and `height: 100%` on `.cm-editor` inside it,
            * are what make a click land on the editor rather than on dead space.
            * CodeMirror sizes itself to its content by default, so in a box this
@@ -440,11 +481,36 @@ export const MarkdownEditor = React.forwardRef<MarkdownEditorHandle, MarkdownEdi
            * looks like the writing surface belongs to this container, and
            * clicking it does nothing at all.
            */}
-          <div className={cn("flex-1", mode === "preview" && "hidden")} ref={hostRef} />
+          <div className="flex-1" ref={hostRef} />
 
-          {mode === "preview" ? (
-            <div className="public-markdown px-4 py-3">
-              <PublicMarkdown markdown={value} />
+          {expandable && (expanded || overflowing) ? (
+            /* `sticky`, not `absolute`: in the collapsed box the control has to
+               stay reachable while the document scrolls under it, and in the
+               expanded one it has to stay with the bottom edge rather than sit
+               at the end of a very long document. */
+            <div className="pointer-events-none sticky bottom-0 flex justify-end p-2">
+              <Button
+                aria-label={expanded ? "Shrink the editor" : "Expand the editor"}
+                aria-pressed={expanded}
+                className="pointer-events-auto size-8 bg-background/90 backdrop-blur-sm"
+                onClick={() => {
+                  setExpanded((current) => {
+                    onExpandedChange?.(!current);
+
+                    return !current;
+                  });
+                }}
+                size="icon"
+                title={expanded ? "Shrink the editor" : "Expand the editor"}
+                type="button"
+                variant="outline"
+              >
+                {expanded ? (
+                  <RiCollapseDiagonalLine aria-hidden="true" className="size-4" />
+                ) : (
+                  <RiExpandDiagonalLine aria-hidden="true" className="size-4" />
+                )}
+              </Button>
             </div>
           ) : null}
         </div>

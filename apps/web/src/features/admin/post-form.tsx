@@ -180,6 +180,10 @@ export function PostForm({ post, type, title, onDone }: PostFormProps) {
   const createPost = useCreatePost();
   const updatePost = useUpdatePost();
   const fieldPrefix = useId();
+  // Mirrors the editor's own expand state. The editor cannot release a height
+  // lock set above it, so the column it sits in has to stop claiming the frame
+  // when the body is expanded to the whole document.
+  const [bodyExpanded, setBodyExpanded] = useState(false);
 
   const isSaving = createPost.isPending || updatePost.isPending;
 
@@ -221,63 +225,19 @@ export function PostForm({ post, type, title, onDone }: PostFormProps) {
 
   return (
     <form
-      // No height constraint anywhere down this column. The body editor grows
-      // with the document and the page is the scroll container, so a `flex-1`
-      // here would fight that by handing the form a fixed share of the frame.
-      className="flex flex-col"
+      // `min-h-0` on a flex child is what lets the editor below actually
+      // shrink; without it the column's implicit `min-height: auto` lets the
+      // body push the controls under it off the frame instead of scrolling
+      // inside its own box. Expanded, that is exactly what is wanted, so the
+      // claim on the frame is dropped and the page scrolls instead.
+      className={bodyExpanded ? "flex flex-col" : "flex min-h-0 flex-1 flex-col"}
       onSubmit={(event) => {
         // `onSubmit` expects a void return, so the promise is deliberately
         // not handed to React. `handleSubmit` settles its own failures.
         void handleSubmit(event);
       }}
     >
-      <AdminPanel
-        // The publication state sits with the panel title rather than down by
-        // the submit buttons: it is the one field that decides what saving
-        // actually *does*, and it reads as a property of the post being edited
-        // rather than as one more input in the column of inputs.
-        actions={
-          <div className="flex items-center gap-2">
-            <Label className="text-muted-foreground" htmlFor={`${fieldPrefix}-state`}>
-              State
-            </Label>
-            <Select
-              onValueChange={(next) => {
-                update("publicationState", next as ContentPublicationState);
-              }}
-              value={form.publicationState}
-            >
-              <SelectTrigger className="w-40" id={`${fieldPrefix}-state`}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {PUBLICATION_STATES.map((state) => (
-                  <SelectItem key={state} value={state}>
-                    {STATE_LABELS[state]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        }
-        // Save and Cancel sit on the title's row rather than at the foot of the
-        // form. The panel is height-locked from `lg` and the body pane fills
-        // whatever is left, so a footer under it was the row that got squeezed:
-        // up here the two controls that end the edit are always on screen, and
-        // the body can have the rest.
-        leading={
-          <div className="flex items-center gap-2">
-            <Button disabled={isSaving} type="submit">
-              {isSaving ? "Saving" : post === null ? "Create" : "Save"}
-            </Button>
-            <Button disabled={isSaving} onClick={onDone} type="button" variant="outline">
-              Cancel
-            </Button>
-          </div>
-        }
-        title={title}
-        titleHidden
-      >
+      <AdminPanel className={bodyExpanded ? "" : "flex min-h-0 flex-1 flex-col"} title={title}>
         <div className="grid gap-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="grid gap-2">
@@ -398,11 +358,12 @@ export function PostForm({ post, type, title, onDone }: PostFormProps) {
           on top of the editing surface and the upload button lines up with
           the formatting controls it belongs beside. */}
         <MarkdownEditor
-          // The body grows with the post and the page scrolls, rather than the
-          // post scrolling inside a fixed box: a writer editing a long article
-          // should see the paragraph they are working on in the context of the
-          // ones around it, not through a 16rem window.
-          autoGrow
+          className={bodyExpanded ? "" : "min-h-0 flex-1"}
+          // Scrolls inside its box by default, so the controls under it stay
+          // on screen; the expand control it draws bottom-right hands the whole
+          // document to the page for anyone editing something long.
+          expandable
+          onExpandedChange={setBodyExpanded}
           actions={
             <>
               <Button
@@ -452,6 +413,47 @@ export function PostForm({ post, type, title, onDone }: PostFormProps) {
           ref={editorRef}
           value={form.body}
         />
+
+        {/* Below the body, not above it: these are what you reach for once the
+            post is written. State on the left because it is a property of the
+            post; the two buttons that end the edit on the right, Save last,
+            where a submit button is looked for. */}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            {/* Off-screen. "Published" / "Draft" / "Archived" already read as a
+                state, so the word in front of them is a label for a screen
+                reader and clutter for everyone else. */}
+            <Label className="sr-only" htmlFor={`${fieldPrefix}-state`}>
+              State
+            </Label>
+            <Select
+              onValueChange={(next) => {
+                update("publicationState", next as ContentPublicationState);
+              }}
+              value={form.publicationState}
+            >
+              <SelectTrigger className="w-36 sm:w-40" id={`${fieldPrefix}-state`}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {PUBLICATION_STATES.map((state) => (
+                  <SelectItem key={state} value={state}>
+                    {STATE_LABELS[state]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Button disabled={isSaving} onClick={onDone} type="button" variant="outline">
+              Cancel
+            </Button>
+            <Button disabled={isSaving} type="submit">
+              {isSaving ? "Saving" : post === null ? "Create" : "Save"}
+            </Button>
+          </div>
+        </div>
       </AdminPanel>
     </form>
   );

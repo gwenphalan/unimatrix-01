@@ -1,4 +1,5 @@
 import { RiArrowRightSLine } from "@remixicon/react";
+import type { ContentPostType } from "@unimatrix/shared";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { UserButton } from "@unimatrix/auth/react";
@@ -92,27 +93,34 @@ export function AdminShell({ children }: { children: ReactNode }) {
  * The middle crumb doubles as the way back to the dashboard root from the
  * editor pages, which a lone "back to website" button could not express at all.
  */
+const TRAIL_TYPE_LABELS: Record<ContentPostType, string> = {
+  blog: "post",
+  project: "project",
+};
+
+function labelForType(type: string | undefined): string {
+  return type === "project" ? TRAIL_TYPE_LABELS.project : TRAIL_TYPE_LABELS.blog;
+}
+
 function AdminBreadcrumbs() {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const search = useRouterState({ select: (state) => state.location.search });
   const client = useApiClient();
 
   const isEditing = pathname.startsWith("/admin/posts/edit");
-  // The edited post's title names the crumb, so the editor panel below does not
-  // have to repeat it in a heading: the post's own Title field is right there.
-  // Read from the admin list the editor page is already using — cached on the
-  // common path in from the dashboard — so this costs no extra request, and
-  // falls back to the generic label while it loads.
+  // The post's type names the crumb, read from the admin list the editor page
+  // is already using — cached on the common path in from the dashboard — so
+  // this costs no extra request.
   const { data } = useQuery({ ...adminPostsQueryOptions(client), enabled: isEditing });
   const editedId = (search as { id?: string }).id;
-  const editedTitle = data?.posts.find((post) => post.id === editedId)?.title;
+  const edited = data?.posts.find((post) => post.id === editedId);
 
+  // The kind being edited, not its title. A crumb is a place in the tool, and
+  // "Edit project" stays legible at a width where "Edit Cube T…" does not.
   const trail = pathname.startsWith("/admin/posts/new")
-    ? "New post"
+    ? `New ${labelForType((search as { type?: string }).type)}`
     : isEditing
-      ? editedTitle === undefined
-        ? "Edit post"
-        : `Edit ${editedTitle}`
+      ? `Edit ${edited === undefined ? "post" : TRAIL_TYPE_LABELS[edited.type]}`
       : null;
 
   return (
@@ -163,24 +171,13 @@ export function AdminPanel({
   children,
   className,
   description,
-  leading,
   title,
-  titleHidden = false,
 }: {
   actions?: ReactNode;
   children: ReactNode;
   className?: string;
   description?: string;
-  /** Rendered to the left of the heading, on the heading's own row. */
-  leading?: ReactNode;
   title: string;
-  /**
-   * Keeps the heading as the section's accessible name but takes it off the
-   * screen. For a panel whose title only repeats what the breadcrumb above and
-   * the content below already say — the post editor — where showing it costs a
-   * line of the viewport and tells a sighted reader nothing new.
-   */
-  titleHidden?: boolean;
 }) {
   const headingId = useId();
 
@@ -189,28 +186,24 @@ export function AdminPanel({
     // heading is what tells a screen-reader user which collection's controls
     // they are in.
     <section aria-labelledby={headingId} className={className}>
-      <div className="site-panel flex min-h-0 flex-col gap-4 px-5 py-5 lg:px-6 lg:py-6">
+      <div className="site-panel flex min-h-0 flex-1 flex-col gap-4 px-5 py-5 lg:px-6 lg:py-6">
         {/* `items-center`, not `items-start`: the heading's cap height and a
             small button's box do not start at the same y, so aligning their
             tops left them visibly a couple of pixels out of line. */}
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex min-w-0 flex-wrap items-center gap-3">
-            {leading}
-            <div className="space-y-1">
-              <h2
-                className={
-                  titleHidden
-                    ? "sr-only"
-                    : "text-lg leading-tight font-medium tracking-[-0.03em] text-foreground"
-                }
-                id={headingId}
-              >
-                {title}
-              </h2>
-              {description === undefined ? null : (
-                <p className="text-sm text-muted-foreground">{description}</p>
-              )}
-            </div>
+        {/* A rule under the header, not just the column gap: the panel's own
+            border is the only other line on the card, so without it the title
+            reads as the first row of the content rather than its heading. */}
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 pb-4">
+          <div className="space-y-1">
+            <h2
+              className="text-lg leading-tight font-medium tracking-[-0.03em] text-foreground"
+              id={headingId}
+            >
+              {title}
+            </h2>
+            {description === undefined ? null : (
+              <p className="text-sm text-muted-foreground">{description}</p>
+            )}
           </div>
           {actions}
         </div>
