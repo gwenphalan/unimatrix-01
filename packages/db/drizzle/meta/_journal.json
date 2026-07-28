@@ -15,6 +15,13 @@
       "when": 1784773377611,
       "tag": "0001_sticky_jazinda",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1785227745674,
+      "tag": "0002_icy_black_crow",
+      "breakpoints": true
     }
   ]
 }
