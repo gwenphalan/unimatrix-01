@@ -82,9 +82,18 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: lighthouse-reports
-          path: apps/*/.lighthouse/
+          path: apps/*/.lighthouse/**
           retention-days: 7
-          if-no-files-found: ignore
+          # THIS is what was broken: `include-hidden-files` defaults to false,
+          # and `.lighthouse` is a dot-prefixed directory, so every report under
+          # it was excluded as a hidden file. The step logged "No files were
+          # found" and passed anyway on every run the workflow has ever done.
+          include-hidden-files: true
+          # Was `ignore`, which is what let the above look like a pass. `warn`
+          # annotates a genuinely empty run — legitimate when the Lighthouse step
+          # itself failed, since `always()` runs this either way — without
+          # turning one failure into two.
+          if-no-files-found: warn
 
   # `Verify` builds with Vite and tsc; it never touches a Dockerfile. That left a
   # whole class of breakage invisible: a dependency can pass every check on the
