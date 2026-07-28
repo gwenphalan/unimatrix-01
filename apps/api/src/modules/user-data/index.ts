@@ -21,20 +21,8 @@ import {
 import type { FastifyPluginAsync, FastifyRequest } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 
+import { resolveContentDisposition } from "../../lib/http/content-types.js";
 import { ApiError } from "../../lib/http/errors.js";
-
-/**
- * Content types safe to serve `inline` from an app origin. Deliberately
- * raster images only — HTML and SVG can carry script, so they (and anything
- * else) are served as downloads instead. See the download route below.
- */
-const INLINE_SAFE_CONTENT_TYPES = new Set([
-  "image/avif",
-  "image/gif",
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-]);
 import {
   deleteDocument,
   deleteFile,
@@ -294,9 +282,7 @@ export const userDataModule: FastifyPluginAsync = async (app) => {
       // everything else is forced to download. `nosniff` stops the browser
       // from second-guessing the declared type. `keyResult.data` is already
       // constrained to `[A-Za-z0-9._-]+`, so it is safe inside the header.
-      const disposition = INLINE_SAFE_CONTENT_TYPES.has(file.contentType.toLowerCase())
-        ? "inline"
-        : "attachment";
+      const disposition = resolveContentDisposition(file.contentType);
 
       reply.header("X-Content-Type-Options", "nosniff");
       reply.header("Content-Type", file.contentType);
