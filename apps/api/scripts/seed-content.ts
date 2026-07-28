@@ -123,7 +123,30 @@ async function seed(): Promise<void> {
         continue;
       }
 
-      if (existing.body === body.body && existing.title === body.title) {
+      // The "is it current?" test and the write are derived from this one
+      // object deliberately. They were separate before, and the comparison
+      // covered `title` and `body` while the write covered six more fields —
+      // so editing only a post's `summary` in the markdown was reported
+      // `current` and skipped forever, including under `--force`, which is
+      // short-circuited by the branch below. Silent, and precisely the drift
+      // this script exists to prevent. Keyed off `updates` they cannot
+      // disagree again.
+      const updates = {
+        title: body.title,
+        summary: body.summary,
+        body: body.body,
+        ...(body.description === undefined ? {} : { description: body.description }),
+        featured: body.featured,
+        ...(body.projectStatus === undefined ? {} : { projectStatus: body.projectStatus }),
+        ...(body.repoUrl === undefined ? {} : { repoUrl: body.repoUrl }),
+        ...(body.liveUrl === undefined ? {} : { liveUrl: body.liveUrl }),
+      };
+
+      const isCurrent = Object.entries(updates).every(
+        ([field, value]) => existing[field as keyof typeof existing] === value,
+      );
+
+      if (isCurrent) {
         skipped += 1;
         console.log(`current  ${type}/${entry.slug}`);
         continue;
@@ -137,17 +160,7 @@ async function seed(): Promise<void> {
         continue;
       }
 
-      await updatePost(instance.db, options.userId, {
-        id: existing.id,
-        title: body.title,
-        summary: body.summary,
-        body: body.body,
-        ...(body.description === undefined ? {} : { description: body.description }),
-        featured: body.featured,
-        ...(body.projectStatus === undefined ? {} : { projectStatus: body.projectStatus }),
-        ...(body.repoUrl === undefined ? {} : { repoUrl: body.repoUrl }),
-        ...(body.liveUrl === undefined ? {} : { liveUrl: body.liveUrl }),
-      });
+      await updatePost(instance.db, options.userId, { id: existing.id, ...updates });
       updated += 1;
       console.log(`updated  ${type}/${entry.slug}`);
     }

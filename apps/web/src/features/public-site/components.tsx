@@ -134,12 +134,17 @@ export function PublicNotice({
 }: {
   action?: React.ReactNode;
   description: string;
-  headingLevel?: 2 | 3;
+  /**
+   * `1` is for the case where this notice *is* the page — a detail route whose
+   * post could not be loaded renders nothing else, so without it the document
+   * has no h1 at all and its first heading is an h2.
+   */
+  headingLevel?: 1 | 2 | 3;
   label: string;
   title: string;
   tone?: "destructive" | "muted";
 }) {
-  const Heading = headingLevel === 2 ? "h2" : "h3";
+  const Heading = headingLevel === 1 ? "h1" : headingLevel === 2 ? "h2" : "h3";
 
   return (
     <div className="site-panel max-w-3xl px-5 py-6 lg:px-8 lg:py-8">

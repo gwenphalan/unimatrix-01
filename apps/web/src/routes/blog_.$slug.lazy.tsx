@@ -71,6 +71,7 @@ function BlogPostUnavailable() {
 
       <PublicNotice
         description="This post could not be loaded right now. Reload the page to try again."
+        headingLevel={1}
         label="Unavailable"
         title="The post could not be loaded."
         tone="destructive"
@@ -85,9 +86,10 @@ function BlogNotFound() {
       <div className="space-y-4">
         <Badge variant="destructive">Post unavailable</Badge>
         <div className="space-y-3">
-          <h2 className="text-3xl leading-tight font-medium tracking-[-0.05em] text-foreground">
+          {/* h1, not h2: this panel replaces the whole article. */}
+          <h1 className="text-3xl leading-tight font-medium tracking-[-0.05em] text-foreground">
             That post is not part of the current archive.
-          </h2>
+          </h1>
           <p className="max-w-2xl text-sm leading-7 text-muted-foreground lg:text-base lg:leading-8">
             Return to the blog page to review the posts that are currently published.
           </p>

@@ -89,6 +89,7 @@ function ProjectUnavailable() {
 
       <PublicNotice
         description="This project could not be loaded right now. Reload the page to try again."
+        headingLevel={1}
         label="Unavailable"
         title="The project could not be loaded."
         tone="destructive"
@@ -103,9 +104,10 @@ function ProjectNotFound() {
       <div className="space-y-4">
         <Badge variant="destructive">Project unavailable</Badge>
         <div className="space-y-3">
-          <h2 className="text-3xl leading-tight font-medium tracking-[-0.05em] text-foreground">
+          {/* h1, not h2: this panel replaces the whole article. */}
+          <h1 className="text-3xl leading-tight font-medium tracking-[-0.05em] text-foreground">
             That project is not part of the current list.
-          </h2>
+          </h1>
           <p className="max-w-2xl text-sm leading-7 text-muted-foreground lg:text-base lg:leading-8">
             Return to the projects page to review the work that is currently published.
           </p>
