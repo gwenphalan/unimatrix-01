@@ -47,8 +47,17 @@ export type AdminSlotProps =
   | { kind: "post-form"; postId: string | null; type: ContentPostType }
   /** A "New blog post" / "New project" button for one collection. */
   | { kind: "new-post"; type: ContentPostType }
-  /** Per-item edit / publish / delete controls, addressed the way a public page knows a post. */
-  | { kind: "post-controls"; type: ContentPostType; slug: string };
+  /**
+   * Per-item publish state and edit / publish controls, addressed the way a
+   * public page knows a post. `part` splits the bar so each half can sit with
+   * the page furniture it belongs beside — the state badge next to the post's
+   * own badges, the buttons next to the post's own buttons. Omitted renders
+   * both together, which is what the narrow layout wants.
+   */
+  | { kind: "post-controls"; type: ContentPostType; slug: string; part?: PostControlsPart };
+
+/** Which half of the post controls a placement wants. */
+export type PostControlsPart = "badge" | "actions";
 
 /** What {@link useAdminAccess} reports about the current visitor. */
 export interface AdminAccess {

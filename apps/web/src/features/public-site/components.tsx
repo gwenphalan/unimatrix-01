@@ -355,12 +355,16 @@ export function ProjectStatusBadge({
 
 export function PublicProjectLedgerItem({
   actions,
+  badge,
   headingLevel = 3,
   index,
   project,
   renderLink,
 }: {
   actions?: React.ReactNode;
+  /** Rendered beside the status badge. Non-interactive content only — this
+   *  sits inside the card's link overlay, which swallows pointer events. */
+  badge?: React.ReactNode;
   /**
    * Heading element for the item title. Defaults to `h3`, which is correct
    * under a section that has its own `h2`. Pass `2` where the list sits
@@ -391,6 +395,7 @@ export function PublicProjectLedgerItem({
               it answers, which is what the badge reports. */}
           <div className="flex flex-wrap items-center gap-2">
             <ProjectStatusBadge frontmatter={project.frontmatter} />
+            {badge}
           </div>
           <Heading className="text-xl leading-tight font-medium tracking-[-0.04em] text-foreground lg:text-[1.5rem]">
             {project.frontmatter.title}
@@ -419,11 +424,18 @@ type PublicPostListItemData = {
 };
 
 export function PublicTransmissionListItem({
+  actions,
+  badge,
   entry,
   headingLevel = 3,
   index,
   renderLink,
 }: {
+  /** Rendered in its own row below the summary, outside the link overlay. */
+  actions?: React.ReactNode;
+  /** Rendered beside the date. Non-interactive content only — this sits
+   *  inside the card's link overlay, which swallows pointer events. */
+  badge?: React.ReactNode;
   entry: PublicPostListItemData;
   /**
    * Heading element for the item title. Defaults to `h3`, which is correct
@@ -446,10 +458,13 @@ export function PublicTransmissionListItem({
     : {};
 
   return (
-    <PublicLinkedSurface className="h-full overflow-hidden" {...linkProps}>
+    <PublicLinkedSurface actions={actions} className="h-full overflow-hidden" {...linkProps}>
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
         <div className="space-y-2.5">
-          <span className="text-xs text-muted-foreground">{entry.frontmatter.publishedAt}</span>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs text-muted-foreground">{entry.frontmatter.publishedAt}</span>
+            {badge}
+          </div>
           <Heading className="text-xl leading-tight font-medium tracking-[-0.04em] text-foreground lg:text-[1.5rem]">
             {entry.frontmatter.title}
           </Heading>

@@ -32,6 +32,12 @@ function BlogRoute() {
           {entries.map((entry, index) => (
             <div className="grid gap-3" key={entry.slug}>
               <PublicTransmissionListItem
+                actions={
+                  <AdminSlot kind="post-controls" part="actions" slug={entry.slug} type="blog" />
+                }
+                badge={
+                  <AdminSlot kind="post-controls" part="badge" slug={entry.slug} type="blog" />
+                }
                 headingLevel={2}
                 entry={entry}
                 index={index + 1}
@@ -46,7 +52,6 @@ function BlogRoute() {
                   </Link>
                 )}
               />
-              <AdminSlot kind="post-controls" slug={entry.slug} type="blog" />
             </div>
           ))}
         </div>

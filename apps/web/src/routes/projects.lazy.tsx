@@ -1,7 +1,7 @@
 import { Link, createLazyFileRoute } from "@tanstack/react-router";
 import { RiArrowRightUpLine } from "@remixicon/react";
 
-import { AdminSlot } from "@/features/admin/admin-slot";
+import { AdminSlot, useAdminAccess } from "@/features/admin/admin-slot";
 import {
   PublicNotice,
   PublicProjectLedgerItem,
@@ -16,6 +16,7 @@ export const Route = createLazyFileRoute("/projects")({
 
 function ProjectsRoute() {
   const projects = Route.useLoaderData();
+  const { isAdmin } = useAdminAccess();
 
   if (projects.length === 0) {
     return (
@@ -44,7 +45,9 @@ function ProjectsRoute() {
       <div className="grid gap-3">
         {projects.map((project, index) => {
           const { liveUrl, repoUrl } = project.frontmatter;
-          const hasActions = Boolean(liveUrl) || Boolean(repoUrl);
+          // `isAdmin` counts: the admin controls live in this row now, so a
+          // project with neither link still has an action row to put them in.
+          const hasActions = Boolean(liveUrl) || Boolean(repoUrl) || isAdmin;
 
           return (
             <div className="grid gap-3" key={project.slug}>
@@ -69,8 +72,17 @@ function ProjectsRoute() {
                           </a>
                         </Button>
                       ) : null}
+                      <AdminSlot
+                        kind="post-controls"
+                        part="actions"
+                        slug={project.slug}
+                        type="project"
+                      />
                     </>
                   ) : undefined
+                }
+                badge={
+                  <AdminSlot kind="post-controls" part="badge" slug={project.slug} type="project" />
                 }
                 index={index + 1}
                 project={project}
@@ -85,7 +97,6 @@ function ProjectsRoute() {
                   </Link>
                 )}
               />
-              <AdminSlot kind="post-controls" slug={project.slug} type="project" />
             </div>
           );
         })}

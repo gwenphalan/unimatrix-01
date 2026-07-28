@@ -26,6 +26,6 @@ export function AdminSurface(props: AdminSlotProps) {
     case "new-post":
       return <NewPostButton type={props.type} />;
     case "post-controls":
-      return <PostControls slug={props.slug} type={props.type} />;
+      return <PostControls part={props.part} slug={props.slug} type={props.type} />;
   }
 }

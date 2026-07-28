@@ -10,6 +10,7 @@ const apiClient = {
   adminListPosts: vi.fn(),
   adminGetPost: vi.fn(),
   setPostsState: vi.fn(),
+  updatePost: vi.fn(),
 } satisfies Partial<ApiClient>;
 
 vi.mock("@/lib/api-client", () => ({
@@ -47,6 +48,8 @@ const DRAFT: ContentPostSummary = {
 
 const PUBLISHED: ContentPostSummary = { ...DRAFT, publicationState: "published" };
 
+const PROJECT: ContentPostSummary = { ...PUBLISHED, type: "project", slug: "a-project" };
+
 describe("PostControls", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -56,7 +59,9 @@ describe("PostControls", () => {
     apiClient.adminListPosts.mockResolvedValue({ posts: [] });
 
     const { PostControls } = await import("@/features/admin/post-controls");
-    const { container } = renderInRouter(<PostControls slug="a-post" type="blog" />);
+    const { container } = renderInRouter(
+      <PostControls part={undefined} slug="a-post" type="blog" />,
+    );
 
     await waitFor(() => {
       expect(apiClient.adminListPosts).toHaveBeenCalled();
@@ -70,7 +75,7 @@ describe("PostControls", () => {
 
     const { PostControls } = await import("@/features/admin/post-controls");
 
-    renderInRouter(<PostControls slug="a-post" type="blog" />);
+    renderInRouter(<PostControls part={undefined} slug="a-post" type="blog" />);
 
     fireEvent.click(await screen.findByRole("button", { name: "Publish" }));
 
@@ -82,13 +87,43 @@ describe("PostControls", () => {
     });
   });
 
+  it("toggles featured on a project and sends only the changed field", async () => {
+    apiClient.adminListPosts.mockResolvedValue({ posts: [PROJECT] });
+    apiClient.updatePost.mockResolvedValue({ ...PROJECT, featured: true, body: "" });
+
+    const { PostControls } = await import("@/features/admin/post-controls");
+
+    renderInRouter(<PostControls part={undefined} slug="a-project" type="project" />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Feature" }));
+
+    await waitFor(() => {
+      // A partial update, so a stale summary cannot overwrite a field this
+      // control has no business touching.
+      expect(apiClient.updatePost).toHaveBeenCalledWith({ id: PROJECT.id, featured: true });
+    });
+  });
+
+  // The home page lists the most recent entries, not featured ones, so the
+  // column exists on a blog row and nothing reads it.
+  it("offers no Feature button on a blog entry", async () => {
+    apiClient.adminListPosts.mockResolvedValue({ posts: [PUBLISHED] });
+
+    const { PostControls } = await import("@/features/admin/post-controls");
+
+    renderInRouter(<PostControls part={undefined} slug="a-post" type="blog" />);
+
+    await screen.findByRole("button", { name: "Unpublish" });
+    expect(screen.queryByRole("button", { name: /feature/iu })).not.toBeInTheDocument();
+  });
+
   it("offers Unpublish for a published post", async () => {
     apiClient.adminListPosts.mockResolvedValue({ posts: [PUBLISHED] });
     apiClient.setPostsState.mockResolvedValue({ affected: 1 });
 
     const { PostControls } = await import("@/features/admin/post-controls");
 
-    renderInRouter(<PostControls slug="a-post" type="blog" />);
+    renderInRouter(<PostControls part={undefined} slug="a-post" type="blog" />);
 
     fireEvent.click(await screen.findByRole("button", { name: "Unpublish" }));
 
@@ -105,7 +140,7 @@ describe("PostControls", () => {
 
     const { PostControls } = await import("@/features/admin/post-controls");
 
-    renderInRouter(<PostControls slug="a-post" type="blog" />);
+    renderInRouter(<PostControls part={undefined} slug="a-post" type="blog" />);
 
     await screen.findByRole("button", { name: "Publish" });
     // Irreversible and the database is the only copy: delete lives on /admin,
@@ -118,7 +153,7 @@ describe("PostControls", () => {
 
     const { PostControls } = await import("@/features/admin/post-controls");
 
-    renderInRouter(<PostControls slug="a-post" type="blog" />);
+    renderInRouter(<PostControls part={undefined} slug="a-post" type="blog" />);
 
     // Addressed by id, which is the only handle that survives the slug being
     // edited in the very form this links to.

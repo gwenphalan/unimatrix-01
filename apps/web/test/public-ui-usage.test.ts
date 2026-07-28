@@ -81,6 +81,7 @@ describe("public UI package usage", () => {
       'export { Switch } from "./components/ui/switch.js";',
       'export { ToggleGroup, ToggleGroupItem } from "./components/ui/toggle-group.js";',
       'export { PublicMarkdown } from "./components/public-markdown.js";',
+      'export { useIsMobile } from "./hooks/use-mobile.js";',
       'export { cn } from "./lib/utils.js";',
     ];
 
