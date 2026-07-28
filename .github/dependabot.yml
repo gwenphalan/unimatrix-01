@@ -114,7 +114,9 @@ updates:
       timezone: America/Phoenix
     open-pull-requests-limit: 5
 
-    # Same 14 days as npm and github-actions, for the same reason.
+    # Same 14 days as npm, for the same reason. Not the same as github-actions,
+    # which is 7 — an action bump is a SHA change against a public, reviewable
+    # repo, whereas this pulls an opaque image the same way npm pulls a tarball.
     cooldown:
       default-days: 14
 

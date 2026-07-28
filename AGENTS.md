@@ -74,6 +74,14 @@ Package names: `apps/web`→`@unimatrix/web`, `apps/api`→`@unimatrix/api`, `ap
 - `packages/auth`: keep the three entry points separate — `.` stays framework-agnostic and dependency-free, `./server` is Node-only, `./react` is browser-only; never cross-import server and react; the package takes config as arguments and never reads `process.env`
 - `packages/user-data`: keep the account and guest adapters behind the same store interface so services stay storage-agnostic; do binary file I/O here (not in `@unimatrix/api-client`); key all account data by the caller's session, never by client-provided ids
 
+## Dependency Ceilings
+Four packages sit deliberately below `latest`. Each has a reason that is not "we have not got round to it", so do not merge a Dependabot PR proposing them without re-checking the reason still holds.
+
+- **`typescript` is capped at the 6 line.** 7.0.2 is `latest`, but the current `typescript-eslint` (8.65.0) declares `typescript: ">=4.8.4 <6.1.0"`. Installing 7 breaks lint in every workspace at once. The enforcement is the `^6.0.3` caret in each workspace, **not** the `>=5.0.0 <6.1.0` peer in `@unimatrix/config-eslint` — `.npmrc` does not set `strict-peer-dependencies` and pnpm 10 defaults it to false, so a peer mismatch installs silently. Verified, not assumed. Lift the cap when typescript-eslint widens its range.
+- **`@types/node` tracks the runtime, not `latest`.** It stays on the major in `.node-version` (24). 26.x describes APIs that do not exist in the Node actually running.
+- **`better-sqlite3` stays on the 12 line.** Upstream ships no prebuilds for 13, so it compiles from source and the alpine image has no toolchain. Full reasoning and the CI blind spot are in `packages/db/AGENTS.md`.
+- **`recharts` and `react-day-picker` are pinned and unexercised.** They are imported only by `packages/ui/src/components/ui/chart.tsx` and `calendar.tsx`, which no app consumes and no route renders — so the real-browser check this repo requires for `packages/ui` changes cannot be performed on them. `recharts@2.15.4` is additionally deprecated upstream ("1.x and 2.x branches are no longer active"). Upgrading, removing, or wiring them up are all defensible; upgrading them *quietly* is not.
+
 ## Key Conventions
 - TypeScript only; keep strict typing, named exports, and small composable modules
 - Keep package boundaries stable instead of duplicating logic app-locally
