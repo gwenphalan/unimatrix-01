@@ -56,6 +56,21 @@ import {
 import { buildOccupiedFootprint, findAffectedTraceIds, retargetTip } from "./scroll-retarget.js";
 import { type Trace, generateTraces } from "./trace-generation.js";
 
+/**
+ * Master switch for the animated circuit traces.
+ *
+ * Off deliberately, not accidentally: the field is unfinished and is not to
+ * appear on a production deployment. This gates the traces only — the
+ * `.grid-backdrop` lattice, its phase alignment, and the occluder provider all
+ * still work, so the site keeps its background and turning this back on needs
+ * no other change.
+ *
+ * Both `circuit-occlusion.spec.ts` suites are skipped while this is `false`;
+ * they wait on `window.__circuitField`, which nothing publishes when the canvas
+ * never mounts. Re-enable them in the same commit that flips this.
+ */
+const CIRCUIT_FIELD_ENABLED = false;
+
 // Tile size of `.grid-backdrop`'s bold background tier, in `GRID` cells — a
 // mirror of the `240px` in `styles.css`, needed here only to phase that tier
 // (see the `--grid-bold-phase-*` effect below). Nothing else in this file
@@ -69,6 +84,20 @@ const BOLD_GRID = GRID * 6;
  */
 function latticePhase(extent: number, tile: number): number {
   return ((extent / 2) % tile) + (extent < 0 ? tile : 0);
+}
+
+/**
+ * Phase for the bold 240px tier, offset half a tile from {@link latticePhase}
+ * so the page's midpoint falls in the *middle of a bold cell* rather than on
+ * the boundary between two of them. Centered content then sits inside one cell
+ * instead of being split down the seam by a bold line.
+ *
+ * Half a bold tile is 120px — three fine cells — which is a whole multiple of
+ * `GRID`, so the two tiers stay seam-locked and every bold line still lands on
+ * a fine one.
+ */
+function boldLatticePhase(extent: number): number {
+  return (latticePhase(extent, BOLD_GRID) + BOLD_GRID / 2) % BOLD_GRID;
 }
 
 /** The fine-lattice phase for the current document, or 0,0 outside a DOM. */
@@ -90,8 +119,10 @@ function measureGridPhase(): Point {
  * viewport centerline *is* the content centerline.
  *
  * Both background tiers get a phase (`--grid-phase-*` for the 40px tier,
- * `--grid-bold-phase-*` for the 240px one). They stay seam-locked because
- * 240 is a whole multiple of GRID, so `center % 240 ≡ center % GRID`.
+ * `--grid-bold-phase-*` for the 240px one). The bold tier is additionally
+ * offset half a tile by {@link boldLatticePhase} so the centerline lands mid
+ * bold cell; 240 and that 120px offset are both whole multiples of GRID, so
+ * every bold line still falls on a fine one.
  *
  * Called from `CircuitField` *above* its narrow-viewport gate, so the CSS
  * vars keep being written on mobile even though no traces render:
@@ -126,14 +157,8 @@ function useGridPhase(): Point {
       const { x, y } = measureGridPhase();
       root.style.setProperty("--grid-phase-x", `${x}px`);
       root.style.setProperty("--grid-phase-y", `${y}px`);
-      root.style.setProperty(
-        "--grid-bold-phase-x",
-        `${latticePhase(root.clientWidth, BOLD_GRID)}px`,
-      );
-      root.style.setProperty(
-        "--grid-bold-phase-y",
-        `${latticePhase(root.clientHeight, BOLD_GRID)}px`,
-      );
+      root.style.setProperty("--grid-bold-phase-x", `${boldLatticePhase(root.clientWidth)}px`);
+      root.style.setProperty("--grid-bold-phase-y", `${boldLatticePhase(root.clientHeight)}px`);
       // Traces are generated on the unphased `n * GRID` lattice and shifted
       // into place at render time (see the translated `<g>` in the canvas
       // below), so the fine phase has to reach the render as state, not just
@@ -270,12 +295,14 @@ function pointsEqual(a: readonly Point[], b: readonly Point[]): boolean {
  * so no traces are generated, no observers are attached, and no animation
  * loop runs. `useGridPhase` still runs above that gate, so the `.grid-backdrop`
  * CSS grid stays centered at every width.
+ *
+ * Currently disabled everywhere by {@link CIRCUIT_FIELD_ENABLED}.
  */
 export function CircuitField({ routeKey = "" }: CircuitFieldProps): React.JSX.Element | null {
   const gridPhase = useGridPhase();
   const isNarrowViewport = useIsNarrowViewport();
 
-  if (isNarrowViewport) {
+  if (!CIRCUIT_FIELD_ENABLED || isNarrowViewport) {
     return null;
   }
 

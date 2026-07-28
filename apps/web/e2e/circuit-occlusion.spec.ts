@@ -8,6 +8,13 @@ import {
 
 import { stubContentApi } from "./fixtures/content-api";
 
+// The circuit field is switched off at `CIRCUIT_FIELD_ENABLED` in
+// `packages/ui/src/components/circuit-field.tsx` while it is unfinished. With
+// the canvas unmounted nothing publishes `window.__circuitField`, so every
+// assertion here would time out waiting for a field that is never built rather
+// than catch a real occlusion bug. Un-skip in the commit that flips the flag.
+test.skip(true, "the circuit field is disabled — see CIRCUIT_FIELD_ENABLED");
+
 /**
  * The circuit field discovers its own occluders by walking the DOM and
  * classifying what paints, rather than by hand-registered
