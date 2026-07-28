@@ -2,12 +2,23 @@ import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { EditorState, Compartment, type Extension } from "@codemirror/state";
 import { EditorView, keymap, placeholder as placeholderExtension } from "@codemirror/view";
+import {
+  RiBold,
+  RiCodeSSlashLine,
+  RiDoubleQuotesL,
+  RiH1,
+  RiItalic,
+  RiLinkM,
+  RiListUnordered,
+} from "@remixicon/react";
 import * as React from "react";
 
 import { cn } from "../../lib/utils.js";
 import { PublicMarkdown } from "../public-markdown.js";
+import { Button } from "../ui/button.js";
 import { ToggleGroup, ToggleGroupItem } from "../ui/toggle-group.js";
 import { markdownLivePreview, markdownLivePreviewTheme } from "./live-preview.js";
+import { insertLink, toggleInlineMarker, toggleLinePrefix, type MarkdownEdit } from "./markdown-commands.js";
 
 /**
  * - `live`: markdown text with rendered styling and syntax hidden off-cursor.
@@ -23,6 +34,60 @@ const MODE_LABELS: Record<MarkdownEditorMode, string> = {
   raw: "Raw",
   preview: "Preview",
 };
+
+/**
+ * Toolbar buttons, in render order. Each is a pure edit over
+ * `(document, selection)` so the toolbar's behaviour is testable without an
+ * `EditorView` — see `./markdown-commands`.
+ *
+ * Deliberately short. This is a markdown editor: anything not on this list is
+ * still one or two keystrokes away in the document itself, and a toolbar that
+ * grows past a single row starts competing with the text for attention.
+ */
+const TOOLBAR_ACTIONS: {
+  key: string;
+  label: string;
+  icon: typeof RiBold;
+  apply: (doc: string, from: number, to: number) => MarkdownEdit;
+}[] = [
+  {
+    key: "bold",
+    label: "Bold",
+    icon: RiBold,
+    apply: (doc, from, to) => toggleInlineMarker(doc, from, to, "**"),
+  },
+  {
+    key: "italic",
+    label: "Italic",
+    icon: RiItalic,
+    apply: (doc, from, to) => toggleInlineMarker(doc, from, to, "*"),
+  },
+  {
+    key: "code",
+    label: "Inline code",
+    icon: RiCodeSSlashLine,
+    apply: (doc, from, to) => toggleInlineMarker(doc, from, to, "`"),
+  },
+  { key: "link", label: "Link", icon: RiLinkM, apply: insertLink },
+  {
+    key: "heading",
+    label: "Heading",
+    icon: RiH1,
+    apply: (doc, from, to) => toggleLinePrefix(doc, from, to, "## "),
+  },
+  {
+    key: "list",
+    label: "Bullet list",
+    icon: RiListUnordered,
+    apply: (doc, from, to) => toggleLinePrefix(doc, from, to, "- "),
+  },
+  {
+    key: "quote",
+    label: "Quote",
+    icon: RiDoubleQuotesL,
+    apply: (doc, from, to) => toggleLinePrefix(doc, from, to, "> "),
+  },
+];
 
 export interface MarkdownEditorHandle {
   /**
@@ -40,8 +105,21 @@ export interface MarkdownEditorProps {
   mode?: MarkdownEditorMode;
   defaultMode?: MarkdownEditorMode;
   onModeChange?: (mode: MarkdownEditorMode) => void;
-  /** Accessible name for the editing surface. */
+  /** Accessible name for the editing surface. Never painted — see the render. */
   label: string;
+  /**
+   * Rendered at the start of the toolbar row, left of the formatting buttons.
+   * The consumer's own visible field label goes here, which is what puts it
+   * directly above the editing surface.
+   */
+  header?: React.ReactNode;
+  /**
+   * Rendered at the end of the toolbar row, after the formatting buttons.
+   * Consumer-specific actions belong here — `apps/web` puts "Insert image"
+   * there, which this package cannot own because uploading is an authenticated
+   * app concern.
+   */
+  actions?: React.ReactNode;
   placeholder?: string;
   className?: string;
   editorClassName?: string;
@@ -109,9 +187,11 @@ function buildExtensions(options: {
 export const MarkdownEditor = React.forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(
   function MarkdownEditor(
     {
+      actions,
       className,
       defaultMode = "live",
       editorClassName,
+      header,
       label,
       mode: controlledMode,
       onChange,
@@ -219,6 +299,30 @@ export const MarkdownEditor = React.forwardRef<MarkdownEditorHandle, MarkdownEdi
       [],
     );
 
+    /**
+     * Applies one toolbar edit and returns focus to the document.
+     *
+     * Focus matters more than it looks: clicking a toolbar button moves focus
+     * to the button, so without this the caret the edit just placed would be
+     * invisible and the next keystroke would go nowhere useful.
+     */
+    const applyToolbarAction = (apply: (typeof TOOLBAR_ACTIONS)[number]["apply"]) => {
+      const view = viewRef.current;
+
+      if (view === null) {
+        return;
+      }
+
+      const { from, to } = view.state.selection.main;
+      const edit = apply(view.state.doc.toString(), from, to);
+
+      view.dispatch({
+        changes: { from: edit.from, to: edit.to, insert: edit.insert },
+        selection: { anchor: edit.anchor, head: edit.head },
+      });
+      view.focus();
+    };
+
     const handleModeChange = (next: string) => {
       // The toggle group reports "" when the active item is pressed again;
       // a mode is always required, so that is ignored.
@@ -239,24 +343,35 @@ export const MarkdownEditor = React.forwardRef<MarkdownEditorHandle, MarkdownEdi
       <div className={cn("flex flex-col gap-2", className)}>
         {/* `label` is the accessible name only — it names the editing surface
             and the mode toggle for assistive technology, and is deliberately
-            not painted. Every consumer already sits under its own visible
-            field label, so rendering it here put the same word on screen
-            twice. */}
-        <div className="flex items-center justify-end gap-3">
-          <ToggleGroup
-            aria-label={`${label} view mode`}
-            onValueChange={handleModeChange}
-            size="sm"
-            type="single"
-            value={mode}
-            variant="outline"
-          >
-            {MARKDOWN_EDITOR_MODES.map((editorMode) => (
-              <ToggleGroupItem key={editorMode} value={editorMode}>
-                {MODE_LABELS[editorMode]}
-              </ToggleGroupItem>
+            not painted. The visible name is whatever the consumer passes as
+            `header`, which sits here so it reads as the label of the box
+            directly below it. */}
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          {header}
+
+          <div className="flex flex-wrap items-center gap-1">
+            {/* Disabled in preview, where there is no caret to act on and the
+                document is not being edited. */}
+            {TOOLBAR_ACTIONS.map((action) => (
+              <Button
+                aria-label={action.label}
+                className="size-8"
+                disabled={readOnly || mode === "preview"}
+                key={action.key}
+                onClick={() => {
+                  applyToolbarAction(action.apply);
+                }}
+                size="icon"
+                title={action.label}
+                type="button"
+                variant="ghost"
+              >
+                <action.icon aria-hidden="true" className="size-4" />
+              </Button>
             ))}
-          </ToggleGroup>
+
+            {actions}
+          </div>
         </div>
 
         <div
@@ -277,6 +392,26 @@ export const MarkdownEditor = React.forwardRef<MarkdownEditorHandle, MarkdownEdi
               <PublicMarkdown markdown={value} />
             </div>
           ) : null}
+        </div>
+
+        {/* Below the surface it switches, not above it: the toolbar row is the
+            field's header, and putting a second control strip up there made the
+            editing area start two rows down from its own label. */}
+        <div className="flex items-center justify-end gap-3">
+          <ToggleGroup
+            aria-label={`${label} view mode`}
+            onValueChange={handleModeChange}
+            size="sm"
+            type="single"
+            value={mode}
+            variant="outline"
+          >
+            {MARKDOWN_EDITOR_MODES.map((editorMode) => (
+              <ToggleGroupItem key={editorMode} value={editorMode}>
+                {MODE_LABELS[editorMode]}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
         </div>
       </div>
     );

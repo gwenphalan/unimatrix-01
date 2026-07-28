@@ -12,7 +12,6 @@ import {
   Checkbox,
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -32,6 +31,7 @@ import { useId, useRef, useState } from "react";
 
 import { ASSET_ACCEPT, assetUrl, uploadAsset } from "./asset-upload";
 import { useCreatePost, useUpdatePost } from "./mutations";
+import { slugifyTitle } from "./slugify";
 
 const PUBLICATION_STATES: readonly ContentPublicationState[] = ["draft", "published", "archived"];
 
@@ -159,6 +159,16 @@ export function PostFormDialog({ post, type, open, onOpenChange }: PostFormDialo
   const [form, setForm] = useState<PostFormState>(() =>
     post === null ? EMPTY_FORM : toFormState(post),
   );
+  /**
+   * Whether the slug has been typed rather than derived, which stops the title
+   * from overwriting it.
+   *
+   * Starts `true` when editing: an existing post's slug is its published URL,
+   * and having a title edit silently rewrite it would break every link to the
+   * post. Clearing the field puts it back under the title's control, which is
+   * the only way to get the derived value back after typing one by hand.
+   */
+  const [isSlugEdited, setIsSlugEdited] = useState(post !== null);
   const editorRef = useRef<MarkdownEditorHandle>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -207,16 +217,20 @@ export function PostFormDialog({ post, type, open, onOpenChange }: PostFormDialo
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] gap-4 overflow-y-auto sm:max-w-3xl">
+      {/* Radix warns about a dialog with no description and points at
+          `aria-describedby`; opting out explicitly is how it wants that said.
+          The title names the action and every field is labelled, so there is
+          nothing left for a description to add. */}
+      <DialogContent
+        aria-describedby={undefined}
+        className="max-h-[90vh] gap-4 overflow-y-auto sm:max-w-3xl"
+      >
         <DialogHeader>
           <DialogTitle>
             {post === null
               ? `New ${effectiveType === "blog" ? "blog post" : "project"}`
               : `Edit ${post.title}`}
           </DialogTitle>
-          <DialogDescription>
-            The body is markdown. Drafts stay off the public site until you publish them.
-          </DialogDescription>
         </DialogHeader>
 
         <form
@@ -234,7 +248,13 @@ export function PostFormDialog({ post, type, open, onOpenChange }: PostFormDialo
                 id={`${fieldPrefix}-title`}
                 maxLength={200}
                 onChange={(event) => {
-                  update("title", event.target.value);
+                  const title = event.target.value;
+
+                  setForm((current) => ({
+                    ...current,
+                    title,
+                    slug: isSlugEdited ? current.slug : slugifyTitle(title),
+                  }));
                 }}
                 required
                 value={form.title}
@@ -246,7 +266,10 @@ export function PostFormDialog({ post, type, open, onOpenChange }: PostFormDialo
               <Input
                 id={`${fieldPrefix}-slug`}
                 onChange={(event) => {
-                  update("slug", event.target.value);
+                  const slug = event.target.value;
+
+                  setIsSlugEdited(slug.length > 0);
+                  update("slug", slug);
                 }}
                 pattern="[a-z0-9][a-z0-9-]*"
                 required
@@ -337,56 +360,60 @@ export function PostFormDialog({ post, type, open, onOpenChange }: PostFormDialo
 
           <Separator />
 
-          <div className="grid gap-2">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <Label htmlFor={`${fieldPrefix}-body`}>Body</Label>
-              <Button
-                className="gap-2"
-                disabled={isUploading}
-                onClick={() => {
-                  fileInputRef.current?.click();
-                }}
-                size="sm"
-                type="button"
-                variant="outline"
-              >
-                {isUploading ? (
-                  <RiLoader4Line aria-hidden="true" className="size-4 animate-spin" />
-                ) : (
-                  <RiImageAddLine aria-hidden="true" className="size-4" />
-                )}
-                {isUploading ? "Uploading" : "Insert image"}
-              </Button>
-              <input
-                accept={ASSET_ACCEPT}
-                className="hidden"
-                onChange={(event) => {
-                  const file = event.target.files?.[0];
+          {/* "Body" and "Insert image" are handed to the editor's own toolbar
+              row rather than rendered above it, so the label sits immediately
+              on top of the editing surface and the upload button lines up with
+              the formatting controls it belongs beside. */}
+          <MarkdownEditor
+            actions={
+              <>
+                <Button
+                  aria-label={isUploading ? "Uploading image" : "Insert image"}
+                  className="size-8"
+                  disabled={isUploading}
+                  onClick={() => {
+                    fileInputRef.current?.click();
+                  }}
+                  size="icon"
+                  title={isUploading ? "Uploading image" : "Insert image"}
+                  type="button"
+                  variant="ghost"
+                >
+                  {isUploading ? (
+                    <RiLoader4Line aria-hidden="true" className="size-4 animate-spin" />
+                  ) : (
+                    <RiImageAddLine aria-hidden="true" className="size-4" />
+                  )}
+                </Button>
+                <input
+                  accept={ASSET_ACCEPT}
+                  className="hidden"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
 
-                  // Reset first: picking the same file twice in a row fires no
-                  // change event otherwise, and re-inserting an image is a
-                  // normal thing to do.
-                  event.target.value = "";
+                    // Reset first: picking the same file twice in a row fires no
+                    // change event otherwise, and re-inserting an image is a
+                    // normal thing to do.
+                    event.target.value = "";
 
-                  if (file !== undefined) {
-                    void handleUpload(file);
-                  }
-                }}
-                ref={fileInputRef}
-                type="file"
-              />
-            </div>
-
-            <MarkdownEditor
-              label="Post body"
-              onChange={(next) => {
-                update("body", next);
-              }}
-              placeholder="Write the post in markdown."
-              ref={editorRef}
-              value={form.body}
-            />
-          </div>
+                    if (file !== undefined) {
+                      void handleUpload(file);
+                    }
+                  }}
+                  ref={fileInputRef}
+                  type="file"
+                />
+              </>
+            }
+            header={<Label>Body</Label>}
+            label="Post body"
+            onChange={(next) => {
+              update("body", next);
+            }}
+            placeholder="Write the post in markdown."
+            ref={editorRef}
+            value={form.body}
+          />
 
           <DialogFooter className="items-center gap-3 sm:justify-between">
             <div className="flex items-center gap-2">

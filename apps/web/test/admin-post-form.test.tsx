@@ -96,6 +96,41 @@ describe("PostFormDialog", () => {
     });
   });
 
+  it("derives the slug from the title until the slug is typed in", async () => {
+    const { PostFormDialog } = await import("@/features/admin/post-form-dialog");
+
+    renderForm(<PostFormDialog onOpenChange={() => {}} open post={null} type="blog" />);
+
+    type("Title", "A Post About Things");
+    expect(screen.getByLabelText("Slug")).toHaveValue("a-post-about-things");
+
+    // Once it is typed by hand it stops following: a slug is a URL, and having
+    // a later title edit silently rewrite it is how links break.
+    type("Slug", "custom-slug");
+    type("Title", "A Different Title");
+    expect(screen.getByLabelText("Slug")).toHaveValue("custom-slug");
+
+    // Clearing it hands control back, which is the only way to recover the
+    // derived value after typing one by hand.
+    type("Slug", "");
+    type("Title", "Back To Derived");
+    expect(screen.getByLabelText("Slug")).toHaveValue("back-to-derived");
+  });
+
+  /**
+   * An existing post's slug is its published URL. Editing the title must never
+   * rewrite it, so derivation starts off rather than on when editing.
+   */
+  it("never rewrites an existing post's slug from its title", async () => {
+    const { PostFormDialog } = await import("@/features/admin/post-form-dialog");
+
+    renderForm(<PostFormDialog onOpenChange={() => {}} open post={PROJECT} type="project" />);
+
+    type("Title", "Cube Trainer Renamed");
+
+    expect(screen.getByLabelText("Slug")).toHaveValue("cube-trainer");
+  });
+
   it("offers no project fields on a blog post", async () => {
     const { PostFormDialog } = await import("@/features/admin/post-form-dialog");
 

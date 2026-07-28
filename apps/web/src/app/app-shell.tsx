@@ -109,7 +109,12 @@ function Breadcrumbs({
       </Link>
       <span className="flex min-w-0 flex-wrap items-center gap-1">
         {items.map((item, index) => {
-          const isLast = index === items.length - 1;
+          // The root crumb links home on every route, including ones that add
+          // no crumb of their own (`/admin`). Trailing crumbs are plain text
+          // because they are the current page, but the root never is — leaving
+          // it as text on a one-crumb route made the site name stop being a way
+          // back.
+          const isPlainText = item.to === undefined || (index > 0 && index === items.length - 1);
 
           return (
             <span
@@ -122,7 +127,7 @@ function Breadcrumbs({
               {index > 0 ? (
                 <RiArrowRightSLine aria-hidden="true" className="size-3.5 shrink-0" />
               ) : null}
-              {isLast || !item.to ? (
+              {isPlainText || item.to === undefined ? (
                 <span className="truncate font-medium text-foreground">{item.label}</span>
               ) : (
                 <Link className="truncate transition-colors hover:text-foreground" to={item.to}>
