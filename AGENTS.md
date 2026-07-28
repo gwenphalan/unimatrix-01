@@ -117,6 +117,7 @@ Four packages sit deliberately below `latest`. Each has a reason that is not "we
 - `minimumReleaseAge` needs pnpm >= 10.16 and Dependabot ships exactly **10.16.0** — no margin. If they ever ship older, that setting silently becomes a no-op
 - Check `/network/updates` (Insights → Dependency graph → Dependabot) after touching anything Dependabot reads. The `.github/dependabot.yml` status check on a PR proves only that the *file parses*; it says nothing about whether the updater can run
 - Auto-merge is armed for grouped minor/patch Dependabot PRs only, and gates on CI rather than on any review
+- CI's `Images` job builds all four `apps/*/Dockerfile`, and its four matrix checks — `Images (api)`, `Images (auth)`, `Images (cube-trainer)`, `Images (web)` — are required on `main` alongside `Verify`. This exists because `Verify` is Vite and tsc only and never touches a Dockerfile, so a dependency could pass every check while making the deployable image unbuildable. `better-sqlite3@13` is the live example: no published prebuilds, so it falls back to `node-gyp` and dies on alpine. If you add a Dockerfile, add it to the matrix **and** to the required checks, or it is unverified
 - CodeRabbit is advisory and non-blocking: treat its comments as leads to verify against primary sources, never as conclusions to act on directly
 - Never add self-hosted Actions runners — this repo is public, so fork PRs would execute untrusted code on the owner's hardware
 - Pin third-party actions to a commit SHA with the version in a trailing comment

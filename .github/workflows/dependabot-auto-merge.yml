@@ -41,30 +41,23 @@ jobs:
       # For a grouped PR, `update-type` reports the highest bump in the group, so a
       # single major sneaking into a group would disqualify the whole PR.
       #
-      # `docker` is excluded because CI did not verify it. `Verify` runs
-      # `turbo run build`, which is Vite and tsc only. Without this guard a
-      # base-image bump would arm auto-merge, pass a `Verify` that never touched
-      # the Dockerfile, land on `main`, and get deployed with nothing having
-      # checked that the image still builds.
+      # `docker` used to be excluded here because no CI job built an image, so a
+      # base-image bump could arm auto-merge, pass a `Verify` that never touched
+      # the Dockerfile, and land unverified. The `Images` job now builds all four
+      # Dockerfiles and its four matrix checks are required on `main`, so
+      # auto-merge waits for them and the exclusion has nothing left to do.
       #
-      # CI now has an `Images` job that builds all four Dockerfiles, so the
-      # underlying gap is closed — but **do not remove this exclusion until
-      # `Images` is a required status check on `main`**. GitHub's auto-merge
-      # waits only for required checks, so while it is optional a bad PR can
-      # still merge before `Images` finishes, and the exclusion is the only
-      # thing still holding the line.
-      #
-      # The exclusion was also never the whole story: it keys on
-      # `package-ecosystem`, so it never covered npm dependencies that break the
-      # image. `better-sqlite3` is the live example — a patch bump that dropped
-      # prebuilds would be grouped, pass `Verify`, and auto-merge. That is the
-      # case `Images` exists to catch, and it cannot be fixed by widening this
-      # condition.
+      # Keeping it would have been actively misleading, because it never did what
+      # it appeared to: it keyed on `package-ecosystem`, so it only ever covered
+      # base images and never the npm dependencies that break an image.
+      # `better-sqlite3` is the live example — a patch bump that dropped prebuilds
+      # would be grouped, pass `Verify`, and auto-merge, with this condition
+      # untroubled. That case could never be fixed by widening the condition, only
+      # by building the image, which is what now happens.
       - name: Enable auto-merge for minor and patch updates
         if: |
-          steps.meta.outputs.package-ecosystem != 'docker' &&
-          (steps.meta.outputs.update-type == 'version-update:semver-patch' ||
-           steps.meta.outputs.update-type == 'version-update:semver-minor')
+          steps.meta.outputs.update-type == 'version-update:semver-patch' ||
+          steps.meta.outputs.update-type == 'version-update:semver-minor'
         run: gh pr merge --auto --squash "$PR_URL"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
@@ -77,7 +70,7 @@ jobs:
 
       # Says so out loud. A skipped auto-merge and a broken auto-merge look
       # identical from the PR page otherwise.
-      - name: Leave base-image bumps for review
+      - name: Note that base images are now CI-verified
         if: steps.meta.outputs.package-ecosystem == 'docker'
         run: |
-          echo "Docker base-image update — auto-merge is deliberately not armed, because no CI job builds the image. Review and merge manually." >> "$GITHUB_STEP_SUMMARY"
+          echo "Docker base-image update — auto-merge is armed on the same terms as any other minor or patch, because the required \`Images\` checks build all four Dockerfiles." >> "$GITHUB_STEP_SUMMARY"
