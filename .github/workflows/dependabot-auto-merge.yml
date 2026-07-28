@@ -41,13 +41,25 @@ jobs:
       # For a grouped PR, `update-type` reports the highest bump in the group, so a
       # single major sneaking into a group would disqualify the whole PR.
       #
-      # `docker` is excluded because CI does not verify it. `Verify` runs
-      # `turbo run build`, which is Vite and tsc only — no workflow in this repo
-      # builds a container image. Without this guard a base-image bump would arm
-      # auto-merge, pass a `Verify` that never touched the Dockerfile, land on
-      # `main`, and get deployed with nothing having checked that the image still
-      # builds or runs. Base-image bumps get a human instead. If CI ever gains a
-      # real `docker build` job as a required check, this exclusion can go.
+      # `docker` is excluded because CI did not verify it. `Verify` runs
+      # `turbo run build`, which is Vite and tsc only. Without this guard a
+      # base-image bump would arm auto-merge, pass a `Verify` that never touched
+      # the Dockerfile, land on `main`, and get deployed with nothing having
+      # checked that the image still builds.
+      #
+      # CI now has an `Images` job that builds all four Dockerfiles, so the
+      # underlying gap is closed — but **do not remove this exclusion until
+      # `Images` is a required status check on `main`**. GitHub's auto-merge
+      # waits only for required checks, so while it is optional a bad PR can
+      # still merge before `Images` finishes, and the exclusion is the only
+      # thing still holding the line.
+      #
+      # The exclusion was also never the whole story: it keys on
+      # `package-ecosystem`, so it never covered npm dependencies that break the
+      # image. `better-sqlite3` is the live example — a patch bump that dropped
+      # prebuilds would be grouped, pass `Verify`, and auto-merge. That is the
+      # case `Images` exists to catch, and it cannot be fixed by widening this
+      # condition.
       - name: Enable auto-merge for minor and patch updates
         if: |
           steps.meta.outputs.package-ecosystem != 'docker' &&
