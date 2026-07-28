@@ -237,8 +237,12 @@ export const MarkdownEditor = React.forwardRef<MarkdownEditorHandle, MarkdownEdi
 
     return (
       <div className={cn("flex flex-col gap-2", className)}>
-        <div className="flex items-center justify-between gap-3">
-          <span className="text-xs text-muted-foreground">{label}</span>
+        {/* `label` is the accessible name only — it names the editing surface
+            and the mode toggle for assistive technology, and is deliberately
+            not painted. Every consumer already sits under its own visible
+            field label, so rendering it here put the same word on screen
+            twice. */}
+        <div className="flex items-center justify-end gap-3">
           <ToggleGroup
             aria-label={`${label} view mode`}
             onValueChange={handleModeChange}
