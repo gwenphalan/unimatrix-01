@@ -3,6 +3,7 @@ import type { ContentPostType } from "@unimatrix/shared";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { UserButton } from "@unimatrix/auth/react";
+import { useIsMobile } from "@unimatrix/ui/editor";
 import { Toaster } from "@unimatrix/ui/editor";
 import { CircuitField, CircuitOccluderProvider } from "@unimatrix/ui/public";
 import { useId, type ReactNode } from "react";
@@ -106,6 +107,7 @@ function AdminBreadcrumbs() {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const search = useRouterState({ select: (state) => state.location.search });
   const client = useApiClient();
+  const isMobile = useIsMobile();
 
   const isEditing = pathname.startsWith("/admin/posts/edit");
   // The post's type names the crumb, read from the admin list the editor page
@@ -117,11 +119,17 @@ function AdminBreadcrumbs() {
 
   // The kind being edited, not its title. A crumb is a place in the tool, and
   // "Edit project" stays legible at a width where "Edit Cube T…" does not.
-  const trail = pathname.startsWith("/admin/posts/new")
-    ? `New ${labelForType((search as { type?: string }).type)}`
-    : isEditing
-      ? `Edit ${edited === undefined ? "post" : TRAIL_TYPE_LABELS[edited.type]}`
-      : null;
+  //
+  // Nothing past "Admin" on a phone, though: the site name does not shrink, so
+  // a third crumb there only clips to "Edit proje…" — and the card's own
+  // heading right below says it in full anyway.
+  const trail = isMobile
+    ? null
+    : pathname.startsWith("/admin/posts/new")
+      ? `New ${labelForType((search as { type?: string }).type)}`
+      : isEditing
+        ? `Edit ${edited === undefined ? "post" : TRAIL_TYPE_LABELS[edited.type]}`
+        : null;
 
   return (
     <nav
