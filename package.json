@@ -29,7 +29,7 @@
     "verify": "pnpm format:check && pnpm deps:check && turbo run build lint typecheck test"
   },
   "devDependencies": {
-    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/jest-dom": "^7.0.0",
     "@testing-library/react": "^16.3.2",
     "chrome-launcher": "^1.2.1",
     "eslint": "^10.0.0",
