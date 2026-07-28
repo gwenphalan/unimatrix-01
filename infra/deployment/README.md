@@ -395,10 +395,12 @@ survivable here, so do not disable it.
 
 ### Doing it over the API instead of the UI
 
-Every step above is reachable through Dokploy's REST API, so this setup can be
-scripted or handed to an agent rather than clicked — that is how the current
-services were created. Generate a key under Settings -> Profile (API/CLI
-section); it is sent as an `x-api-key` header.
+Every *Dokploy-side* step above is reachable through its REST API, so the
+service creation and preview configuration can be scripted or handed to an
+agent rather than clicked — that is how the current services were created. The
+two prerequisites that live outside Dokploy are not scriptable with a key; see
+below. Generate a key under Settings -> Profile (API/CLI section); it is sent
+as an `x-api-key` header.
 
 Two things that cost time when scripting it:
 
@@ -426,10 +428,13 @@ Two things this does not remove: installing the GitHub App is an OAuth consent
 flow that cannot be done with the key, and the wildcard DNS record lives at the
 registrar.
 
-Treat the key accordingly. It can create, mutate, and delete every application
-on the instance and trigger builds — it is effectively root on that VPS, and it
-is a bearer credential with no scoping. Issue one for the task, keep it out of
-the repo and out of CI, and revoke it when the setup is done.
+Treat the key accordingly. It is a bearer credential with no scoping and no
+expiry, granting instance-wide administrative control: it can create, mutate,
+and delete every application on the Dokploy instance — not only this project's
+— and trigger builds. Since a build runs a Dockerfile of the holder's choosing
+on the host, treat that reach as host-level in practice even though the key
+itself is not an OS credential. Issue one for the task, keep it out of the repo
+and out of CI, and revoke it when the setup is done.
 
 ## Verification after deploy
 
