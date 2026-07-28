@@ -93,6 +93,10 @@ export function CircuitDebugOverlay({
   return createPortal(
     <svg
       aria-hidden="true"
+      // Excluded from discovery and from mutation-triggered rescans — a debug
+      // overlay that occluded against itself would change the very geometry it
+      // exists to visualise.
+      data-circuit-overlay=""
       style={{
         position: "fixed",
         inset: 0,

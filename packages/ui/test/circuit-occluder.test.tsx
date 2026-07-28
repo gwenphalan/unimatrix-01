@@ -5,6 +5,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   CircuitOccluderProvider,
+  MAX_SCANS_PER_SECOND,
+  MUTATION_BACKOFF_MS,
+  MUTATION_SETTLE_MS,
   useCircuitOccluder,
   useCircuitOccluderDelta,
   useCircuitOccluderRects,
@@ -102,14 +105,35 @@ function scroll(): void {
   window.dispatchEvent(new Event("scroll"));
 }
 
+/**
+ * Measured rects are clamped to the viewport, and jsdom's is 1024x768 with a
+ * `documentElement.clientWidth` of 0. Several cases below use deliberately
+ * large synthetic geometry (a 1392px-wide header bar, a 1000px-tall panel), so
+ * without a viewport big enough to contain the stubs the clamp would trim them
+ * and the assertions would be measuring the fixture rather than the behaviour.
+ */
+function stubViewport(width: number, height: number): void {
+  Object.defineProperty(document.documentElement, "clientWidth", {
+    configurable: true,
+    value: width,
+  });
+  Object.defineProperty(document.documentElement, "clientHeight", {
+    configurable: true,
+    value: height,
+  });
+}
+
 describe("CircuitOccluderProvider / useCircuitOccluder", () => {
   beforeEach(() => {
     MockResizeObserver.instances = [];
     vi.stubGlobal("ResizeObserver", MockResizeObserver);
+    stubViewport(4000, 4000);
   });
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    Reflect.deleteProperty(document.documentElement, "clientWidth");
+    Reflect.deleteProperty(document.documentElement, "clientHeight");
   });
 
   it("registers a ref's element and reports its measured rect", async () => {
@@ -620,5 +644,237 @@ describe("CircuitOccluderProvider / useCircuitOccluder", () => {
     await flushRaf();
 
     expect(latestRects).toEqual([{ x0: 0, y0: 0, x1: 100, y1: 100 }]);
+  });
+
+  /**
+   * Automatic discovery. jsdom reflects inline styles through
+   * `getComputedStyle` but reports every rect as zero-sized, so a discoverable
+   * surface here is an inline background plus a stubbed box — which is enough to
+   * exercise the real classifier rather than a mock of it.
+   */
+  describe("automatic discovery", () => {
+    // Discovery walks the whole of `document.body`, so anything appended here
+    // outlives its own test unless it is tracked and removed — testing-library's
+    // `cleanup` only removes its own render containers, and a leaked surface
+    // shows up as a phantom extra rect in every later case.
+    let appended: Element[] = [];
+
+    function boxAt(el: Element, left: number, top: number, width: number, height: number): void {
+      el.getBoundingClientRect = () => ({
+        left,
+        top,
+        right: left + width,
+        bottom: top + height,
+        width,
+        height,
+        x: left,
+        y: top,
+        toJSON: () => ({}),
+      });
+    }
+
+    function discoverable(width: number, height: number): HTMLDivElement {
+      const el = document.createElement("div");
+      el.style.backgroundColor = "rgb(255, 0, 0)";
+      boxAt(el, 200, 300, width, height);
+
+      return el;
+    }
+
+    function attach(el: Element): void {
+      appended.push(el);
+      document.body.append(el);
+    }
+
+    afterEach(() => {
+      vi.useRealTimers();
+      appended.forEach((el) => {
+        el.remove();
+      });
+      appended = [];
+    });
+
+    it("discovers a painting surface with no registration at all", async () => {
+      let latestRects: readonly Rect[] = [];
+      attach(discoverable(300, 200));
+
+      render(
+        <CircuitOccluderProvider>
+          <RectsProbe onRects={(r) => (latestRects = r)} />
+        </CircuitOccluderProvider>,
+      );
+
+      await flushRaf();
+
+      expect(latestRects).toEqual([{ x0: 200, y0: 300, x1: 500, y1: 500 }]);
+    });
+
+    /**
+     * The no-double-count rule. `useCircuitOccluder` stamps
+     * `data-circuit-occluder="surface"`, and the scan skips that element *and*
+     * its subtree, so the manual registry keeps sole ownership of its rect.
+     */
+    it("does not double-count a manually registered surface", async () => {
+      let latestRects: readonly Rect[] = [];
+      const rect = makeRect({ left: 0, top: 0, right: 100, bottom: 100 });
+
+      render(
+        <CircuitOccluderProvider>
+          <Registrant rect={rect} />
+          <RectsProbe onRects={(r) => (latestRects = r)} />
+        </CircuitOccluderProvider>,
+      );
+
+      await flushRaf();
+
+      expect(latestRects).toEqual([{ x0: 0, y0: 0, x1: 100, y1: 100 }]);
+    });
+
+    it("commits newly inserted content after the mutation settles", async () => {
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+
+      let latestRects: readonly Rect[] = [];
+
+      render(
+        <CircuitOccluderProvider>
+          <RectsProbe onRects={(r) => (latestRects = r)} />
+        </CircuitOccluderProvider>,
+      );
+
+      await flushRaf();
+      expect(latestRects).toEqual([]);
+
+      attach(discoverable(300, 200));
+      // The MutationObserver callback is a microtask; the rescan behind it is
+      // debounced by `MUTATION_SETTLE_MS`.
+      await Promise.resolve();
+      act(() => {
+        vi.advanceTimersByTime(MUTATION_SETTLE_MS);
+      });
+      await flushRaf();
+
+      expect(latestRects).toEqual([{ x0: 200, y0: 300, x1: 500, y1: 500 }]);
+    });
+
+    /**
+     * The filter that makes observing `style` attributes affordable at all:
+     * `CircuitField`'s animation loop writes `style.opacity` on its own SVG
+     * children every frame, so without this every rendered frame would queue a
+     * rescan and the debounce would never drain.
+     */
+    it("ignores style mutations inside its own field layer", async () => {
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+
+      const field = document.createElement("div");
+      field.setAttribute("data-circuit-field", "");
+      const animated = discoverable(300, 200);
+      field.append(animated);
+      attach(field);
+
+      let commits = 0;
+
+      render(
+        <CircuitOccluderProvider>
+          <RectsProbe
+            onRects={() => {
+              commits += 1;
+            }}
+          />
+        </CircuitOccluderProvider>,
+      );
+
+      await flushRaf();
+      const baseline = commits;
+
+      for (let frame = 0; frame < 10; frame += 1) {
+        animated.style.opacity = String(frame / 10);
+      }
+      await Promise.resolve();
+      act(() => {
+        vi.advanceTimersByTime(MUTATION_BACKOFF_MS * 2);
+      });
+      await flushRaf();
+
+      // No rescan, and nothing inside the field layer was ever discovered.
+      expect(commits).toBe(baseline);
+    });
+
+    /**
+     * A CSS transition mutates no attribute when it finishes, so neither
+     * observer sees the settle — `apps/web`'s condensed header fades over 300ms
+     * and would otherwise leave a stale mid-transition occluder behind.
+     */
+    it("rescans on transitionend", async () => {
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+
+      let latestRects: readonly Rect[] = [];
+      const transitioning = discoverable(300, 200);
+      attach(transitioning);
+
+      render(
+        <CircuitOccluderProvider>
+          <RectsProbe onRects={(r) => (latestRects = r)} />
+        </CircuitOccluderProvider>,
+      );
+
+      await flushRaf();
+      expect(latestRects).toEqual([{ x0: 200, y0: 300, x1: 500, y1: 500 }]);
+
+      // Geometry changes with no DOM mutation whatsoever — the stub function is
+      // swapped, no attribute or child is touched. Neither observer can see
+      // this, so a commit afterwards proves the transition event is what
+      // triggered the remeasure. A real transition ends the same way: the final
+      // computed style differs from the one the last scan read, with nothing
+      // mutated to announce it.
+      boxAt(transitioning, 200, 300, 300, 400);
+
+      window.dispatchEvent(new Event("transitionend"));
+      act(() => {
+        vi.advanceTimersByTime(MUTATION_SETTLE_MS);
+      });
+      await flushRaf();
+
+      expect(latestRects).toEqual([{ x0: 200, y0: 300, x1: 500, y1: 700 }]);
+    });
+
+    it("stretches the debounce once the scan rate is exceeded", async () => {
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+
+      let latestRects: readonly Rect[] = [];
+
+      render(
+        <CircuitOccluderProvider>
+          <RectsProbe onRects={(r) => (latestRects = r)} />
+        </CircuitOccluderProvider>,
+      );
+
+      await flushRaf();
+
+      // Burn through the per-second scan budget.
+      for (let i = 0; i < MAX_SCANS_PER_SECOND; i += 1) {
+        attach(document.createElement("span"));
+        await Promise.resolve();
+        act(() => {
+          vi.advanceTimersByTime(MUTATION_SETTLE_MS);
+        });
+        await flushRaf();
+      }
+
+      attach(discoverable(300, 200));
+      await Promise.resolve();
+
+      // The normal settle window is no longer enough.
+      act(() => {
+        vi.advanceTimersByTime(MUTATION_SETTLE_MS);
+      });
+      await flushRaf();
+      expect(latestRects).toEqual([]);
+
+      act(() => {
+        vi.advanceTimersByTime(MUTATION_BACKOFF_MS);
+      });
+      await flushRaf();
+      expect(latestRects).toEqual([{ x0: 200, y0: 300, x1: 500, y1: 500 }]);
+    });
   });
 });

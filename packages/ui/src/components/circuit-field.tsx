@@ -1718,6 +1718,13 @@ function CircuitFieldCanvas({
             ? `circuit-field circuit-field-static${idleGlowEligible ? " circuit-field-idle-glow" : ""}`
             : "circuit-field"
         }
+        // Marks this layer for `scanOccluders` to skip, and for the provider's
+        // `MutationObserver` to ignore. A dedicated attribute rather than
+        // `aria-hidden`, which every decorative icon on the page also carries —
+        // and those are legitimate ink. Load-bearing for performance too: the
+        // animation loop below writes `style.opacity` on these children every
+        // frame, and without this marker each write would queue a rescan.
+        data-circuit-field=""
         height={size.height}
         style={{ position: "fixed", inset: 0, zIndex: -1, pointerEvents: "none" }}
         width={size.width}

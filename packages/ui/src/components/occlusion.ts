@@ -88,16 +88,24 @@ export function translateRect<T extends Rect>(rect: T, dx: number, dy: number): 
  * rows every pass, and the rows outside the viewport can never matter:
  * `findFreeComponents` starts at cell 1 and generation never emits a vertex
  * outside the canvas. Behaviour-neutral for routing, cheap for the cell loop.
+ *
+ * A non-positive `width` or `height` means "viewport unknown on that axis" and
+ * leaves it unbounded, rather than clamping every rect to nothing. That
+ * distinction is load-bearing: treating an unmeasurable viewport as a zero-sized
+ * one discards the entire occluder set, and the only symptom would be traces
+ * calmly drawing underneath every panel on the page — a silent failure, with no
+ * error and nothing in the console. A viewport of 0 is never a real viewport,
+ * so it can only ever mean the measurement was unavailable.
  */
 export function clampRectToViewport<T extends Rect>(
   rect: T,
   width: number,
   height: number,
 ): T | null {
-  const x0 = Math.max(rect.x0, 0);
-  const y0 = Math.max(rect.y0, 0);
-  const x1 = Math.min(rect.x1, width);
-  const y1 = Math.min(rect.y1, height);
+  const x0 = width > 0 ? Math.max(rect.x0, 0) : rect.x0;
+  const y0 = height > 0 ? Math.max(rect.y0, 0) : rect.y0;
+  const x1 = width > 0 ? Math.min(rect.x1, width) : rect.x1;
+  const y1 = height > 0 ? Math.min(rect.y1, height) : rect.y1;
 
   if (x1 <= x0 || y1 <= y0) return null;
 
