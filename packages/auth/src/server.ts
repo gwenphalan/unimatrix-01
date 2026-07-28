@@ -142,9 +142,20 @@ export function getSessionPermissionsClaim(request: FastifyRequest): SessionPerm
  * session, throwing {@link AuthError} with `kind: "unauthorized"`
  * otherwise. Requires {@link registerClerkAuth} to have been registered
  * first.
+ *
+ * **The `async` is load-bearing — do not remove it.** Fastify's hook runner
+ * advances the chain in exactly two ways: the hook calls the `next` callback
+ * it is passed as a third argument, or it returns a thenable that Fastify
+ * subscribes to (`lib/hooks.js`, `hookRunnerGenerator`). A *synchronous* hook
+ * that takes only `request` therefore never advances anything: a thrown error
+ * is caught and turned into a response, but a successful return value of
+ * `undefined` leaves the request parked in the preHandler phase forever, with
+ * the event loop free and nothing logged. The failure mode is inverted from
+ * the usual one — rejected requests answer normally and *authorized* ones hang
+ * — so it survives any test that only asserts 401/403.
  */
 export function requireAuth() {
-  return function requireAuthPreHandler(request: FastifyRequest): void {
+  return async function requireAuthPreHandler(request: FastifyRequest): Promise<void> {
     const { userId } = getAuth(request);
 
     if (userId === null) {
@@ -159,12 +170,15 @@ export function requireAuth() {
  * `kind: "unauthorized"` when there is no session, or `kind: "forbidden"`
  * when the session lacks the required permission. Requires
  * {@link registerClerkAuth} to have been registered first.
+ *
+ * `async` for the same load-bearing reason as {@link requireAuth} — read the
+ * note there before changing this signature.
  */
 export function requirePermission(appSlug: AppSlug, role: Role) {
   const requireAuthPreHandler = requireAuth();
 
-  return function requirePermissionPreHandler(request: FastifyRequest): void {
-    requireAuthPreHandler(request);
+  return async function requirePermissionPreHandler(request: FastifyRequest): Promise<void> {
+    await requireAuthPreHandler(request);
 
     const claim = getSessionPermissionsClaim(request);
 
