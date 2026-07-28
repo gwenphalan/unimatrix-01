@@ -252,6 +252,26 @@ Dokploy's database rather than in this repo, so this document describes intent
 and can drift from the instance — read the instance, not this file, when the
 two disagree.
 
+> **Previews do not currently work, and the cause is upstream.** The services
+> are configured correctly but no preview has ever built. On Dokploy v0.29.13,
+> a `pull_request` webhook for `synchronize`/`reopened` gets as far as
+> `✅ SECURITY: Preview deployment authorized ... Permission: admin` and then
+> dies with `TRPCError: Github Account not configured correctly`
+> (`code: NOT_FOUND`) from `apps/dokploy/pages/api/deploy/github`, returning
+> HTTP 500 to GitHub. `push`, `opened`, and `closed` deliveries return 200.
+>
+> The credentials are **not** actually missing: the same provider record clones
+> fine for all four production Compose services, and `authGithub` succeeds
+> earlier in that very request — it is what emits the SECURITY line. A second
+> provider lookup later in the preview path resolves to nothing. Ruled out by
+> testing: webhook signature, `previewWildcard` format (the `*.` prefix is
+> required, not wrong), `previewCertificateType`, `previewBuildArgs`, and
+> git-provider ownership/sharing.
+>
+> Do **not** "fix" this by recreating the GitHub provider — that would re-point
+> all four production services for no reason. Next step is a Dokploy upgrade
+> past v0.29.13 and, failing that, an upstream bug report.
+
 ### Previews need Application services, not the existing Compose apps
 
 The four `infra/docker/*-compose.yaml` files run as Dokploy **Compose** apps,
