@@ -227,6 +227,12 @@ function countRouteCollisions(points: Point[]): number {
  * Optional (not required) so existing non-barrier-aware callers/tests keep
  * compiling; omitting it reproduces the pre-barrier collision-only
  * behavior exactly.
+ *
+ * Barriers come in two kinds and the fallback ladder treats them differently:
+ * an elbow or corridor is tried first against hard ∪ ink, then — if that
+ * fails — against hard alone. So the invariant is that ink never causes a
+ * hard-barrier violation and never causes a console warning; it only ever
+ * costs a route its ink clearance.
  */
 export function buildRoute(
   from: RoutePoint[],
@@ -251,19 +257,28 @@ export function buildRoute(
   const fullRouteCollisions = (connector: RoutePoint[]) =>
     countRouteCollisions([...from, ...leadIn, ...connector, ...to]);
 
-  const crossesBarrier = (connector: RoutePoint[]) => {
-    if (!barriers) return false;
+  // The same field with the ink channel emptied. Every tier below that is
+  // allowed to clip ink but never a surface tests against this instead of
+  // `barriers`, which is what keeps the two invariants separable: ink can
+  // degrade a route's aesthetics, only a hard surface can make it *wrong*.
+  const hardOnly: BarrierField | undefined = barriers
+    ? { buffered: barriers.buffered, cells: barriers.cells, soft: [], softCells: new Set() }
+    : undefined;
+
+  const crossesBarrier = (connector: RoutePoint[], field = barriers) => {
+    if (!field) return false;
     const full = [...from, ...leadIn, ...connector, ...to];
     for (let i = 1; i < full.length; i += 1) {
-      if (segmentCrossesBarrier(barriers, full[i - 1] as Point, full[i] as Point)) return true;
+      if (segmentCrossesBarrier(field, full[i - 1] as Point, full[i] as Point)) return true;
     }
     return false;
   };
 
-  const elbowCandidates = [
+  const elbows = [
     connectorViaElbow(snappedFromEnd, toStart, { x: toStart.x, y: snappedFromEnd.y }),
     connectorViaElbow(snappedFromEnd, toStart, { x: snappedFromEnd.x, y: toStart.y }),
-  ].filter((candidate) => !crossesBarrier(candidate));
+  ];
+  const elbowCandidates = elbows.filter((candidate) => !crossesBarrier(candidate));
 
   let best: RoutePoint[] | null = elbowCandidates[0] ?? null;
   let bestCollisions = Infinity;
@@ -282,7 +297,15 @@ export function buildRoute(
   if (best === null || bestCollisions > 0) {
     const fromCell = cellOf(snappedFromEnd);
     const toCell = cellOf(toStart);
-    const margin = 6;
+    // Cells of slack outside the endpoints' bounding box the corridor may use
+    // to detour. 12, not the 6 it started at: measured on `apps/web` `/`, 6
+    // left 12 `buildRoute` canary warnings per load and 12 left 10 — and 10 is
+    // also exactly what the same page produces with the ink channel disabled
+    // outright, so at this margin ink costs zero warnings. The residual 10 are
+    // surface-blocked endpoint pairs that predate this change: the same page on
+    // `main`, same viewport, warns 39 times per load. Only the fallback path
+    // pays for the wider window.
+    const margin = 12;
     const bounds = {
       minX: Math.min(fromCell.cx, toCell.cx) - margin,
       maxX: Math.max(fromCell.cx, toCell.cx) + margin,
@@ -345,9 +368,21 @@ export function buildRoute(
     }
   }
 
+  if (best === null && hardOnly) {
+    // Ink-blind elbow retry, and the tier that stops this function from
+    // warning on an ordinary text-dense page. Measured on `apps/web` `/`
+    // before it existed: ~100 warnings per load. Both elbows commonly clip a
+    // glyph, and the BFS below them searches only a ±6-cell window around the
+    // endpoints, so a wide panel between them defeats it — the pair fails
+    // together, routinely, on nothing worse than a paragraph in the way.
+    // Accepted silently: guaranteed hard-clear, may clip ink, which is the
+    // documented ink trade-off rather than a defect worth a console line.
+    best = elbows.find((candidate) => !crossesBarrier(candidate, hardOnly)) ?? null;
+  }
+
   if (best === null) {
-    // Every candidate crossed a barrier and no BFS corridor was found — a
-    // canary, not an expected path. Fall back to the first raw elbow
+    // Every candidate crossed a *hard* barrier and no BFS corridor was found —
+    // a canary, not an expected path. Fall back to the first raw elbow
     // (unfiltered) so a route is always produced; it may visually clip a
     // barrier in this pathological case.
     console.warn(

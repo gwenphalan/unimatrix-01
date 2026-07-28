@@ -53,13 +53,18 @@ export const OCCLUDER_AFFECT_MARGIN_PX = GRID * 4;
 // the single nearest cell on that axis instead of blocking nothing.
 export const OCCLUDER_BUFFER_PX = 8;
 
-// Clearance (px) around an ink rect. Small on purpose, and — unlike
-// `OCCLUDER_BUFFER_PX` — it means exactly what it says: soft rects are never
-// lattice-snapped, so the caveat above about a px buffer being unable to
-// control clearance at a 40px pitch does not apply to this channel. 4px keeps
-// a trace from grazing a glyph's antialiased edge without carving a visible
-// moat around every word.
-export const SOFT_OCCLUDER_BUFFER_PX = 4;
+// Clearance (px) around an ink rect. Unlike `OCCLUDER_BUFFER_PX` this means
+// exactly what it says: soft rects are never lattice-snapped, so the caveat
+// above about a px buffer being unable to control clearance at a 40px pitch
+// does not apply to this channel — it is the one buffer in the file that
+// translates 1:1 into visible clearance.
+//
+// 10px, not the 4px first tried: 4 is enough to clear a glyph's antialiased
+// edge but reads as a trace touching the text. This is the knob to turn when
+// traces look too close to content; raising `OCCLUDER_BUFFER_PX` instead only
+// changes *which* lattice line a trace snaps to, so it buys clearance in
+// non-uniform 40px jumps or not at all.
+export const SOFT_OCCLUDER_BUFFER_PX = 10;
 
 // `<T extends Rect>` with a spread, not a fresh 4-key literal: these run over
 // tagged `Occluder`s, and rebuilding the object from named fields would
