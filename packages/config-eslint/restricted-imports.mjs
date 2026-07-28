@@ -97,10 +97,12 @@ const WORKSPACE_RESTRICTIONS = {
  *
  * The workspace-wide ban above exists because that entry point carries
  * CodeMirror and the dialog/table primitives: measured on the production
- * build, naming it from a module the public routes reach adds it to the
- * public chunk whether or not the symbols are used. Confining it here means a
- * stray import in a route file is a lint error rather than half a megabyte
- * shipped to every reader.
+ * build, naming it from a module the public routes reach adds it to the set
+ * `index.html` eagerly preloads whether or not the symbols are used (+497.6
+ * kB raw, +169.3 kB gzip — the measurement is written up in
+ * `packages/ui/src/editor.ts`). Confining it here means a stray import in a
+ * route file is a lint error rather than half a megabyte shipped to every
+ * reader.
  *
  * Scoped by file rather than by workspace, so it lives outside the table
  * above. Flat config applies later entries last, so this replaces the
