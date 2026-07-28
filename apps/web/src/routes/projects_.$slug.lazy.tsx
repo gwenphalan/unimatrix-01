@@ -5,6 +5,7 @@ import { Badge, Button } from "@unimatrix/ui/public";
 
 import { LazyPublicMarkdown } from "@/features/content/lazy-public-markdown";
 import { renderPublicMarkdownInternalLink } from "@/features/content/markdown";
+import { AdminSlot } from "@/features/admin/admin-slot";
 import { ProjectStatusBadge, PublicNotice } from "@/features/public-site/components";
 
 export const Route = createLazyFileRoute("/projects_/$slug")({
@@ -57,6 +58,8 @@ function ProjectDetailRoute() {
               </Button>
             ) : null}
           </div>
+
+          <AdminSlot kind="post-controls" slug={project.slug} type="project" />
         </div>
       </header>
 

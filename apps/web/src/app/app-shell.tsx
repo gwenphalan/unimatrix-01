@@ -11,6 +11,7 @@ import {
 } from "@remixicon/react";
 import { SignedIn, SignedOut, UserButton } from "@unimatrix/auth/react";
 
+import { AdminSlot } from "@/features/admin/admin-slot";
 import { PublicPageContainer, PublicSiteFooter } from "@/features/public-site/components";
 import { isAuthEnabled, loadWebRuntimeConfig } from "@/lib/config";
 import { CircuitField, CircuitOccluderProvider, cn } from "@unimatrix/ui/public";
@@ -314,6 +315,7 @@ function AppShellContent({ children }: AppShellProps) {
 
           {authEnabled ? (
             <div className="flex shrink-0 items-center justify-end gap-2">
+              <AdminSlot kind="nav-link" />
               <AuthHeaderAction />
             </div>
           ) : null}
@@ -379,6 +381,7 @@ function AppShellContent({ children }: AppShellProps) {
 
               {authEnabled ? (
                 <div className="flex shrink-0 items-center justify-end gap-2">
+                  <AdminSlot kind="nav-link" />
                   <AuthHeaderAction />
                 </div>
               ) : null}
@@ -392,6 +395,12 @@ function AppShellContent({ children }: AppShellProps) {
       </main>
 
       <PublicSiteFooter />
+
+      {/* Mounted once, here, rather than beside each admin control: every
+          admin action reports through one toast host, and two hosts would
+          render two stacks. Nothing for a non-admin — the slot returns null
+          and loads no chunk. */}
+      <AdminSlot kind="toaster" />
     </PublicPageContainer>
   );
 }

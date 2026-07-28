@@ -1,0 +1,158 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import type { ApiClient } from "@unimatrix/api-client";
+import type { ContentPost } from "@unimatrix/shared";
+import type * as EditorModule from "@unimatrix/ui/editor";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import type { ReactNode } from "react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const apiClient = {
+  createPost: vi.fn(),
+  updatePost: vi.fn(),
+} satisfies Partial<ApiClient>;
+
+vi.mock("@/lib/api-client", () => ({
+  useApiClient: () => apiClient as unknown as ApiClient,
+  apiClient: apiClient as unknown as ApiClient,
+}));
+
+vi.mock("@unimatrix/auth/react", () => ({
+  useAuth: () => ({ getToken: () => Promise.resolve("token-123") }),
+}));
+
+const toastSuccess = vi.fn();
+const toastError = vi.fn();
+
+vi.mock("@unimatrix/ui/editor", async () => {
+  const actual = await vi.importActual<typeof EditorModule>("@unimatrix/ui/editor");
+
+  return { ...actual, toast: { success: toastSuccess, error: toastError } };
+});
+
+const PROJECT: ContentPost = {
+  id: "33333333-3333-4333-8333-333333333333",
+  type: "project",
+  slug: "cube-trainer",
+  title: "Cube Trainer",
+  summary: "A trainer.",
+  description: null,
+  body: "# Heading\n",
+  publicationState: "published",
+  publishedAt: "2026-07-01T00:00:00.000Z",
+  featured: true,
+  projectStatus: "live",
+  repoUrl: "https://example.com/repo",
+  liveUrl: null,
+  updatedAt: "2026-07-28T00:00:00.000Z",
+};
+
+function renderForm(node: ReactNode) {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
+
+  return render(<QueryClientProvider client={queryClient}>{node}</QueryClientProvider>);
+}
+
+function type(label: RegExp | string, value: string) {
+  fireEvent.change(screen.getByLabelText(label), { target: { value } });
+}
+
+describe("PostFormDialog", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("creates a blog post as a draft without any project-only fields", async () => {
+    apiClient.createPost.mockResolvedValue({ ...PROJECT, title: "New post" });
+
+    const { PostFormDialog } = await import("@/features/admin/post-form-dialog");
+
+    renderForm(<PostFormDialog onOpenChange={() => {}} open post={null} type="blog" />);
+
+    type("Title", "New post");
+    type("Slug", "new-post");
+    type("Summary", "A summary.");
+
+    fireEvent.click(screen.getByRole("button", { name: "Create" }));
+
+    await waitFor(() => {
+      expect(apiClient.createPost).toHaveBeenCalledWith({
+        type: "blog",
+        slug: "new-post",
+        title: "New post",
+        summary: "A summary.",
+        // An empty text input means "no value"; the contract spells that null.
+        description: null,
+        body: "",
+        publicationState: "draft",
+        // Project-only columns stay null on a blog row rather than picking up
+        // the form's defaults.
+        featured: false,
+        projectStatus: null,
+        repoUrl: null,
+        liveUrl: null,
+      });
+    });
+  });
+
+  it("offers no project fields on a blog post", async () => {
+    const { PostFormDialog } = await import("@/features/admin/post-form-dialog");
+
+    renderForm(<PostFormDialog onOpenChange={() => {}} open post={null} type="blog" />);
+
+    expect(screen.queryByLabelText("Repository URL")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Feature on the homepage/u)).not.toBeInTheDocument();
+  });
+
+  it("loads an existing project into the form and sends an update keyed by id", async () => {
+    apiClient.updatePost.mockResolvedValue(PROJECT);
+
+    const { PostFormDialog } = await import("@/features/admin/post-form-dialog");
+
+    renderForm(<PostFormDialog onOpenChange={() => {}} open post={PROJECT} type="project" />);
+
+    expect(screen.getByLabelText("Title")).toHaveValue("Cube Trainer");
+    expect(screen.getByLabelText("Repository URL")).toHaveValue("https://example.com/repo");
+
+    type("Title", "Cube Trainer 2");
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      expect(apiClient.updatePost).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: PROJECT.id,
+          title: "Cube Trainer 2",
+          projectStatus: "live",
+          featured: true,
+        }),
+      );
+    });
+
+    // `type` is not a field of the update contract's strictObject, so an
+    // inherited key — even one set to undefined — would be a 400.
+    expect(apiClient.updatePost.mock.calls[0]?.[0]).not.toHaveProperty("type");
+  });
+
+  it("keeps the dialog open and reports the failure when a save is rejected", async () => {
+    const onOpenChange = vi.fn();
+
+    apiClient.createPost.mockRejectedValue(new Error("nope"));
+
+    const { PostFormDialog } = await import("@/features/admin/post-form-dialog");
+
+    renderForm(<PostFormDialog onOpenChange={onOpenChange} open post={null} type="blog" />);
+
+    type("Title", "New post");
+    type("Slug", "new-post");
+    type("Summary", "A summary.");
+
+    fireEvent.click(screen.getByRole("button", { name: "Create" }));
+
+    await waitFor(() => {
+      expect(toastError).toHaveBeenCalled();
+    });
+    // Closing on failure would discard whatever the admin had typed.
+    expect(onOpenChange).not.toHaveBeenCalledWith(false);
+  });
+});

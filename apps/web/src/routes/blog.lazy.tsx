@@ -1,5 +1,6 @@
 import { Link, createLazyFileRoute } from "@tanstack/react-router";
 
+import { AdminSlot } from "@/features/admin/admin-slot";
 import {
   PublicNotice,
   PublicSectionHeading,
@@ -18,6 +19,8 @@ function BlogRoute() {
     <div className="space-y-5">
       <PublicSectionHeading headingLevel={1} title="Blog" />
 
+      <AdminSlot kind="new-post" type="blog" />
+
       {entries.length === 0 ? (
         <PublicNotice
           description="Nothing is published here yet. Check back once the first entry goes up."
@@ -27,22 +30,24 @@ function BlogRoute() {
       ) : (
         <div className="grid gap-3">
           {entries.map((entry, index) => (
-            <PublicTransmissionListItem
-              headingLevel={2}
-              entry={entry}
-              index={index + 1}
-              key={entry.slug}
-              renderLink={({ ariaLabel, children, className }) => (
-                <Link
-                  aria-label={ariaLabel}
-                  className={className}
-                  params={{ slug: entry.slug }}
-                  to="/blog/$slug"
-                >
-                  {children}
-                </Link>
-              )}
-            />
+            <div className="grid gap-3" key={entry.slug}>
+              <PublicTransmissionListItem
+                headingLevel={2}
+                entry={entry}
+                index={index + 1}
+                renderLink={({ ariaLabel, children, className }) => (
+                  <Link
+                    aria-label={ariaLabel}
+                    className={className}
+                    params={{ slug: entry.slug }}
+                    to="/blog/$slug"
+                  >
+                    {children}
+                  </Link>
+                )}
+              />
+              <AdminSlot kind="post-controls" slug={entry.slug} type="blog" />
+            </div>
           ))}
         </div>
       )}

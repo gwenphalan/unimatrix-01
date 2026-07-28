@@ -5,6 +5,7 @@ import { Badge, Button } from "@unimatrix/ui/public";
 
 import { LazyPublicMarkdown } from "@/features/content/lazy-public-markdown";
 import { renderPublicMarkdownInternalLink } from "@/features/content/markdown";
+import { AdminSlot } from "@/features/admin/admin-slot";
 import { PublicNotice } from "@/features/public-site/components";
 
 export const Route = createLazyFileRoute("/blog_/$slug")({
@@ -35,6 +36,8 @@ function BlogDetailRoute() {
           <p className="max-w-2xl text-[0.95rem] leading-7 text-foreground/86">
             {entry.frontmatter.description ?? entry.frontmatter.summary}
           </p>
+
+          <AdminSlot kind="post-controls" slug={entry.slug} type="blog" />
         </div>
       </header>
 
