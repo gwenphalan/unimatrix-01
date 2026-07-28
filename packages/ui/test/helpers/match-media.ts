@@ -10,6 +10,13 @@
  */
 export class FakeMediaQueryList {
   matches: boolean;
+  /**
+   * Every `addEventListener("change", …)` ever made, not the count currently
+   * attached. A re-subscribing hook removes as it adds, so the live listener
+   * count stays at 1 and hides the churn; this counter is what makes it
+   * visible.
+   */
+  attachCount = 0;
   private readonly listeners = new Set<() => void>();
 
   constructor(
@@ -20,7 +27,9 @@ export class FakeMediaQueryList {
   }
 
   addEventListener(type: string, listener: () => void): void {
-    if (type === "change") this.listeners.add(listener);
+    if (type !== "change") return;
+    this.attachCount += 1;
+    this.listeners.add(listener);
   }
 
   removeEventListener(type: string, listener: () => void): void {

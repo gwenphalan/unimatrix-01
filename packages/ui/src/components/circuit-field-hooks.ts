@@ -73,8 +73,22 @@ function subscribeToMediaQuery(query: string, onStoreChange: () => void): () => 
  * exact work the gate exists to avoid.
  */
 function useMediaQuery(query: string): boolean {
+  // `subscribe` needs a stable identity. `useSyncExternalStore` re-runs its
+  // subscription effect whenever this reference changes, so an inline arrow
+  // detaches and re-attaches the `change` listener on every render — including
+  // every render `useGridPhase` triggers while a window is being dragged,
+  // which is exactly when this hook is busiest.
+  const subscribe = React.useCallback(
+    (onStoreChange: () => void) => subscribeToMediaQuery(query, onStoreChange),
+    [query],
+  );
+
+  // `getSnapshot` is deliberately left inline. Its identity is not a
+  // subscription key: `useSyncExternalStore` calls it during every render and
+  // after every store change regardless, so wrapping it would add a hook
+  // without removing a single `matchMedia` call.
   return React.useSyncExternalStore(
-    (onStoreChange) => subscribeToMediaQuery(query, onStoreChange),
+    subscribe,
     () => getMediaQueryList(query)?.matches ?? false,
     () => false,
   );

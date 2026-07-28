@@ -4,6 +4,11 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { CircuitField } from "../src/components/circuit-field.js";
 import { type FakeMediaQueryList, stubMatchMedia } from "./helpers/match-media.js";
 
+// Deliberately re-stated rather than imported from the hook module. This is
+// the breakpoint's behavioural contract, so it should be asserted from the
+// outside: moving the gate to another width has to fail here (the stub stops
+// matching the query the hook actually asks for) instead of quietly following
+// the source.
 const NARROW_VIEWPORT_QUERY = "(max-width: 639px)";
 
 // Half of each is a whole number of pixels but not a whole number of 40px
@@ -73,6 +78,17 @@ describe("CircuitField narrow-viewport gate", () => {
     // The bold tier is phased off the same measurement — 240 is a whole
     // multiple of the 40px grid, so `center % 240` here is the same 10px.
     expect(style.getPropertyValue("--grid-bold-phase-x")).toBe("10px");
+  });
+
+  it("keeps one `change` subscription across re-renders", () => {
+    const { rerender } = render(<CircuitField routeKey="/" />);
+    rerender(<CircuitField routeKey="/projects" />);
+    rerender(<CircuitField routeKey="/blog" />);
+
+    // Not `listeners.size`: `useSyncExternalStore` removes as it re-adds, so a
+    // subscription rebuilt on every render still reads as exactly one live
+    // listener. `attachCount` is what catches an unstable `subscribe`.
+    expect(registry.get(NARROW_VIEWPORT_QUERY)!.attachCount).toBe(1);
   });
 
   it("unmounts and remounts the canvas as the query flips live", () => {
