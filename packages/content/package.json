@@ -25,7 +25,7 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "devDependencies": {
-    "@types/node": "^24.13.3",
+    "@types/node": "^26.1.1",
     "@unimatrix/config-eslint": "workspace:*",
     "@unimatrix/config-typescript": "workspace:*",
     "@unimatrix/config-vitest": "workspace:*",
