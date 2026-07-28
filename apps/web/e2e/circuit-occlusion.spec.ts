@@ -6,6 +6,8 @@ import {
   waitForSettledCircuitField,
 } from "@unimatrix/e2e-helpers";
 
+import { stubContentApi } from "./fixtures/content-api";
+
 /**
  * The circuit field discovers its own occluders by walking the DOM and
  * classifying what paints, rather than by hand-registered
@@ -50,6 +52,7 @@ for (const width of WIDTHS) {
       page,
     }) => {
       await page.setViewportSize({ height: 900, width });
+      await stubContentApi(page);
       await page.goto(route.path, { waitUntil: "domcontentloaded" });
       await waitForSettledCircuitField(page, SURFACE_SELECTORS);
 
@@ -82,6 +85,7 @@ for (const width of WIDTHS) {
  */
 test("scrolling does not leave traces inside a surface", async ({ page }) => {
   await page.setViewportSize({ height: 900, width: 1440 });
+  await stubContentApi(page);
   await page.goto("/projects/cube-trainer", { waitUntil: "domcontentloaded" });
   await waitForSettledCircuitField(page, SURFACE_SELECTORS);
 
@@ -101,6 +105,7 @@ test("scrolling does not leave traces inside a surface", async ({ page }) => {
  */
 test("the field is not occluded out of existence on a wide home page", async ({ page }) => {
   await page.setViewportSize({ height: 900, width: 1440 });
+  await stubContentApi(page);
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await waitForSettledCircuitField(page, SURFACE_SELECTORS);
 
@@ -113,6 +118,7 @@ test("the field is not occluded out of existence on a wide home page", async ({ 
 
 test("an article route at 1024px is allowed to have no room for traces", async ({ page }) => {
   await page.setViewportSize({ height: 900, width: 1024 });
+  await stubContentApi(page);
   await page.goto("/blog/placeholder-post", { waitUntil: "domcontentloaded" });
   await waitForSettledCircuitField(page, SURFACE_SELECTORS);
 

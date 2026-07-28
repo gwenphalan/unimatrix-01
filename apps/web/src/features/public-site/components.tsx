@@ -116,6 +116,54 @@ export function PublicSectionHeading({
   );
 }
 
+/**
+ * Panel for a state that is neither content nor a crash: an empty collection,
+ * or a list the API could not serve right now.
+ *
+ * These states only became reachable when content moved from the bundle into
+ * the database — a baked-in list was always present and always complete — so
+ * they get a deliberate, readable surface rather than an empty page.
+ */
+export function PublicNotice({
+  action,
+  description,
+  headingLevel = 2,
+  label,
+  title,
+  tone = "muted",
+}: {
+  action?: React.ReactNode;
+  description: string;
+  /**
+   * `1` is for the case where this notice *is* the page — a detail route whose
+   * post could not be loaded renders nothing else, so without it the document
+   * has no h1 at all and its first heading is an h2.
+   */
+  headingLevel?: 1 | 2 | 3;
+  label: string;
+  title: string;
+  tone?: "destructive" | "muted";
+}) {
+  const Heading = headingLevel === 1 ? "h1" : headingLevel === 2 ? "h2" : "h3";
+
+  return (
+    <div className="site-panel max-w-3xl px-5 py-6 lg:px-8 lg:py-8">
+      <div className="space-y-4">
+        <Badge variant={tone === "destructive" ? "destructive" : "secondary"}>{label}</Badge>
+        <div className="space-y-3">
+          <Heading className="text-2xl leading-tight font-medium tracking-[-0.05em] text-foreground lg:text-3xl">
+            {title}
+          </Heading>
+          <p className="max-w-2xl text-sm leading-7 text-muted-foreground lg:text-base lg:leading-8">
+            {description}
+          </p>
+        </div>
+        {action}
+      </div>
+    </div>
+  );
+}
+
 export function PublicContentParagraphs({
   className,
   columns = 1,
@@ -226,7 +274,6 @@ export function PublicDecisionCard({
 }
 
 type PublicProjectCardData = {
-  excerpt: string;
   frontmatter: {
     liveUrl?: string;
     publishedAt: string;
@@ -348,7 +395,6 @@ export function PublicProjectLedgerItem({
 }
 
 type PublicPostListItemData = {
-  excerpt: string;
   frontmatter: {
     description?: string;
     publishedAt: string;

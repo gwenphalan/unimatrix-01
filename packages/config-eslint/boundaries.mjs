@@ -21,8 +21,19 @@ const ALLOWED_PACKAGE_IMPORTS = {
   // a fact worth stating per workspace. Note the grant is workspace-wide — the
   // rule has no per-directory granularity — so it does not by itself stop `src/`
   // from importing test helpers; nothing in the app builds does today.
-  "apps/web": ["api-client", "auth", "content", "e2e-helpers", "ui"],
-  "apps/api": ["auth", "db", "shared"],
+  // `shared` was added when blog and project content moved behind the API:
+  // route loaders and the admin UI work in terms of the content contracts'
+  // request/response types, and those live in `@unimatrix/shared` by rule
+  // ("shared request/response shapes belong in @unimatrix/shared"). The vite
+  // alias and tsconfig path for it predate this entry.
+  "apps/web": ["api-client", "auth", "content", "e2e-helpers", "shared", "ui"],
+  // `content` is here for `scripts/seed-content.ts` only — the one-way import
+  // of the repository's authored markdown into the content database. No route
+  // module reads markdown from disk. The rule has no per-directory
+  // granularity, so this grant is workspace-wide even though only that script
+  // uses it; `@unimatrix/content` stays a devDependency of `apps/api` so it is
+  // absent from the deployable image.
+  "apps/api": ["auth", "content", "db", "shared"],
   // Deliberately narrow. AGENTS.md: cube-trainer must not gain
   // `@unimatrix/api-client`, `@unimatrix/shared`, or `@unimatrix/content`
   // unless a real server-backed feature is added.

@@ -1,16 +1,26 @@
 import { createFileRoute, notFound } from "@tanstack/react-router";
 
-import { getProjectEntryBySlug } from "@/features/content/site-content";
+import { toProjectDetail } from "@/features/content/entries";
+import {
+  isMissingContentError,
+  publishedPostQueryOptions,
+} from "@/features/content/queries/content-posts";
 
 export const Route = createFileRoute("/projects_/$slug")({
-  loader: ({ params }) => {
-    const project = getProjectEntryBySlug(params.slug);
+  loader: async ({ context, params }) => {
+    try {
+      const post = await context.queryClient.ensureQueryData(
+        publishedPostQueryOptions("project", params.slug),
+      );
 
-    if (!project) {
-      throw createProjectNotFoundError(params.slug);
+      return toProjectDetail(post);
+    } catch (error) {
+      if (isMissingContentError(error)) {
+        throw createProjectNotFoundError(params.slug);
+      }
+
+      throw error;
     }
-
-    return project;
   },
   head: ({ loaderData }) => ({
     meta: [

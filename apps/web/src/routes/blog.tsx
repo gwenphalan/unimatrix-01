@@ -1,9 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import { blogEntries } from "@/features/content/site-content";
+import { toBlogEntry } from "@/features/content/entries";
+import { publishedPostsQueryOptions } from "@/features/content/queries/content-posts";
 
 export const Route = createFileRoute("/blog")({
-  loader: () => blogEntries,
+  loader: async ({ context }) => {
+    const { posts } = await context.queryClient.ensureQueryData(publishedPostsQueryOptions("blog"));
+
+    return posts.map(toBlogEntry);
+  },
   head: () => ({
     meta: [
       { title: "Unimatrix-01 - Blog" },

@@ -1,25 +1,45 @@
 import {
+  adminGetPostContract,
+  adminListPostsContract,
+  createPostContract,
   deleteDocumentContract,
   deleteFileContract,
+  deletePostsContract,
   getDocumentContract,
+  getPostContract,
   healthContract,
+  listAssetsContract,
   listDocumentsContract,
   listFilesContract,
+  listPostsContract,
   putDocumentContract,
+  setPostsStateContract,
+  updatePostContract,
+  type AdminListPostsQuery,
   type ApiContract,
   type ApiContractBody,
   type ApiContractQuery,
   type ApiContractResponse,
+  type BulkResult,
+  type ContentPost,
+  type CreatePostBody,
   type DeleteDocumentBody,
   type DeleteFileBody,
+  type DeletePostsBody,
   type DeleteResult,
   type GetDocumentQuery,
+  type GetPostQuery,
   type HealthResponse,
+  type ListAssetsResponse,
   type ListDocumentsQuery,
   type ListDocumentsResponse,
   type ListFilesQuery,
   type ListFilesResponse,
+  type ListPostsQuery,
+  type ListPostsResponse,
   type PutDocumentBody,
+  type SetPostsStateBody,
+  type UpdatePostBody,
   type UserDocument,
 } from "@unimatrix/shared";
 
@@ -51,6 +71,21 @@ export interface ApiClient {
   listDocuments(query: ListDocumentsQuery): Promise<ListDocumentsResponse>;
   listFiles(query: ListFilesQuery): Promise<ListFilesResponse>;
   deleteFile(body: DeleteFileBody): Promise<DeleteResult>;
+  /** Published content only; safe to call unauthenticated. */
+  listPosts(query: ListPostsQuery): Promise<ListPostsResponse>;
+  getPost(query: GetPostQuery): Promise<ContentPost>;
+  /**
+   * Admin content operations. Every one of these is rejected with 403 unless
+   * the configured `getAuthToken` yields a session holding the `auth` admin
+   * role — the client cannot and does not check that itself.
+   */
+  adminListPosts(query: AdminListPostsQuery): Promise<ListPostsResponse>;
+  adminGetPost(query: GetPostQuery): Promise<ContentPost>;
+  createPost(body: CreatePostBody): Promise<ContentPost>;
+  updatePost(body: UpdatePostBody): Promise<ContentPost>;
+  setPostsState(body: SetPostsStateBody): Promise<BulkResult>;
+  deletePosts(body: DeletePostsBody): Promise<BulkResult>;
+  listAssets(): Promise<ListAssetsResponse>;
   request<TContract extends ApiContract>(
     contract: TContract,
     ...args: RequiresRequestOptions<TContract> extends true
@@ -306,6 +341,22 @@ export function createApiClient(config: ApiClientConfig): ApiClient {
       request<typeof listFilesContract>(listFilesContract, { query }),
     deleteFile: (body: DeleteFileBody) =>
       request<typeof deleteFileContract>(deleteFileContract, { body }),
+    listPosts: (query: ListPostsQuery) =>
+      request<typeof listPostsContract>(listPostsContract, { query }),
+    getPost: (query: GetPostQuery) => request<typeof getPostContract>(getPostContract, { query }),
+    adminListPosts: (query: AdminListPostsQuery) =>
+      request<typeof adminListPostsContract>(adminListPostsContract, { query }),
+    adminGetPost: (query: GetPostQuery) =>
+      request<typeof adminGetPostContract>(adminGetPostContract, { query }),
+    createPost: (body: CreatePostBody) =>
+      request<typeof createPostContract>(createPostContract, { body }),
+    updatePost: (body: UpdatePostBody) =>
+      request<typeof updatePostContract>(updatePostContract, { body }),
+    setPostsState: (body: SetPostsStateBody) =>
+      request<typeof setPostsStateContract>(setPostsStateContract, { body }),
+    deletePosts: (body: DeletePostsBody) =>
+      request<typeof deletePostsContract>(deletePostsContract, { body }),
+    listAssets: () => request<typeof listAssetsContract>(listAssetsContract),
     request,
   };
 }

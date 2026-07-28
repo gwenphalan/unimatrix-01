@@ -1,16 +1,26 @@
 import { createFileRoute, notFound } from "@tanstack/react-router";
 
-import { getBlogEntryBySlug } from "@/features/content/site-content";
+import { toBlogDetail } from "@/features/content/entries";
+import {
+  isMissingContentError,
+  publishedPostQueryOptions,
+} from "@/features/content/queries/content-posts";
 
 export const Route = createFileRoute("/blog_/$slug")({
-  loader: ({ params }) => {
-    const entry = getBlogEntryBySlug(params.slug);
+  loader: async ({ context, params }) => {
+    try {
+      const post = await context.queryClient.ensureQueryData(
+        publishedPostQueryOptions("blog", params.slug),
+      );
 
-    if (!entry) {
-      throw createBlogNotFoundError(params.slug);
+      return toBlogDetail(post);
+    } catch (error) {
+      if (isMissingContentError(error)) {
+        throw createBlogNotFoundError(params.slug);
+      }
+
+      throw error;
     }
-
-    return entry;
   },
   head: ({ loaderData }) => ({
     meta: [

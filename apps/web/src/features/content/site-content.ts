@@ -1,47 +1,19 @@
-import type { BlogEntry, HomePageContent, ProjectEntry } from "@unimatrix/content";
-import {
-  parseBlogContentFile,
-  parseHomeContentFile,
-  parseProjectContentFile,
-  sortEntriesByPublishedAtDesc,
-} from "@unimatrix/content";
-
-import { indexEntriesBySlug } from "./lookups";
+import type { HomePageContent } from "@unimatrix/content";
+import { parseHomeContentFile } from "@unimatrix/content";
 
 import homeSource from "../../../../../content/home/index.md?raw";
-import placeholderPostSource from "../../../../../content/blog/placeholder-post.md?raw";
-import cubeTrainerProjectSource from "../../../../../content/projects/cube-trainer.md?raw";
 
+/**
+ * The home/about singleton is the only content still compiled into the bundle.
+ *
+ * Blog and project entries moved into the content database behind the API and
+ * are fetched at runtime (see `features/content/queries`), so publishing no
+ * longer requires a commit and a rebuild. This one file stays repo-backed
+ * deliberately: it is site copy rather than an archive of entries, it has no
+ * listing or admin surface, and baking it in keeps the homepage's first paint
+ * free of a network round-trip.
+ */
 export const homeContent: HomePageContent = parseHomeContentFile(
   homeSource,
   "content/home/index.md",
 );
-
-const parsedProjectEntries = [
-  parseProjectContentFile(cubeTrainerProjectSource, "content/projects/cube-trainer.md"),
-];
-
-export const projectEntries: ProjectEntry[] = sortEntriesByPublishedAtDesc([
-  ...parsedProjectEntries,
-]);
-
-const parsedBlogEntries = [
-  parseBlogContentFile(placeholderPostSource, "content/blog/placeholder-post.md"),
-];
-
-export const blogEntries: BlogEntry[] = sortEntriesByPublishedAtDesc([...parsedBlogEntries]);
-
-export const featuredProjects = projectEntries.filter((entry) => entry.frontmatter.featured);
-
-export const latestBlogEntries = blogEntries.slice(0, 2);
-
-const projectEntriesBySlug = indexEntriesBySlug(projectEntries);
-const blogEntriesBySlug = indexEntriesBySlug(blogEntries);
-
-export function getProjectEntryBySlug(slug: string): ProjectEntry | undefined {
-  return projectEntriesBySlug.get(slug);
-}
-
-export function getBlogEntryBySlug(slug: string): BlogEntry | undefined {
-  return blogEntriesBySlug.get(slug);
-}

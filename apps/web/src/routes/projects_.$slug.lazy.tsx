@@ -5,10 +5,11 @@ import { Badge, Button } from "@unimatrix/ui/public";
 
 import { LazyPublicMarkdown } from "@/features/content/lazy-public-markdown";
 import { renderPublicMarkdownInternalLink } from "@/features/content/markdown";
-import { ProjectStatusBadge } from "@/features/public-site/components";
+import { ProjectStatusBadge, PublicNotice } from "@/features/public-site/components";
 
 export const Route = createLazyFileRoute("/projects_/$slug")({
   component: ProjectDetailRoute,
+  errorComponent: ProjectUnavailable,
   notFoundComponent: ProjectNotFound,
 });
 
@@ -71,15 +72,42 @@ function ProjectDetailRoute() {
   );
 }
 
+/**
+ * A missing slug is `notFound()`; an unreachable API is this. Without it the
+ * error escapes to the router's default component, which replaces the root and
+ * drops the `<HeadContent />` the page's meta tags live in.
+ */
+function ProjectUnavailable() {
+  return (
+    <div className="space-y-8">
+      <Button asChild className="w-fit gap-2" variant="outline">
+        <Link to="/projects">
+          <RiArrowLeftLine aria-hidden="true" className="size-4" />
+          Back to projects
+        </Link>
+      </Button>
+
+      <PublicNotice
+        description="This project could not be loaded right now. Reload the page to try again."
+        headingLevel={1}
+        label="Unavailable"
+        title="The project could not be loaded."
+        tone="destructive"
+      />
+    </div>
+  );
+}
+
 function ProjectNotFound() {
   return (
     <div className="site-panel max-w-3xl px-5 py-6 lg:px-8 lg:py-8">
       <div className="space-y-4">
         <Badge variant="destructive">Project unavailable</Badge>
         <div className="space-y-3">
-          <h2 className="text-3xl leading-tight font-medium tracking-[-0.05em] text-foreground">
+          {/* h1, not h2: this panel replaces the whole article. */}
+          <h1 className="text-3xl leading-tight font-medium tracking-[-0.05em] text-foreground">
             That project is not part of the current list.
-          </h2>
+          </h1>
           <p className="max-w-2xl text-sm leading-7 text-muted-foreground lg:text-base lg:leading-8">
             Return to the projects page to review the work that is currently published.
           </p>

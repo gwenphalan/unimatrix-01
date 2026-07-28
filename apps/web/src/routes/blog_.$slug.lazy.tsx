@@ -5,9 +5,11 @@ import { Badge, Button } from "@unimatrix/ui/public";
 
 import { LazyPublicMarkdown } from "@/features/content/lazy-public-markdown";
 import { renderPublicMarkdownInternalLink } from "@/features/content/markdown";
+import { PublicNotice } from "@/features/public-site/components";
 
 export const Route = createLazyFileRoute("/blog_/$slug")({
   component: BlogDetailRoute,
+  errorComponent: BlogPostUnavailable,
   notFoundComponent: BlogNotFound,
 });
 
@@ -48,15 +50,46 @@ function BlogDetailRoute() {
   );
 }
 
+/**
+ * A missing slug is `notFound()`; an unreachable API is this. They are
+ * different answers and deserve different copy — one says the post does not
+ * exist, the other says we could not find out.
+ *
+ * Without this the error escapes to the router's default component, which
+ * replaces the root and drops the `<HeadContent />` the page's meta tags live
+ * in.
+ */
+function BlogPostUnavailable() {
+  return (
+    <div className="space-y-8">
+      <Button asChild className="w-fit gap-2" variant="outline">
+        <Link to="/blog">
+          <RiArrowLeftLine aria-hidden="true" className="size-4" />
+          Back to blog
+        </Link>
+      </Button>
+
+      <PublicNotice
+        description="This post could not be loaded right now. Reload the page to try again."
+        headingLevel={1}
+        label="Unavailable"
+        title="The post could not be loaded."
+        tone="destructive"
+      />
+    </div>
+  );
+}
+
 function BlogNotFound() {
   return (
     <div className="site-panel max-w-3xl px-5 py-6 lg:px-8 lg:py-8">
       <div className="space-y-4">
         <Badge variant="destructive">Post unavailable</Badge>
         <div className="space-y-3">
-          <h2 className="text-3xl leading-tight font-medium tracking-[-0.05em] text-foreground">
+          {/* h1, not h2: this panel replaces the whole article. */}
+          <h1 className="text-3xl leading-tight font-medium tracking-[-0.05em] text-foreground">
             That post is not part of the current archive.
-          </h2>
+          </h1>
           <p className="max-w-2xl text-sm leading-7 text-muted-foreground lg:text-base lg:leading-8">
             Return to the blog page to review the posts that are currently published.
           </p>

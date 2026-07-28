@@ -11,7 +11,6 @@ import {
 } from "@remixicon/react";
 import { SignedIn, SignedOut, UserButton } from "@unimatrix/auth/react";
 
-import { getBlogEntryBySlug, getProjectEntryBySlug } from "@/features/content/site-content";
 import { PublicPageContainer, PublicSiteFooter } from "@/features/public-site/components";
 import { isAuthEnabled, loadWebRuntimeConfig } from "@/lib/config";
 import { CircuitField, CircuitOccluderProvider, cn } from "@unimatrix/ui/public";
@@ -187,6 +186,28 @@ function AppShellContent({ children }: AppShellProps) {
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
   });
+  /**
+   * Title of the entry the detail routes loaded, used by the breadcrumb.
+   *
+   * Read from the active match's loader data rather than from a slug lookup:
+   * entries live in the database now, so the shell has no synchronous index to
+   * consult, and the detail route has already resolved exactly this entry. The
+   * breadcrumb falls back to the slug while the loader is still in flight.
+   */
+  const activeEntryTitle = useRouterState({
+    select: (state) => {
+      for (const match of state.matches) {
+        const loaderData = match.loaderData as { frontmatter?: { title?: unknown } } | undefined;
+        const title = loaderData?.frontmatter?.title;
+
+        if (typeof title === "string") {
+          return title;
+        }
+      }
+
+      return undefined;
+    },
+  });
 
   useEffect(() => {
     const updateCollapsedState = () => {
@@ -223,10 +244,9 @@ function AppShellContent({ children }: AppShellProps) {
 
     if (pathname.startsWith("/projects/")) {
       const slug = pathname.replace("/projects/", "");
-      const project = getProjectEntryBySlug(slug);
 
       items.push({ label: "Projects", to: "/projects" });
-      items.push({ label: project?.frontmatter.title ?? slug });
+      items.push({ label: activeEntryTitle ?? slug });
       return items;
     }
 
@@ -237,15 +257,14 @@ function AppShellContent({ children }: AppShellProps) {
 
     if (pathname.startsWith("/blog/")) {
       const slug = pathname.replace("/blog/", "");
-      const entry = getBlogEntryBySlug(slug);
 
       items.push({ label: "Blog", to: "/blog" });
-      items.push({ label: entry?.frontmatter.title ?? slug });
+      items.push({ label: activeEntryTitle ?? slug });
       return items;
     }
 
     return items;
-  }, [pathname]);
+  }, [activeEntryTitle, pathname]);
 
   return (
     <PublicPageContainer>

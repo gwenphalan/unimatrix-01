@@ -1,15 +1,34 @@
 import { Link, createLazyFileRoute } from "@tanstack/react-router";
 import { RiArrowRightUpLine } from "@remixicon/react";
 
-import { PublicProjectLedgerItem, PublicSectionHeading } from "@/features/public-site/components";
+import {
+  PublicNotice,
+  PublicProjectLedgerItem,
+  PublicSectionHeading,
+} from "@/features/public-site/components";
 import { Button } from "@unimatrix/ui/public";
 
 export const Route = createLazyFileRoute("/projects")({
   component: ProjectsRoute,
+  errorComponent: ProjectsUnavailable,
 });
 
 function ProjectsRoute() {
   const projects = Route.useLoaderData();
+
+  if (projects.length === 0) {
+    return (
+      <div className="space-y-5">
+        <PublicSectionHeading headingLevel={1} title="Projects" />
+
+        <PublicNotice
+          description="Nothing is published here yet. Check back once the first project goes up."
+          label="No projects yet"
+          title="The project list is empty."
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5">
@@ -62,6 +81,26 @@ function ProjectsRoute() {
           );
         })}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Projects are fetched from the API now, so an unreachable API is a real
+ * state this page has to render — it used to be impossible, because the list
+ * was compiled into the bundle.
+ */
+function ProjectsUnavailable() {
+  return (
+    <div className="space-y-5">
+      <PublicSectionHeading headingLevel={1} title="Projects" />
+
+      <PublicNotice
+        description="The project list could not be loaded right now. Reload the page to try again."
+        label="Unavailable"
+        title="Projects could not be loaded."
+        tone="destructive"
+      />
     </div>
   );
 }
