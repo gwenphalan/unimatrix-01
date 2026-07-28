@@ -2,14 +2,17 @@ import { Link, createLazyFileRoute } from "@tanstack/react-router";
 import { RiArrowRightUpLine, RiArticleLine, RiFolderLine } from "@remixicon/react";
 
 import {
+  PublicNotice,
   PublicProjectLedgerItem,
   PublicSectionHeading,
   PublicTransmissionListItem,
 } from "@/features/public-site/components";
+import { homeContent } from "@/features/content/site-content";
 import { Badge, Button } from "@unimatrix/ui/public";
 
 export const Route = createLazyFileRoute("/")({
   component: IndexRoute,
+  errorComponent: HomeUnavailable,
 });
 
 function IndexRoute() {
@@ -104,6 +107,45 @@ function IndexRoute() {
           </Button>
         </section>
       </div>
+    </div>
+  );
+}
+
+/**
+ * The homepage's two lists come from the API, but its heading does not —
+ * `homeContent` is still compiled into the bundle. Rendering that much when
+ * the API is unreachable keeps the page recognisably the site rather than a
+ * bare error card.
+ *
+ * This is not cosmetic. Without an `errorComponent` the failure escapes to the
+ * router's default, which replaces the root component and with it the
+ * `<HeadContent />` that carries the meta description — the homepage then
+ * ships without one, which is a Lighthouse SEO failure and a real crawler
+ * regression, not just an ugly screen.
+ */
+function HomeUnavailable() {
+  return (
+    <div className="space-y-12 lg:space-y-16">
+      <section className="max-w-3xl space-y-4 pb-2">
+        <h1 className="text-3xl leading-[0.92] font-medium tracking-[-0.06em] text-foreground sm:text-4xl lg:text-[3.2rem]">
+          {homeContent.frontmatter.title}
+        </h1>
+      </section>
+
+      <PublicNotice
+        action={
+          <Button asChild className="w-fit gap-2" variant="outline">
+            <Link to="/about">
+              Read the about page
+              <RiArrowRightUpLine aria-hidden="true" className="size-4" />
+            </Link>
+          </Button>
+        }
+        description="Featured projects and recent posts could not be loaded right now. Reload the page to try again."
+        label="Unavailable"
+        title="The latest entries are not available."
+        tone="destructive"
+      />
     </div>
   );
 }

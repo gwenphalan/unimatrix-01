@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+import { stubContentApi } from "./fixtures/content-api";
+
 /**
  * The header breadcrumb is one flex line holding the home logo and the crumb
  * trail. Wrapping belongs on the trail — the logo must stay beside it at every
@@ -21,6 +23,7 @@ const WIDTHS = [375, 640, 768, 1024];
 for (const width of WIDTHS) {
   test(`header breadcrumb keeps the logo on the trail's row at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 800 });
+    await stubContentApi(page);
     await page.goto("/projects/cube-trainer", { waitUntil: "domcontentloaded" });
 
     // Measuring straight after `domcontentloaded` reads the pre-hydration DOM

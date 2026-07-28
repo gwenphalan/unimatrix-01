@@ -91,6 +91,9 @@ importers:
       '@unimatrix/config-typescript':
         specifier: workspace:*
         version: link:../../packages/config-typescript
+      '@unimatrix/content':
+        specifier: workspace:*
+        version: link:../../packages/content
       eslint:
         specifier: ^10.0.0
         version: 10.8.0(jiti@2.7.0)
@@ -294,6 +297,9 @@ importers:
       '@unimatrix/content':
         specifier: workspace:*
         version: link:../../packages/content
+      '@unimatrix/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
       '@unimatrix/ui':
         specifier: workspace:^
         version: link:../../packages/ui

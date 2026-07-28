@@ -35,6 +35,14 @@ function collapseExportSpecifiers(source: string): string {
   );
 }
 
+/**
+ * Drops block and line comments so a source assertion cannot be satisfied by
+ * prose that merely mentions the symbol it is looking for.
+ */
+function stripComments(source: string): string {
+  return source.replace(/\/\*[\s\S]*?\*\//gu, "").replace(/\/\/[^\n]*/gu, "");
+}
+
 function readRepositoryFile(path: string): string {
   return readFileSync(join(repositoryRoot, path), "utf8");
 }
@@ -100,6 +108,40 @@ describe("public UI package usage", () => {
     expect(publicSource).not.toMatch(/vaul/u);
   });
 
+  it("gives every API-backed route its own error component", () => {
+    // Derived from the route files rather than hard-coded, so a route added
+    // later is covered without anyone remembering to extend a list.
+    const routeFiles = collectRepositoryFiles("apps/web/src/routes").filter(
+      (path) => path.endsWith(".tsx") && !path.endsWith(".lazy.tsx"),
+    );
+    const missing = routeFiles.flatMap((routePath) => {
+      if (!/ensureQueryData/u.test(stripComments(readRepositoryFile(routePath)))) {
+        return [];
+      }
+
+      const lazyPath = routePath.replace(/\.tsx$/u, ".lazy.tsx");
+
+      if (!existsSync(join(repositoryRoot, lazyPath))) {
+        return [`${routePath} (no lazy sibling)`];
+      }
+
+      // Comments are stripped and the option's colon required: the first
+      // version of this test matched the word inside the doc comment that
+      // explains why the option is there, so deleting the option left it
+      // green. Verified by deleting it again afterwards.
+      const lazySource = stripComments(readRepositoryFile(lazyPath));
+
+      return /errorComponent:\s*\S/u.test(lazySource) ? [] : [lazyPath];
+    });
+
+    // Not a style rule. Without an `errorComponent` a failed loader escapes to
+    // the router's default, which replaces the root component — and with it the
+    // `<HeadContent />` carrying the page's meta description. An unreachable API
+    // then costs the homepage its description, which CI reports as a Lighthouse
+    // SEO failure rather than as anything that looks like a routing bug.
+    expect(missing).toEqual([]);
+  });
+
   it("packages/ui owns the canonical shadcn config and shared stylesheet export", () => {
     expect(existsSync(join(repositoryRoot, "packages/ui/components.json"))).toBe(true);
     expect(existsSync(join(repositoryRoot, "apps/web/components.json"))).toBe(false);
@@ -123,6 +165,7 @@ describe("public UI package usage", () => {
     expect(publicSiteSource).toMatch(/PublicProjectLedgerItem/u);
     expect(publicSiteSource).toMatch(/PublicTransmissionListItem/u);
     expect(publicSiteSource).toMatch(/PublicMetadataStrip/u);
+    expect(publicSiteSource).toMatch(/PublicNotice/u);
     expect(publicSiteSource).toMatch(/PublicReadingFrame/u);
     expect(publicSiteSource).toContain('from "@unimatrix/ui/public"');
     expect(publicSiteSource).not.toContain('from "@unimatrix/ui"');
@@ -178,6 +221,7 @@ describe("public UI package usage", () => {
 
     expect(homeRouteSource).toMatch(/createFileRoute\("\/"\)/u);
     expect(homeRouteSource).toMatch(/loader/u);
+    expect(homeRouteSource).toMatch(/ensureQueryData/u);
     expect(homeRouteSource).not.toMatch(/PublicMarkdown/u);
     expect(homeLazyRouteSource).toMatch(/createLazyFileRoute\("\/"\)/u);
     expect(homeLazyRouteSource).toMatch(/@unimatrix\/ui\/public/u);
@@ -194,7 +238,12 @@ describe("public UI package usage", () => {
     expect(homeLazyRouteSource).toMatch(/to="\/blog\/\$slug"/u);
 
     expect(projectsRouteSource).toMatch(/createFileRoute\("\/projects"\)/u);
+    // Content is fetched from the API now: the non-lazy route file owns the
+    // data (through the router's query client), the lazy file owns the UI.
+    expect(projectsRouteSource).toMatch(/publishedPostsQueryOptions\("project"\)/u);
+    expect(projectsRouteSource).toMatch(/ensureQueryData/u);
     expect(projectsRouteSource).not.toMatch(/PublicProjectLedgerItem/u);
+    expect(projectsLazyRouteSource).toMatch(/errorComponent/u);
     expect(projectsLazyRouteSource).toMatch(/createLazyFileRoute\("\/projects"\)/u);
     expect(projectsLazyRouteSource).toMatch(/Projects/u);
     expect(projectsLazyRouteSource).toMatch(/PublicProjectLedgerItem/u);
@@ -204,7 +253,10 @@ describe("public UI package usage", () => {
     expect(projectsLazyRouteSource).toMatch(/Open repository/u);
 
     expect(blogRouteSource).toMatch(/createFileRoute\("\/blog"\)/u);
+    expect(blogRouteSource).toMatch(/publishedPostsQueryOptions\("blog"\)/u);
+    expect(blogRouteSource).toMatch(/ensureQueryData/u);
     expect(blogRouteSource).not.toMatch(/PublicTransmissionListItem/u);
+    expect(blogLazyRouteSource).toMatch(/errorComponent/u);
     expect(blogLazyRouteSource).toMatch(/createLazyFileRoute\("\/blog"\)/u);
     expect(blogLazyRouteSource).toMatch(/title="Blog"/u);
     expect(blogLazyRouteSource).toMatch(/PublicTransmissionListItem/u);
@@ -219,6 +271,10 @@ describe("public UI package usage", () => {
     expect(aboutLazyRouteSource).toMatch(/About/u);
 
     expect(projectDetailRouteSource).toMatch(/createFileRoute\("\/projects_\/\$slug"\)/u);
+    expect(projectDetailRouteSource).toMatch(/publishedPostQueryOptions\("project"/u);
+    // A 404 (or a slug the shared schema rejects) has to reach the route's
+    // not-found component rather than the error boundary.
+    expect(projectDetailRouteSource).toMatch(/isMissingContentError/u);
     expect(projectDetailRouteSource).toMatch(/throw createProjectNotFoundError/u);
     expect(projectDetailRouteSource).not.toMatch(/PublicMarkdown/u);
     expect(projectDetailLazyRouteSource).toMatch(/createLazyFileRoute\("\/projects_\/\$slug"\)/u);
@@ -228,6 +284,8 @@ describe("public UI package usage", () => {
     expect(projectDetailLazyRouteSource).not.toMatch(/splitMarkdownIntoParagraphs/u);
 
     expect(blogDetailRouteSource).toMatch(/createFileRoute\("\/blog_\/\$slug"\)/u);
+    expect(blogDetailRouteSource).toMatch(/publishedPostQueryOptions\("blog"/u);
+    expect(blogDetailRouteSource).toMatch(/isMissingContentError/u);
     expect(blogDetailRouteSource).toMatch(/throw createBlogNotFoundError/u);
     expect(blogDetailRouteSource).not.toMatch(/PublicMarkdown/u);
     expect(blogDetailLazyRouteSource).toMatch(/createLazyFileRoute\("\/blog_\/\$slug"\)/u);

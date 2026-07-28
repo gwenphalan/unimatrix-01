@@ -1,9 +1,16 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import { projectEntries } from "@/features/content/site-content";
+import { toProjectEntry } from "@/features/content/entries";
+import { publishedPostsQueryOptions } from "@/features/content/queries/content-posts";
 
 export const Route = createFileRoute("/projects")({
-  loader: () => projectEntries,
+  loader: async ({ context }) => {
+    const { posts } = await context.queryClient.ensureQueryData(
+      publishedPostsQueryOptions("project"),
+    );
+
+    return posts.map(toProjectEntry);
+  },
   head: () => ({
     meta: [
       { title: "Unimatrix-01 - Projects" },

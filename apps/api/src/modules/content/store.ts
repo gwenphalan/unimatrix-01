@@ -202,12 +202,28 @@ export async function slugExists(
   return rows.some((row) => row.id !== excludePostId);
 }
 
+export interface CreatePostOptions {
+  /**
+   * Overrides the publication date. Store-level only, and used exclusively by
+   * the seed script so migrated repository entries keep the date their
+   * frontmatter declared instead of the date they were imported. No route
+   * passes it, and `createPostBodySchema` does not accept it — for anything
+   * arriving over HTTP, `publishedAt` stays server-owned.
+   */
+  publishedAt?: string;
+}
+
 export async function createPost(
   db: ContentDb,
   userId: string,
   input: CreatePostBody,
+  options: CreatePostOptions = {},
 ): Promise<ContentPost> {
   const now = new Date().toISOString();
+  const publishedAt =
+    input.publicationState === "published"
+      ? (options.publishedAt ?? now)
+      : (options.publishedAt ?? null);
 
   const rows = await db
     .insert(contentPostsTable)
@@ -220,9 +236,7 @@ export async function createPost(
       description: input.description ?? null,
       body: input.body,
       publicationState: input.publicationState,
-      // `publishedAt` is server-owned: it is stamped the moment a post first
-      // reaches `published` and is never accepted from the client.
-      publishedAt: input.publicationState === "published" ? now : null,
+      publishedAt,
       featured: input.featured,
       projectStatus: input.projectStatus ?? null,
       repoUrl: input.repoUrl ?? null,

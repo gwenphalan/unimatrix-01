@@ -5,9 +5,11 @@ import { Badge, Button } from "@unimatrix/ui/public";
 
 import { LazyPublicMarkdown } from "@/features/content/lazy-public-markdown";
 import { renderPublicMarkdownInternalLink } from "@/features/content/markdown";
+import { PublicNotice } from "@/features/public-site/components";
 
 export const Route = createLazyFileRoute("/blog_/$slug")({
   component: BlogDetailRoute,
+  errorComponent: BlogPostUnavailable,
   notFoundComponent: BlogNotFound,
 });
 
@@ -44,6 +46,35 @@ function BlogDetailRoute() {
           />
         </article>
       </div>
+    </div>
+  );
+}
+
+/**
+ * A missing slug is `notFound()`; an unreachable API is this. They are
+ * different answers and deserve different copy — one says the post does not
+ * exist, the other says we could not find out.
+ *
+ * Without this the error escapes to the router's default component, which
+ * replaces the root and drops the `<HeadContent />` the page's meta tags live
+ * in.
+ */
+function BlogPostUnavailable() {
+  return (
+    <div className="space-y-8">
+      <Button asChild className="w-fit gap-2" variant="outline">
+        <Link to="/blog">
+          <RiArrowLeftLine aria-hidden="true" className="size-4" />
+          Back to blog
+        </Link>
+      </Button>
+
+      <PublicNotice
+        description="This post could not be loaded right now. Reload the page to try again."
+        label="Unavailable"
+        title="The post could not be loaded."
+        tone="destructive"
+      />
     </div>
   );
 }

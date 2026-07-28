@@ -7,6 +7,8 @@ import {
   gotoRoute,
 } from "@unimatrix/e2e-helpers";
 
+import { stubContentApi } from "./fixtures/content-api";
+
 /**
  * Empty, and meant to stay that way. This list held `region`, `heading-order`,
  * and `landmark-unique`; all three are fixed, so the baseline is now a hard
@@ -32,6 +34,8 @@ async function scanAccessibility(page: Page, routeLabel: string) {
 
 test("homepage load", async ({ page }) => {
   const pageErrors = collectPageErrors(page);
+
+  await stubContentApi(page);
   const main = page.locator("main");
 
   await gotoRoute(page, "/");
@@ -48,6 +52,8 @@ test("homepage load", async ({ page }) => {
 
 test("navigation smoke flow", async ({ page }) => {
   const pageErrors = collectPageErrors(page);
+
+  await stubContentApi(page);
   const main = page.locator("main");
 
   await gotoRoute(page, "/");
@@ -89,6 +95,8 @@ test("navigation smoke flow", async ({ page }) => {
 test("project page render", async ({ page }) => {
   const pageErrors = collectPageErrors(page);
 
+  await stubContentApi(page);
+
   await gotoRoute(page, "/projects/cube-trainer");
 
   await expect(page.getByRole("heading", { name: "Cube Trainer" })).toBeVisible();
@@ -113,6 +121,8 @@ test("project page render", async ({ page }) => {
 
 test("blog page render", async ({ page }) => {
   const pageErrors = collectPageErrors(page);
+
+  await stubContentApi(page);
 
   await gotoRoute(page, "/blog/placeholder-post");
 
