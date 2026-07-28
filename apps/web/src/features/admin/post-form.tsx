@@ -54,7 +54,6 @@ interface PostFormState {
   body: string;
   publicationState: ContentPublicationState;
   featured: boolean;
-  projectStatus: string;
   repoUrl: string;
   liveUrl: string;
 }
@@ -67,7 +66,6 @@ const EMPTY_FORM: PostFormState = {
   body: "",
   publicationState: "draft",
   featured: false,
-  projectStatus: "",
   repoUrl: "",
   liveUrl: "",
 };
@@ -81,7 +79,6 @@ function toFormState(post: ContentPost): PostFormState {
     body: post.body,
     publicationState: post.publicationState,
     featured: post.featured,
-    projectStatus: post.projectStatus ?? "",
     repoUrl: post.repoUrl ?? "",
     liveUrl: post.liveUrl ?? "",
   };
@@ -104,7 +101,6 @@ function toCreateBody(form: PostFormState, type: ContentPostType): CreatePostBod
     body: form.body,
     publicationState: form.publicationState,
     featured: type === "project" && form.featured,
-    projectStatus: type === "project" ? orNull(form.projectStatus) : null,
     repoUrl: type === "project" ? orNull(form.repoUrl) : null,
     liveUrl: type === "project" ? orNull(form.liveUrl) : null,
   };
@@ -127,7 +123,6 @@ function toUpdateBody(form: PostFormState, post: ContentPost): UpdatePostBody {
     body: form.body,
     publicationState: form.publicationState,
     featured: isProject && form.featured,
-    projectStatus: isProject ? orNull(form.projectStatus) : null,
     repoUrl: isProject ? orNull(form.repoUrl) : null,
     liveUrl: isProject ? orNull(form.liveUrl) : null,
   };
@@ -268,7 +263,7 @@ export function PostForm({ post, type, title, onDone }: PostFormProps) {
         className="flex min-h-0 flex-1 flex-col"
         title={title}
       >
-      <div className="grid gap-4">
+        <div className="grid gap-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="grid gap-2">
               <Label htmlFor={`${fieldPrefix}-title`}>Title</Label>
@@ -337,18 +332,12 @@ export function PostForm({ post, type, title, onDone }: PostFormProps) {
           {effectiveType === "project" ? (
             <>
               <Separator />
-              <div className="grid gap-4 sm:grid-cols-3">
-                <div className="grid gap-2">
-                  <Label htmlFor={`${fieldPrefix}-status`}>Project status</Label>
-                  <Input
-                    id={`${fieldPrefix}-status`}
-                    onChange={(event) => {
-                      update("projectStatus", event.target.value);
-                    }}
-                    placeholder="live"
-                    value={form.projectStatus}
-                  />
-                </div>
+              {/* No "project status" field. A project's status is not something
+                  an admin keeps up to date by hand — it is whether the thing is
+                  reachable, which `ProjectStatusBadge` answers by requesting
+                  the live URL below and reporting what actually happened. A
+                  typed value would only ever be a stale second opinion. */}
+              <div className="grid gap-4 sm:grid-cols-2">
                 <div className="grid gap-2">
                   <Label htmlFor={`${fieldPrefix}-repo`}>Repository URL</Label>
                   <Input
@@ -385,74 +374,78 @@ export function PostForm({ post, type, title, onDone }: PostFormProps) {
               </div>
             </>
           ) : null}
-      </div>
+        </div>
 
-      <Separator />
+        <Separator />
 
-      {/* "Body" and "Insert image" are handed to the editor's own toolbar
+        {/* "Body" and "Insert image" are handed to the editor's own toolbar
           row rather than rendered above it, so the label sits immediately
           on top of the editing surface and the upload button lines up with
           the formatting controls it belongs beside. */}
-      <MarkdownEditor
-            className="min-h-0 flex-1"
-            actions={
-              <>
-                <Button
-                  aria-label={isUploading ? "Uploading image" : "Insert image"}
-                  className="size-8"
-                  disabled={isUploading}
-                  onClick={() => {
-                    fileInputRef.current?.click();
-                  }}
-                  size="icon"
-                  title={isUploading ? "Uploading image" : "Insert image"}
-                  type="button"
-                  variant="ghost"
-                >
-                  {isUploading ? (
-                    <RiLoader4Line aria-hidden="true" className="size-4 animate-spin" />
-                  ) : (
-                    <RiImageAddLine aria-hidden="true" className="size-4" />
-                  )}
-                </Button>
-                <input
-                  accept={ASSET_ACCEPT}
-                  className="hidden"
-                  onChange={(event) => {
-                    const file = event.target.files?.[0];
+        <MarkdownEditor
+          // A floor rather than `min-h-0`: this is a flex column, so an item
+          // free to shrink below its content is free to shrink to nothing,
+          // and it does whenever the fields above are taller than the frame.
+          // `flex-1` still hands it the leftover space when there is any.
+          className="min-h-64 flex-1"
+          actions={
+            <>
+              <Button
+                aria-label={isUploading ? "Uploading image" : "Insert image"}
+                className="size-8"
+                disabled={isUploading}
+                onClick={() => {
+                  fileInputRef.current?.click();
+                }}
+                size="icon"
+                title={isUploading ? "Uploading image" : "Insert image"}
+                type="button"
+                variant="ghost"
+              >
+                {isUploading ? (
+                  <RiLoader4Line aria-hidden="true" className="size-4 animate-spin" />
+                ) : (
+                  <RiImageAddLine aria-hidden="true" className="size-4" />
+                )}
+              </Button>
+              <input
+                accept={ASSET_ACCEPT}
+                className="hidden"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
 
-                    // Reset first: picking the same file twice in a row fires no
-                    // change event otherwise, and re-inserting an image is a
-                    // normal thing to do.
-                    event.target.value = "";
+                  // Reset first: picking the same file twice in a row fires no
+                  // change event otherwise, and re-inserting an image is a
+                  // normal thing to do.
+                  event.target.value = "";
 
-                    if (file !== undefined) {
-                      void handleUpload(file);
-                    }
-                  }}
-                  ref={fileInputRef}
-                  type="file"
-                />
-              </>
-            }
-            header={<Label>Body</Label>}
-            label="Post body"
-            onChange={(next) => {
-              update("body", next);
-            }}
-            placeholder="Write the post in markdown."
-            ref={editorRef}
-            value={form.body}
-          />
+                  if (file !== undefined) {
+                    void handleUpload(file);
+                  }
+                }}
+                ref={fileInputRef}
+                type="file"
+              />
+            </>
+          }
+          header={<Label>Body</Label>}
+          label="Post body"
+          onChange={(next) => {
+            update("body", next);
+          }}
+          placeholder="Write the post in markdown."
+          ref={editorRef}
+          value={form.body}
+        />
 
-      <div className="flex justify-end gap-2">
-        <Button disabled={isSaving} onClick={onDone} type="button" variant="outline">
-          Cancel
-        </Button>
-        <Button disabled={isSaving} type="submit">
-          {isSaving ? "Saving" : post === null ? "Create" : "Save"}
-        </Button>
-      </div>
+        <div className="flex justify-end gap-2">
+          <Button disabled={isSaving} onClick={onDone} type="button" variant="outline">
+            Cancel
+          </Button>
+          <Button disabled={isSaving} type="submit">
+            {isSaving ? "Saving" : post === null ? "Create" : "Save"}
+          </Button>
+        </div>
       </AdminPanel>
     </form>
   );

@@ -89,7 +89,6 @@ describe("PostForm", () => {
         // Project-only columns stay null on a blog row rather than picking up
         // the form's defaults.
         featured: false,
-        projectStatus: null,
         repoUrl: null,
         liveUrl: null,
       });
@@ -140,6 +139,31 @@ describe("PostForm", () => {
     expect(screen.queryByLabelText(/Feature on the homepage/u)).not.toBeInTheDocument();
   });
 
+  /**
+   * A project's status is whether it answers on its live URL, which
+   * `ProjectStatusBadge` measures. A typed field would only ever be a second
+   * opinion that nobody remembers to update.
+   */
+  it("offers no project status field, and never sends one", async () => {
+    apiClient.updatePost.mockResolvedValue(PROJECT);
+
+    const { PostForm } = await import("@/features/admin/post-form");
+
+    renderForm(<PostForm onDone={() => {}} post={PROJECT} title="Edit post" type="project" />);
+
+    expect(screen.queryByLabelText("Project status")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      expect(apiClient.updatePost).toHaveBeenCalled();
+    });
+
+    // Omitted, not nulled: the update store only writes columns the body
+    // carries, so a seeded status survives an edit made through the form.
+    expect(apiClient.updatePost.mock.calls[0]?.[0]).not.toHaveProperty("projectStatus");
+  });
+
   it("loads an existing project into the form and sends an update keyed by id", async () => {
     apiClient.updatePost.mockResolvedValue(PROJECT);
 
@@ -158,7 +182,6 @@ describe("PostForm", () => {
         expect.objectContaining({
           id: PROJECT.id,
           title: "Cube Trainer 2",
-          projectStatus: "live",
           featured: true,
         }),
       );
