@@ -39,7 +39,7 @@
     "prettier": "^3.9.6",
     "syncpack": "^15.3.2",
     "turbo": "^2.8.14",
-    "typescript": "^6.0.3",
+    "typescript": "^7.0.2",
     "vitest": "^4.1.10"
   }
 }
