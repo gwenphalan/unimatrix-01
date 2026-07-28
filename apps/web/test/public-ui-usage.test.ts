@@ -154,11 +154,12 @@ describe("public UI package usage", () => {
 
     // Not a style rule, and not a hypothetical. A barrel's whole re-export
     // graph lands in the chunk importing it regardless of what is actually
-    // used: adding `MarkdownEditor` to `./public` was measured at +498 kB
-    // (+173 kB gzip) on the public chunk with no importer anywhere in
-    // apps/web. `./public` is what every public route imports and the root
-    // barrel is banned from apps/web outright (asserted above), so neither
-    // may name the editor.
+    // used: adding `MarkdownEditor` to `./public` was measured at +497.6 kB
+    // (+169.3 kB gzip) on the set `index.html` eagerly preloads, with no
+    // importer anywhere in apps/web. `./public` is what every public route
+    // imports and the root barrel is banned from apps/web outright (asserted
+    // above), so neither may name the editor. Full measurement, including the
+    // alternative causes ruled out, is in `packages/ui/src/editor.ts`.
     expect(publicSource).not.toMatch(/MarkdownEditor/u);
     expect(publicSource).not.toMatch(/markdown-editor/u);
     expect(rootSource).not.toMatch(/MarkdownEditor/u);
