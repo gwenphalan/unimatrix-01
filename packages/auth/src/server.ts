@@ -155,6 +155,9 @@ export function getSessionPermissionsClaim(request: FastifyRequest): SessionPerm
  * — so it survives any test that only asserts 401/403.
  */
 export function requireAuth() {
+  // The rule is right in general and wrong here: the `async` is not sugar for
+  // an awaited call, it is how Fastify is told this hook returns a thenable.
+  // eslint-disable-next-line @typescript-eslint/require-await -- see the note above; removing `async` parks every authorized request forever.
   return async function requireAuthPreHandler(request: FastifyRequest): Promise<void> {
     const { userId } = getAuth(request);
 

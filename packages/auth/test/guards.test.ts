@@ -1,11 +1,11 @@
-import Fastify, { type FastifyInstance, type preHandlerHookHandler } from "fastify";
+import Fastify, { type FastifyInstance, type preHandlerAsyncHookHandler } from "fastify";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const getAuthMock = vi.fn();
 
 vi.mock("@clerk/fastify", () => ({
   clerkPlugin: () => undefined,
-  getAuth: (request: unknown) => getAuthMock(request),
+  getAuth: (request: unknown): unknown => getAuthMock(request),
 }));
 
 const { AuthError, requireAuth, requirePermission } = await import("../src/server.js");
@@ -19,7 +19,7 @@ const { AuthError, requireAuth, requirePermission } = await import("../src/serve
  * So these tests drive it through the hook runner rather than invoking it
  * directly.
  */
-async function buildApp(preHandler: preHandlerHookHandler): Promise<FastifyInstance> {
+async function buildApp(preHandler: preHandlerAsyncHookHandler): Promise<FastifyInstance> {
   const app = Fastify();
 
   app.setErrorHandler((error, _request, reply) =>
