@@ -2,8 +2,8 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, type Page } from "@playwright/test";
 
 /**
- * WCAG 2.1 A and AA. Any violation here fails the build outright — the trainer
- * has none today, so this is a hard floor rather than a backlog.
+ * WCAG 2.1 A and AA. Any violation here fails the build outright — no app has
+ * one today, so this is a hard floor rather than a backlog.
  */
 const WCAG_TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"];
 
@@ -19,17 +19,6 @@ const WCAG_TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"];
  * harder to scan.
  */
 const BEST_PRACTICE_TAGS = ["best-practice"];
-
-/**
- * Empty, and meant to stay that way. This list held `heading-order`, which fired
- * inside the "Choose cases" picker: its `h1` was followed by `h3` group labels.
- * Those are `h2` now, so the baseline is a hard floor rather than a backlog.
- *
- * Adding an entry here should be a deliberate, explained edit. It means shipping
- * a known structural problem, and it is the kind of change that is easy to make
- * quietly to turn a build green.
- */
-const KNOWN_BEST_PRACTICE_VIOLATIONS: string[] = [];
 
 interface ViolationSummary {
   id: string;
@@ -58,19 +47,30 @@ function summarize(
  *
  * Failure messages carry rule id, impact, and the failing selectors: an axe
  * violation reported as a bare count is not actionable from a CI log.
+ *
+ * `knownBestPracticeViolations` is a **per-app** parameter rather than a constant
+ * shared by every caller, and that is the point. Both apps pass an empty list
+ * today, and a single shared baseline would mean one app suppressing a rule it
+ * has decided to live with silently lowers the floor for the other — the exact
+ * quiet build-greening the callers' own comments warn against. Each app owns and
+ * annotates its own list; this function only enforces whatever it is handed.
  */
-export async function expectNoAccessibilityViolations(page: Page, routeLabel: string) {
+export async function expectNoAccessibilityViolations(
+  page: Page,
+  routeLabel: string,
+  knownBestPracticeViolations: readonly string[] = [],
+) {
   const wcag = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze();
 
   expect(summarize(wcag.violations), `WCAG 2.1 A/AA violations on ${routeLabel}`).toEqual([]);
 
   const bestPractice = await new AxeBuilder({ page }).withTags(BEST_PRACTICE_TAGS).analyze();
   const unexpected = summarize(bestPractice.violations).filter(
-    (violation) => !KNOWN_BEST_PRACTICE_VIOLATIONS.includes(violation.id),
+    (violation) => !knownBestPracticeViolations.includes(violation.id),
   );
 
   expect(
     unexpected,
-    `New axe best-practice violations on ${routeLabel} (known: ${KNOWN_BEST_PRACTICE_VIOLATIONS.join(", ")})`,
+    `New axe best-practice violations on ${routeLabel} (known: ${knownBestPracticeViolations.join(", ")})`,
   ).toEqual([]);
 }

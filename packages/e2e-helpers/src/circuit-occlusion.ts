@@ -8,20 +8,11 @@ import { type Page, expect } from "@playwright/test";
  * occlusion: that no trace is generated into a surface in the first place, so
  * nothing ever looks like it runs underneath an opaque panel.
  *
- * SYNC NOTE: this file exists **byte-for-byte** at both
- * `apps/web/e2e/helpers/circuit-occlusion.ts` and
- * `apps/cube-trainer/e2e/helpers/circuit-occlusion.ts`. Edit one, copy it to the
- * other, and check with `diff` — nothing enforces it. Naming both paths rather
- * than "the other app" is deliberate: byte-identity means whichever copy you are
- * reading says the same thing, so a note phrased as a pointer would send a reader
- * of one copy back to the file they already have open, and fixing that per copy
- * would break the `diff` check this note asks for. The per-app copy follows
- * the convention `accessibility.ts` already set (Playwright suites are per-app,
- * `packages/ui` has no browser suite and so ships no test helpers), but at 400
- * lines the copy is well past the size where that convention pays for itself.
- * Extracting both helpers into a `@unimatrix/e2e-helpers` workspace package is a
- * planned follow-up; the two `accessibility.ts` copies have already drifted,
- * which is the failure mode this note exists to delay.
+ * Nothing app-specific belongs here: every function takes the surface selectors
+ * it should measure as an argument. The per-app part — *which* selectors count as
+ * a painting surface, and which routes are worth asserting on — stays in each
+ * app's `e2e/circuit-occlusion.spec.ts`, where those vocabularies genuinely
+ * differ. Reaching for an app name inside this file means the split is wrong.
  */
 
 export type OccluderKind = "hard" | "ink" | "soft";

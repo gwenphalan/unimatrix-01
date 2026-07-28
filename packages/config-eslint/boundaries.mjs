@@ -15,12 +15,18 @@ import boundaries from "eslint-plugin-boundaries";
  * against new coupling rather than a backlog of pre-existing failures.
  */
 const ALLOWED_PACKAGE_IMPORTS = {
-  "apps/web": ["api-client", "auth", "content", "ui"],
+  // `e2e-helpers` is granted only to the two workspaces that actually run a
+  // Playwright suite, rather than to everyone via SHARED_CONFIG_PACKAGES below.
+  // It ships assertion code, not configuration, so a workspace importing it is
+  // a fact worth stating per workspace. Note the grant is workspace-wide — the
+  // rule has no per-directory granularity — so it does not by itself stop `src/`
+  // from importing test helpers; nothing in the app builds does today.
+  "apps/web": ["api-client", "auth", "content", "e2e-helpers", "ui"],
   "apps/api": ["auth", "db", "shared"],
   // Deliberately narrow. AGENTS.md: cube-trainer must not gain
   // `@unimatrix/api-client`, `@unimatrix/shared`, or `@unimatrix/content`
   // unless a real server-backed feature is added.
-  "apps/cube-trainer": ["ui"],
+  "apps/cube-trainer": ["e2e-helpers", "ui"],
   "apps/auth": ["auth", "ui"],
   "packages/api-client": ["shared"],
   "packages/user-data": ["api-client", "auth", "shared"],
@@ -31,6 +37,10 @@ const ALLOWED_PACKAGE_IMPORTS = {
   "packages/content": [],
   "packages/db": [],
   "packages/auth": [],
+  // A leaf, and listed even though it imports no sibling package: `default` is
+  // "disallow", so a workspace with no policy of its own cannot even resolve its
+  // own relative imports.
+  "packages/e2e-helpers": [],
 };
 
 /**

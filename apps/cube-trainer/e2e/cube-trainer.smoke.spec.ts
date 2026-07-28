@@ -1,26 +1,29 @@
 import { expect, test, type Page } from "@playwright/test";
 
-import { expectNoAccessibilityViolations } from "./helpers/accessibility";
+import {
+  collectPageErrors,
+  expectNoAccessibilityViolations,
+  expectNoPageErrors,
+  gotoRoute,
+} from "@unimatrix/e2e-helpers";
 
-function collectPageErrors(page: Page): Error[] {
-  const pageErrors: Error[] = [];
+/**
+ * Empty, and meant to stay that way. This list held `heading-order`, which fired
+ * inside the "Choose cases" picker: its `h1` was followed by `h3` group labels.
+ * Those are `h2` now, so the baseline is a hard floor rather than a backlog.
+ *
+ * Adding an entry here should be a deliberate, explained edit. It means shipping
+ * a known structural problem, and it is the kind of change that is easy to make
+ * quietly to turn a build green.
+ *
+ * It stays app-local rather than moving into `@unimatrix/e2e-helpers` alongside
+ * the scanner: a baseline shared with apps/web would let a suppression added for
+ * one app silently lower the floor for the other.
+ */
+const KNOWN_BEST_PRACTICE_VIOLATIONS: readonly string[] = [];
 
-  page.on("pageerror", (error) => {
-    pageErrors.push(error);
-  });
-
-  return pageErrors;
-}
-
-function expectNoPageErrors(pageErrors: Error[]) {
-  expect(
-    pageErrors.map((error) => error.message),
-    "Expected the route interaction to finish without uncaught page errors.",
-  ).toEqual([]);
-}
-
-async function gotoRoute(page: Page, url: string) {
-  await page.goto(url, { waitUntil: "domcontentloaded" });
+async function scanAccessibility(page: Page, routeLabel: string) {
+  await expectNoAccessibilityViolations(page, routeLabel, KNOWN_BEST_PRACTICE_VIOLATIONS);
 }
 
 test("homepage load", async ({ page }) => {
@@ -33,7 +36,7 @@ test("homepage load", async ({ page }) => {
   await expect(main.getByRole("link", { name: "Learn" })).toBeVisible();
   await expect(main.getByRole("link", { name: "Drill" })).toBeVisible();
 
-  await expectNoAccessibilityViolations(page, "/");
+  await scanAccessibility(page, "/");
   expectNoPageErrors(pageErrors);
 });
 
@@ -63,7 +66,7 @@ test("Drill flow: drill and case picker", async ({ page }) => {
   await expect(main.getByRole("heading", { name: "Choose cases" })).toBeVisible();
   await expect(main.getByRole("button", { name: "PLL Ua", exact: true })).toBeVisible();
 
-  await expectNoAccessibilityViolations(page, "/drill");
+  await scanAccessibility(page, "/drill");
   expectNoPageErrors(pageErrors);
 });
 
@@ -85,6 +88,6 @@ test("Learn flow: guided session and case picker", async ({ page }) => {
   await expect(main.getByRole("heading", { name: "Choose cases" })).toBeVisible();
   await expect(main.getByRole("button", { name: "PLL Gd", exact: true })).toBeVisible();
 
-  await expectNoAccessibilityViolations(page, "/learn");
+  await scanAccessibility(page, "/learn");
   expectNoPageErrors(pageErrors);
 });

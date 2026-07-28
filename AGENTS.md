@@ -15,7 +15,7 @@
 ## Workspace
 - Monorepo: `apps/*` and `packages/*` from `pnpm-workspace.yaml`; root scripts fan out through Turbo
 - Live apps: `apps/web`, `apps/api`, `apps/cube-trainer`, `apps/auth` (package `@unimatrix/auth-app`) — all Vite + React + TanStack Router except `apps/api` (Fastify); see Workspace Responsibilities for what each owns
-- Live packages: `packages/ui`, `packages/shared`, `packages/api-client`, `packages/content`, `packages/db`, `packages/auth`, `packages/user-data`, `packages/config-typescript`, `packages/config-eslint`, `packages/config-vitest`
+- Live packages: `packages/ui`, `packages/shared`, `packages/api-client`, `packages/content`, `packages/db`, `packages/auth`, `packages/user-data`, `packages/config-typescript`, `packages/config-eslint`, `packages/config-vitest`, `packages/e2e-helpers`
 - Live content: `content/home`, `content/projects`, `content/blog`
 - Repo-internal docs: `docs/`; infra/runtime helpers: `infra/scripts`, `infra/deployment`, `infra/docker`
 - Reserved, not live: `apps/workers`, `content/docs`, `content/notes`, future packages like `packages/bmd-parser`
@@ -35,6 +35,7 @@
 - `packages/auth`: single source of truth for the permission scheme (`.`), Clerk Fastify guards (`./server`), and Clerk React provider/hooks (`./react`); never reads `process.env`
 - `packages/user-data`: unified per-user store (settings as JSON documents, files as blobs) with an account adapter (via `@unimatrix/api-client`) and a browser-only IndexedDB guest adapter
 - `packages/config-vitest`: shared Vitest coverage configuration; owns the provider, reporters, and exclusions, while each workspace supplies its own thresholds
+- `packages/e2e-helpers`: shared Playwright assertion helpers (accessibility scan, circuit-field occlusion measurement, page-error collection) for the app e2e suites; source-only, consumed through tsconfig `paths`
 
 ## File-Scoped Commands
 
@@ -70,6 +71,7 @@
 - `packages/db`: schema under `src/schema`, migrations under `drizzle`, default DB at `packages/db/local/unimatrix.sqlite`
 - `packages/auth`: keep the three entry points separate — `.` stays framework-agnostic and dependency-free, `./server` is Node-only, `./react` is browser-only; never cross-import server and react; the package takes config as arguments and never reads `process.env`
 - `packages/user-data`: keep the account and guest adapters behind the same store interface so services stay storage-agnostic; do binary file I/O here (not in `@unimatrix/api-client`); key all account data by the caller's session, never by client-provided ids
+- `packages/e2e-helpers`: test-only and app-agnostic — helpers take the selectors, route labels, and accessibility baseline they act on as arguments, so anything naming a specific app belongs in that app's `e2e/*.spec.ts` instead. Import it only from `e2e/`, never from `src/`. Consumers resolve it through a tsconfig `paths` entry pointing at `src/index.ts`, not through the `exports` map: Playwright will not transpile a path containing `node_modules`, so the symlinked resolution fails on raw TypeScript. Keep `@playwright/test` a peer dependency — two resolved copies means `expect` cannot see the running test
 
 ## Dependency Ceilings
 Four packages sit deliberately below `latest`. Each has a reason that is not "we have not got round to it", so do not merge a Dependabot PR proposing them without re-checking the reason still holds.
