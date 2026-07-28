@@ -393,13 +393,28 @@ describe("scanOccluders", () => {
   /**
    * `checkVisibility` does not exist in this jsdom, which is exactly why the
    * computed-style triple is the primary implementation rather than a fallback.
+   *
+   * The absence is *forced* rather than asserted. Asserting it made the test a
+   * statement about jsdom's API surface, so the day jsdom implements
+   * `checkVisibility` this would go red on an unrelated upgrade — and worse, the
+   * quiet version of that (dropping the assertion and keeping the rest) would
+   * stop exercising the fallback at all, silently, since the scan would start
+   * taking the fast path instead.
    */
   it("works without Element.prototype.checkVisibility", () => {
-    expect((Element.prototype as { checkVisibility?: unknown }).checkVisibility).toBeUndefined();
+    const prototype = Element.prototype as { checkVisibility?: unknown };
+    const had = "checkVisibility" in prototype;
+    const original = prototype.checkVisibility;
 
-    const container = root();
-    container.append(panel(100, 100, 400, 300));
+    delete prototype.checkVisibility;
 
-    expect(scan(container)).toHaveLength(1);
+    try {
+      const container = root();
+      container.append(panel(100, 100, 400, 300));
+
+      expect(scan(container)).toHaveLength(1);
+    } finally {
+      if (had) prototype.checkVisibility = original;
+    }
   });
 });

@@ -98,6 +98,41 @@ export const MUTATION_BACKOFF_MS = 500;
 const WATCHED_ATTRIBUTES = ["class", "style", "hidden", "inert"];
 
 /**
+ * Transition property names worth rescanning for, i.e. the ones that can change
+ * an element's geometry or whether it is visible at all. Everything else is
+ * ignored, and the measured reason is mouse movement: `transition-colors
+ * hover:*` is all over these apps, so a capture-phase listener with no filter
+ * turns a pointer sweep into a stream of whole-document `getComputedStyle`
+ * walks. Measured on `apps/web` `/about` in Chromium — four hovers (two nav
+ * links, a contact card, a button) fired 38 `transitionend` events, 34 of them
+ * `background-color` / `border-*-color` / `color`, and drove 260
+ * `getComputedStyle` calls against an idle baseline of zero.
+ *
+ * A colour transition *can* change classification, since `paintsSurface` keys on
+ * `background-color` alpha — a ghost control fading in `hover:bg-accent` crosses
+ * the 0.05 threshold. Deliberately not covered: those controls are the small
+ * ones, so they land in the soft tier where the cost of missing them is a trace
+ * grazing a hovered button for as long as the pointer rests on it, against
+ * re-deriving the entire occluder set on every hover. The `class` mutation is
+ * still watched, so a hover state applied by *class* (rather than by a
+ * pre-declared transition) rescans as before.
+ *
+ * `animationend` carries no `propertyName`, so it passes this filter untouched —
+ * a keyframe animation can move anything and is not the hover-frequency event
+ * this exists to drop.
+ */
+const RESCAN_TRANSITION_PROPERTIES = new Set([
+  "opacity",
+  "visibility",
+  "transform",
+  "translate",
+  "scale",
+  "rotate",
+  "width",
+  "height",
+]);
+
+/**
  * Whether a mutation originated inside one of our own SVG layers.
  *
  * This is what makes observing `style` attributes affordable at all:
@@ -509,7 +544,11 @@ export function CircuitOccluderProvider({
     // to zero with nothing left to trigger a correction. Scroll settle
     // (`SCROLL_SETTLE_MS`) does not cover it either, since the transition is
     // still running at that point.
-    const onTransitionEnd = () => {
+    const onTransitionEnd = (event: Event) => {
+      const property = (event as TransitionEvent).propertyName;
+
+      if (property !== undefined && !RESCAN_TRANSITION_PROPERTIES.has(property)) return;
+
       scheduleScan();
     };
     window.addEventListener("transitionend", onTransitionEnd, { passive: true, capture: true });

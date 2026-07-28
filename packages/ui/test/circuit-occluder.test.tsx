@@ -831,8 +831,56 @@ describe("CircuitOccluderProvider / useCircuitOccluder", () => {
       expect(latestRects).toEqual([{ x0: 200, y0: 300, x1: 500, y1: 700 }]);
     });
 
-    it("stretches the debounce once the scan rate is exceeded", async () => {
+    /**
+     * The counterpart to the case above, and the one that keeps a pointer sweep
+     * from re-deriving the whole occluder set: measured in Chromium on `apps/web`
+     * `/about`, four hovers fired 38 `transitionend` events, 34 of them colour
+     * properties, driving 260 `getComputedStyle` calls from an idle baseline of
+     * zero. A colour transition cannot move an element, so it cannot invalidate
+     * geometry the way the opacity fade above does.
+     */
+    it("ignores a colour transition ending", async () => {
       vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+
+      let latestRects: readonly Rect[] = [];
+      const transitioning = discoverable(300, 200);
+      attach(transitioning);
+
+      render(
+        <CircuitOccluderProvider>
+          <RectsProbe onRects={(r) => (latestRects = r)} />
+        </CircuitOccluderProvider>,
+      );
+
+      await flushRaf();
+      expect(latestRects).toEqual([{ x0: 200, y0: 300, x1: 500, y1: 500 }]);
+
+      boxAt(transitioning, 200, 300, 300, 400);
+
+      const colourEnd = new Event("transitionend");
+      // `TransitionEvent` is not constructible in this jsdom, and the handler
+      // reads `propertyName` off the event rather than instanceof-checking it.
+      Object.defineProperty(colourEnd, "propertyName", { value: "background-color" });
+      window.dispatchEvent(colourEnd);
+      act(() => {
+        vi.advanceTimersByTime(MUTATION_SETTLE_MS);
+      });
+      await flushRaf();
+
+      // Still the pre-transition geometry: no rescan ran, so the new box was
+      // never measured.
+      expect(latestRects).toEqual([{ x0: 200, y0: 300, x1: 500, y1: 500 }]);
+    });
+
+    it("stretches the debounce once the scan rate is exceeded", async () => {
+      // `Date` is faked alongside the timers, not left real: the backoff branch
+      // compares `Date.now()` against the timestamps of the last
+      // `MAX_SCANS_PER_SECOND` scans, so with a real clock this test would
+      // depend on the four burn iterations below finishing within one wall-clock
+      // second — fine locally, a flake on a loaded runner. Faked, each
+      // `advanceTimersByTime` moves the same clock the provider reads, and the
+      // four scans land 120ms apart deterministically.
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
 
       let latestRects: readonly Rect[] = [];
 
