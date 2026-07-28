@@ -10,8 +10,6 @@
 ## Package Manager
 - Use **pnpm** with Node `24.18.0` and pnpm `10.30.3`
 - Canonical root commands: `pnpm install`, `pnpm dev`, `pnpm setup:local`, `pnpm setup:worktree`, `pnpm check`, `pnpm verify`
-- Full root surface: `pnpm build`, `pnpm lint`, `pnpm test`, `pnpm typecheck`, `pnpm db:migrate`, `pnpm db:generate`
-- Repro install: `pnpm install --frozen-lockfile`
 - If host Node/pnpm mismatch: `./infra/scripts/pnpm-with-pinned-node.sh <pnpm-args>`
 
 ## Workspace
@@ -39,7 +37,6 @@
 - `packages/config-vitest`: shared Vitest coverage configuration; owns the provider, reporters, and exclusions, while each workspace supplies its own thresholds
 
 ## File-Scoped Commands
-Package names: `apps/web`→`@unimatrix/web`, `apps/api`→`@unimatrix/api`, `apps/cube-trainer`→`@unimatrix/cube-trainer`, `apps/auth`→`@unimatrix/auth-app`; packages use `@unimatrix/<dir-name>` (e.g. `packages/auth`→`@unimatrix/auth`).
 
 | Task | Command |
 | --- | --- |
