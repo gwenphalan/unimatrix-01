@@ -85,10 +85,24 @@ export function findAffectedTraceIds(
  * which this module has no visibility into — an in-line nudge sidesteps
  * that requirement entirely.
  *
+ * Reads the **full** cell-blocking channel, which since text blocks became
+ * `kind: "ink"` includes them: a tip swallowed by a paragraph gets nudged out
+ * exactly as one swallowed by a panel does. That is a reversal of the earlier
+ * intent, which was written when text was advisory-only and clipping it was
+ * accepted — a strict barrier the scroll path declined to escape would leave a
+ * trace tip sitting on glyphs until the `SCROLL_SETTLE_MS` commit regenerated.
+ * Measured on `apps/web` `/projects/cube-trainer` at 1908x879, wheel-scrolled
+ * through the condensed-header transition: 197 frames, median 16.7ms, p95
+ * 19.5ms, three frames over 50ms (max 72). The cost is `retargetTip` firing
+ * more often on text-dense routes, and it is bounded by the caller's
+ * `MAX_SCROLL_RETARGETS_PER_EVENT` and `RETARGET_COOLDOWN_MS`, not by this
+ * gate. Pass `surfaceOnlyBarriers(field)` if a caller ever needs the old
+ * surfaces-only behaviour back.
+ *
  * Returns `null` — an intentional "leave it alone", not a bug — when the
- * tip isn't currently inside a barrier (under hard barriers there is
- * nothing to fix: a free tip has no "better" position, only a different
- * one, so this only ever fires as a genuine escape, not an ambient nudge),
+ * tip isn't currently inside a barrier (a free tip has no "better" position,
+ * only a different one, so this only ever fires as a genuine escape, not an
+ * ambient nudge),
  * when the tip's own cell is already claimed by another trace's anchor
  * (sole-ownership guard: per `attachRoute`'s "nearest footprint point, any
  * cell, not just endpoints" semantics, a shared cell means some other

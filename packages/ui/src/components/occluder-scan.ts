@@ -72,7 +72,10 @@ export type DiscoveredSurface = {
   readonly kind: OccluderKind;
   /**
    * Rects **local to the element's own box origin**. A hard surface has exactly
-   * one, spanning its box; ink has one per coalesced line.
+   * one, spanning its box; ink has one per coalesced *block* (`coalesceInkRects`
+   * merges adjacent lines, so a paragraph is usually one rect, not one per
+   * line). One element can produce two entries — an `"ink"` one for the blocks
+   * that clear `MIN_HARD_SIDE_PX` and a `"soft"` one for the remainder.
    *
    * Local rather than viewport coordinates is what makes the discovery /
    * measurement split work: re-deriving viewport rects on scroll costs one
@@ -103,6 +106,15 @@ function defaultComputeStyle(el: Element): OccluderStyle {
  * Keeps the largest-area rects when a cap is hit. Dropping the *smallest* would
  * be the intuitive choice and is the wrong one: a cap is reached on pages dense
  * with small ink, and the rects that matter visually are the big ones.
+ *
+ * `MAX_HARD_RECTS` is a **shared** budget since text blocks became `"ink"` and
+ * started riding in the same list as painting surfaces, so this ranks a
+ * paragraph against a panel purely by area. The bad case, if the cap is ever
+ * reached, is a wide text block (786x47 is ~37k px²) evicting a small card and
+ * putting a trace back under a real surface — the exact failure automatic
+ * discovery exists to remove. Live counts are 3-6 hard entries per route across
+ * all three apps, so this is latent, not active; if it ever goes live, split the
+ * budget by kind rather than raising the number.
  */
 function capByArea(surfaces: DiscoveredSurface[], limit: number): DiscoveredSurface[] {
   if (surfaces.length <= limit) return surfaces;

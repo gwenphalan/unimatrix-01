@@ -64,15 +64,21 @@ for (const width of WIDTHS) {
 /**
  * Scrolling is the one path that re-measures occluders without a full style
  * walk, and it moves every surface at once. Worth its own case because the
- * scroll path is documented best-effort: `retargetTip` stays hard-only, and the
- * `SCROLL_SETTLE_MS` structural commit is the backstop that regenerates against
- * the new geometry.
+ * scroll path is documented best-effort: `retargetTip` nudges tips out of the
+ * cell-blocking channel (surfaces *and* text blocks), and the `SCROLL_SETTLE_MS`
+ * structural commit is the backstop that regenerates against the new geometry.
  *
  * Only the surface invariant is asserted after scrolling. A block of text is a
  * cell-blocking barrier now, so `expectCircuitFieldRespectsOccluders` already
  * covers it through the strict channel; what stays best-effort is the *soft*
  * remainder — single short lines and icons, which the routing ladder's last tier
  * may clip. Pinning a sample count for those would encode a value nobody chose.
+ *
+ * Measured by hand on `/projects/cube-trainer` at 1908x879, because the
+ * intermediate state is what a real user sees: immediately after the wheel
+ * stops, 250 trace samples sat inside surfaces and 103 inside soft rects; both
+ * were 0 once the settle commit landed. `waitForSettledCircuitField` below is
+ * what makes this assertion measure the converged state rather than that one.
  */
 test("scrolling does not leave traces inside a surface", async ({ page }) => {
   await page.setViewportSize({ height: 900, width: 1440 });
