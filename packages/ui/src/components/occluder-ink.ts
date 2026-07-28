@@ -18,10 +18,10 @@ export const MIN_INK_SIDE_PX = 6;
  * (`<a>`, `<code>`, `<strong>`) fragments a line into several client rects
  * whose tops can differ by a subpixel or two.
  */
-export const INK_LINE_MERGE_PX = 2;
+const INK_LINE_MERGE_PX = 2;
 
 /** Maximum vertical gap between lines that still merges into one block. */
-export const INK_BLOCK_MERGE_PX = 6;
+const INK_BLOCK_MERGE_PX = 6;
 
 /**
  * Minimum horizontal overlap ratio for two stacked lines to merge into a
@@ -30,7 +30,7 @@ export const INK_BLOCK_MERGE_PX = 6;
  * short heading sitting above wide body text does not merge and keeps its tight
  * ink width.
  */
-export const INK_BLOCK_OVERLAP_RATIO = 0.6;
+const INK_BLOCK_OVERLAP_RATIO = 0.6;
 
 /** Past this many rects for one element, the overflow unions into one rect. */
 export const MAX_INK_RECTS_PER_ELEMENT = 12;

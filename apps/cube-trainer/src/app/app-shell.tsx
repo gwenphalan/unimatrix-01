@@ -8,12 +8,11 @@ type AppShellProps = {
   children: ReactNode;
 };
 
-// `main` itself is no longer registered — it's a centered, non-scrolling
-// column spanning the whole viewport, which would blanket the entire field
-// at a flat weight regardless of what's actually on screen. Negative-space
-// routing instead comes from registering the real rectangular content
-// blocks inside it (mode tiles, learn/drill panels, case sections) — see
-// `useCircuitOccluder` calls in those components.
+// Nothing in this app registers a circuit occluder except `OccludingCluster`:
+// `CircuitOccluderProvider` discovers every painting surface itself. `main` is a
+// centered, non-scrolling column spanning the whole viewport and would blanket
+// the entire field if it occluded — it paints nothing, so the scan walks
+// straight through it to the mode tiles, learn/drill panels, and case cards.
 function AppShellContent({ children }: AppShellProps) {
   const pathname = useRouterState({
     select: (state) => state.location.pathname,

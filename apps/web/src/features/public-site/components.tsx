@@ -2,7 +2,7 @@ import * as React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { RiGithubLine, RiLoaderLine, RiMailLine } from "@remixicon/react";
 
-import { Badge, Card, cn, useCircuitOccluder } from "@unimatrix/ui/public";
+import { Badge, Card, cn } from "@unimatrix/ui/public";
 
 import { projectLiveStatusQueryOptions } from "./queries/check-project-live-status";
 import { emailAddress, githubProfileUrl } from "./site-links";
@@ -21,14 +21,9 @@ export function PublicPageContainer({ className, ...props }: React.ComponentProp
 
 export function PublicSiteFooter() {
   const year = new Date().getFullYear();
-  const footerRef = React.useRef<HTMLElement | null>(null);
-  useCircuitOccluder(footerRef);
 
   return (
-    <footer
-      className="site-panel site-shell overflow-hidden px-5 py-5 lg:px-8 lg:py-6"
-      ref={footerRef}
-    >
+    <footer className="site-panel site-shell overflow-hidden px-5 py-5 lg:px-8 lg:py-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-xs text-muted-foreground">© {year} Gwen Phalan.</p>
 
@@ -171,8 +166,6 @@ function PublicLinkedSurface({
           "absolute inset-0 z-10 outline-none focus-visible:ring-2 focus-visible:ring-primary/45",
       })
     : undefined;
-  const ref = React.useRef<HTMLDivElement | null>(null);
-  useCircuitOccluder(ref);
 
   return (
     <Card
@@ -182,7 +175,6 @@ function PublicLinkedSurface({
           "transition-[border-color,background-color,transform,box-shadow] duration-200 hover:border-primary/45 hover:bg-secondary/26 hover:-translate-y-0.5 focus-within:border-primary/50 focus-within:shadow-[0_0_0_1px_color-mix(in_oklab,var(--primary)_35%,transparent)]",
         className,
       )}
-      ref={ref}
     >
       {overlay}
       <div

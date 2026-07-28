@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { RiArrowLeftLine, RiArrowRightLine } from "@remixicon/react";
-import { Card, Kbd, useCircuitOccluder } from "@unimatrix/ui/public";
+import { Card, Kbd } from "@unimatrix/ui/public";
 
 import { CaseDiagramView } from "@/features/algorithms/components/case-diagram-view";
 import type { DiagramPreviewMode } from "@/features/algorithms/preview-mode";
@@ -15,8 +15,6 @@ export interface LearnPanelProps {
 export function LearnPanel({ previewMode, setId }: LearnPanelProps) {
   const { back, cube, currentCase, markLearned, next, setupMoves } = useLearnSession(setId);
   const [showAlternates, setShowAlternates] = useState(false);
-  const panelRef = useRef<HTMLDivElement | null>(null);
-  useCircuitOccluder(panelRef);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -42,10 +40,7 @@ export function LearnPanel({ previewMode, setId }: LearnPanelProps) {
 
   if (!currentCase || !cube) {
     return (
-      <Card
-        className="site-panel site-panel-strong flex min-h-96 flex-col items-center justify-center gap-3 px-6 py-10 text-center"
-        ref={panelRef}
-      >
+      <Card className="site-panel site-panel-strong flex min-h-96 flex-col items-center justify-center gap-3 px-6 py-10 text-center">
         <p className="text-sm text-muted-foreground">Every case in this set is known.</p>
       </Card>
     );
@@ -54,10 +49,7 @@ export function LearnPanel({ previewMode, setId }: LearnPanelProps) {
   const [primaryAlgorithm, ...alternateAlgorithms] = currentCase.algorithms;
 
   return (
-    <Card
-      className="site-panel site-panel-strong flex flex-col items-center gap-6 px-6 py-10 text-center"
-      ref={panelRef}
-    >
+    <Card className="site-panel site-panel-strong flex flex-col items-center gap-6 px-6 py-10 text-center">
       <CaseDiagramView
         cube={cube}
         label={currentCase.displayName}

@@ -1,8 +1,8 @@
 import { createLazyFileRoute } from "@tanstack/react-router";
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { RiGithubLine, RiMailLine, RiSendPlaneLine } from "@remixicon/react";
 
-import { Button, useCircuitOccluder } from "@unimatrix/ui/public";
+import { Button } from "@unimatrix/ui/public";
 
 import { homeContent } from "@/features/content/site-content";
 import { emailAddress, githubProfileUrl, projectRepoUrl } from "@/features/public-site/site-links";
@@ -13,10 +13,6 @@ export const Route = createLazyFileRoute("/about")({
 
 function AboutRoute() {
   const [formState, setFormState] = useState({ email: "", message: "", name: "" });
-  const contactRef = useRef<HTMLElement | null>(null);
-  const formRef = useRef<HTMLElement | null>(null);
-  useCircuitOccluder(contactRef);
-  useCircuitOccluder(formRef);
 
   const mailtoHref = useMemo(() => {
     const subject = formState.name
@@ -43,7 +39,7 @@ function AboutRoute() {
       </header>
 
       <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_minmax(22rem,26rem)]">
-        <section className="site-panel px-5 py-5 lg:px-7 lg:py-7" ref={contactRef}>
+        <section className="site-panel px-5 py-5 lg:px-7 lg:py-7">
           <div className="space-y-5">
             <div className="space-y-2">
               <h2 className="text-xl leading-tight font-medium tracking-[-0.04em] text-foreground lg:text-2xl">
@@ -100,7 +96,7 @@ function AboutRoute() {
           </div>
         </section>
 
-        <section className="site-panel px-5 py-5 lg:px-6 lg:py-6" ref={formRef}>
+        <section className="site-panel px-5 py-5 lg:px-6 lg:py-6">
           <div className="space-y-5">
             <div className="space-y-2">
               <h2 className="text-xl leading-tight font-medium tracking-[-0.04em] text-foreground lg:text-2xl">

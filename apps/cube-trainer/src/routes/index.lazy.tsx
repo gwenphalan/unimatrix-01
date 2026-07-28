@@ -1,9 +1,6 @@
 import { Link, createLazyFileRoute } from "@tanstack/react-router";
 import { RiBookOpenLine, RiFlashlightLine } from "@remixicon/react";
 import type { RemixiconComponentType } from "@remixicon/react";
-import { useRef } from "react";
-
-import { useCircuitOccluder } from "@unimatrix/ui/public";
 
 import { OccludingCluster } from "@/features/cube-trainer-site/components";
 
@@ -16,13 +13,10 @@ const MODES = [
   { icon: RiFlashlightLine, label: "Drill", to: "/drill" as const },
 ];
 
-// Each tile registers itself as an occluder — a hook can't be called per
-// iteration of a `.map()`, so this is its own component instead. The
-// occluder ref lives on the wrapping `div`, not the `Link` itself: circuit
-// occluders are meant for non-interactive surfaces (panels, cards,
-// footers), never for interactive elements like links/buttons, even one
-// that's visually a card. The `Link` stays the full-size click target
-// inside it.
+// The tile is discovered as an occluder automatically: `.site-panel` paints,
+// and the wrapping `div` — not the `Link` inside it — is the element that
+// carries that class, so what registers is still the surface rather than the
+// interactive element.
 function ModeTile({
   icon: Icon,
   label,
@@ -32,11 +26,8 @@ function ModeTile({
   label: string;
   to: "/learn" | "/drill";
 }) {
-  const ref = useRef<HTMLDivElement | null>(null);
-  useCircuitOccluder(ref);
-
   return (
-    <div className="site-panel site-panel-strong h-40" ref={ref}>
+    <div className="site-panel site-panel-strong h-40">
       <Link
         className="flex h-full w-full flex-col items-center justify-center gap-3 text-center transition-colors hover:bg-primary/8"
         to={to}

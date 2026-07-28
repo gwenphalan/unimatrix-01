@@ -28,17 +28,17 @@ import type { OccluderKind, Rect } from "./occlusion.js";
  */
 
 /** Minimum side for a *hard* rect. Below it, an element demotes to ink. */
-export const MIN_HARD_SIDE_PX = GRID;
+const MIN_HARD_SIDE_PX = GRID;
 
-export const MAX_SCAN_ELEMENTS = 4000;
-export const MAX_SCAN_DEPTH = 40;
-export const MAX_HARD_RECTS = 64;
+const MAX_SCAN_ELEMENTS = 4000;
+const MAX_SCAN_DEPTH = 40;
+const MAX_HARD_RECTS = 64;
 /**
  * The hot cap. `segmentCrossesBarrier` scans this list per candidate segment
  * per trace, and `walkFromStart`'s reject multiplies that by roughly six
  * attempts per segment.
  */
-export const MAX_SOFT_RECTS = 256;
+const MAX_SOFT_RECTS = 256;
 
 /** Marks our own SVG layers, so the scan never occludes against itself. */
 export const CIRCUIT_FIELD_MARKER = "data-circuit-field";

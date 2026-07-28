@@ -1,8 +1,6 @@
 import { createLazyFileRoute, getRouteApi } from "@tanstack/react-router";
-import { useRef } from "react";
 
 import { SignIn } from "@unimatrix/auth/react";
-import { useCircuitOccluder } from "@unimatrix/ui/public";
 
 import { safeRedirectUrl, withRedirectParam } from "@/features/auth/safe-redirect";
 
@@ -17,14 +15,13 @@ function SignInRoute() {
   // Validated against the same-family allowlist before it can ever be used
   // as a post-auth redirect target; falls back to the auth landing ("/").
   const target = safeRedirectUrl(redirect_url);
-  // Clerk's hosted widget doesn't forward a DOM ref, so this wrapper carries
-  // the occluder ref instead — it shrink-wraps the widget exactly, unlike a
-  // shell-level wrapper which would conflict with other routes' own sizing.
-  const ref = useRef<HTMLDivElement | null>(null);
-  useCircuitOccluder(ref);
+  // Clerk's hosted widget mounts asynchronously and paints its own `.cl-card`,
+  // which the provider's DOM scan discovers on its own — this wrapper no longer
+  // registers anything. It stays because `w-fit` shrink-wraps the widget inside
+  // the shell's centering column; removing it is a layout change, not a cleanup.
 
   return (
-    <div className="w-fit" ref={ref}>
+    <div className="w-fit">
       {/*
        * Clerk's <SignIn /> needs to route its own internal sub-steps
        * (email code entry, MFA, etc). Two options integrate with

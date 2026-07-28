@@ -28,7 +28,7 @@ export type OccluderStyle = {
  * these are compared upper-cased: `tagName` is uppercase for HTML elements but
  * *lowercase* for SVG ones, so `<svg>` would silently miss a naive check.
  */
-export const REPLACED_TAGS: ReadonlySet<string> = new Set([
+const REPLACED_TAGS: ReadonlySet<string> = new Set([
   "IMG",
   "SVG",
   "VIDEO",

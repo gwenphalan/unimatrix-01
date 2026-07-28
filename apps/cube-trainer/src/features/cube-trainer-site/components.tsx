@@ -10,11 +10,20 @@ import { cn, useCircuitOccluder } from "@unimatrix/ui/public";
  * wrapper rather than the controls: occluders are meant for non-interactive
  * surfaces, and registering a `Button`/`Link` directly warns.
  *
+ * **The one surviving `useCircuitOccluder` call in the repo, and a deliberate
+ * force-include.** Every other registration was deleted once
+ * `CircuitOccluderProvider` started discovering occluders by what paints: this
+ * wrapper paints nothing at all, so no paint-based classifier can find it. The
+ * controls inside it do paint, but each is under one grid cell tall and would
+ * therefore be classified as ink (a few px of clearance) rather than as a
+ * surface — which is not enough for a row of buttons.
+ *
  * `-m-1 p-1` is load bearing in both directions. A bare 36px control row is
- * under `MIN_OCCLUDER_SIDE_PX` (one grid cell) on its short side and would be
- * rejected as too small to be a real surface, so the box needs the padding to
+ * under `MIN_OCCLUDER_SIDE_PX` (one grid cell) on its short side and manual
+ * registrants are still floor-and-rejected, so the box needs the padding to
  * clear the floor — and the matching negative margin keeps the outer margin
  * box identical to the original content box, so nothing on screen moves.
+ * Removing the padding as dead styling would silently drop the occluder.
  */
 export function OccludingCluster({ className, ...props }: React.ComponentProps<"div">) {
   const ref = useRef<HTMLDivElement | null>(null);

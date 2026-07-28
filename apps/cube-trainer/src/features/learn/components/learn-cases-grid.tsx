@@ -1,7 +1,3 @@
-import { useRef } from "react";
-
-import { useCircuitOccluder } from "@unimatrix/ui/public";
-
 import { getAlgorithmSet, groupCasesByGroup } from "@/features/algorithms/algorithm-sets";
 import { CasePreviewCard } from "@/features/algorithms/components/case-preview-card";
 import type { AlgorithmCase, AlgorithmSetId } from "@/features/algorithms/types";
@@ -12,8 +8,10 @@ export interface LearnCasesGridProps {
   setId: AlgorithmSetId;
 }
 
-// A hook can't be called per iteration of the outer `.map()`, so each
-// group's occluder registration lives in its own component.
+// Kept as its own component for the `useCaseProgress`-driven props below; it no
+// longer registers an occluder. The `section` paints nothing, so the field now
+// routes around the `h2`'s ink and each `CasePreviewCard.site-panel` instead of
+// around one rect spanning the whole group.
 function LearnGroupSection({
   cases,
   group,
@@ -27,13 +25,10 @@ function LearnGroupSection({
   setId: AlgorithmSetId;
   updateStatus: (caseId: string, status: CaseStatus) => void;
 }) {
-  const sectionRef = useRef<HTMLElement | null>(null);
-  useCircuitOccluder(sectionRef, { enabled: cases.length > 0 });
-
   if (cases.length === 0) return null;
 
   return (
-    <section className="space-y-3" ref={sectionRef}>
+    <section className="space-y-3">
       <h2 className="text-xs font-medium tracking-[0.2em] text-muted-foreground uppercase">
         {group}
       </h2>

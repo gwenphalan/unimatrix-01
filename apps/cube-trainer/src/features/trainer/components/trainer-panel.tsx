@@ -1,6 +1,6 @@
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 
-import { Card, Kbd, useCircuitOccluder } from "@unimatrix/ui/public";
+import { Card, Kbd } from "@unimatrix/ui/public";
 
 import { CaseDiagramView } from "@/features/algorithms/components/case-diagram-view";
 import type { DiagramPreviewMode } from "@/features/algorithms/preview-mode";
@@ -17,8 +17,6 @@ export function TrainerPanel({
   setId: AlgorithmSetId;
 }) {
   const { cube, currentCase, next, setupMoves } = useAlgorithmTrainer(setId, cases);
-  const panelRef = useRef<HTMLDivElement | null>(null);
-  useCircuitOccluder(panelRef);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -34,10 +32,7 @@ export function TrainerPanel({
   }, [next]);
 
   return (
-    <Card
-      className="site-panel site-panel-strong flex min-h-96 flex-col items-center justify-center gap-6 px-6 py-10 text-center"
-      ref={panelRef}
-    >
+    <Card className="site-panel site-panel-strong flex min-h-96 flex-col items-center justify-center gap-6 px-6 py-10 text-center">
       {currentCase && cube ? (
         <>
           <CaseDiagramView
