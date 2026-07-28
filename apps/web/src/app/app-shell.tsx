@@ -440,8 +440,14 @@ function AppShellContent({ children }: AppShellProps) {
       {/* Mounted once, here, rather than beside each admin control: every
           admin action reports through one toast host, and two hosts would
           render two stacks. Nothing for a non-admin — the slot returns null
-          and loads no chunk. */}
-      <AdminSlot kind="toaster" />
+          and loads no chunk.
+
+          Taken out of flow. The host renders a zero-height element, but a
+          zero-height *flex item* still earns the column's `gap-10`, so an
+          admin saw 40px of dead space under the footer that nobody else did. */}
+      <div className="absolute">
+        <AdminSlot kind="toaster" />
+      </div>
     </PublicPageContainer>
   );
 }

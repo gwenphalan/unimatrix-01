@@ -19,8 +19,8 @@ function IndexRoute() {
   const { blogEntries, home, projects } = Route.useLoaderData();
 
   return (
-    <div className="space-y-8 sm:space-y-12 lg:space-y-16">
-      <section className="max-w-3xl space-y-4 pb-2">
+    <div className="space-y-8 lg:space-y-10">
+      <section className="max-w-3xl space-y-4 lg:max-w-none">
         <h1 className="text-3xl leading-[0.92] font-medium tracking-[-0.06em] text-foreground sm:text-4xl lg:text-[3.2rem]">
           {home.frontmatter.title}
         </h1>
@@ -38,7 +38,7 @@ function IndexRoute() {
             // No rule under a badge-only heading: with the title visually hidden
             // it separated the badge from the list it introduces rather than
             // the section from what came before.
-            className="border-b-0 pb-0"
+            className="border-b-0 pb-0 sm:pb-0"
             title="Featured projects"
             titleClassName="sr-only"
           />
@@ -82,7 +82,7 @@ function IndexRoute() {
             // No rule under a badge-only heading: with the title visually hidden
             // it separated the badge from the list it introduces rather than
             // the section from what came before.
-            className="border-b-0 pb-0"
+            className="border-b-0 pb-0 sm:pb-0"
             title="Recent blog posts"
             titleClassName="sr-only"
           />
@@ -133,8 +133,8 @@ function IndexRoute() {
  */
 function HomeUnavailable() {
   return (
-    <div className="space-y-8 sm:space-y-12 lg:space-y-16">
-      <section className="max-w-3xl space-y-4 pb-2">
+    <div className="space-y-8 lg:space-y-10">
+      <section className="max-w-3xl space-y-4 lg:max-w-none">
         <h1 className="text-3xl leading-[0.92] font-medium tracking-[-0.06em] text-foreground sm:text-4xl lg:text-[3.2rem]">
           {homeContent.frontmatter.title}
         </h1>
