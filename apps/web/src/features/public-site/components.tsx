@@ -114,7 +114,12 @@ export function PublicSectionHeading({
         ) : null}
       </div>
 
-      {trailing ? <div className="flex items-end justify-end">{trailing}</div> : null}
+      {/* Right-aligned only once it shares a row with the title. Stacked below
+          `lg`, a right-aligned control sat opposite a left-aligned heading with
+          nothing between them. */}
+      {trailing ? (
+        <div className="flex items-end justify-start lg:justify-end">{trailing}</div>
+      ) : null}
     </div>
   );
 }

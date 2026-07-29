@@ -21,11 +21,13 @@ function ProjectsRoute() {
   if (projects.length === 0) {
     return (
       <div className="space-y-5">
-        <PublicSectionHeading headingLevel={1} title="Projects" />
-
         {/* Also on the empty branch: an empty list is exactly when an admin
             most needs the create button. */}
-        <AdminSlot kind="new-post" type="project" />
+        <PublicSectionHeading
+          headingLevel={1}
+          title="Projects"
+          trailing={<AdminSlot kind="new-post" type="project" />}
+        />
 
         <PublicNotice
           description="Nothing is published here yet. Check back once the first project goes up."
@@ -38,9 +40,12 @@ function ProjectsRoute() {
 
   return (
     <div className="space-y-5">
-      <PublicSectionHeading headingLevel={1} title="Projects" />
-
-      <AdminSlot kind="new-post" type="project" />
+      {/* Inline with the title, not a row below it — see the empty branch. */}
+      <PublicSectionHeading
+        headingLevel={1}
+        title="Projects"
+        trailing={<AdminSlot kind="new-post" type="project" />}
+      />
 
       <div className="grid gap-3">
         {projects.map((project, index) => {
