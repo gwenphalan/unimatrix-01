@@ -377,7 +377,9 @@ void test("putDocument accepts a write that lands exactly on the cumulative quot
 
   try {
     await putDocument(db, "user_1", "cube-trainer", "a", "a".repeat(40), 100);
-    const created = await putDocument(db, "user_1", "cube-trainer", "b", "a".repeat(54), 100);
+    // 42 bytes already stored + 58 bytes here == the 100 byte cap exactly, so
+    // this fails if the comparison is ever loosened from `>` to `>=`.
+    const created = await putDocument(db, "user_1", "cube-trainer", "b", "a".repeat(56), 100);
 
     assert.equal(created.key, "b");
   } finally {

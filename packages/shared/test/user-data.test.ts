@@ -398,6 +398,9 @@ describe("documentValueSchema size bound", () => {
     const result = putDocumentBodySchema.safeParse({ namespace: "cube-trainer", key: "settings" });
 
     expect(result.success).toBe(false);
+    // Exactly one issue: the size refinement must not also fire on a value
+    // that was never supplied, or the caller gets a contradictory pair.
+    expect(result.error?.issues).toHaveLength(1);
     expect(result.error?.issues[0]?.message).toMatch(/value is required/u);
   });
 
