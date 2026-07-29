@@ -8,11 +8,17 @@ type AppShellProps = {
   children: ReactNode;
 };
 
-// Nothing in this app registers a circuit occluder except `OccludingCluster`:
+// Nothing in this app registers a circuit occluder by hand any more:
 // `CircuitOccluderProvider` discovers every painting surface itself. `main` is a
 // centered, non-scrolling column spanning the whole viewport and would blanket
 // the entire field if it occluded — it paints nothing, so the scan walks
 // straight through it to the mode tiles, learn/drill panels, and case cards.
+//
+// The control rows (the view title bars, the set/preview toggles, the home
+// wordmark) are therefore *soft* occluders, not hard ones: a shadcn control is
+// 36px on its short side and `MIN_HARD_SIDE_PX` is one 40px grid cell, so they
+// demote to ink. They used to be force-included through a padded
+// `useCircuitOccluder` wrapper; that was removed deliberately rather than lost.
 function AppShellContent({ children }: AppShellProps) {
   const pathname = useRouterState({
     select: (state) => state.location.pathname,

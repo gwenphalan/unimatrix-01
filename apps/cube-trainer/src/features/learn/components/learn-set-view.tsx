@@ -1,6 +1,4 @@
 import { useState } from "react";
-import { Link } from "@tanstack/react-router";
-import { RiArrowLeftLine } from "@remixicon/react";
 import { Button } from "@unimatrix/ui/public";
 
 import { AlgorithmSetToggle } from "@/features/algorithms/components/algorithm-set-toggle";
@@ -8,7 +6,7 @@ import { PreviewModeToggle } from "@/features/algorithms/components/preview-mode
 import { resolvePreviewMode } from "@/features/algorithms/preview-mode";
 import type { AlgorithmSetId } from "@/features/algorithms/types";
 import { usePreviewMode } from "@/features/algorithms/use-preview-mode";
-import { OccludingCluster } from "@/features/cube-trainer-site/components";
+import { ToolTitleBar } from "@/features/cube-trainer-site/components";
 import { LearnCasesGrid } from "@/features/learn/components/learn-cases-grid";
 import { LearnPanel } from "@/features/learn/components/learn-panel";
 
@@ -25,21 +23,15 @@ export function LearnSetView() {
   if (mode === "cases") {
     return (
       <div className="space-y-8">
-        <div className="flex items-center justify-between gap-4">
-          <OccludingCluster>
-            <Button
-              aria-label="Back to learning"
-              onClick={() => {
-                setMode("session");
-              }}
-              size="icon"
-              variant="outline"
-            >
-              <RiArrowLeftLine aria-hidden="true" className="size-4" />
-            </Button>
-            <h1 className="text-xl font-medium tracking-[-0.03em] text-foreground">Choose cases</h1>
-          </OccludingCluster>
-        </div>
+        <ToolTitleBar
+          back={{
+            label: "Back to learning",
+            onClick: () => {
+              setMode("session");
+            },
+          }}
+          title="Choose cases"
+        />
 
         <LearnCasesGrid key={setId} setId={setId} />
       </div>
@@ -48,16 +40,8 @@ export function LearnSetView() {
 
   return (
     <div className="space-y-8">
-      <div className="flex items-center justify-between gap-4">
-        <OccludingCluster>
-          <Button asChild aria-label="Home" size="icon" variant="outline">
-            <Link to="/">
-              <RiArrowLeftLine aria-hidden="true" className="size-4" />
-            </Link>
-          </Button>
-          <h1 className="text-xl font-medium tracking-[-0.03em] text-foreground">Learning</h1>
-        </OccludingCluster>
-        <OccludingCluster>
+      <ToolTitleBar
+        actions={
           <Button
             onClick={() => {
               setMode("cases");
@@ -66,18 +50,16 @@ export function LearnSetView() {
           >
             Choose cases
           </Button>
-        </OccludingCluster>
-      </div>
+        }
+        back={{ label: "Home", to: "/" }}
+        title="Learning"
+      />
 
       <LearnPanel key={setId} previewMode={resolvedPreviewMode} setId={setId} />
 
       <div className="flex items-center justify-between gap-4">
-        <OccludingCluster>
-          <AlgorithmSetToggle onChange={setSetId} setId={setId} />
-        </OccludingCluster>
-        <OccludingCluster>
-          <PreviewModeToggle mode={resolvedPreviewMode} onChange={setPreviewMode} setId={setId} />
-        </OccludingCluster>
+        <AlgorithmSetToggle onChange={setSetId} setId={setId} />
+        <PreviewModeToggle mode={resolvedPreviewMode} onChange={setPreviewMode} setId={setId} />
       </div>
     </div>
   );

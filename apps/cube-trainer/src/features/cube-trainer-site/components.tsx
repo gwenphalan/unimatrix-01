@@ -1,35 +1,52 @@
 import type * as React from "react";
-import { useRef } from "react";
+import { Link } from "@tanstack/react-router";
+import { RiArrowLeftLine } from "@remixicon/react";
 
-import { cn, useCircuitOccluder } from "@unimatrix/ui/public";
+import { Button, cn } from "@unimatrix/ui/public";
 
 /**
- * Wraps a cluster of controls in a non-interactive box registered as a
- * circuit-field occluder, so the background traces route around the cluster
- * instead of running under its buttons. The ref deliberately goes on this
- * wrapper rather than the controls: occluders are meant for non-interactive
- * surfaces, and registering a `Button`/`Link` directly warns.
+ * The row that opens a view: a back control, the view's `h1`, and whatever
+ * that view puts opposite them.
  *
- * **The one surviving `useCircuitOccluder` call in the repo, and a deliberate
- * force-include.** Every other registration was deleted once
- * `CircuitOccluderProvider` started discovering occluders by what paints: this
- * wrapper paints nothing at all, so no paint-based classifier can find it. The
- * controls inside it do paint, but each is under one grid cell tall and would
- * therefore be classified as ink (a few px of clearance) rather than as a
- * surface — which is not enough for a row of buttons.
+ * Four places rendered this by hand — Learn and Drill, each in its session view
+ * and its case-picker view — with the same wrapper, the same icon button, and
+ * the same heading classes, differing only in the heading text and where "back"
+ * goes. It stays app-local rather than moving to `@unimatrix/ui` because
+ * nothing outside cube-trainer opens a view this way.
  *
- * `-m-1 p-1` is load bearing in both directions. A bare 36px control row is
- * under `MIN_OCCLUDER_SIDE_PX` (one grid cell) on its short side and manual
- * registrants are still floor-and-rejected, so the box needs the padding to
- * clear the floor — and the matching negative margin keeps the outer margin
- * box identical to the original content box, so nothing on screen moves.
- * Removing the padding as dead styling would silently drop the occluder.
+ * `back` is a discriminated pair rather than a `ReactNode`: every call site
+ * either routes home or steps a local mode back, and taking the button as a
+ * slot would let a caller ship one without an accessible name.
  */
-export function OccludingCluster({ className, ...props }: React.ComponentProps<"div">) {
-  const ref = useRef<HTMLDivElement | null>(null);
-  useCircuitOccluder(ref);
+export function ToolTitleBar({
+  actions,
+  back,
+  title,
+}: {
+  actions?: React.ReactNode;
+  back: { label: string } & ({ onClick: () => void } | { to: string });
+  title: string;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-4">
+      <div className="flex items-center gap-3">
+        {"to" in back ? (
+          <Button asChild aria-label={back.label} size="icon" variant="outline">
+            <Link to={back.to}>
+              <RiArrowLeftLine aria-hidden="true" className="size-4" />
+            </Link>
+          </Button>
+        ) : (
+          <Button aria-label={back.label} onClick={back.onClick} size="icon" variant="outline">
+            <RiArrowLeftLine aria-hidden="true" className="size-4" />
+          </Button>
+        )}
+        <h1 className="text-xl font-medium tracking-[-0.03em] text-foreground">{title}</h1>
+      </div>
 
-  return <div className={cn("-m-1 flex items-center gap-3 p-1", className)} ref={ref} {...props} />;
+      {actions === undefined ? null : <div className="flex items-center gap-3">{actions}</div>}
+    </div>
+  );
 }
 
 export function AppPageContainer({ className, ...props }: React.ComponentProps<"div">) {
