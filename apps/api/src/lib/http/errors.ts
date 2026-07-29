@@ -8,6 +8,7 @@ export type ApiErrorCode =
   | "NOT_FOUND"
   | "UNAUTHORIZED"
   | "FORBIDDEN"
+  | "RATE_LIMITED"
   | "INTERNAL_ERROR";
 
 export interface ApiValidationIssue {
@@ -167,6 +168,22 @@ export function normalizeError(error: unknown, requestId: string): NormalizedApi
       statusCode: 404,
       envelope: createNotFoundErrorEnvelope(requestId),
       logLevel: "info",
+    };
+  }
+
+  // Ahead of the generic client-error branch so the ceiling is nameable: a
+  // client retrying after 429 needs to know it was rate-limited rather than
+  // that it sent something wrong.
+  if (fastifyStatusCode === 429) {
+    return {
+      statusCode: 429,
+      envelope: createApiErrorEnvelope({
+        requestId,
+        code: "RATE_LIMITED",
+        message: getFastifyErrorMessage(error),
+        statusCode: 429,
+      }),
+      logLevel: "warn",
     };
   }
 
