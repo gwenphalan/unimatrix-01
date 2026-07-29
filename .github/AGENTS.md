@@ -32,9 +32,9 @@ this file holds the mechanics, each of which was learned the hard way.
 
 ## CI
 
-- CI's `Images` job builds all four `apps/*/Dockerfile`, and its four matrix checks — `Images (api)`,
-  `Images (auth)`, `Images (cube-trainer)`, `Images (web)` — are required on `main` alongside
-  `Verify`. This exists because `Verify` is Vite and tsc only and never touches a Dockerfile, so a
+- CI's `Images` job builds every `apps/*/Dockerfile`, and all five matrix checks — `Images (admin)`,
+  `Images (api)`, `Images (auth)`, `Images (cube-trainer)`, `Images (web)` — are required on `main`
+  alongside `Verify`, `Review dependency changes`, `Analyze`, and `CodeQL`. This exists because `Verify` is Vite and tsc only and never touches a Dockerfile, so a
   dependency could pass every check while making the deployable image unbuildable. `better-sqlite3@13`
   is the live example: no published prebuilds, so it falls back to `node-gyp` and dies on alpine.
   **If you add a Dockerfile, add it to the matrix and to the required checks, or it is unverified.**

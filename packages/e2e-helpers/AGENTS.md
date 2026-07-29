@@ -1,11 +1,11 @@
 # AGENTS.md
 
 ## 1. Overview
-`packages/e2e-helpers` holds shared Playwright assertion helpers for the app e2e suites: an accessibility scan and a page-error collector. It exists so two app suites do not keep their own drifting copies of the same assertion.
+`packages/e2e-helpers` holds shared Playwright helpers for the app e2e suites: an accessibility scan, a page-error collector, and a route-navigation helper (`gotoRoute`). It exists so two app suites do not keep their own drifting copies of the same assertion.
 
 ## 2. Folder Structure
 - `src/accessibility.ts`: the shared accessibility scan.
-- `src/page-errors.ts`: page-error collection.
+- `src/page-errors.ts`: page-error collection, plus `gotoRoute` for shared route navigation.
 - `src/index.ts`: the barrel.
 
 ## 3. Core Behaviors & Patterns
