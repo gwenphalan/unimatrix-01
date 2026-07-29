@@ -7,6 +7,7 @@ surface:
 - `apps/api` as a Fastify Node runtime image
 - `apps/cube-trainer` as a static Vite SPA image
 - `apps/auth` as a static Vite SPA image
+- `apps/admin` as a static Vite SPA image
 
 Dokploy plus Traefik is the primary production target for now. The Docker and
 Compose files here are the secondary, manual deployment path and the local
@@ -21,6 +22,8 @@ validation path for containerized builds.
 - `apps/cube-trainer/nginx.conf`: static file server config with SPA fallback
 - `apps/auth/Dockerfile`: multi-stage auth app image build
 - `apps/auth/nginx.conf`: static file server config with SPA fallback
+- `apps/admin/Dockerfile`: multi-stage admin app image build
+- `apps/admin/nginx.conf`: static file server config with SPA fallback
 - `infra/docker/web-compose.yaml`: single-service `web` stack, used both for
   local validation and as a Dokploy Compose deployment
 - `infra/docker/api-compose.yaml`: single-service `api` stack, used both for
@@ -29,11 +32,13 @@ validation path for containerized builds.
   stack, used both for local validation and as a Dokploy Compose deployment
 - `infra/docker/auth-compose.yaml`: single-service `auth` stack, used both for
   local validation and as a Dokploy Compose deployment
+- `infra/docker/admin-compose.yaml`: single-service `admin` stack, used both
+  for local validation and as a Dokploy Compose deployment
 - `.dockerignore`: root build hygiene for repo-root Docker contexts
 
 ## Monorepo build rules
 
-Build all four images from the repo root, not from an individual app
+Build all five images from the repo root, not from an individual app
 directory.
 
 That is required because:
@@ -48,6 +53,9 @@ That is required because:
 - `apps/auth` resolves its `@unimatrix/auth`, `@unimatrix/api-client`,
   `@unimatrix/shared`, and `@unimatrix/ui` workspace source aliases from
   `apps/auth/vite.config.ts` and `apps/auth/tsconfig.json`
+- `apps/admin` resolves its `@unimatrix/auth`, `@unimatrix/chrome`, and
+  `@unimatrix/ui` workspace source aliases from `apps/admin/vite.config.ts`
+  and `apps/admin/tsconfig.json`
 
 The checked-in images assume these repo-root build contexts:
 
@@ -56,6 +64,7 @@ docker build -f apps/web/Dockerfile .
 docker build -f apps/api/Dockerfile .
 docker build -f apps/cube-trainer/Dockerfile .
 docker build -f apps/auth/Dockerfile .
+docker build -f apps/admin/Dockerfile .
 ```
 
 ## Dokploy watch-path convention
@@ -68,6 +77,7 @@ Each live app README is the canonical service-specific list:
 - `apps/api/README.md`
 - `apps/cube-trainer/README.md`
 - `apps/auth/README.md`
+- `apps/admin/README.md`
 
 Every list includes the service directory, workspace source imported by its
 build, root pnpm manifests, `.dockerignore`, and the service-specific Compose
@@ -218,11 +228,48 @@ docker build \
   .
 ```
 
+## Admin image
+
+The admin image builds `apps/admin/dist` and serves it from a small internal
+Nginx container, same pattern as the other SPA images. It is the operator
+console behind Cloudflare Access; the container itself carries no secrets.
+
+### Admin build inputs
+
+See [`apps/admin/README.md`](../../apps/admin/README.md) for the canonical,
+up-to-date list of build inputs and Dokploy watch paths.
+
+### Admin runtime contract
+
+- container port: `8080`
+- build artifact: `apps/admin/dist`
+- required SPA fallback: unknown application routes must serve `index.html`
+- build-time env: `VITE_API_BASE_URL`, `VITE_CLERK_PUBLISHABLE_KEY`; optional
+  `VITE_AUTH_APP_URL` (sign-in redirect target, defaults to
+  `https://auth.unimatrix-01.dev`)
+
+`VITE_CLERK_PUBLISHABLE_KEY` has no Dockerfile default on purpose:
+`loadAdminAppRuntimeConfig` throws without it, so an image built without the
+key fails loudly in the browser rather than rendering an admin console that
+can never sign anyone in. All `VITE_*` values are inlined at build time, not
+container start.
+
+Example build:
+
+```bash
+docker build \
+  -f apps/admin/Dockerfile \
+  --build-arg VITE_API_BASE_URL=http://localhost:3001 \
+  --build-arg VITE_CLERK_PUBLISHABLE_KEY=pk_test_xxx \
+  -t unimatrix-admin:local \
+  .
+```
+
 ## Compose workflow
 
 `infra/docker/web-compose.yaml`, `infra/docker/api-compose.yaml`,
-`infra/docker/cube-trainer-compose.yaml`, and `infra/docker/auth-compose.yaml`
-are each single-service files. Run them together from the repo root for local
+`infra/docker/cube-trainer-compose.yaml`, `infra/docker/auth-compose.yaml`,
+and `infra/docker/admin-compose.yaml` are each single-service files. Run them together from the repo root for local
 combined validation:
 
 ```bash
@@ -234,6 +281,7 @@ docker compose \
   -f infra/docker/web-compose.yaml \
   -f infra/docker/cube-trainer-compose.yaml \
   -f infra/docker/auth-compose.yaml \
+  -f infra/docker/admin-compose.yaml \
   up --build
 ```
 
@@ -254,6 +302,9 @@ docker run --rm -p 8081:8080 unimatrix-cube-trainer:local
 
 docker build -f apps/auth/Dockerfile --build-arg VITE_API_BASE_URL=http://localhost:3001 --build-arg VITE_CLERK_PUBLISHABLE_KEY=pk_test_xxx -t unimatrix-auth:local .
 docker run --rm -p 8082:8080 unimatrix-auth:local
+
+docker build -f apps/admin/Dockerfile --build-arg VITE_API_BASE_URL=http://localhost:3001 --build-arg VITE_CLERK_PUBLISHABLE_KEY=pk_test_xxx -t unimatrix-admin:local .
+docker run --rm -p 8083:8080 unimatrix-admin:local
 ```
 
 To stop the compose stack:
@@ -264,6 +315,7 @@ docker compose \
   -f infra/docker/web-compose.yaml \
   -f infra/docker/cube-trainer-compose.yaml \
   -f infra/docker/auth-compose.yaml \
+  -f infra/docker/admin-compose.yaml \
   down
 ```
 
@@ -276,6 +328,7 @@ curl http://localhost:3001/health
 curl -I http://localhost:8080/
 curl -I http://localhost:8081/
 curl -I http://localhost:8082/
+curl -I http://localhost:8083/
 ```
 
 Then open these web routes in a browser and confirm they render after both a
@@ -321,8 +374,8 @@ storage strategy — document that here if it is ever adopted.
 ## Dokploy Compose deployment
 
 `infra/docker/web-compose.yaml`, `infra/docker/api-compose.yaml`,
-`infra/docker/cube-trainer-compose.yaml`, and `infra/docker/auth-compose.yaml`
-are single-service compose files meant to be used as Dokploy's "Compose"
+`infra/docker/cube-trainer-compose.yaml`, `infra/docker/auth-compose.yaml`,
+and `infra/docker/admin-compose.yaml` are single-service compose files meant to be used as Dokploy's "Compose"
 application type, one Dokploy app per file. They intentionally have:
 
 - no `ports:` host publishing
@@ -330,19 +383,21 @@ application type, one Dokploy app per file. They intentionally have:
 
 Dokploy's own Domains page handles routing: pick the service and the
 container port (`8080` for web, `3001` for api, `8080` for cube-trainer,
-`8080` for auth) there, and Dokploy wires Traefik itself. Don't hand-add
+`8080` for auth, `8080` for admin) there, and Dokploy wires Traefik itself. Don't hand-add
 Traefik labels to these files. Point the cube-trainer Dokploy app's domain at
-`cube.unimatrix-01.dev` and the auth Dokploy app's domain at
-`auth.unimatrix-01.dev`.
+`cube.unimatrix-01.dev`, the auth Dokploy app's domain at
+`auth.unimatrix-01.dev`, and the admin Dokploy app's domain at
+`admin.unimatrix-01.dev`.
 
 `web-compose.yaml` and `api-compose.yaml` read their environment-dependent
 values (`VITE_API_BASE_URL`, `CORS_ALLOWED_ORIGINS`) from compose variable
 substitution, so set those in the Dokploy app's environment variables UI
 rather than editing the file. `cube-trainer-compose.yaml` has no
 environment-dependent values to set. `auth-compose.yaml` reads
-`VITE_API_BASE_URL` and `VITE_CLERK_PUBLISHABLE_KEY` the same way.
+`VITE_API_BASE_URL` and `VITE_CLERK_PUBLISHABLE_KEY` the same way, and
+`admin-compose.yaml` reads those two plus an optional `VITE_AUTH_APP_URL`.
 
-These four files are Dokploy **Compose** apps, and Dokploy has no preview
+These five files are Dokploy **Compose** apps, and Dokploy has no preview
 deployment support for that service type — every `preview*` field lives on its
 `applications` record and none exist on `compose`. Previews are therefore
 configured on *separate* Application-type services that reuse these same
@@ -355,7 +410,7 @@ the preview deployment section.
 ## Base image updates
 
 Dependabot watches base images through the `docker` ecosystem, pointed at the
-four `apps/*` directories — **not** at this one. The compose files here declare
+five `apps/*` directories — **not** at this one. The compose files here declare
 no `image:` at all, only `build:` plus a Dockerfile path, and Dependabot's
 `docker-compose` parser reads only `image:` (or an inline `dockerfile_inline`).
 It never follows `build.dockerfile`, so a `docker-compose` block would scan
@@ -369,8 +424,9 @@ to update":
   interpolation and its tag regex cannot match a leading `$`. That is
   deliberate — the Node version stays owned by `.node-version` and CI's
   `node-version-file` rather than gaining a second, competing owner.
-- Base-image PRs are excluded from auto-merge, because no CI job builds a
-  container image. They need a human. See the comment in
+- Base-image PRs auto-merge on the same terms as any other minor/patch,
+  because CI's required `Images` checks now build every `apps/*/Dockerfile`.
+  The history of that decision lives in the comment in
   `.github/workflows/dependabot-auto-merge.yml`.
 
 ## Relationship to production deployment docs
