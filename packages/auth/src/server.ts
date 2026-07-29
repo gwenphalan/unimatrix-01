@@ -1,8 +1,8 @@
 import { clerkPlugin, getAuth } from "@clerk/fastify";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 
-import type { AppSlug, Role, SessionPermissionsClaim } from "./permissions.js";
-import { hasPermission } from "./permissions.js";
+import type { AdminSection, AppSlug, Role, SessionPermissionsClaim } from "./permissions.js";
+import { canAccessAdminSection, hasPermission } from "./permissions.js";
 
 /**
  * The kinds of failures `requireAuth()` and `requirePermission()` can
@@ -186,6 +186,35 @@ export function requirePermission(appSlug: AppSlug, role: Role) {
     const claim = getSessionPermissionsClaim(request);
 
     if (!hasPermission(claim, appSlug, role)) {
+      throw new AuthError({ kind: "forbidden" });
+    }
+  };
+}
+
+/**
+ * Returns a Fastify `preHandler` that requires an authenticated Clerk session
+ * allowed to access `section` of the admin app. Throws {@link AuthError} with
+ * `kind: "unauthorized"` when there is no session, or `kind: "forbidden"` when
+ * the session fails the section's gate. Requires {@link registerClerkAuth} to
+ * have been registered first.
+ *
+ * This is a thin wrapper around `canAccessAdminSection` from this package's
+ * `.` entry — the decision lives there, in one place, so the HTTP guard and
+ * any UI check agree by construction. New admin API modules use this instead
+ * of open-coding `requirePermission("auth", "admin")`.
+ *
+ * `async` for the same load-bearing reason as {@link requireAuth} — read the
+ * note there before changing this signature.
+ */
+export function requireAdminSection(section: AdminSection) {
+  const requireAuthPreHandler = requireAuth();
+
+  return async function requireAdminSectionPreHandler(request: FastifyRequest): Promise<void> {
+    await requireAuthPreHandler(request);
+
+    const claim = getSessionPermissionsClaim(request);
+
+    if (!canAccessAdminSection(claim, section)) {
       throw new AuthError({ kind: "forbidden" });
     }
   };

@@ -8,8 +8,8 @@ All Unimatrix services are subdomains of `unimatrix-01.dev`. Clerk's primary dom
 
 | Import path | Runtime | Contents |
 | --- | --- | --- |
-| `@unimatrix/auth` | any (zero runtime deps) | `AppSlug`, `Role`, `UserPermissionsMetadata`, `SessionPermissionsClaim`, `hasPermission`, `isAdmin` |
-| `@unimatrix/auth/server` | Node (Fastify 5) | `registerClerkAuth`, `requireAuth`, `requirePermission`, `getAuthUserId`, `getSessionPermissionsClaim`, `AuthError` |
+| `@unimatrix/auth` | any (zero runtime deps) | `AppSlug`, `Role`, `AdminSection`, `UserPermissionsMetadata`, `SessionPermissionsClaim`, `hasPermission`, `isAdmin`, `canAccessAdminSection` |
+| `@unimatrix/auth/server` | Node (Fastify 5) | `registerClerkAuth`, `requireAuth`, `requirePermission`, `requireAdminSection`, `getAuthUserId`, `getSessionPermissionsClaim`, `AuthError` |
 | `@unimatrix/auth/react` | browser (React 19) | `AuthProvider`, `usePermissions`, plus re-exports of `SignIn`, `SignUp`, `UserButton`, `UserProfile`, `SignedIn`, `SignedOut`, `RedirectToSignIn`, `useAuth`, `useUser` |
 
 Use `.` from anywhere you only need types or the pure permission-check helpers (e.g. shared validation logic). Use `./server` only in `apps/api` (or another Fastify backend). Use `./react` only in a Vite/React frontend (`apps/web`, `apps/cube-trainer`, a future `apps/auth`).
@@ -28,9 +28,23 @@ Permissions are stored in Clerk `user.publicMetadata` under a single `permission
 }
 ```
 
-- App slugs: `"web"`, `"cube-trainer"`, `"auth"`, `"api"` (see `AppSlug`).
+- App slugs: `"web"`, `"cube-trainer"`, `"auth"`, `"admin"`, `"api"` (see `AppSlug`).
 - Roles: `"viewer"`, `"editor"`, `"admin"` (see `Role`).
 - The platform-wide administrator role is `auth: ["admin"]` — `isAdmin(perms)` is shorthand for `hasPermission(perms, "auth", "admin")`.
+
+### Admin sections
+
+`apps/admin` hosts several independently-navigable sections. Every one of them — UI and API alike — reads its gate through a single predicate:
+
+```ts
+import { canAccessAdminSection } from "@unimatrix/auth";
+
+canAccessAdminSection(perms, "content"); // today: equivalent to isAdmin(perms)
+```
+
+`ADMIN_SECTIONS`/`AdminSection` name the sections that exist. A private `ADMIN_SECTION_PERMISSIONS` table in `src/permissions.ts` maps each one to the `{ appSlug, role }` it requires, and today every entry is `auth:admin` — so the predicate is `isAdmin` for every section. **That table is the point.** Introducing per-section capabilities later is an edit to one record, not a change at N call sites, which only holds as long as nothing open-codes the check.
+
+`@unimatrix/auth/server`'s `requireAdminSection(section)` is a Fastify `preHandler` wrapping the same predicate — one implementation, two surfaces. New admin API modules use it rather than `requirePermission("auth", "admin")` directly. (`apps/api/src/modules/content` still uses the latter; nothing existing was re-gated in the change that introduced this.)
 
 `publicMetadata` can only be written server-side — in the Clerk Dashboard or via the Clerk Backend API — never from the client. There is intentionally no public "become admin" flow.
 

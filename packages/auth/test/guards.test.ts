@@ -8,7 +8,8 @@ vi.mock("@clerk/fastify", () => ({
   getAuth: (request: unknown): unknown => getAuthMock(request),
 }));
 
-const { AuthError, requireAuth, requirePermission } = await import("../src/server.js");
+const { AuthError, requireAdminSection, requireAuth, requirePermission } =
+  await import("../src/server.js");
 
 /**
  * Mounts a guard on a real Fastify instance.
@@ -112,6 +113,56 @@ describe("requirePermission", () => {
     getAuthMock.mockReturnValue({ userId: null, sessionClaims: null });
 
     const app = await buildApp(requirePermission("auth", "admin"));
+
+    expect(await inject(app)).toStrictEqual({ statusCode: 401, body: '{"code":"UNAUTHORIZED"}' });
+  });
+});
+
+describe("requireAdminSection", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  // The 200 case is the one that matters: a guard that forgot to be `async`
+  // still answers 401/403 correctly while parking every *authorized* request
+  // in the preHandler phase forever. `inject()` races that stall.
+  it("lets a session allowed into the section through to the handler", async () => {
+    getAuthMock.mockReturnValue({
+      userId: "user_1",
+      sessionClaims: { permissions: { auth: ["admin"] } },
+    });
+
+    const app = await buildApp(requireAdminSection("content"));
+
+    expect(await inject(app)).toStrictEqual({ statusCode: 200, body: '{"ok":true}' });
+  });
+
+  it("rejects a session that fails the section gate", async () => {
+    getAuthMock.mockReturnValue({
+      userId: "user_1",
+      sessionClaims: { permissions: { auth: ["editor"] } },
+    });
+
+    const app = await buildApp(requireAdminSection("content"));
+
+    expect(await inject(app)).toStrictEqual({ statusCode: 403, body: '{"code":"FORBIDDEN"}' });
+  });
+
+  it("rejects a session holding admin on the admin app slug rather than auth", async () => {
+    getAuthMock.mockReturnValue({
+      userId: "user_1",
+      sessionClaims: { permissions: { admin: ["admin"] } },
+    });
+
+    const app = await buildApp(requireAdminSection("content"));
+
+    expect(await inject(app)).toStrictEqual({ statusCode: 403, body: '{"code":"FORBIDDEN"}' });
+  });
+
+  it("rejects an unauthenticated request before checking the section gate", async () => {
+    getAuthMock.mockReturnValue({ userId: null, sessionClaims: null });
+
+    const app = await buildApp(requireAdminSection("content"));
 
     expect(await inject(app)).toStrictEqual({ statusCode: 401, body: '{"code":"UNAUTHORIZED"}' });
   });
