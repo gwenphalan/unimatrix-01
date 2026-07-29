@@ -1,4 +1,5 @@
 import type { ContentAssetMetadata } from "@unimatrix/shared";
+import { contentAssetMetadataSchema } from "@unimatrix/shared";
 
 import { loadWebRuntimeConfig } from "@/lib/config";
 
@@ -46,7 +47,16 @@ export async function uploadAsset(file: File, token: string | null): Promise<Con
     throw new AssetUploadError(await describeUploadFailure(response));
   }
 
-  return (await response.json()) as ContentAssetMetadata;
+  // Parsed, not asserted: this is an external boundary, and a response that
+  // does not match the contract has to fail here rather than reach the editor
+  // as a metadata object with a missing hash and become a broken image link.
+  const parsed = contentAssetMetadataSchema.safeParse(await response.json());
+
+  if (!parsed.success) {
+    throw new AssetUploadError("The upload succeeded but the server's reply could not be read.");
+  }
+
+  return parsed.data;
 }
 
 /**

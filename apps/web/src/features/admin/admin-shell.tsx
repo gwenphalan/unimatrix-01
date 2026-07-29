@@ -58,7 +58,9 @@ export function AdminShell({ children }: { children: ReactNode }) {
               first field of the form below it on a phone. */}
           <div className="flex items-center justify-between gap-4">
             <AdminBreadcrumbs />
-            <UserButton afterSignOutUrl="/" />
+            {/* `afterSignOutUrl` is set on `<ClerkProvider>`, not here — it is
+                deprecated on the button. */}
+            <UserButton />
           </div>
         </header>
 

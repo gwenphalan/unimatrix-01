@@ -182,7 +182,9 @@ function AuthHeaderAction() {
   return (
     <>
       <SignedIn>
-        <UserButton afterSignOutUrl="/">
+        {/* No `afterSignOutUrl` here — deprecated on the button, and
+            `<ClerkProvider>` in `auth-boundary.tsx` already sets it. */}
+        <UserButton>
           {isAdmin ? (
             <UserButton.MenuItems>
               <UserButton.Link
