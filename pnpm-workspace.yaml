@@ -74,3 +74,21 @@ overrides:
   #
   # Remove this once drizzle-kit drops the vestigial dependency.
   "@esbuild-kit/core-utils>esbuild": ^0.25.0
+
+  # `shadcn` (a devDependency CLI in `packages/ui`) pulls in
+  # `@modelcontextprotocol/sdk`, which depends on `@hono/node-server@^1.19.9` —
+  # carrying GHSA-frvp-7c67-39w9 (medium, CVSS 5.9): path traversal in
+  # `serve-static` on Windows through an encoded backslash.
+  #
+  # Not reachable here on two counts. The package is only used by the SDK's MCP
+  # server transport, which nothing in this repo starts, and the traversal is
+  # Windows-only while every build and deployment target is Linux. The override
+  # is about keeping `pnpm audit` at a real zero so the next finding stands out.
+  #
+  # `@modelcontextprotocol/sdk@1.30.0` widens its range to
+  # `^1.19.9 || ^2.0.5`, which is the proper fix — but both it and the
+  # `shadcn@4.16.0` that would pull it in were published less than
+  # `minimumReleaseAge` ago, so neither can be resolved yet. Drop this override
+  # once Dependabot bumps `shadcn` past that point; the range widening makes it
+  # redundant rather than merely unnecessary.
+  "@modelcontextprotocol/sdk>@hono/node-server": ^2.0.5
