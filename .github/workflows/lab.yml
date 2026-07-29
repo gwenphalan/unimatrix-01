@@ -1,0 +1,70 @@
+name: Lab
+
+# The lightweight check for prototype branches.
+#
+# Deliberately NOT `Verify`. That job builds every workspace, runs every test
+# suite, and gates on per-workspace coverage thresholds — on a branch whose only
+# new code is a throwaway UX sketch, it fails on coverage and burns minutes for
+# nothing. What is actually worth knowing on a `lab/*` branch is that the
+# *harness* still compiles, so this runs lint and typecheck against `lab/src`
+# and stops there.
+#
+# `lab/prototypes/` is excluded from both by construction: lab's `lint` script
+# is `eslint src` and its tsconfig `include` covers `src/**` only. A
+# half-finished prototype must not be a red check.
+#
+# Nothing here is (or should be) a required status check. It reports on branches
+# that never merge.
+
+on:
+  push:
+    # `lab/**`, not `lab/*` — GitHub's branch filter treats `*` as matching a
+    # single path segment, so `lab/*` would skip `lab/admin/section-nav`.
+    branches: ["lab/**"]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref_name }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  lab:
+    name: Lab harness
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 15
+    permissions:
+      contents: read
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+        with:
+          version: 10.30.3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      # Not `--frozen-lockfile`: a `lab/*` branch is a scratch branch, and a
+      # prototype that pulls in a package is a normal thing to do there. Failing
+      # the whole run on a lockfile the author has not committed yet would make
+      # this job an obstacle rather than a signal.
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Lint harness
+        run: pnpm --filter @unimatrix/lab lint
+
+      - name: Typecheck harness
+        run: pnpm --filter @unimatrix/lab typecheck

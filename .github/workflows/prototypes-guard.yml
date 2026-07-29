@@ -1,0 +1,95 @@
+name: Prototypes guard
+
+# Keeps `lab/prototypes/` empty on `main`.
+#
+# GitHub cannot express the rule the way it reads. Branch protection and
+# rulesets gate the **target** branch, and there is no "block merges whose head
+# matches `lab/*`" filter. So the negative rule ("prototype branches are never
+# merged") is expressed as the positive invariant that can actually be enforced:
+# a check on pull requests to `main` that fails when the diff touches
+# `lab/prototypes/`.
+#
+# WHAT THIS IS NOT: a security control. Say it plainly, because a rule that
+# sounds like a security boundary gets trusted like one. The lab is local-dev
+# only — no Dockerfile, no compose file, no domain, no CI image job, no route in
+# any deployed app — so a prototype reaching `main` costs clutter, `pnpm check`
+# time, and rot. It exposes nothing. This is repo hygiene.
+#
+# NO `paths:` FILTER, deliberately. A path-filtered workflow that does not run
+# reports nothing at all, and a required check that never reports blocks a pull
+# request forever instead of passing it. The job therefore runs on every pull
+# request to `main` and decides pass/fail by inspecting the diff itself.
+#
+# Not armed as a required status check by this workflow's existence — arming it
+# on the ruleset is a separate, human step.
+
+on:
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  no-prototypes:
+    name: No prototypes on main
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 5
+    permissions:
+      contents: read
+
+    steps:
+      # `fetch-depth: 0` so the base commit is present locally and the diff needs
+      # no API call and no token.
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Fail if the diff touches lab/prototypes/
+        env:
+          # Read through the environment rather than interpolated into the
+          # script body, so nothing from the event payload is ever expanded as
+          # shell source.
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+
+          # HEAD is the pull request's merge commit, so diffing it against the
+          # base commit yields exactly what the pull request would introduce.
+          #
+          # The two scaffolding files are allowed: `.gitkeep` is what makes the
+          # empty directory exist at all, and `README.md` documents the rule
+          # this job enforces. Blocking edits to those would mean the check
+          # fails on the pull request that creates it and on every later
+          # documentation fix — for no gain, since neither is a prototype.
+          #
+          # `--diff-filter=d` excludes deletions. Without it this job blocks the
+          # one pull request it should welcome most: the cleanup that removes a
+          # prototype that reached `main`, which is exactly what the error
+          # message below tells people to open. A deleted prototype is the
+          # desired end state, not an offence.
+          offending="$(
+            git diff --name-only --diff-filter=d "${BASE_SHA}" HEAD -- 'lab/prototypes/' \
+              | grep -v -x -e 'lab/prototypes/.gitkeep' -e 'lab/prototypes/README.md' \
+              || true
+          )"
+
+          if [ -n "${offending}" ]; then
+            echo "::error::Prototypes must not be merged to main. Offending paths:"
+            echo "${offending}"
+            echo ""
+            echo "lab/prototypes/ stays empty on main. Prototypes live on lab/* branches"
+            echo "and are never merged. This is repo hygiene, not a security control:"
+            echo "the lab is local-dev only, so a prototype on main costs clutter and"
+            echo "rot rather than exposure. Drop the files from this branch and open a"
+            echo "lab/* branch for them instead."
+            exit 1
+          fi
+
+          echo "No prototype files in this diff."

@@ -21,3 +21,9 @@ packages/db/drizzle/
 
 # Local SQLite artifacts and their directory.
 packages/db/local/
+
+# Throwaway UX sketches on `lab/*` branches, excluded for the same reason they
+# are excluded from lint and typecheck: a half-finished prototype must not turn
+# `pnpm check` red. Empty on `main`, so this line does nothing there — it earns
+# its keep on the branches where prototypes actually exist.
+lab/prototypes/

@@ -1,0 +1,14 @@
+@import "@unimatrix/ui/styles.css";
+
+/* Tailwind v4 source detection does not reach a sibling workspace, so without
+   these two lines the utilities `@unimatrix/ui` and `@unimatrix/chrome` use are
+   simply never emitted and the shell renders unstyled. Nothing catches that but
+   a browser: lint, types and every automated check stay green.
+
+   `prototypes/` is listed too. It is excluded from lint, typecheck and coverage
+   — but a stylesheet is not a check, and omitting it would mean every prototype
+   silently loses every Tailwind class it writes, which is the one failure this
+   harness cannot tolerate. */
+@source "../../packages/ui/src/**/*.{ts,tsx}";
+@source "../../packages/chrome/src/**/*.{ts,tsx}";
+@source "../prototypes/**/*.{ts,tsx}";

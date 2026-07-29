@@ -1,6 +1,13 @@
 packages:
   - apps/*
   - packages/*
+  # `lab` is the package itself, not a glob: the UX prototyping harness is a
+  # single workspace member that has to be one so it can import `@unimatrix/ui`
+  # and `@unimatrix/chrome`. It is local-dev only — no Dockerfile, no compose
+  # file, no domain, no CI `Images` entry — so `pnpm install` pulls its
+  # dependencies in CI even though CI never runs it. That cost is accepted; see
+  # `lab/AGENTS.md`.
+  - lab
 
 # Lifecycle scripts are blocked for every dependency except the two below, which
 # genuinely need a native build step. This is pnpm 10's default-deny behaviour —

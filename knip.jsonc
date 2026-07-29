@@ -69,6 +69,22 @@
       "ignoreDependencies": ["tailwindcss", "tw-animate-css"],
     },
 
+    // The local-dev prototyping harness. `src/main.tsx` is found by the Vite
+    // plugin via index.html; `src/mocks/index.ts` is declared because it is an
+    // entry point in the only sense that matters here — it is the surface
+    // prototypes import, and prototypes live on `lab/*` branches, so on `main`
+    // every one of its exports has zero importers by design. Without this,
+    // knip reports the whole mock surface as dead code forever.
+    //
+    // `project` deliberately stops at `src/**`: `lab/prototypes/` is throwaway
+    // code excluded from lint and typecheck, and reporting on sketches would
+    // be noise in a channel that is already advisory-only.
+    "lab": {
+      "entry": ["src/mocks/index.ts"],
+      "project": ["src/**/*.{ts,tsx}"],
+      "ignoreDependencies": ["tailwindcss", "tw-animate-css"],
+    },
+
     // Library workspaces publish from `dist`, so their `exports` map points at
     // build output knip cannot trace back to source. Each entry below mirrors
     // one subpath export — keep them in sync when an export is added.
