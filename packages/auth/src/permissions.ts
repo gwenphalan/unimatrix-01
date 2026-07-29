@@ -13,7 +13,7 @@
  */
 
 /** App slugs that participate in the Unimatrix permission scheme. */
-export const APP_SLUGS = ["web", "cube-trainer", "auth", "api"] as const;
+export const APP_SLUGS = ["web", "cube-trainer", "auth", "admin", "api"] as const;
 
 /** A registered app slug. */
 export type AppSlug = (typeof APP_SLUGS)[number];
@@ -101,4 +101,58 @@ export function isAdmin(
   perms: SessionPermissionsClaim | UserPermissionsMetadata | undefined,
 ): boolean {
   return hasPermission(perms, "auth", "admin");
+}
+
+/**
+ * Sections of the admin app (`apps/admin`) that are gated independently.
+ *
+ * Only the sections that actually exist belong here. The section-nav and the
+ * four future capabilities (deploys, analytics, social, feedback triage) are
+ * out of scope for this step, and naming them here would pre-commit decisions
+ * that have not been taken yet.
+ */
+export const ADMIN_SECTIONS = ["content"] as const;
+
+/** A gated section of the admin app. */
+export type AdminSection = (typeof ADMIN_SECTIONS)[number];
+
+/**
+ * The permission each admin section requires.
+ *
+ * Today every section maps to `auth:admin`, so
+ * {@link canAccessAdminSection} is equivalent to {@link isAdmin} for every
+ * section. That is deliberate: this table is the *one* place a per-section
+ * capability scheme gets introduced later. Because every admin surface reads
+ * its gate through {@link canAccessAdminSection}, moving a section onto its
+ * own app slug or role is an edit to this record — not a change at N call
+ * sites, and not a second implementation of the check.
+ */
+const ADMIN_SECTION_PERMISSIONS: Record<AdminSection, { appSlug: AppSlug; role: Role }> = {
+  content: { appSlug: "auth", role: "admin" },
+};
+
+/**
+ * Determines whether the given permissions payload may access `section` of
+ * the admin app. Accepts either the Clerk `publicMetadata` shape or the
+ * session JWT claim shape, and safely handles malformed or missing input.
+ *
+ * This is the single predicate every admin surface — UI and API alike —
+ * gates on. `@unimatrix/auth/server`'s `requireAdminSection()` wraps this
+ * function rather than re-deriving the check, so the two surfaces cannot
+ * drift apart.
+ */
+export function canAccessAdminSection(
+  perms: SessionPermissionsClaim | UserPermissionsMetadata | undefined,
+  section: AdminSection,
+): boolean {
+  const required = ADMIN_SECTION_PERMISSIONS[section];
+
+  // `section` is typed, but the value can still arrive from an untyped
+  // boundary (a route param, a session claim). An unknown section is denied
+  // rather than crashing on a destructure of `undefined`.
+  if (required === undefined) {
+    return false;
+  }
+
+  return hasPermission(perms, required.appSlug, required.role);
 }

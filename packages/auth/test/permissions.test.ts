@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { hasPermission, isAdmin } from "../src/permissions.js";
+import type { SessionPermissionsClaim } from "../src/permissions.js";
+import {
+  ADMIN_SECTIONS,
+  APP_SLUGS,
+  canAccessAdminSection,
+  hasPermission,
+  isAdmin,
+} from "../src/permissions.js";
 
 describe("hasPermission", () => {
   it("returns true when the role is present for the app slug", () => {
@@ -66,5 +73,67 @@ describe("isAdmin", () => {
 
   it("returns false when perms is undefined", () => {
     expect(isAdmin(undefined)).toBe(false);
+  });
+});
+
+describe("APP_SLUGS", () => {
+  it("includes the admin app", () => {
+    expect(APP_SLUGS).toContain("admin");
+  });
+});
+
+describe("canAccessAdminSection", () => {
+  it.each(ADMIN_SECTIONS)("allows an auth admin into the %s section", (section) => {
+    expect(canAccessAdminSection({ permissions: { auth: ["admin"] } }, section)).toBe(true);
+  });
+
+  it.each(ADMIN_SECTIONS)("denies a non-admin the %s section", (section) => {
+    expect(canAccessAdminSection({ permissions: { auth: ["editor"] } }, section)).toBe(false);
+  });
+
+  /**
+   * The spec's decision, asserted rather than assumed: every section is gated
+   * on `auth:admin` today, so the predicate and `isAdmin` must not have
+   * drifted apart. When per-section capabilities land, this is the test that
+   * is expected to change.
+   */
+  it.each(ADMIN_SECTIONS)("agrees with isAdmin for the %s section today", (section) => {
+    const cases: (SessionPermissionsClaim | undefined)[] = [
+      undefined,
+      {},
+      { permissions: {} },
+      { permissions: { auth: ["admin"] } },
+      { permissions: { auth: ["viewer"] } },
+      { permissions: { web: ["admin"] } },
+      { permissions: { admin: ["admin"] } },
+    ];
+
+    for (const perms of cases) {
+      expect(canAccessAdminSection(perms, section)).toBe(isAdmin(perms));
+    }
+  });
+
+  it("returns false when perms is undefined", () => {
+    expect(canAccessAdminSection(undefined, "content")).toBe(false);
+  });
+
+  it("returns false for malformed permission payloads", () => {
+    expect(canAccessAdminSection(null as never, "content")).toBe(false);
+    expect(canAccessAdminSection({ permissions: "nope" } as never, "content")).toBe(false);
+    expect(canAccessAdminSection({ permissions: { auth: "admin" } } as never, "content")).toBe(
+      false,
+    );
+  });
+
+  it("denies an unknown section reaching it from an untyped boundary", () => {
+    expect(canAccessAdminSection({ permissions: { auth: ["admin"] } }, "deploys" as never)).toBe(
+      false,
+    );
+  });
+
+  it("does not grant access from the admin app slug alone", () => {
+    // `"admin"` is now a registered app slug, but the gate is still
+    // `auth:admin`. Holding `admin:admin` must not be a way in.
+    expect(canAccessAdminSection({ permissions: { admin: ["admin"] } }, "content")).toBe(false);
   });
 });
