@@ -28,4 +28,19 @@ jobs:
         uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
         with:
           fail-on-severity: high
+          # `fail-on-scopes` defaults to `runtime` alone, which left every
+          # `devDependency` advisory invisible to this gate — vite, vitest, eslint,
+          # playwright, drizzle-kit, turbo. That is most of this repo's dependency
+          # surface, and it is the code that executes on a developer machine and in
+          # CI with a token, so it is not the cheaper half to skip.
+          #
+          # Widening scope rather than lowering `fail-on-severity` is deliberate. Both
+          # advisories this repo has actually hit (GHSA-67mh-4wv8-2f99 via
+          # `drizzle-kit`, GHSA-frvp-7c67-39w9 via `@modelcontextprotocol/sdk`) were
+          # *moderate* and transitive-only with no upstream fix — dropping the
+          # threshold would have hard-blocked every lockfile PR until an override was
+          # written under pressure, and a stalled Dependabot queue is its own security
+          # cost. `pnpm audit` reported 0 findings at every severity when this landed,
+          # so widening cost nothing to adopt.
+          fail-on-scopes: runtime, development
           comment-summary-in-pr: on-failure
