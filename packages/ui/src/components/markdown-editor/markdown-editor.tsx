@@ -494,11 +494,13 @@ export const MarkdownEditor = React.forwardRef<MarkdownEditorHandle, MarkdownEdi
                 aria-pressed={expanded}
                 className="pointer-events-auto size-8 bg-background/90 backdrop-blur-sm"
                 onClick={() => {
-                  setExpanded((current) => {
-                    onExpandedChange?.(!current);
+                  // The notification happens here, not inside the updater:
+                  // React re-runs functional updaters in Strict Mode to check
+                  // they are pure, which would fire this callback twice.
+                  const next = !expanded;
 
-                    return !current;
-                  });
+                  setExpanded(next);
+                  onExpandedChange?.(next);
                 }}
                 size="icon"
                 title={expanded ? "Shrink the editor" : "Expand the editor"}

@@ -98,6 +98,27 @@ describe("toggleLinePrefix", () => {
     expect(apply(doc, edit)).toBe("one\n\ntwo");
   });
 
+  /**
+   * `[from, to)`: a selection that ends immediately after a newline stops at
+   * the end of the line it highlighted, so triple-clicking one line and
+   * pressing the list button does not silently prefix the next one too.
+   */
+  it("leaves the following line alone when the selection ends on a newline", () => {
+    const doc = "one\ntwo";
+    const edit = toggleLinePrefix(doc, 0, 4, "- ");
+
+    expect(apply(doc, edit)).toBe("- one\ntwo");
+  });
+
+  it("uses the line a collapsed cursor is actually on", () => {
+    const doc = "one\ntwo";
+    // Same offset as the selection above, but empty — the cursor sits at the
+    // start of "two", so that is the line to prefix.
+    const edit = toggleLinePrefix(doc, 4, 4, "- ");
+
+    expect(apply(doc, edit)).toBe("one\n- two");
+  });
+
   it("marks an empty document so the button does something on a blank editor", () => {
     const edit = toggleLinePrefix("", 0, 0, "## ");
 

@@ -107,7 +107,11 @@ export function toggleLinePrefix(
   prefix: string,
 ): MarkdownEdit {
   const blockStart = lineStartAt(doc, from);
-  const blockEnd = lineEndAt(doc, to);
+  // A selection is `[from, to)`, so a `to` sitting immediately after a newline
+  // belongs to the previous line — selecting "one\n" in "one\ntwo" must not
+  // prefix "two". Only a non-empty selection is stepped back; a collapsed
+  // cursor at that position really is on the next line.
+  const blockEnd = lineEndAt(doc, from === to ? to : to - 1);
   const lines = doc.slice(blockStart, blockEnd).split("\n");
   const meaningful = lines.filter((line) => line.trim().length > 0);
   const isPrefixed = meaningful.length > 0 && meaningful.every((line) => line.startsWith(prefix));
