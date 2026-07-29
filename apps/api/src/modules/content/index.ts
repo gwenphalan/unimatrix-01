@@ -424,12 +424,18 @@ export const contentModule: FastifyPluginAsync = async (app) => {
   });
 
   // Binary route, same reasoning as the public asset route above.
-  app.route({
-    method: "POST",
-    url: "/content/admin/assets",
-    config: { rateLimit: UPLOAD_RATE_LIMIT_OPTIONS },
-    preHandler: requireAdmin,
-    handler: async (request, reply) => {
+  // The shorthand form, not `app.route({...})`, and the ceiling in the options
+  // argument rather than on the route object. CodeQL's `js/missing-rate-limiting`
+  // recognises a per-route limit only on a 3-argument shorthand call — its
+  // Fastify rule excludes the method name `route` outright — so the object form
+  // reads as an unlimited authorizing route no matter what config it carries.
+  app.post(
+    "/content/admin/assets",
+    {
+      config: { rateLimit: UPLOAD_RATE_LIMIT_OPTIONS },
+      preHandler: requireAdmin,
+    },
+    async (request, reply) => {
       const userId = getRequiredAuthUserId(request);
       const file = await request.file();
 
@@ -467,7 +473,7 @@ export const contentModule: FastifyPluginAsync = async (app) => {
 
       return metadata;
     },
-  });
+  );
 };
 
 function createPostNotFoundError(id: string): ApiError {

@@ -205,12 +205,16 @@ export const userDataModule: FastifyPluginAsync = async (app) => {
   // Binary routes: not contract-driven (files are not JSON), so namespace
   // and key are validated manually with the shared zod schemas instead of
   // going through the zod type provider.
-  app.route({
-    method: "POST",
-    url: "/me/files",
-    config: { rateLimit: UPLOAD_RATE_LIMIT_OPTIONS },
-    preHandler: requireAuth(),
-    handler: async (request, reply) => {
+  // Shorthand rather than `app.route({...})`, for the reason given at the
+  // content module's upload route: a per-route ceiling declared on a route
+  // object is invisible to the analysis that asks for one.
+  app.post(
+    "/me/files",
+    {
+      config: { rateLimit: UPLOAD_RATE_LIMIT_OPTIONS },
+      preHandler: requireAuth(),
+    },
+    async (request, reply) => {
       const userId = getRequiredAuthUserId(request);
       const query = request.query as Record<string, unknown>;
 
@@ -256,7 +260,7 @@ export const userDataModule: FastifyPluginAsync = async (app) => {
 
       return responseBody;
     },
-  });
+  );
 
   app.route({
     method: "GET",
