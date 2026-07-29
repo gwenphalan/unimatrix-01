@@ -1,0 +1,45 @@
+{
+  "name": "@unimatrix/chrome",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Shared application chrome for the Unimatrix services: a tool shell and a public-site shell.",
+  "license": "MIT",
+  "type": "module",
+  "files": [
+    "src"
+  ],
+  "exports": {
+    "./tool": "./src/tool.ts"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^7.0.0",
+    "@testing-library/react": "^16.3.2",
+    "@tanstack/react-router": "^1.166.6",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@unimatrix/config-eslint": "workspace:*",
+    "@unimatrix/config-typescript": "workspace:*",
+    "@unimatrix/config-vitest": "workspace:*",
+    "@vitest/coverage-v8": "^4.1.10",
+    "eslint": "^10.0.0",
+    "jsdom": "^29.1.1",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.10"
+  },
+  "dependencies": {
+    "@remixicon/react": "^4.9.0",
+    "@unimatrix/ui": "workspace:*"
+  },
+  "peerDependencies": {
+    "@tanstack/react-router": "^1.166.6",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4"
+  }
+}

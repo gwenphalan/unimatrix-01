@@ -1,6 +1,7 @@
 @import "@unimatrix/ui/styles.css";
 
 @source "../../../packages/ui/src/**/*.{ts,tsx}";
+@source "../../../packages/chrome/src/**/*.{ts,tsx}";
 
 @layer components {
   .alg-move-string {

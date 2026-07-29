@@ -1,0 +1,21 @@
+{
+  "extends": "@unimatrix/config-typescript/base.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    // Not `library.json`. That preset turns on `composite`/`declaration`, and a
+    // composite project may not pull files in from outside its own `include` —
+    // which is exactly what the `@unimatrix/ui/public` mapping below does. The
+    // emit would be dead weight regardless: every consumer resolves this
+    // package's raw source through its own vite alias and tsconfig `paths`, the
+    // same way it already resolves `@unimatrix/ui/public`, so nothing in the
+    // repo would ever read a `dist` here. Same call, same reasons, as
+    // `@unimatrix/e2e-helpers`.
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    // Mapped to source rather than left to the `exports` map, so typechecking
+    // this package never depends on `packages/ui` having been built first.
+    "paths": {
+      "@unimatrix/ui/public": ["../ui/src/public.ts"]
+    }
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx", "test/**/*.ts", "test/**/*.tsx", "vitest.config.ts"]
+}
