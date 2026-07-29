@@ -1,5 +1,5 @@
 import type { AppSlug, Role, UserPermissionsMetadata } from "@unimatrix/auth";
-import { hasPermission } from "@unimatrix/auth";
+import { APP_SLUGS, hasPermission } from "@unimatrix/auth";
 import { Avatar, AvatarFallback } from "@unimatrix/ui";
 
 /**
@@ -27,19 +27,24 @@ export interface LabSession {
   permissions: UserPermissionsMetadata;
 }
 
-/** Holds `admin` everywhere a slug exists. Use this to prototype an admin view. */
+/**
+ * Holds `admin` on every slug in `APP_SLUGS`, derived rather than hand-listed.
+ *
+ * A literal object here drifts silently: a slug added to `APP_SLUGS` is simply
+ * absent from this fixture, `hasPermission` returns false for it, and the
+ * prototype renders the unauthorized view with nothing failing. `admin` was
+ * already missing this way. Building from `APP_SLUGS` makes the doc comment
+ * true by construction instead of by maintenance.
+ */
 export const labAdminSession: LabSession = {
   userId: "user_lab_admin",
   fullName: "Lab Admin",
   primaryEmail: "admin@lab.invalid",
   initials: "LA",
   permissions: {
-    permissions: {
-      web: ["admin", "editor", "viewer"],
-      auth: ["admin"],
-      api: ["admin"],
-      "cube-trainer": ["viewer"],
-    },
+    permissions: Object.fromEntries(
+      APP_SLUGS.map((slug: AppSlug) => [slug, ["admin"] satisfies Role[]]),
+    ),
   },
 };
 

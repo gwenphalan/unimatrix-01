@@ -238,8 +238,19 @@ export function createLabApiClient(options: CreateLabApiClientOptions = {}): Lab
 
       let affected = 0;
 
+      // Unknown ids are SKIPPED, not a 404. The real route filters with
+      // `inArray(...)` and reports `rows.length`, so a bulk call naming one
+      // stale id succeeds partially. Throwing here would invent a status the
+      // API never returns *and* abandon the loop after earlier ids had already
+      // been mutated — a prototype designed against a failure mode that does
+      // not exist, on a half-applied store.
       for (const id of body.ids) {
-        const existing = findById(id);
+        const existing = posts.find((candidate) => candidate.id === id);
+
+        if (existing === undefined) {
+          continue;
+        }
+
         posts.splice(posts.indexOf(existing), 1, {
           ...existing,
           publicationState: body.publicationState,
@@ -258,8 +269,14 @@ export function createLabApiClient(options: CreateLabApiClientOptions = {}): Lab
 
       let affected = 0;
 
+      // Same partial-success contract as `setPostsState` above.
       for (const id of body.ids) {
-        const existing = findById(id);
+        const existing = posts.find((candidate) => candidate.id === id);
+
+        if (existing === undefined) {
+          continue;
+        }
+
         posts.splice(posts.indexOf(existing), 1);
         affected += 1;
       }

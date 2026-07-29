@@ -80,7 +80,16 @@ export async function loadPrototype(id: string): Promise<PrototypeModule> {
 
   const loaded = await load();
 
-  if (typeof loaded.default !== "function") {
+  // `memo`, `forwardRef` and `lazy` components are OBJECTS carrying a
+  // `$$typeof` symbol, not functions. A bare `typeof !== "function"` rejects
+  // them with a message insisting they are not React components, which is both
+  // wrong and the most confusing possible thing to read while prototyping.
+  const component: unknown = loaded.default;
+  const isRenderable =
+    typeof component === "function" ||
+    (typeof component === "object" && component !== null && "$$typeof" in component);
+
+  if (!isRenderable) {
     throw new Error(
       `lab/prototypes/${id}.tsx must have a default export that is a React component.`,
     );
