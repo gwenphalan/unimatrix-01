@@ -39,11 +39,17 @@
       "ignoreDependencies": ["pino-pretty"],
     },
 
-    // The three Vite apps share a shape: `src/main.tsx` is found by the Vite
+    // The four Vite apps share a shape: `src/main.tsx` is found by the Vite
     // plugin via index.html, so only the test entries are declared here. Each
     // one also carries a generated TanStack Router tree that must never be
     // reported, and declares Tailwind per app while reaching it only through
     // `@import` in packages/ui/src/styles.css — a CSS edge knip cannot follow.
+    "apps/admin": {
+      "entry": ["test/**/*.test.{ts,tsx}"],
+      "project": ["src/**/*.{ts,tsx}", "test/**/*.{ts,tsx}"],
+      "ignore": ["src/routes/routeTree.gen.ts"],
+      "ignoreDependencies": ["tailwindcss", "tw-animate-css"],
+    },
     "apps/auth": {
       "entry": ["test/**/*.test.{ts,tsx}"],
       "project": ["src/**/*.{ts,tsx}", "test/**/*.{ts,tsx}"],

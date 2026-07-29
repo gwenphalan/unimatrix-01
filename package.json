@@ -24,9 +24,10 @@
     "deps:check": "syncpack lint",
     "deps:fix": "syncpack fix",
     "lighthouse": "node ./infra/scripts/lighthouse.mjs apps/web && node ./infra/scripts/lighthouse.mjs apps/cube-trainer",
-    "check": "pnpm format:check && pnpm deps:check && turbo run lint typecheck test",
+    "check:app-wiring": "bash ./infra/scripts/check-app-wiring.sh",
+    "check": "pnpm format:check && pnpm deps:check && pnpm check:app-wiring && turbo run lint typecheck test",
     "knip": "knip",
-    "verify": "pnpm format:check && pnpm deps:check && turbo run build lint typecheck test"
+    "verify": "pnpm format:check && pnpm deps:check && pnpm check:app-wiring && turbo run build lint typecheck test"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^7.0.0",

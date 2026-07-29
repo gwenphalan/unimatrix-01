@@ -55,6 +55,20 @@ const WORKSPACE_RESTRICTIONS = {
       },
     ],
   },
+  // Same rule as `apps/auth`, and it needs its own entry: `boundaries` reasons
+  // about workspace elements, and `@clerk/clerk-react` is an external package
+  // it classifies as outside the graph entirely. This is the only layer that
+  // stops a direct import.
+  "apps/admin": {
+    files: ALL_SOURCE,
+    patterns: [
+      {
+        group: ["@clerk/clerk-react", "@clerk/clerk-react/*"],
+        message:
+          "Consume Clerk only through `@unimatrix/auth/react`, never `@clerk/clerk-react` directly, so the provider and hooks stay swappable in one place.",
+      },
+    ],
+  },
   "apps/web": {
     files: ALL_SOURCE,
     patterns: [
