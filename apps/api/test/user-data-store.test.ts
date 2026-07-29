@@ -475,3 +475,76 @@ void test("the cumulative quota is scoped per user", async () => {
     client.close();
   }
 });
+
+void test("a file at the same namespace/key still counts when a document is written", async () => {
+  const { client, db } = createMigratedInMemoryDatabase();
+
+  try {
+    const data = Buffer.alloc(80, 0x61);
+    await putFile(
+      db,
+      "user_1",
+      "cube-trainer",
+      "shared",
+      "application/octet-stream",
+      80,
+      data,
+      1000,
+    );
+
+    // The document write replaces no *file*, so the file's 80 bytes must still
+    // count: 80 + 42 = 122 > 100. Excluding the replaced row from both tables
+    // would hide the file and let this through.
+    await assert.rejects(
+      () => putDocument(db, "user_1", "cube-trainer", "shared", "a".repeat(40), 100),
+      (error: unknown) => error instanceof ApiError && error.statusCode === 413,
+    );
+  } finally {
+    client.close();
+  }
+});
+
+void test("a document at the same namespace/key still counts when a file is uploaded", async () => {
+  const { client, db } = createMigratedInMemoryDatabase();
+
+  try {
+    await putDocument(db, "user_1", "cube-trainer", "shared", "a".repeat(60), 1000);
+
+    const data = Buffer.alloc(80, 0x61);
+
+    await assert.rejects(
+      () =>
+        putFile(db, "user_1", "cube-trainer", "shared", "application/octet-stream", 80, data, 100),
+      (error: unknown) => error instanceof ApiError && error.statusCode === 413,
+    );
+  } finally {
+    client.close();
+  }
+});
+
+void test("replacing a document at a key shared with a file still excludes only the document", async () => {
+  const { client, db } = createMigratedInMemoryDatabase();
+
+  try {
+    const data = Buffer.alloc(40, 0x61);
+    await putFile(
+      db,
+      "user_1",
+      "cube-trainer",
+      "shared",
+      "application/octet-stream",
+      40,
+      data,
+      1000,
+    );
+    await putDocument(db, "user_1", "cube-trainer", "shared", "a".repeat(50), 1000);
+
+    // Shrinking the document must still work: the old document row is excluded
+    // (it is replaced), the file is not. 40 + 12 = 52 <= 100.
+    const updated = await putDocument(db, "user_1", "cube-trainer", "shared", "a".repeat(10), 100);
+
+    assert.equal(updated.value, "a".repeat(10));
+  } finally {
+    client.close();
+  }
+});

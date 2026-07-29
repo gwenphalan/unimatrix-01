@@ -13,15 +13,44 @@ export type UserDataDb = DatabaseInstance["db"];
  */
 type UserDataTx = Parameters<Parameters<UserDataDb["transaction"]>[0]>[0];
 
-/** Identifies the row a pending write will replace, if one exists. */
+/**
+ * Identifies the row a pending write will replace, if one exists.
+ *
+ * `target` is load-bearing, not decoration. Documents and files are keyed by
+ * the same `(namespace, key)` pair from the same two schemas, so the pair
+ * alone does not say *which* table the write replaces a row in. Excluding it
+ * from both sums would drop a row that is not being replaced at all — a user
+ * could park a 5 MiB file and a document under one key and write the document
+ * forever with the file's bytes invisible to the check.
+ */
 interface ReplacedRow {
   namespace: string;
   key: string;
+  target: "document" | "file";
+}
+
+/**
+ * The exclusion predicate for the table being written, or `undefined` for the
+ * other table — where nothing is replaced and every row must count.
+ * `and(x, undefined)` is drizzle's documented way to drop a condition.
+ */
+function excludeReplacedRow(
+  replaced: ReplacedRow,
+  target: "document" | "file",
+  namespaceColumn: typeof userDocumentsTable.namespace | typeof userFilesTable.namespace,
+  keyColumn: typeof userDocumentsTable.key | typeof userFilesTable.key,
+) {
+  if (replaced.target !== target) {
+    return undefined;
+  }
+
+  return or(ne(namespaceColumn, replaced.namespace), ne(keyColumn, replaced.key));
 }
 
 /**
  * Bytes this user already stores in `user_documents`, excluding the row the
- * pending write is about to replace.
+ * pending write is about to replace — only when the write targets *this*
+ * table. See {@link ReplacedRow.target}.
  *
  * `length()` on a TEXT column counts **characters**, not bytes — the exact
  * mistake the shared document-value schema avoids in TypeScript, one layer
@@ -49,9 +78,11 @@ function sumDocumentBytes(tx: UserDataTx, userId: string, replaced: ReplacedRow)
         // this sum a constant 0, i.e. a quota that never triggered. `or()`
         // emits its own parentheses. Both columns are NOT NULL, so there is
         // no three-valued-logic hole in the `<>` form.
-        or(
-          ne(userDocumentsTable.namespace, replaced.namespace),
-          ne(userDocumentsTable.key, replaced.key),
+        excludeReplacedRow(
+          replaced,
+          "document",
+          userDocumentsTable.namespace,
+          userDocumentsTable.key,
         ),
       ),
     )
@@ -62,8 +93,9 @@ function sumDocumentBytes(tx: UserDataTx, userId: string, replaced: ReplacedRow)
 
 /**
  * Bytes this user already stores in `user_files`, excluding the row the
- * pending write is about to replace. `size` is written from the uploaded
- * buffer's `length`, so it is already a byte count.
+ * pending write is about to replace — only when the write targets *this*
+ * table. `size` is written from the uploaded buffer's `length`, so it is
+ * already a byte count.
  */
 function sumFileBytes(tx: UserDataTx, userId: string, replaced: ReplacedRow): number {
   const rows = tx
@@ -72,7 +104,7 @@ function sumFileBytes(tx: UserDataTx, userId: string, replaced: ReplacedRow): nu
     .where(
       and(
         eq(userFilesTable.userId, userId),
-        or(ne(userFilesTable.namespace, replaced.namespace), ne(userFilesTable.key, replaced.key)),
+        excludeReplacedRow(replaced, "file", userFilesTable.namespace, userFilesTable.key),
       ),
     )
     .all();
@@ -223,7 +255,13 @@ export async function putDocument(
   const pendingBytes = Buffer.byteLength(serializedValue, "utf8");
 
   const row = await runGuardedWrite(db, (tx) => {
-    assertWithinStorageQuota(tx, userId, { namespace, key }, pendingBytes, maxUserStorageBytes);
+    assertWithinStorageQuota(
+      tx,
+      userId,
+      { namespace, key, target: "document" },
+      pendingBytes,
+      maxUserStorageBytes,
+    );
 
     return tx
       .insert(userDocumentsTable)
@@ -295,7 +333,13 @@ export async function putFile(
   maxUserStorageBytes: number,
 ): Promise<StoredFileMetadata> {
   const row = await runGuardedWrite(db, (tx) => {
-    assertWithinStorageQuota(tx, userId, { namespace, key }, size, maxUserStorageBytes);
+    assertWithinStorageQuota(
+      tx,
+      userId,
+      { namespace, key, target: "file" },
+      size,
+      maxUserStorageBytes,
+    );
 
     return tx
       .insert(userFilesTable)
