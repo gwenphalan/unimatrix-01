@@ -322,10 +322,19 @@ function stripComments(source: string): string {
  * shorthand is not cosmetic — CodeQL's per-route rate-limit rule only sees a
  * ceiling declared that way — so a structural check that knew only about the
  * object form would silently stop counting the route that carries one.
+ *
+ * The shorthand's URL is either a string literal (the binary routes, which are
+ * not contract-driven) or a `<name>Contract.path` reference (the JSON routes,
+ * which are). Matching only the literal form silently undercounted by one the
+ * moment `PUT /me/data` moved onto the shorthand to carry its rate limit —
+ * which is the failure mode this whole test exists to prevent, so the
+ * alternation is spelled out rather than loosened to "any expression". A bare
+ * `\w+` there would also match ordinary `.get(`/`.delete(` method calls on
+ * non-route objects.
  */
 function splitRouteDefinitions(source: string): string[] {
   return stripComments(source)
-    .split(/\.route\(\{|\.(?:get|post|put|patch|delete)\(\s*"/u)
+    .split(/\.route\(\{|\.(?:get|post|put|patch|delete)\(\s*(?:"|\w+Contract\.path)/u)
     .slice(1);
 }
 

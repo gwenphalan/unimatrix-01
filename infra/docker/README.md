@@ -134,7 +134,9 @@ up-to-date list of build inputs and Dokploy watch paths.
 
 The image defaults `HOST=0.0.0.0`, `PORT=3001`, and `NODE_ENV=production`.
 Optional runtime env: `MAX_UPLOAD_BYTES` (per-request file upload size limit
-for the user-data file endpoints; defaults to 5 MiB), plus the Clerk
+for the user-data file endpoints; defaults to 5 MiB),
+`MAX_USER_STORAGE_BYTES` (cumulative per-user cap across documents and files
+together; defaults to 50 MiB), plus the Clerk
 variables (`CLERK_SECRET_KEY`, `CLERK_PUBLISHABLE_KEY`, `CLERK_JWT_KEY`),
 required together in production.
 

@@ -205,7 +205,9 @@ scheme.
   browser clients
 - `apps/api/.env.production.example` shows the checked-in production env
   template, including `MAX_UPLOAD_BYTES` (per-request file upload size limit
-  for the user-data file endpoints; defaults to 5 MiB when unset)
+  for the user-data file endpoints; defaults to 5 MiB when unset) and
+  `MAX_USER_STORAGE_BYTES` (cumulative per-user cap across documents and files
+  together; defaults to 50 MiB when unset)
 
 ## Auto-updates from `main`
 

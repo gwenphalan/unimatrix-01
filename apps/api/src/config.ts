@@ -59,6 +59,13 @@ export interface ApiRuntimeConfig {
   cors: ApiCorsConfig;
   clerk: ApiClerkConfig | null;
   maxUploadBytes: number;
+  /**
+   * Cumulative ceiling on the bytes one user may keep in `user_documents`
+   * plus `user_files` combined. Distinct from {@link maxUploadBytes}, which
+   * bounds a single request: without a cumulative bound, a caller can stay
+   * under the per-request limit indefinitely and still fill the volume.
+   */
+  maxUserStorageBytes: number;
   runDatabaseMigrations: boolean;
 }
 
@@ -73,6 +80,7 @@ export interface ApiRuntimeEnv {
   CLERK_PUBLISHABLE_KEY?: string | undefined;
   CLERK_JWT_KEY?: string | undefined;
   MAX_UPLOAD_BYTES?: string | undefined;
+  MAX_USER_STORAGE_BYTES?: string | undefined;
   DB_MIGRATE_ON_START?: string | undefined;
 }
 
@@ -81,6 +89,8 @@ const DEFAULT_NODE_ENV: ApiNodeEnv = "development";
 const DEFAULT_PORT = 3001;
 const DEFAULT_TRUST_PROXY = false;
 const DEFAULT_MAX_UPLOAD_BYTES = 5_242_880;
+/** 50 MiB per user across documents and files combined. */
+const DEFAULT_MAX_USER_STORAGE_BYTES = 52_428_800;
 const WILDCARD_CORS_ALLOWED_ORIGIN_PATTERN = /^(https?):\/\/\*\.([^/?#:]+)(?::([0-9]+))?$/iu;
 const HOST_LABEL_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/iu;
 
@@ -142,32 +152,42 @@ function parsePort(value: string | undefined): number {
   return port;
 }
 
-function parseMaxUploadBytes(value: string | undefined): number {
+/**
+ * Shared parser for the byte-count env vars. Both `MAX_UPLOAD_BYTES` and
+ * `MAX_USER_STORAGE_BYTES` mean the same thing to a reader — a positive
+ * integer number of bytes — so they get the same validation and the same
+ * error wording rather than two copies that can drift apart.
+ */
+function parseByteCount(
+  variableName: "MAX_UPLOAD_BYTES" | "MAX_USER_STORAGE_BYTES",
+  value: string | undefined,
+  fallback: number,
+): number {
   if (value === undefined) {
-    return DEFAULT_MAX_UPLOAD_BYTES;
+    return fallback;
   }
 
   const trimmedValue = value.trim();
 
   if (trimmedValue.length === 0) {
-    throw createApiConfigError("MAX_UPLOAD_BYTES must not be empty when it is set.");
+    throw createApiConfigError(`${variableName} must not be empty when it is set.`);
   }
 
   if (!/^[0-9]+$/u.test(trimmedValue)) {
     throw createApiConfigError(
-      `MAX_UPLOAD_BYTES must be a positive integer. Received ${JSON.stringify(trimmedValue)}.`,
+      `${variableName} must be a positive integer. Received ${JSON.stringify(trimmedValue)}.`,
     );
   }
 
-  const maxUploadBytes = Number(trimmedValue);
+  const byteCount = Number(trimmedValue);
 
-  if (!Number.isSafeInteger(maxUploadBytes) || maxUploadBytes < 1) {
+  if (!Number.isSafeInteger(byteCount) || byteCount < 1) {
     throw createApiConfigError(
-      `MAX_UPLOAD_BYTES must be a positive integer. Received ${JSON.stringify(trimmedValue)}.`,
+      `${variableName} must be a positive integer. Received ${JSON.stringify(trimmedValue)}.`,
     );
   }
 
-  return maxUploadBytes;
+  return byteCount;
 }
 
 function parseRunDatabaseMigrations(value: string | undefined): boolean {
@@ -536,7 +556,16 @@ export function loadApiRuntimeConfig(env: ApiRuntimeEnv = process.env): ApiRunti
     trustProxy: parseTrustProxy(env.TRUST_PROXY),
     cors: parseCorsAllowedOrigins(env.CORS_ALLOWED_ORIGINS),
     clerk: parseClerkConfig(env, nodeEnv),
-    maxUploadBytes: parseMaxUploadBytes(env.MAX_UPLOAD_BYTES),
+    maxUploadBytes: parseByteCount(
+      "MAX_UPLOAD_BYTES",
+      env.MAX_UPLOAD_BYTES,
+      DEFAULT_MAX_UPLOAD_BYTES,
+    ),
+    maxUserStorageBytes: parseByteCount(
+      "MAX_USER_STORAGE_BYTES",
+      env.MAX_USER_STORAGE_BYTES,
+      DEFAULT_MAX_USER_STORAGE_BYTES,
+    ),
     runDatabaseMigrations: parseRunDatabaseMigrations(env.DB_MIGRATE_ON_START),
   };
 }

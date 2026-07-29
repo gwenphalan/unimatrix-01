@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   dataKeySchema,
   dataNamespaceSchema,
+  documentValueSchema,
+  DOCUMENT_VALUE_MAX_BYTES,
   deleteDocumentBodySchema,
   deleteDocumentContract,
   deleteFileBodySchema,
@@ -18,6 +20,7 @@ import {
   listFilesResponseSchema,
   putDocumentBodySchema,
   putDocumentContract,
+  storedDocumentValueSchema,
   userDocumentSchema,
   userFileMetadataSchema,
 } from "../src/index.js";
@@ -326,5 +329,102 @@ describe("user-data contracts", () => {
     expect(deleteFileContract).toMatchObject({ method: "DELETE", path: "/me/files" });
     expect(deleteFileContract.bodySchema).toBe(deleteFileBodySchema);
     expect(deleteFileContract.responseSchema).toBe(deleteResultSchema);
+  });
+});
+
+describe("documentValueSchema size bound", () => {
+  /**
+   * Builds a value whose `JSON.stringify` is exactly `byteLength` bytes.
+   * `{"v":"…"}` is 8 bytes of framing around the string's contents.
+   */
+  function valueOfSerializedBytes(byteLength: number): { v: string } {
+    return { v: "a".repeat(byteLength - 8) };
+  }
+
+  it("accepts a value exactly at the byte cap", () => {
+    const value = valueOfSerializedBytes(DOCUMENT_VALUE_MAX_BYTES);
+
+    expect(JSON.stringify(value).length).toBe(DOCUMENT_VALUE_MAX_BYTES);
+    expect(documentValueSchema.safeParse(value).success).toBe(true);
+  });
+
+  it("rejects a value one byte over the cap", () => {
+    const value = valueOfSerializedBytes(DOCUMENT_VALUE_MAX_BYTES + 1);
+
+    expect(documentValueSchema.safeParse(value).success).toBe(false);
+  });
+
+  it("measures bytes rather than characters for multibyte content", () => {
+    // Every "☃" is one UTF-16 code unit but three UTF-8 bytes. Just under the
+    // cap by `.length`, well over it by bytes — this is the case a `.length`
+    // regression would wrongly accept.
+    const snowmen = "☃".repeat(DOCUMENT_VALUE_MAX_BYTES - 100);
+    const serialized = JSON.stringify({ v: snowmen });
+
+    expect(serialized.length).toBeLessThan(DOCUMENT_VALUE_MAX_BYTES);
+    expect(new TextEncoder().encode(serialized).length).toBeGreaterThan(DOCUMENT_VALUE_MAX_BYTES);
+    expect(documentValueSchema.safeParse({ v: snowmen }).success).toBe(false);
+  });
+
+  it("accepts a multibyte value that is under the cap in bytes", () => {
+    // 1000 snowmen = 3000 bytes of content, comfortably inside the cap.
+    expect(documentValueSchema.safeParse({ v: "☃".repeat(1000) }).success).toBe(true);
+  });
+
+  it("returns a validation error for a circular value rather than throwing", () => {
+    const circular: { self?: unknown } = {};
+    circular.self = circular;
+
+    // The assertion that matters is that this does not throw.
+    const result = documentValueSchema.safeParse(circular);
+
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0]?.message).toMatch(/circular references/u);
+  });
+
+  it("returns a validation error for values JSON.stringify drops", () => {
+    // `JSON.stringify` returns undefined (rather than throwing) for these,
+    // which would otherwise be written into a NOT NULL column.
+    for (const value of [() => undefined, Symbol("x")]) {
+      expect(documentValueSchema.safeParse(value).success).toBe(false);
+    }
+  });
+
+  it("rejects a BigInt, which JSON.stringify throws on", () => {
+    expect(documentValueSchema.safeParse(1n).success).toBe(false);
+  });
+
+  it("still reports a missing value as required rather than as a size problem", () => {
+    const result = putDocumentBodySchema.safeParse({ namespace: "cube-trainer", key: "settings" });
+
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0]?.message).toMatch(/value is required/u);
+  });
+
+  it("rejects an over-cap value through putDocumentBodySchema", () => {
+    expect(
+      putDocumentBodySchema.safeParse({
+        namespace: "cube-trainer",
+        key: "settings",
+        value: valueOfSerializedBytes(DOCUMENT_VALUE_MAX_BYTES + 1),
+      }).success,
+    ).toBe(false);
+  });
+
+  it("leaves the stored/read shape uncapped so pre-cap rows stay readable", () => {
+    // userDocumentSchema backs the response contract; capping it would turn a
+    // legacy oversized row into a 500 on GET.
+    expect(
+      storedDocumentValueSchema.safeParse(valueOfSerializedBytes(DOCUMENT_VALUE_MAX_BYTES + 1000))
+        .success,
+    ).toBe(true);
+    expect(
+      userDocumentSchema.safeParse({
+        namespace: "cube-trainer",
+        key: "settings",
+        value: valueOfSerializedBytes(DOCUMENT_VALUE_MAX_BYTES + 1000),
+        updatedAt: "2026-07-28 00:00:00",
+      }).success,
+    ).toBe(true);
   });
 });

@@ -53,6 +53,29 @@ export const UPLOAD_RATE_LIMIT_OPTIONS = {
   timeWindow: RATE_LIMIT_WINDOW,
 } as const;
 
+/**
+ * A tighter ceiling for `PUT /me/data`, the JSON document write.
+ *
+ * Reasoned in bytes per minute, the way the upload limiter is. A document
+ * value caps at `DOCUMENT_VALUE_MAX_BYTES` (256 KiB), so 60/min is at most
+ * ~15 MiB/min — an order of magnitude under the upload route's 30 × 5 MiB =
+ * 150 MiB/min, which is right, because before this the document route was
+ * the *faster* disk-filling vector at the global 300/min (~75 MiB/min) and
+ * the only one with no per-route ceiling at all.
+ *
+ * 60/min stays comfortably above real use: this backs a settings store, and
+ * a UI that writes on every preference change still makes one request per
+ * change, not a stream of them.
+ *
+ * Defense in depth rather than the primary bound — the cumulative per-user
+ * quota is what actually stops the disk filling, since it survives the
+ * write/delete/write churn a rate limit alone does not.
+ */
+export const DOCUMENT_WRITE_RATE_LIMIT_OPTIONS = {
+  max: 60,
+  timeWindow: RATE_LIMIT_WINDOW,
+} as const;
+
 export function setupRateLimit(app: FastifyInstance): void {
   app.register(fastifyRateLimit, {
     ...RATE_LIMIT_OPTIONS,
