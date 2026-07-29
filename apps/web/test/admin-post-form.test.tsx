@@ -6,10 +6,18 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const apiClient = {
-  createPost: vi.fn(),
-  updatePost: vi.fn(),
-} satisfies Partial<ApiClient>;
+// `vi.hoisted`, not a plain `const`, and that is what lets `PostForm` be a
+// static import below. `vi.mock` is hoisted above every import, so a factory
+// closing over a normal module-level `const` reads it inside its temporal dead
+// zone the moment anything imports the mocked module at module scope — the file
+// fails to collect with "Cannot access 'toastSuccess' before initialization".
+// Deferring the import into a test is the other way to dodge that, and is what
+// this file used to do; see the note on the import for why it stopped.
+const { apiClient, toastError, toastSuccess } = vi.hoisted(() => ({
+  apiClient: { createPost: vi.fn(), updatePost: vi.fn() } satisfies Partial<ApiClient>,
+  toastError: vi.fn(),
+  toastSuccess: vi.fn(),
+}));
 
 vi.mock("@/lib/api-client", () => ({
   useApiClient: () => apiClient as unknown as ApiClient,
@@ -20,14 +28,19 @@ vi.mock("@unimatrix/auth/react", () => ({
   useAuth: () => ({ getToken: () => Promise.resolve("token-123") }),
 }));
 
-const toastSuccess = vi.fn();
-const toastError = vi.fn();
-
 vi.mock("@unimatrix/ui/editor", async () => {
   const actual = await vi.importActual<typeof EditorModule>("@unimatrix/ui/editor");
 
   return { ...actual, toast: { success: toastSuccess, error: toastError } };
 });
+
+// Statically imported, not `await import(...)` inside the first test.
+// `post-form` reaches `@unimatrix/ui/editor` and CodeMirror through it, and
+// resolving that inside a test charged the whole cost to one 5s budget — only
+// the first test paid it, the rest hit the module cache. It timed out twice on
+// CI, on unrelated branches, while running in under a second locally. At module
+// scope the cost lands in collection, which `testTimeout` does not bound.
+import { PostForm } from "@/features/admin/post-form";
 
 const PROJECT: ContentPost = {
   id: "33333333-3333-4333-8333-333333333333",
@@ -66,8 +79,6 @@ describe("PostForm", () => {
   it("creates a blog post as a draft without any project-only fields", async () => {
     apiClient.createPost.mockResolvedValue({ ...PROJECT, title: "New post" });
 
-    const { PostForm } = await import("@/features/admin/post-form");
-
     renderForm(<PostForm title="Edit post" onDone={() => {}} post={null} type="blog" />);
 
     type("Title", "New post");
@@ -95,9 +106,7 @@ describe("PostForm", () => {
     });
   });
 
-  it("derives the slug from the title until the slug is typed in", async () => {
-    const { PostForm } = await import("@/features/admin/post-form");
-
+  it("derives the slug from the title until the slug is typed in", () => {
     renderForm(<PostForm title="Edit post" onDone={() => {}} post={null} type="blog" />);
 
     type("Title", "A Post About Things");
@@ -120,9 +129,7 @@ describe("PostForm", () => {
    * An existing post's slug is its published URL. Editing the title must never
    * rewrite it, so derivation starts off rather than on when editing.
    */
-  it("never rewrites an existing post's slug from its title", async () => {
-    const { PostForm } = await import("@/features/admin/post-form");
-
+  it("never rewrites an existing post's slug from its title", () => {
     renderForm(<PostForm title="Edit post" onDone={() => {}} post={PROJECT} type="project" />);
 
     type("Title", "Cube Trainer Renamed");
@@ -130,9 +137,7 @@ describe("PostForm", () => {
     expect(screen.getByLabelText("Slug")).toHaveValue("cube-trainer");
   });
 
-  it("offers no project fields on a blog post", async () => {
-    const { PostForm } = await import("@/features/admin/post-form");
-
+  it("offers no project fields on a blog post", () => {
     renderForm(<PostForm title="Edit post" onDone={() => {}} post={null} type="blog" />);
 
     expect(screen.queryByLabelText("Repository URL")).not.toBeInTheDocument();
@@ -146,8 +151,6 @@ describe("PostForm", () => {
    */
   it("offers no project status field, and never sends one", async () => {
     apiClient.updatePost.mockResolvedValue(PROJECT);
-
-    const { PostForm } = await import("@/features/admin/post-form");
 
     renderForm(<PostForm onDone={() => {}} post={PROJECT} title="Edit post" type="project" />);
 
@@ -166,8 +169,6 @@ describe("PostForm", () => {
 
   it("loads an existing project into the form and sends an update keyed by id", async () => {
     apiClient.updatePost.mockResolvedValue(PROJECT);
-
-    const { PostForm } = await import("@/features/admin/post-form");
 
     renderForm(<PostForm title="Edit post" onDone={() => {}} post={PROJECT} type="project" />);
 
@@ -197,8 +198,6 @@ describe("PostForm", () => {
 
     apiClient.createPost.mockRejectedValue(new Error("nope"));
 
-    const { PostForm } = await import("@/features/admin/post-form");
-
     renderForm(<PostForm onDone={onDone} post={null} title="Edit post" type="blog" />);
 
     type("Title", "New post");
@@ -219,9 +218,7 @@ describe("PostForm", () => {
    * silently. `[a-z0-9-]` is legal under `u` and rejected under `v`, so the
    * check has to be the stricter of the two.
    */
-  it("uses a slug pattern that compiles under the flag browsers apply", async () => {
-    const { PostForm } = await import("@/features/admin/post-form");
-
+  it("uses a slug pattern that compiles under the flag browsers apply", () => {
     renderForm(<PostForm onDone={vi.fn()} post={null} title="Edit post" type="blog" />);
 
     const pattern = screen.getByLabelText("Slug").getAttribute("pattern");
