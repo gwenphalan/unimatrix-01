@@ -42,3 +42,24 @@ Then `pnpm --filter @unimatrix/lab dev` and open the printed URL.
 - **Expect rot.** `lab/*` branches drift behind `packages/ui` and
   `packages/chrome`. That is correct for throwaway work: a stale prototype
   breaks in the browser, which is the only place it is ever used.
+
+## What is enforced mechanically, and what is not
+
+Worth stating precisely, because a rule that reads like a security boundary gets
+trusted like one.
+
+**Enforced by ESLint** — but only under `lab/src/`, which is the linted tree:
+imports of `@unimatrix/api-client`, `@unimatrix/user-data`, `@unimatrix/auth/react`,
+`@unimatrix/auth/server` and `@clerk/*` are banned by name.
+
+**Not enforced under `lab/prototypes/`.** That directory is deliberately excluded
+from lint, typecheck, Prettier and coverage, so nothing stops a prototype from
+importing whatever it likes. There is no vite alias to those modules, so an
+import would fail to resolve rather than silently reach a real transport — but
+that is a consequence of the wiring, **convention, not a mechanism** aimed at
+prototypes.
+
+**What actually keeps this contained** is that the lab has no Dockerfile, no
+compose entry, no CI `Images` row and no build script, plus the
+`No prototypes on main` check keeping `lab/prototypes/` empty on the default
+branch. Containment is structural; the lint rule is hygiene for the harness.

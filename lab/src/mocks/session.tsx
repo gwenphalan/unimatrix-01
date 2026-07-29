@@ -87,7 +87,11 @@ export function labSessionHasPermission(
  * `@unimatrix/chrome`'s shells. Non-interactive on purpose: there is nothing to
  * sign out of.
  */
-export function MockAccountControl({ session }: { session: LabSession | null }) {
+export interface MockAccountControlProps {
+  session: LabSession | null;
+}
+
+export function MockAccountControl({ session }: MockAccountControlProps) {
   if (session === null) {
     return <span className="text-sm text-muted-foreground">Signed out (mock)</span>;
   }

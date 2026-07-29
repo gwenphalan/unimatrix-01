@@ -18,7 +18,10 @@ export function LabShell({ children }: { children: ReactNode }) {
     <ToolShell
       accountControl={<MockAccountControl session={labAdminSession} />}
       footerEnd="Local-dev only — never built, never deployed"
-      homeHref="https://unimatrix-01.dev/"
+      // The lab's "home" is its own index, not the production site. This is a
+      // local-only tool; sending its one navigation affordance to a deployed
+      // origin is the opposite of what the surface is for.
+      homeHref="/"
       homeLabel="Unimatrix Lab"
     >
       {children}

@@ -14,7 +14,7 @@ export { createLabApiClient, LabApiError } from "./api.js";
 
 export { mockDocuments, mockFiles, mockPosts } from "./fixtures.js";
 
-export type { LabSession } from "./session.js";
+export type { LabSession, MockAccountControlProps } from "./session.js";
 export {
   labAdminSession,
   labSessionHasPermission,
@@ -25,6 +25,7 @@ export {
 
 export type {
   CreateLabUserStoreOptions,
+  LabUserSettingsEntry,
   LabUserFilesStore,
   LabUserFilesUploadOptions,
   LabUserSettingsStore,

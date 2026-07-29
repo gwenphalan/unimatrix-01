@@ -3,10 +3,14 @@ import { ToolTitleBar } from "@unimatrix/chrome/tool";
 
 import { findPrototype, loadPrototype } from "@/lib/prototype-registry";
 
+// Every variant carries the id it belongs to. Without that, changing
+// `prototypeId` leaves the PREVIOUS component rendering under the new title
+// until the new import resolves — a stale sketch shown as if it were the one
+// asked for, which is worse than a blank frame.
 type LoadState =
-  | { status: "loading" }
-  | { status: "ready"; Component: ComponentType }
-  | { status: "error"; message: string };
+  | { status: "loading"; id: string }
+  | { status: "ready"; id: string; Component: ComponentType }
+  | { status: "error"; id: string; message: string };
 
 /**
  * Renders one prototype below a title bar that gets back to the index.
@@ -18,22 +22,25 @@ type LoadState =
  * same. The message names the file.
  */
 export function PrototypeHostPage({ prototypeId }: { prototypeId: string }) {
-  const [state, setState] = useState<LoadState>({ status: "loading" });
+  const [state, setState] = useState<LoadState>({ status: "loading", id: prototypeId });
   const entry = findPrototype(prototypeId);
 
   useEffect(() => {
     let cancelled = false;
 
+    setState({ status: "loading", id: prototypeId });
+
     loadPrototype(prototypeId)
       .then((module) => {
         if (!cancelled) {
-          setState({ status: "ready", Component: module.default });
+          setState({ status: "ready", id: prototypeId, Component: module.default });
         }
       })
       .catch((error: unknown) => {
         if (!cancelled) {
           setState({
             status: "error",
+            id: prototypeId,
             message: error instanceof Error ? error.message : String(error),
           });
         }
@@ -51,7 +58,7 @@ export function PrototypeHostPage({ prototypeId }: { prototypeId: string }) {
         title={entry?.title ?? prototypeId}
       />
 
-      {state.status === "loading" ? (
+      {state.id !== prototypeId || state.status === "loading" ? (
         <p className="text-sm text-muted-foreground">Loading {prototypeId}…</p>
       ) : null}
 

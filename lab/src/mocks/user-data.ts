@@ -21,12 +21,18 @@ import { mockDocuments, mockFiles } from "./fixtures.js";
  * small, stable interface; if it ever stops being either, the answer is a
  * types-only entry point on that package, not a dependency here.
  */
+/** One entry as returned by {@link LabUserSettingsStore.list}. */
+export interface LabUserSettingsEntry {
+  key: DataKey;
+  value: unknown;
+}
+
 export interface LabUserSettingsStore {
   /** Resolves `undefined` when no document exists for `key` (never throws for "missing"). */
   get<T = unknown>(key: DataKey): Promise<T | undefined>;
   set<T = unknown>(key: DataKey, value: T): Promise<void>;
   delete(key: DataKey): Promise<void>;
-  list(): Promise<Array<{ key: DataKey; value: unknown }>>;
+  list(): Promise<LabUserSettingsEntry[]>;
 }
 
 export interface LabUserFilesUploadOptions {
@@ -74,11 +80,19 @@ export interface CreateLabUserStoreOptions {
  */
 export function createLabUserStore(options: CreateLabUserStoreOptions = {}): LabUserStore {
   const namespace = options.namespace ?? "lab";
+
+  // Seed fixtures belong to the default namespace. Asking for a different one
+  // and being handed `lab`'s data would make a prototype look like it reads
+  // across namespaces when the real store does not. Explicitly supplied
+  // documents/files are always honoured — that is the caller's own data.
+  const seedDocuments = options.documents ?? (namespace === "lab" ? mockDocuments : []);
+  const seedFiles = options.files ?? (namespace === "lab" ? mockFiles : []);
+
   const documents = new Map<DataKey, unknown>(
-    (options.documents ?? mockDocuments).map((document) => [document.key, document.value]),
+    seedDocuments.map((document) => [document.key, document.value]),
   );
   const fileMetadata = new Map<DataKey, UserFileMetadata>(
-    (options.files ?? mockFiles).map((file) => [file.key, file]),
+    seedFiles.map((file) => [file.key, file]),
   );
   const fileBlobs = new Map<DataKey, Blob>();
 

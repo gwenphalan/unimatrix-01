@@ -104,7 +104,10 @@ function delay(ms: number): Promise<void> {
  */
 export function createLabApiClient(options: CreateLabApiClientOptions = {}): LabApiClient {
   const latencyMs = options.latencyMs ?? 200;
-  const posts: ContentPost[] = [...(options.posts ?? mockPosts)];
+  // Cloned on ingress, not just spread. A shallow array copy still shares the
+  // POST OBJECTS with `mockPosts`, so one client mutating a returned post would
+  // rewrite the exported fixture and every later client's starting state.
+  const posts: ContentPost[] = (options.posts ?? mockPosts).map((post) => ({ ...post }));
 
   function findById(id: string): ContentPost {
     const post = posts.find((candidate) => candidate.id === id);
@@ -161,7 +164,8 @@ export function createLabApiClient(options: CreateLabApiClientOptions = {}): Lab
         throw new LabApiError(404, `Mock post ${query.slug} is not published.`);
       }
 
-      return post;
+      // A copy: callers must not be able to edit the store by mutating a read.
+      return { ...post };
     },
 
     async adminListPosts(query) {
@@ -244,7 +248,9 @@ export function createLabApiClient(options: CreateLabApiClientOptions = {}): Lab
       // API never returns *and* abandon the loop after earlier ids had already
       // been mutated — a prototype designed against a failure mode that does
       // not exist, on a half-applied store.
-      for (const id of body.ids) {
+      // Deduplicated: the real route's `IN (...)` matches a row once, so a repeated
+      // id must not increment `affected` twice.
+      for (const id of new Set(body.ids)) {
         const existing = posts.find((candidate) => candidate.id === id);
 
         if (existing === undefined) {
@@ -270,7 +276,9 @@ export function createLabApiClient(options: CreateLabApiClientOptions = {}): Lab
       let affected = 0;
 
       // Same partial-success contract as `setPostsState` above.
-      for (const id of body.ids) {
+      // Deduplicated: the real route's `IN (...)` matches a row once, so a repeated
+      // id must not increment `affected` twice.
+      for (const id of new Set(body.ids)) {
         const existing = posts.find((candidate) => candidate.id === id);
 
         if (existing === undefined) {
