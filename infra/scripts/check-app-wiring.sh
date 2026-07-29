@@ -88,16 +88,39 @@ check_vite_app() {
   # failure, not a vacuous pass. That is the standard bug in this class of
   # script — a glob that matches nothing silently satisfies "no file is
   # missing the line".
+  # A substring match on "packages/chrome/src" is NOT enough: `@source
+  # "../../packages/chrome/src/**"` from a file that needs three `../` is a
+  # perfectly valid line that resolves to nothing, Tailwind emits no utilities,
+  # and every automated check stays green. So resolve the glob against the CSS
+  # file's own directory and require that the base directory actually exists.
   local stylesheet_count
   stylesheet_count="$(find "${app_dir}/src" -type f -name '*.css' 2>/dev/null | wc -l)"
 
   if ((stylesheet_count == 0)); then
     fail "${app_name}: no stylesheet under src/ — nowhere for the chrome @source line to live"
-  elif grep -rqE --include='*.css' '^[[:space:]]*@source[[:space:]]+"[^"]*packages/chrome/src' \
-    "${app_dir}/src"; then
-    pass "${app_name}: stylesheet has @source for packages/chrome/src"
   else
-    fail "${app_name}: no '@source \"…/packages/chrome/src/**\"' line in any src/**.css — the tool shell's utilities will not be emitted"
+    local chrome_src resolved_ok css_file raw_glob base_dir
+    chrome_src="$(cd "${repo_root}/packages/chrome/src" && pwd)"
+    resolved_ok=0
+
+    while IFS= read -r css_file; do
+      while IFS= read -r raw_glob; do
+        # Strip the glob tail, leaving the directory the pattern is rooted at.
+        base_dir="${raw_glob%%\**}"
+        base_dir="$(cd "$(dirname "${css_file}")" 2>/dev/null && cd "${base_dir}" 2>/dev/null && pwd)" || continue
+        if [[ "${base_dir}" == "${chrome_src}" ]]; then
+          resolved_ok=1
+          break 2
+        fi
+      done < <(grep -oE '^[[:space:]]*@source[[:space:]]+"[^"]*packages/chrome/src[^"]*"' "${css_file}" \
+        | sed -E 's/.*"([^"]*)".*/\1/')
+    done < <(find "${app_dir}/src" -type f -name '*.css')
+
+    if ((resolved_ok == 1)); then
+      pass "${app_name}: stylesheet @source resolves to packages/chrome/src"
+    else
+      fail "${app_name}: no @source line under src/**.css resolves to ${chrome_src} — the tool shell's utilities will not be emitted (a wrong number of '../' still parses, and still emits nothing)"
+    fi
   fi
 
   # --- 2. @tanstack/react-router in resolve.dedupe -------------------------

@@ -143,6 +143,7 @@ updates:
   # anyway so a future non-ARG base image there is picked up automatically.
   - package-ecosystem: docker
     directories:
+      - /apps/admin
       - /apps/api
       - /apps/auth
       - /apps/cube-trainer

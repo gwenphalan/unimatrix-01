@@ -42,6 +42,15 @@ jobs:
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
 
+      # Pure bash, reads only `apps/*` and this file, so it runs before the
+      # install and costs nothing. It lives here rather than only inside
+      # `pnpm check`/`pnpm verify` because this job runs its gates individually
+      # and calls neither wrapper — a gate reachable only through them is not a
+      # pre-merge gate at all, it is a next-morning email from the scheduled
+      # `maintenance.yml` run against already-merged `main`.
+      - name: App wiring
+        run: bash ./infra/scripts/check-app-wiring.sh
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
@@ -126,8 +135,8 @@ jobs:
       # is confined to one image or affects all of them is most of the
       # diagnosis, and re-running to find out costs another full cycle.
       fail-fast: false
-      # Every `apps/*/Dockerfile` must appear here, and
-      # `infra/scripts/check-app-wiring.sh` fails the build if one does not.
+      # Every `apps/*/Dockerfile` must appear here. The `App wiring` step in
+      # the `Verify` job above fails the build if one does not.
       # Adding an entry is only half the job: the matching `Images (<app>)`
       # check also has to be armed as required on `main`, or the image is built
       # and its result ignored.

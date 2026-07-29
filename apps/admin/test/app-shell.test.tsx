@@ -6,14 +6,18 @@ import {
   createRouter,
 } from "@tanstack/react-router";
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // `SignedIn`/`SignedOut` need a mounted Clerk provider, and mounting a real one
-// would need live keys. Both branches are rendered instead, so the assertions
-// below cover the signed-in *and* signed-out affordances in one pass.
+// would need live keys. The mock is a *switch* rather than a pair that both
+// render their children: with both rendering, swapping the two wrappers in the
+// shell leaves every assertion below green, so the two tests named after auth
+// gating would assert nothing about gating at all.
+const auth = vi.hoisted(() => ({ signedIn: true }));
+
 vi.mock("@unimatrix/auth/react", () => ({
-  SignedIn: ({ children }: { children: ReactNode }) => <>{children}</>,
-  SignedOut: ({ children }: { children: ReactNode }) => <>{children}</>,
+  SignedIn: ({ children }: { children: ReactNode }) => (auth.signedIn ? <>{children}</> : null),
+  SignedOut: ({ children }: { children: ReactNode }) => (auth.signedIn ? null : <>{children}</>),
   UserButton: () => <button type="button">Account</button>,
 }));
 
@@ -32,6 +36,10 @@ function renderShell(children: ReactNode) {
 }
 
 describe("AppShell", () => {
+  beforeEach(() => {
+    auth.signedIn = true;
+  });
+
   it("renders its children inside the shared tool shell", async () => {
     renderShell(<p>console body</p>);
 
@@ -62,6 +70,7 @@ describe("AppShell", () => {
   });
 
   it("sends the signed-out visitor to the auth hub with a return address", async () => {
+    auth.signedIn = false;
     renderShell(<p>console body</p>);
 
     // jsdom's default location. Asserted through the built href rather than a
@@ -70,11 +79,15 @@ describe("AppShell", () => {
       "href",
       `https://auth.example.test/sign-in?redirect_url=${encodeURIComponent(window.location.href)}`,
     );
+    // The negative half is what makes this a gating test: the account control
+    // must be absent, not merely the sign-in link present.
+    expect(screen.queryByRole("button", { name: "Account" })).not.toBeInTheDocument();
   });
 
   it("shows the account control to a signed-in operator", async () => {
     renderShell(<p>console body</p>);
 
     expect(await screen.findByRole("button", { name: "Account" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Sign in" })).not.toBeInTheDocument();
   });
 });
