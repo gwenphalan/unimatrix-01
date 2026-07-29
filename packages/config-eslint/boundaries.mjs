@@ -26,7 +26,16 @@ const ALLOWED_PACKAGE_IMPORTS = {
   // request/response types, and those live in `@unimatrix/shared` by rule
   // ("shared request/response shapes belong in @unimatrix/shared"). The vite
   // alias and tsconfig path for it predate this entry.
-  "apps/web": ["api-client", "auth", "chrome", "content", "e2e-helpers", "shared", "ui"],
+  "apps/web": [
+    "api-client",
+    "app-config",
+    "auth",
+    "chrome",
+    "content",
+    "e2e-helpers",
+    "shared",
+    "ui",
+  ],
   // `content` is here for `scripts/seed-content.ts` only — the one-way import
   // of the repository's authored markdown into the content database. No route
   // module reads markdown from disk. The rule has no per-directory
@@ -40,13 +49,17 @@ const ALLOWED_PACKAGE_IMPORTS = {
   // it carries no auth, transport, or content dependency of its own, which is
   // the whole reason its shells take the account control as a slot.
   "apps/cube-trainer": ["chrome", "e2e-helpers", "ui"],
-  "apps/auth": ["auth", "chrome", "ui"],
+  "apps/auth": ["app-config", "auth", "chrome", "ui"],
   // The admin scaffold, and deliberately as narrow as `apps/auth`. It is not
   // the CMS yet: `api-client` and `shared` are the edges the content move will
   // need, and they get added when code actually uses them rather than now, so
   // this stays a statement of fact instead of a permission slip.
-  "apps/admin": ["auth", "chrome", "ui"],
+  "apps/admin": ["app-config", "auth", "chrome", "ui"],
   "packages/api-client": ["shared"],
+  // Env validation for the Vite apps' config boundaries. A leaf on purpose:
+  // `zod` is its only dependency and stays its implementation detail — apps
+  // compose schemas through `envSchema` instead of importing zod themselves.
+  "packages/app-config": [],
   // The shared chrome composes `ui` primitives and nothing else. It must never
   // gain `auth`: both of its shells take the account control as a `ReactNode`
   // slot precisely so a sign-in-free tool can import one without pulling Clerk

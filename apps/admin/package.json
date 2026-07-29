@@ -38,6 +38,7 @@
   "dependencies": {
     "@remixicon/react": "^4.9.0",
     "@tanstack/react-router": "^1.166.6",
+    "@unimatrix/app-config": "workspace:*",
     "@unimatrix/auth": "workspace:*",
     "@unimatrix/chrome": "workspace:^",
     "@unimatrix/ui": "workspace:^",

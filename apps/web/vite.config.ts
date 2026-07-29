@@ -99,6 +99,12 @@ export function createWebViteConfig(mode: string): UserConfig {
           ),
         },
         {
+          find: /^@unimatrix\/app-config$/,
+          replacement: fileURLToPath(
+            new URL("../../packages/app-config/src/index.ts", import.meta.url),
+          ),
+        },
+        {
           find: /^@unimatrix\/auth\/react$/,
           replacement: fileURLToPath(new URL("../../packages/auth/src/react.tsx", import.meta.url)),
         },
