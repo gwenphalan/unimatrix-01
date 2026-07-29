@@ -10,6 +10,17 @@ services:
       LOG_LEVEL: info
       TRUST_PROXY: "1"
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS}
+      # Required together in production — the API refuses to boot without all
+      # three (`parseClerkConfig` in apps/api/src/config.ts). Compose passes
+      # nothing to a container that is not named here, so setting them in the
+      # deployment platform is not enough on its own: leaving this block out is
+      # what put the production API in a restart loop, which reads from outside
+      # as every content route 404ing.
+      CLERK_SECRET_KEY: ${CLERK_SECRET_KEY}
+      CLERK_PUBLISHABLE_KEY: ${CLERK_PUBLISHABLE_KEY}
+      # A PEM public key. Clerk strips newlines before use, so a single-line
+      # value works and avoids a multi-line env value the platform may truncate.
+      CLERK_JWT_KEY: ${CLERK_JWT_KEY}
       # Apply pending Drizzle migrations against the mounted volume at startup
       # (idempotent). The DB file defaults to /data/unimatrix.sqlite (set in the
       # Dockerfile); the api-data volume below persists it across redeploys.
