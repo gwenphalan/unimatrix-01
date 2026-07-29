@@ -64,6 +64,10 @@ export function createAuthAppViteConfig(mode: string): UserConfig {
           ),
         },
         {
+          find: /^@unimatrix\/chrome\/tool$/,
+          replacement: fileURLToPath(new URL("../../packages/chrome/src/tool.ts", import.meta.url)),
+        },
+        {
           find: /^@unimatrix\/ui\/public$/,
           replacement: fileURLToPath(new URL("../../packages/ui/src/public.ts", import.meta.url)),
         },
@@ -76,7 +80,11 @@ export function createAuthAppViteConfig(mode: string): UserConfig {
           replacement: fileURLToPath(new URL("./node_modules/react", import.meta.url)),
         },
       ],
-      dedupe: ["react", "react-dom"],
+      // `@tanstack/react-router` is deduped, not just React. `@unimatrix/chrome`
+      // declares it as a peer and resolves from its own directory, so without
+      // this the bundle can carry two copies and the shell's `useRouterState`
+      // reads a router context the app's `RouterProvider` never wrote to.
+      dedupe: ["@tanstack/react-router", "react", "react-dom"],
     },
   };
 }

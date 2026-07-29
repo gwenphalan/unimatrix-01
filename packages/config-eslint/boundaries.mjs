@@ -40,7 +40,7 @@ const ALLOWED_PACKAGE_IMPORTS = {
   // it carries no auth, transport, or content dependency of its own, which is
   // the whole reason its shells take the account control as a slot.
   "apps/cube-trainer": ["chrome", "e2e-helpers", "ui"],
-  "apps/auth": ["auth", "ui"],
+  "apps/auth": ["auth", "chrome", "ui"],
   "packages/api-client": ["shared"],
   // The shared chrome composes `ui` primitives and nothing else. It must never
   // gain `auth`: both of its shells take the account control as a `ReactNode`

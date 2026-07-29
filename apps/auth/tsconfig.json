@@ -5,6 +5,7 @@
     "paths": {
       "@/*": ["./src/*"],
       "@unimatrix/api-client": ["../../packages/api-client/src/index.ts"],
+      "@unimatrix/chrome/tool": ["../../packages/chrome/src/tool.ts"],
       "@unimatrix/auth/react": ["../../packages/auth/src/react.tsx"],
       "@unimatrix/auth": ["../../packages/auth/src/index.ts"],
       "@unimatrix/shared": ["../../packages/shared/src/index.ts"],

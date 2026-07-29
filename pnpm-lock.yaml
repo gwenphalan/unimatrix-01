@@ -125,6 +125,9 @@ importers:
       '@unimatrix/auth':
         specifier: workspace:*
         version: link:../../packages/auth
+      '@unimatrix/chrome':
+        specifier: workspace:^
+        version: link:../../packages/chrome
       '@unimatrix/ui':
         specifier: workspace:^
         version: link:../../packages/ui
