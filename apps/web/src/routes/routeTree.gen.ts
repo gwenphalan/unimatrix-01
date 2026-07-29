@@ -11,10 +11,14 @@
 import { Route as rootRouteImport } from './__root'
 import { Route as IndexRouteImport } from './index'
 import { Route as AboutRouteImport } from './about'
+import { Route as AdminRouteImport } from './admin'
 import { Route as BlogRouteImport } from './blog'
 import { Route as ProjectsRouteImport } from './projects'
+import { Route as AdminIndexRouteImport } from './admin.index'
 import { Route as BlogSlugRouteImport } from './blog_.$slug'
 import { Route as ProjectsSlugRouteImport } from './projects_.$slug'
+import { Route as AdminPostsEditRouteImport } from './admin.posts.edit'
+import { Route as AdminPostsNewRouteImport } from './admin.posts.new'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -26,6 +30,11 @@ const AboutRoute = AboutRouteImport.update({
   path: '/about',
   getParentRoute: () => rootRouteImport,
 } as any).lazy(() => import('./about.lazy').then((d) => d.Route))
+const AdminRoute = AdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
+  getParentRoute: () => rootRouteImport,
+} as any).lazy(() => import('./admin.lazy').then((d) => d.Route))
 const BlogRoute = BlogRouteImport.update({
   id: '/blog',
   path: '/blog',
@@ -36,6 +45,11 @@ const ProjectsRoute = ProjectsRouteImport.update({
   path: '/projects',
   getParentRoute: () => rootRouteImport,
 } as any).lazy(() => import('./projects.lazy').then((d) => d.Route))
+const AdminIndexRoute = AdminIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AdminRoute,
+} as any).lazy(() => import('./admin.index.lazy').then((d) => d.Route))
 const BlogSlugRoute = BlogSlugRouteImport.update({
   id: '/blog_/$slug',
   path: '/blog/$slug',
@@ -46,14 +60,28 @@ const ProjectsSlugRoute = ProjectsSlugRouteImport.update({
   path: '/projects/$slug',
   getParentRoute: () => rootRouteImport,
 } as any).lazy(() => import('./projects_.$slug.lazy').then((d) => d.Route))
+const AdminPostsEditRoute = AdminPostsEditRouteImport.update({
+  id: '/posts/edit',
+  path: '/posts/edit',
+  getParentRoute: () => AdminRoute,
+} as any).lazy(() => import('./admin.posts.edit.lazy').then((d) => d.Route))
+const AdminPostsNewRoute = AdminPostsNewRouteImport.update({
+  id: '/posts/new',
+  path: '/posts/new',
+  getParentRoute: () => AdminRoute,
+} as any).lazy(() => import('./admin.posts.new.lazy').then((d) => d.Route))
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
+  '/admin': typeof AdminRouteWithChildren
   '/blog': typeof BlogRoute
   '/projects': typeof ProjectsRoute
   '/blog/$slug': typeof BlogSlugRoute
   '/projects/$slug': typeof ProjectsSlugRoute
+  '/admin/': typeof AdminIndexRoute
+  '/admin/posts/edit': typeof AdminPostsEditRoute
+  '/admin/posts/new': typeof AdminPostsNewRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -62,35 +90,65 @@ export interface FileRoutesByTo {
   '/projects': typeof ProjectsRoute
   '/blog/$slug': typeof BlogSlugRoute
   '/projects/$slug': typeof ProjectsSlugRoute
+  '/admin': typeof AdminIndexRoute
+  '/admin/posts/edit': typeof AdminPostsEditRoute
+  '/admin/posts/new': typeof AdminPostsNewRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
+  '/admin': typeof AdminRouteWithChildren
   '/blog': typeof BlogRoute
   '/projects': typeof ProjectsRoute
   '/blog_/$slug': typeof BlogSlugRoute
   '/projects_/$slug': typeof ProjectsSlugRoute
+  '/admin/': typeof AdminIndexRoute
+  '/admin/posts/edit': typeof AdminPostsEditRoute
+  '/admin/posts/new': typeof AdminPostsNewRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    '/' | '/about' | '/blog' | '/projects' | '/blog/$slug' | '/projects/$slug'
+    | '/'
+    | '/about'
+    | '/admin'
+    | '/blog'
+    | '/projects'
+    | '/blog/$slug'
+    | '/projects/$slug'
+    | '/admin/'
+    | '/admin/posts/edit'
+    | '/admin/posts/new'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/about' | '/blog' | '/projects' | '/blog/$slug' | '/projects/$slug'
-  id:
-    | '__root__'
+  to:
     | '/'
     | '/about'
     | '/blog'
     | '/projects'
+    | '/blog/$slug'
+    | '/projects/$slug'
+    | '/admin'
+    | '/admin/posts/edit'
+    | '/admin/posts/new'
+  id:
+    | '__root__'
+    | '/'
+    | '/about'
+    | '/admin'
+    | '/blog'
+    | '/projects'
     | '/blog_/$slug'
     | '/projects_/$slug'
+    | '/admin/'
+    | '/admin/posts/edit'
+    | '/admin/posts/new'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AboutRoute: typeof AboutRoute
+  AdminRoute: typeof AdminRouteWithChildren
   BlogRoute: typeof BlogRoute
   ProjectsRoute: typeof ProjectsRoute
   BlogSlugRoute: typeof BlogSlugRoute
@@ -113,6 +171,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AboutRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin': {
+      id: '/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AdminRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/blog': {
       id: '/blog'
       path: '/blog'
@@ -126,6 +191,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/projects'
       preLoaderRoute: typeof ProjectsRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/admin/': {
+      id: '/admin/'
+      path: '/'
+      fullPath: '/admin/'
+      preLoaderRoute: typeof AdminIndexRouteImport
+      parentRoute: typeof AdminRoute
     }
     '/blog_/$slug': {
       id: '/blog_/$slug'
@@ -141,12 +213,41 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProjectsSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/posts/edit': {
+      id: '/admin/posts/edit'
+      path: '/posts/edit'
+      fullPath: '/admin/posts/edit'
+      preLoaderRoute: typeof AdminPostsEditRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/posts/new': {
+      id: '/admin/posts/new'
+      path: '/posts/new'
+      fullPath: '/admin/posts/new'
+      preLoaderRoute: typeof AdminPostsNewRouteImport
+      parentRoute: typeof AdminRoute
+    }
   }
 }
+
+interface AdminRouteChildren {
+  AdminIndexRoute: typeof AdminIndexRoute
+  AdminPostsEditRoute: typeof AdminPostsEditRoute
+  AdminPostsNewRoute: typeof AdminPostsNewRoute
+}
+
+const AdminRouteChildren: AdminRouteChildren = {
+  AdminIndexRoute: AdminIndexRoute,
+  AdminPostsEditRoute: AdminPostsEditRoute,
+  AdminPostsNewRoute: AdminPostsNewRoute,
+}
+
+const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AboutRoute: AboutRoute,
+  AdminRoute: AdminRouteWithChildren,
   BlogRoute: BlogRoute,
   ProjectsRoute: ProjectsRoute,
   BlogSlugRoute: BlogSlugRoute,

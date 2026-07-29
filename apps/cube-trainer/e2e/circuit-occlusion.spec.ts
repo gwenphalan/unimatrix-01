@@ -6,6 +6,11 @@ import {
   waitForSettledCircuitField,
 } from "@unimatrix/e2e-helpers";
 
+// Skipped for the same reason as the `apps/web` mirror: the circuit field is
+// off at `CIRCUIT_FIELD_ENABLED` in `packages/ui`, so `window.__circuitField`
+// never appears and these would time out rather than fail on a real bug.
+test.skip(true, "the circuit field is disabled — see CIRCUIT_FIELD_ENABLED");
+
 /**
  * The `apps/web` mirror of this spec explains the invariant; this one exists
  * because cube-trainer is the app where automatic discovery has the most to get

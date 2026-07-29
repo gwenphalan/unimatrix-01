@@ -7,10 +7,12 @@ import {
   RiFolderLine,
   RiHome5Line,
   RiLoginBoxLine,
+  RiShieldUserLine,
   RiUserLine,
 } from "@remixicon/react";
 import { SignedIn, SignedOut, UserButton } from "@unimatrix/auth/react";
 
+import { AdminSlot, useAdminAccess } from "@/features/admin/admin-slot";
 import { PublicPageContainer, PublicSiteFooter } from "@/features/public-site/components";
 import { isAuthEnabled, loadWebRuntimeConfig } from "@/lib/config";
 import { CircuitField, CircuitOccluderProvider, cn } from "@unimatrix/ui/public";
@@ -107,7 +109,12 @@ function Breadcrumbs({
       </Link>
       <span className="flex min-w-0 flex-wrap items-center gap-1">
         {items.map((item, index) => {
-          const isLast = index === items.length - 1;
+          // The root crumb links home on every route, including ones that add
+          // no crumb of their own (`/admin`). Trailing crumbs are plain text
+          // because they are the current page, but the root never is — leaving
+          // it as text on a one-crumb route made the site name stop being a way
+          // back.
+          const isPlainText = item.to === undefined || (index > 0 && index === items.length - 1);
 
           return (
             <span
@@ -120,7 +127,7 @@ function Breadcrumbs({
               {index > 0 ? (
                 <RiArrowRightSLine aria-hidden="true" className="size-3.5 shrink-0" />
               ) : null}
-              {isLast || !item.to ? (
+              {isPlainText || item.to === undefined ? (
                 <span className="truncate font-medium text-foreground">{item.label}</span>
               ) : (
                 <Link className="truncate transition-colors hover:text-foreground" to={item.to}>
@@ -146,8 +153,28 @@ function buildSignInHref(): string {
  * (the default for this public site) — `SignedIn`/`SignedOut` are Clerk
  * components that require a mounted `AuthProvider`, so they must never be
  * rendered when one isn't present.
+ *
+ * The admin entry point lives in the `UserButton` menu rather than beside it:
+ * it is an account-scoped affordance, not a site section, and the header
+ * already carries four nav items.
+ *
+ * This is the one admin control that is **not** routed through `AdminSlot`.
+ * Clerk resolves `UserButton`'s menu by inspecting its direct children for its
+ * own `MenuItems`/`Link` component types, so the `Suspense` + error boundary
+ * `AdminSlot` wraps everything in would leave the item silently undetected.
+ * The cost is that the literal `"Admin"` and `/admin` ship in the public
+ * bundle, which reveals nothing: `routeTree.gen.ts` is not lazy, so the
+ * `/admin` route is already in every visitor's bundle. No admin *code* moves —
+ * the page, controls, dialogs and editor all stay behind `AdminSlot`'s single
+ * dynamic import.
+ *
+ * `useAdminAccess()` is called above the `authEnabled` early return so the hook
+ * order is identical in both builds; in the no-Clerk build it resolves to a
+ * hookless constant.
  */
 function AuthHeaderAction() {
+  const { isAdmin } = useAdminAccess();
+
   if (!authEnabled) {
     return null;
   }
@@ -155,7 +182,19 @@ function AuthHeaderAction() {
   return (
     <>
       <SignedIn>
-        <UserButton afterSignOutUrl="/" />
+        {/* No `afterSignOutUrl` here — deprecated on the button, and
+            `<ClerkProvider>` in `auth-boundary.tsx` already sets it. */}
+        <UserButton>
+          {isAdmin ? (
+            <UserButton.MenuItems>
+              <UserButton.Link
+                href="/admin"
+                label="Admin"
+                labelIcon={<RiShieldUserLine aria-hidden="true" className="size-4" />}
+              />
+            </UserButton.MenuItems>
+          ) : null}
+        </UserButton>
       </SignedIn>
       <SignedOut>
         <a
@@ -328,9 +367,16 @@ function AppShellContent({ children }: AppShellProps) {
           moment it is shown. `aria-hidden` alone would be wrong here: it
           hides content from assistive technology while leaving it focusable,
           which is a WCAG 4.1.2 failure rather than a fix. */}
+      {/* Not shown on a phone. Its nav stacks two-up below `lg`, so the bar
+          lands about 110px tall over an 844px viewport — an eighth of the
+          screen, permanently, sitting on top of whatever is being read. The
+          header it condenses is one scroll away, which is where a phone
+          expects to find it. `hidden` also keeps it out of the tab order at
+          those widths, so the `inert` toggle below still describes the only
+          case where it exists. */}
       <div
         className={cn(
-          "fixed top-3 inset-x-0 z-40 transition-opacity duration-300 ease-out",
+          "fixed top-3 inset-x-0 z-40 hidden transition-opacity duration-300 ease-out sm:block",
           isCondensed ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0",
         )}
         inert={!isCondensed}
@@ -392,6 +438,18 @@ function AppShellContent({ children }: AppShellProps) {
       </main>
 
       <PublicSiteFooter />
+
+      {/* Mounted once, here, rather than beside each admin control: every
+          admin action reports through one toast host, and two hosts would
+          render two stacks. Nothing for a non-admin — the slot returns null
+          and loads no chunk.
+
+          Taken out of flow. The host renders a zero-height element, but a
+          zero-height *flex item* still earns the column's `gap-10`, so an
+          admin saw 40px of dead space under the footer that nobody else did. */}
+      <div className="absolute">
+        <AdminSlot kind="toaster" />
+      </div>
     </PublicPageContainer>
   );
 }

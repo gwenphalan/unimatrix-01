@@ -5,12 +5,16 @@ import { setupAuth } from "./auth.js";
 import { setupCors } from "./cors.js";
 import { setupDatabase } from "./database.js";
 import { setupObservability } from "./observability.js";
+import { setupRateLimit } from "./rate-limit.js";
 import { setupSecurity } from "./security.js";
 
 export function setupCorePlugins(app: FastifyInstance): void {
   setupHttpValidation(app);
   setupObservability(app);
   setupSecurity(app);
+  // Before the routes and outside every module, so a route cannot be added
+  // without a ceiling by being added somewhere this was not thought about.
+  setupRateLimit(app);
   setupCors(app);
   setupAuth(app);
   // Registered unconditionally: it is cheap (a single SQLite connection) and

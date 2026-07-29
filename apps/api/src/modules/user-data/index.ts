@@ -1,4 +1,5 @@
 import fastifyMultipart from "@fastify/multipart";
+import fastifyRateLimit from "@fastify/rate-limit";
 import { getAuthUserId, requireAuth } from "@unimatrix/auth/server";
 import {
   dataKeySchema,
@@ -23,6 +24,7 @@ import type { ZodTypeProvider } from "fastify-type-provider-zod";
 
 import { resolveContentDisposition } from "../../lib/http/content-types.js";
 import { ApiError } from "../../lib/http/errors.js";
+import { RATE_LIMIT_OPTIONS, UPLOAD_RATE_LIMIT_OPTIONS } from "../../plugins/rate-limit.js";
 import {
   deleteDocument,
   deleteFile,
@@ -63,6 +65,15 @@ export const userDataModule: FastifyPluginAsync = async (app) => {
       "userDataModule requires app.runtimeConfig.clerk to be configured; only register it when Clerk is set up.",
     );
   }
+
+  // Registered here as well as globally in `src/plugins/rate-limit.ts`. The
+  // modules are encapsulated plugins, so the ceiling installed on the root
+  // instance is not visible from inside one — not to a reader of this file and
+  // not to CodeQL, which reports every authorizing route here as unlimited.
+  // Both limiters count the same request against equal budgets, so the
+  // effective ceiling is unchanged; what changes is that the guarantee is
+  // stated where the routes that need it are.
+  await app.register(fastifyRateLimit, RATE_LIMIT_OPTIONS);
 
   await app.register(fastifyMultipart, {
     limits: {
@@ -194,11 +205,16 @@ export const userDataModule: FastifyPluginAsync = async (app) => {
   // Binary routes: not contract-driven (files are not JSON), so namespace
   // and key are validated manually with the shared zod schemas instead of
   // going through the zod type provider.
-  app.route({
-    method: "POST",
-    url: "/me/files",
-    preHandler: requireAuth(),
-    handler: async (request, reply) => {
+  // Shorthand rather than `app.route({...})`, for the reason given at the
+  // content module's upload route: a per-route ceiling declared on a route
+  // object is invisible to the analysis that asks for one.
+  app.post(
+    "/me/files",
+    {
+      config: { rateLimit: UPLOAD_RATE_LIMIT_OPTIONS },
+      preHandler: requireAuth(),
+    },
+    async (request, reply) => {
       const userId = getRequiredAuthUserId(request);
       const query = request.query as Record<string, unknown>;
 
@@ -244,7 +260,7 @@ export const userDataModule: FastifyPluginAsync = async (app) => {
 
       return responseBody;
     },
-  });
+  );
 
   app.route({
     method: "GET",

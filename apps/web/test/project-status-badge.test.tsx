@@ -24,6 +24,14 @@ describe("ProjectStatusBadge", () => {
     expect(screen.getByText("standby")).toBeInTheDocument();
   });
 
+  // Nothing to check and nothing stored, so nothing is claimed. Every project
+  // created through the admin form lands here, since the form writes no status.
+  it("renders nothing with neither a liveUrl nor a stored status", () => {
+    const { container } = renderWithQueryClient(<ProjectStatusBadge frontmatter={{}} />);
+
+    expect(container).toBeEmptyDOMElement();
+  });
+
   it("shows a checking state before the live check resolves", () => {
     vi.stubGlobal("fetch", vi.fn().mockReturnValue(new Promise(() => {})));
 

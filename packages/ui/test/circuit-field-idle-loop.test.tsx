@@ -31,7 +31,10 @@ function setHidden(hidden: boolean): void {
  * and no packet ever spawns. Stubbed to a high count so the mode is decided
  * by this file, not by the host.
  */
-describe("CircuitField idle loop (full mode)", () => {
+// Every assertion here needs the canvas mounted, and the field is switched off
+// at `CIRCUIT_FIELD_ENABLED` while it is unfinished. Un-skip in the commit that
+// flips the flag.
+describe.skip("CircuitField idle loop (full mode)", () => {
   const originalRAF = window.requestAnimationFrame.bind(window);
   const originalPerformanceNow = performance.now.bind(performance);
   const originalHardwareConcurrency = Object.getOwnPropertyDescriptor(

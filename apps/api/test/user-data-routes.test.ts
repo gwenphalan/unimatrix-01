@@ -316,8 +316,17 @@ function stripComments(source: string): string {
  * "does the source say `requireAuth()` here", which is exactly the question a
  * behavioural test cannot answer — see the comment on the test below.
  */
+/**
+ * One chunk per route declaration, covering both forms the modules use: the
+ * `.route({ ... })` object and the `.post(url, opts, handler)` shorthand. The
+ * shorthand is not cosmetic — CodeQL's per-route rate-limit rule only sees a
+ * ceiling declared that way — so a structural check that knew only about the
+ * object form would silently stop counting the route that carries one.
+ */
 function splitRouteDefinitions(source: string): string[] {
-  return stripComments(source).split(".route({").slice(1);
+  return stripComments(source)
+    .split(/\.route\(\{|\.(?:get|post|put|patch|delete)\(\s*"/u)
+    .slice(1);
 }
 
 /**
@@ -342,7 +351,7 @@ void test("every route in the user-data module declares requireAuth()", async ()
   assert.equal(
     definitions.length,
     USER_DATA_ROUTES.length,
-    "expected one .route({ ... }) call per entry in USER_DATA_ROUTES",
+    "expected one route declaration per entry in USER_DATA_ROUTES",
   );
 
   for (const [index, definition] of definitions.entries()) {

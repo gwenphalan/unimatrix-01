@@ -445,8 +445,17 @@ function stripComments(source: string): string {
   return source.replaceAll(/\/\*[\s\S]*?\*\//gu, "").replaceAll(/^[ \t]*\/\/.*$/gmu, "");
 }
 
+/**
+ * One chunk per route declaration, covering both forms the modules use: the
+ * `.route({ ... })` object and the `.post(url, opts, handler)` shorthand. The
+ * shorthand is not cosmetic — CodeQL's per-route rate-limit rule only sees a
+ * ceiling declared that way — so a structural check that knew only about the
+ * object form would silently stop counting the route that carries one.
+ */
 function splitRouteDefinitions(source: string): string[] {
-  return stripComments(source).split(".route({").slice(1);
+  return stripComments(source)
+    .split(/\.route\(\{|\.(?:get|post|put|patch|delete)\(\s*"/u)
+    .slice(1);
 }
 
 /**
@@ -478,7 +487,7 @@ void test("every admin content route declares requireAdmin, and only the public 
   assert.equal(
     definitions.length,
     ADMIN_ROUTES.length + publicUrls.length,
-    "expected one .route({ ... }) call per admin route plus the three public ones",
+    "expected one route declaration per admin route plus the three public ones",
   );
 
   const unguarded = definitions.filter(

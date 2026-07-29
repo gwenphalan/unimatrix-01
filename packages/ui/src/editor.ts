@@ -25,7 +25,74 @@
  * editor needs lives here. Anything added here reaches the browser only
  * through a dynamic `import()`; anything moved to `./public` is paid for by
  * every visitor.
+ *
+ * The name is the editor because that is what forced the split, but the
+ * entry point is the whole authoring surface: the primitives below are here
+ * so the CMS's table and dialogs have somewhere to come from that is not
+ * `./public`. `Badge` and `Button` are deliberately re-exported rather than
+ * imported from `./public` alongside these — one import specifier per module
+ * in the admin code, and the shared modules dedupe in the graph either way.
  */
+export {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "./components/ui/alert-dialog.js";
+export { Badge } from "./components/ui/badge.js";
+export { Button } from "./components/ui/button.js";
+export { Checkbox } from "./components/ui/checkbox.js";
+export {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "./components/ui/dialog.js";
+export {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyTitle,
+} from "./components/ui/empty.js";
+export { Input } from "./components/ui/input.js";
+export { Label } from "./components/ui/label.js";
+export {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "./components/ui/select.js";
+export { Separator } from "./components/ui/separator.js";
+// Not a Tailwind `sm:hidden` pair: a table and a compact list are different
+// markup for the same rows, and shipping both would put two controls with the
+// same accessible name in the tree at once.
+export { useIsMobile } from "./hooks/use-mobile.js";
+export { Skeleton } from "./components/ui/skeleton.js";
+export { Spinner } from "./components/ui/spinner.js";
+export {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "./components/ui/table.js";
+export { Textarea } from "./components/ui/textarea.js";
+export { Toaster } from "./components/ui/sonner.js";
+// Re-exported rather than imported from `sonner` by the consumer: `<Toaster />`
+// and the `toast()` feeding it must come from the same resolved copy, and this
+// keeps `sonner` out of `apps/web`'s own dependency list.
+export { toast } from "sonner";
+export { ToggleGroup, ToggleGroupItem } from "./components/ui/toggle-group.js";
+export { cn } from "./lib/utils.js";
 export {
   MarkdownEditor,
   MARKDOWN_EDITOR_MODES,

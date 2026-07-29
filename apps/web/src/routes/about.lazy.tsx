@@ -28,7 +28,7 @@ function AboutRoute() {
   }, [formState.email, formState.message, formState.name]);
 
   return (
-    <div className="space-y-10 lg:space-y-12">
+    <div className="space-y-8 sm:space-y-10 lg:space-y-12">
       <header className="max-w-3xl space-y-4 border-b border-border/70 pb-8">
         <h1 className="text-3xl leading-[0.92] font-medium tracking-[-0.06em] text-foreground sm:text-4xl lg:text-[3.2rem]">
           About

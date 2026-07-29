@@ -1,10 +1,11 @@
 import { RiArrowLeftLine } from "@remixicon/react";
 import { Link, createLazyFileRoute } from "@tanstack/react-router";
 
-import { Badge, Button } from "@unimatrix/ui/public";
+import { Badge, Button, useIsMobile } from "@unimatrix/ui/public";
 
 import { LazyPublicMarkdown } from "@/features/content/lazy-public-markdown";
 import { renderPublicMarkdownInternalLink } from "@/features/content/markdown";
+import { AdminSlot } from "@/features/admin/admin-slot";
 import { PublicNotice } from "@/features/public-site/components";
 
 export const Route = createLazyFileRoute("/blog_/$slug")({
@@ -15,19 +16,36 @@ export const Route = createLazyFileRoute("/blog_/$slug")({
 
 function BlogDetailRoute() {
   const entry = Route.useLoaderData();
+  const isMobile = useIsMobile();
 
   return (
-    <div className="space-y-8 lg:space-y-10">
+    <div className="space-y-6 sm:space-y-8 lg:space-y-10">
       <header className="space-y-5 border-b border-border/70 pb-8">
-        <Button asChild className="w-fit gap-2" variant="outline">
-          <Link to="/blog">
-            <RiArrowLeftLine aria-hidden="true" className="size-4" />
-            Back to blog
-          </Link>
-        </Button>
+        {/* On a wide screen the admin bar is split across rows the post
+            already has — its buttons opposite the back link, which is the one
+            line here that is chrome rather than content, and the publication
+            state beside the post's date badge — so it adds no row of its own.
+            A narrow screen gets the whole bar below the summary instead. Each
+            control renders once either way; two copies would put two buttons
+            with the same accessible name in the tree. */}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <Button asChild className="w-fit gap-2" variant="outline">
+            <Link to="/blog">
+              <RiArrowLeftLine aria-hidden="true" className="size-4" />
+              Back to blog
+            </Link>
+          </Button>
+
+          {isMobile ? null : (
+            <AdminSlot kind="post-controls" part="actions" slug={entry.slug} type="blog" />
+          )}
+        </div>
 
         <div className="space-y-4">
-          <Badge variant="secondary">{entry.frontmatter.publishedAt}</Badge>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="secondary">{entry.frontmatter.publishedAt}</Badge>
+            <AdminSlot kind="post-controls" part="badge" slug={entry.slug} type="blog" />
+          </div>
 
           <h1 className="max-w-4xl text-3xl leading-[0.92] font-medium tracking-[-0.06em] text-foreground sm:text-4xl lg:text-[3.2rem]">
             {entry.frontmatter.title}
@@ -35,6 +53,10 @@ function BlogDetailRoute() {
           <p className="max-w-2xl text-[0.95rem] leading-7 text-foreground/86">
             {entry.frontmatter.description ?? entry.frontmatter.summary}
           </p>
+
+          {isMobile ? (
+            <AdminSlot kind="post-controls" part="actions" slug={entry.slug} type="blog" />
+          ) : null}
         </div>
       </header>
 

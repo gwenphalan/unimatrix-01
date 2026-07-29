@@ -34,32 +34,39 @@ for (const width of WIDTHS) {
     await expect(page.getByRole("link", { name: "Back to projects" })).toBeVisible();
 
     const rows = await page.evaluate(() =>
-      [...document.querySelectorAll('nav[aria-label^="Breadcrumb"]')].map((nav) => {
-        const logo = nav.querySelector("a[aria-label='Unimatrix-01 home']");
-        const trail = nav.querySelector("span");
+      [...document.querySelectorAll('nav[aria-label^="Breadcrumb"]')]
+        // The condensed overlay is `hidden` below `sm`, where its two-row nav
+        // would cover an eighth of a phone screen. A hidden element measures
+        // 0×0, so it is dropped here rather than being read as a wrapped logo.
+        .filter((nav) => nav.getBoundingClientRect().height > 0)
+        .map((nav) => {
+          const logo = nav.querySelector("a[aria-label='Unimatrix-01 home']");
+          const trail = nav.querySelector("span");
 
-        if (logo === null || trail === null) {
-          return null;
-        }
+          if (logo === null || trail === null) {
+            return null;
+          }
 
-        const logoRect = logo.getBoundingClientRect();
-        const trailRect = trail.getBoundingClientRect();
+          const logoRect = logo.getBoundingClientRect();
+          const trailRect = trail.getBoundingClientRect();
 
-        return {
-          label: nav.getAttribute("aria-label"),
-          // "Same row" is judged against the logo's own height rather than an
-          // exact match: the logo and the first crumb are different heights and
-          // are centre-aligned, so their tops differ by a couple of pixels even
-          // when they are visually on one line.
-          sameRow: Math.abs(logoRect.top - trailRect.top) < logoRect.height,
-        };
-      }),
+          return {
+            label: nav.getAttribute("aria-label"),
+            // "Same row" is judged against the logo's own height rather than an
+            // exact match: the logo and the first crumb are different heights
+            // and are centre-aligned, so their tops differ by a couple of
+            // pixels even when they are visually on one line.
+            sameRow: Math.abs(logoRect.top - trailRect.top) < logoRect.height,
+          };
+        }),
     );
 
-    expect(rows, `expected both header breadcrumbs to be present at ${width}px`).toHaveLength(2);
-    expect(rows, `logo wrapped away from the breadcrumb trail at ${width}px`).toEqual([
-      { label: "Breadcrumb", sameRow: true },
-      { label: "Breadcrumb, condensed header", sameRow: true },
-    ]);
+    const expected = [{ label: "Breadcrumb", sameRow: true }];
+
+    if (width >= 640) {
+      expected.push({ label: "Breadcrumb, condensed header", sameRow: true });
+    }
+
+    expect(rows, `unexpected set of visible header breadcrumbs at ${width}px`).toEqual(expected);
   });
 }

@@ -19,15 +19,15 @@ function IndexRoute() {
   const { blogEntries, home, projects } = Route.useLoaderData();
 
   return (
-    <div className="space-y-12 lg:space-y-16">
-      <section className="max-w-3xl space-y-4 pb-2">
+    <div className="space-y-8 lg:space-y-10">
+      <section className="max-w-3xl space-y-4 lg:max-w-none">
         <h1 className="text-3xl leading-[0.92] font-medium tracking-[-0.06em] text-foreground sm:text-4xl lg:text-[3.2rem]">
           {home.frontmatter.title}
         </h1>
       </section>
 
-      <div className="grid gap-8 xl:grid-cols-2 xl:items-stretch">
-        <section className="flex h-full flex-col gap-5">
+      <div className="grid divide-y divide-border/70 xl:grid-cols-2 xl:items-stretch xl:gap-8 xl:divide-y-0">
+        <section className="flex h-full flex-col gap-3 py-5 first:pt-0 last:pb-0 xl:py-0">
           <PublicSectionHeading
             badges={
               <Badge className="gap-1.5">
@@ -35,6 +35,10 @@ function IndexRoute() {
                 Featured projects
               </Badge>
             }
+            // No rule under a badge-only heading: with the title visually hidden
+            // it separated the badge from the list it introduces rather than
+            // the section from what came before.
+            className="border-b-0 pb-0 sm:pb-0"
             title="Featured projects"
             titleClassName="sr-only"
           />
@@ -67,7 +71,7 @@ function IndexRoute() {
           </Button>
         </section>
 
-        <section className="flex h-full flex-col gap-5">
+        <section className="flex h-full flex-col gap-3 py-5 first:pt-0 last:pb-0 xl:py-0">
           <PublicSectionHeading
             badges={
               <Badge className="gap-1.5">
@@ -75,6 +79,10 @@ function IndexRoute() {
                 Recent blog posts
               </Badge>
             }
+            // No rule under a badge-only heading: with the title visually hidden
+            // it separated the badge from the list it introduces rather than
+            // the section from what came before.
+            className="border-b-0 pb-0 sm:pb-0"
             title="Recent blog posts"
             titleClassName="sr-only"
           />
@@ -125,8 +133,8 @@ function IndexRoute() {
  */
 function HomeUnavailable() {
   return (
-    <div className="space-y-12 lg:space-y-16">
-      <section className="max-w-3xl space-y-4 pb-2">
+    <div className="space-y-8 lg:space-y-10">
+      <section className="max-w-3xl space-y-4 lg:max-w-none">
         <h1 className="text-3xl leading-[0.92] font-medium tracking-[-0.06em] text-foreground sm:text-4xl lg:text-[3.2rem]">
           {homeContent.frontmatter.title}
         </h1>

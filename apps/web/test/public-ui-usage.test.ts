@@ -81,6 +81,7 @@ describe("public UI package usage", () => {
       'export { Switch } from "./components/ui/switch.js";',
       'export { ToggleGroup, ToggleGroupItem } from "./components/ui/toggle-group.js";',
       'export { PublicMarkdown } from "./components/public-markdown.js";',
+      'export { useIsMobile } from "./hooks/use-mobile.js";',
       'export { cn } from "./lib/utils.js";',
     ];
 
@@ -170,6 +171,44 @@ describe("public UI package usage", () => {
     expect(webViteConfig.indexOf("@unimatrix\\/ui\\/editor")).toBeLessThan(
       webViteConfig.indexOf("find: /^@unimatrix\\/ui$/"),
     );
+  });
+
+  it("reaches the admin surface only through the slot's dynamic import", () => {
+    // The requirement is that admin code is not *delivered* to non-admins, not
+    // that it is hidden once delivered. Only a dynamic `import()` achieves
+    // that, and only if nothing else in the graph names the module statically:
+    // one static import from a public route would fold the whole admin chunk
+    // back into that route's chunk.
+    const sourceFiles = collectRepositoryFiles("apps/web/src").filter((path) =>
+      /\.(ts|tsx)$/u.test(path),
+    );
+    const adminFeatureFiles = sourceFiles.filter((path) =>
+      path.startsWith(join("apps", "web", "src", "features", "admin")),
+    );
+
+    const slotSource = stripComments(
+      readRepositoryFile("apps/web/src/features/admin/admin-slot.tsx"),
+    );
+
+    expect(slotSource).toMatch(/lazy\(/u);
+    expect(slotSource).toMatch(/import\("\.\/admin-surface"\)/u);
+    // The gate itself must stay clear of the entry point it is gating,
+    // otherwise it drags the whole surface into the public chunk it lives in.
+    expect(slotSource).not.toMatch(/@unimatrix\/ui\/editor/u);
+
+    // Everything outside the admin feature directory may name `admin-slot`,
+    // and nothing at all may name a module inside the chunk.
+    const chunkImporters = sourceFiles.filter((path) => {
+      if (adminFeatureFiles.includes(path)) {
+        return false;
+      }
+
+      return /from "@\/features\/admin\/(?!admin-slot")/u.test(
+        stripComments(readRepositoryFile(path)),
+      );
+    });
+
+    expect(chunkImporters).toEqual([]);
   });
 
   it("packages/ui owns the canonical shadcn config and shared stylesheet export", () => {

@@ -16,8 +16,11 @@
     @apply mx-auto max-w-3xl;
   }
 
+  /* No measure cap. The article panels this renders in are already capped at
+     `max-w-4xl`, and a 65ch column inside one of those left a wide strip of
+     empty panel down the right of every line. The panel is the measure. */
   .public-markdown {
-    @apply max-w-[65ch] text-[0.95rem] leading-7 text-muted-foreground;
+    @apply text-[0.95rem] leading-7 text-muted-foreground;
   }
 
   .public-markdown > :first-child {

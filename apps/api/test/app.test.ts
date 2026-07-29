@@ -268,3 +268,29 @@ void test("GET /missing-route returns the not-found envelope", async () => {
     await app.close();
   }
 });
+
+void test("a burst past the ceiling is answered with the API's own 429 envelope", async () => {
+  const app = createTestApp();
+
+  try {
+    // One over the limit. The store is per-instance and keyed by IP, and
+    // `inject` presents every request as the same one, so this is the whole
+    // window for this app.
+    let last = await app.inject({ method: "GET", url: "/health" });
+
+    for (let sent = 1; sent <= 300; sent += 1) {
+      last = await app.inject({ method: "GET", url: "/health" });
+    }
+
+    assert.equal(last.statusCode, 429);
+
+    const body: { error: { code: string; statusCode: number }; requestId: string } = last.json();
+
+    // The shape every other error on this API uses — not the plugin's own.
+    assert.equal(body.error.code, "RATE_LIMITED");
+    assert.equal(body.error.statusCode, 429);
+    assert.equal(typeof body.requestId, "string");
+  } finally {
+    await app.close();
+  }
+});
