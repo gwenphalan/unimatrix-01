@@ -26,7 +26,7 @@ const ALLOWED_PACKAGE_IMPORTS = {
   // request/response types, and those live in `@unimatrix/shared` by rule
   // ("shared request/response shapes belong in @unimatrix/shared"). The vite
   // alias and tsconfig path for it predate this entry.
-  "apps/web": ["api-client", "auth", "content", "e2e-helpers", "shared", "ui"],
+  "apps/web": ["api-client", "auth", "chrome", "content", "e2e-helpers", "shared", "ui"],
   // `content` is here for `scripts/seed-content.ts` only — the one-way import
   // of the repository's authored markdown into the content database. No route
   // module reads markdown from disk. The rule has no per-directory

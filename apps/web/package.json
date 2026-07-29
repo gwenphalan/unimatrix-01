@@ -45,6 +45,7 @@
     "@tanstack/react-router": "^1.166.6",
     "@unimatrix/api-client": "workspace:*",
     "@unimatrix/auth": "workspace:*",
+    "@unimatrix/chrome": "workspace:^",
     "@unimatrix/content": "workspace:*",
     "@unimatrix/shared": "workspace:*",
     "@unimatrix/ui": "workspace:^",

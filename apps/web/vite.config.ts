@@ -118,6 +118,12 @@ export function createWebViteConfig(mode: string): UserConfig {
             new URL("../../packages/shared/src/index.ts", import.meta.url),
           ),
         },
+        {
+          find: /^@unimatrix\/chrome\/public$/,
+          replacement: fileURLToPath(
+            new URL("../../packages/chrome/src/public.ts", import.meta.url),
+          ),
+        },
         // Ordered before the bare `@unimatrix/ui` entry below: these are
         // prefix-anchored regexes evaluated in order, and the bare one would
         // otherwise never let a subpath through.
@@ -138,7 +144,11 @@ export function createWebViteConfig(mode: string): UserConfig {
           replacement: fileURLToPath(new URL("./node_modules/react", import.meta.url)),
         },
       ],
-      dedupe: ["react", "react-dom"],
+      // `@tanstack/react-router` is deduped, not just React. `@unimatrix/chrome`
+      // declares it as a peer and resolves from its own directory, so without
+      // this the bundle can carry two copies and the shell's `useRouterState`
+      // reads a router context the app's `RouterProvider` never wrote to.
+      dedupe: ["@tanstack/react-router", "react", "react-dom"],
     },
   };
 }

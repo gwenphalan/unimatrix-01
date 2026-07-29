@@ -9,6 +9,7 @@
     "src"
   ],
   "exports": {
+    "./public": "./src/public.ts",
     "./tool": "./src/tool.ts"
   },
   "scripts": {
