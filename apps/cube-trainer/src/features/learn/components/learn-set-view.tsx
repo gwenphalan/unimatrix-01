@@ -6,7 +6,7 @@ import { PreviewModeToggle } from "@/features/algorithms/components/preview-mode
 import { resolvePreviewMode } from "@/features/algorithms/preview-mode";
 import type { AlgorithmSetId } from "@/features/algorithms/types";
 import { usePreviewMode } from "@/features/algorithms/use-preview-mode";
-import { OccludingCluster, ToolTitleBar } from "@/features/cube-trainer-site/components";
+import { ToolTitleBar } from "@/features/cube-trainer-site/components";
 import { LearnCasesGrid } from "@/features/learn/components/learn-cases-grid";
 import { LearnPanel } from "@/features/learn/components/learn-panel";
 
@@ -58,12 +58,8 @@ export function LearnSetView() {
       <LearnPanel key={setId} previewMode={resolvedPreviewMode} setId={setId} />
 
       <div className="flex items-center justify-between gap-4">
-        <OccludingCluster>
-          <AlgorithmSetToggle onChange={setSetId} setId={setId} />
-        </OccludingCluster>
-        <OccludingCluster>
-          <PreviewModeToggle mode={resolvedPreviewMode} onChange={setPreviewMode} setId={setId} />
-        </OccludingCluster>
+        <AlgorithmSetToggle onChange={setSetId} setId={setId} />
+        <PreviewModeToggle mode={resolvedPreviewMode} onChange={setPreviewMode} setId={setId} />
       </div>
     </div>
   );

@@ -9,7 +9,7 @@ import { PreviewModeToggle } from "@/features/algorithms/components/preview-mode
 import { resolvePreviewMode } from "@/features/algorithms/preview-mode";
 import type { AlgorithmSetId } from "@/features/algorithms/types";
 import { usePreviewMode } from "@/features/algorithms/use-preview-mode";
-import { OccludingCluster, ToolTitleBar } from "@/features/cube-trainer-site/components";
+import { ToolTitleBar } from "@/features/cube-trainer-site/components";
 import { DrillCasesGrid } from "@/features/trainer/components/drill-cases-grid";
 import { TrainerPanel } from "@/features/trainer/components/trainer-panel";
 
@@ -88,12 +88,8 @@ export function DrillSetView() {
       />
 
       <div className="flex items-center justify-between gap-4">
-        <OccludingCluster>
-          <AlgorithmSetToggle onChange={setSetId} setId={setId} />
-        </OccludingCluster>
-        <OccludingCluster>
-          <PreviewModeToggle mode={resolvedPreviewMode} onChange={setPreviewMode} setId={setId} />
-        </OccludingCluster>
+        <AlgorithmSetToggle onChange={setSetId} setId={setId} />
+        <PreviewModeToggle mode={resolvedPreviewMode} onChange={setPreviewMode} setId={setId} />
       </div>
     </div>
   );

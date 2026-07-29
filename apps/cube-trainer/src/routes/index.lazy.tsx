@@ -2,8 +2,6 @@ import { Link, createLazyFileRoute } from "@tanstack/react-router";
 import { RiBookOpenLine, RiFlashlightLine } from "@remixicon/react";
 import type { RemixiconComponentType } from "@remixicon/react";
 
-import { OccludingCluster } from "@/features/cube-trainer-site/components";
-
 export const Route = createLazyFileRoute("/")({
   component: IndexRoute,
 });
@@ -43,14 +41,10 @@ function IndexRoute() {
   return (
     <div className="space-y-10">
       <div className="flex items-center justify-center text-center">
-        {/* The logo + wordmark occlude too, so traces never run through the
-            title. The cluster wrapper is what carries the ref: this row is
-            full-width, and registering it would carve a full-width band out
-            of the field instead of a box around the words. */}
-        <OccludingCluster>
+        <div className="flex items-center gap-3">
           <img alt="" className="size-9 shrink-0 opacity-90" src="/favicon.svg" />
           <h1 className="text-3xl font-medium tracking-[-0.03em] text-foreground">Cube Trainer</h1>
-        </OccludingCluster>
+        </div>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">

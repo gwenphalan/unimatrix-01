@@ -25,11 +25,12 @@ test.skip(true, "the circuit field is disabled — see CIRCUIT_FIELD_ENABLED");
  * one hard rect per card, and the 12px `gap-3` between cards is expected to stay
  * blocked by the 8px buffer alone.
  *
- * `OccludingCluster` (`features/cube-trainer-site/components.tsx`) is the one
- * surviving `useCircuitOccluder` call in the repo — a bare `div` that paints
- * nothing, wrapping controls, kept as a deliberate force-include. If it stopped
- * working the home route's control cluster would be the first thing a trace ran
- * through, which is why `/` is in the matrix.
+ * `/` is in the matrix because its control cluster is the thinnest cover on any
+ * route: the wordmark row and the mode tiles are all a trace has to route
+ * around. It used to be force-included through a padded `useCircuitOccluder`
+ * wrapper — that was removed, so the row is now soft (a 36px control is under
+ * the 40px `MIN_HARD_SIDE_PX` floor) and this is the route where the loss would
+ * show first.
  */
 // cube-trainer renders no `header` element at all, and its `AppFooter` is a bare
 // `<footer className="py-1">` that paints nothing — only its text is an
