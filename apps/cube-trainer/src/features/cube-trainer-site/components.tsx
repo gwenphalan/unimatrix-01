@@ -1,7 +1,9 @@
 import type * as React from "react";
 import { useRef } from "react";
+import { Link } from "@tanstack/react-router";
+import { RiArrowLeftLine } from "@remixicon/react";
 
-import { cn, useCircuitOccluder } from "@unimatrix/ui/public";
+import { Button, cn, useCircuitOccluder } from "@unimatrix/ui/public";
 
 /**
  * Wraps a cluster of controls in a non-interactive box registered as a
@@ -30,6 +32,52 @@ export function OccludingCluster({ className, ...props }: React.ComponentProps<"
   useCircuitOccluder(ref);
 
   return <div className={cn("-m-1 flex items-center gap-3 p-1", className)} ref={ref} {...props} />;
+}
+
+/**
+ * The row that opens a view: a back control, the view's `h1`, and whatever
+ * that view puts opposite them.
+ *
+ * Four places rendered this by hand — Learn and Drill, each in its session view
+ * and its case-picker view — with the same wrapper, the same icon button, and
+ * the same heading classes, differing only in the heading text and where "back"
+ * goes. It stays here rather than in `@unimatrix/ui` because the two halves are
+ * wrapped in {@link OccludingCluster}, which is this app's own force-included
+ * occluder and has no meaning outside it.
+ *
+ * `back` is a discriminated pair rather than a `ReactNode`: every call site
+ * either routes home or steps a local mode back, and taking the button as a
+ * slot would let a caller ship one without an accessible name.
+ */
+export function ToolTitleBar({
+  actions,
+  back,
+  title,
+}: {
+  actions?: React.ReactNode;
+  back: { label: string } & ({ onClick: () => void } | { to: string });
+  title: string;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-4">
+      <OccludingCluster>
+        {"to" in back ? (
+          <Button asChild aria-label={back.label} size="icon" variant="outline">
+            <Link to={back.to}>
+              <RiArrowLeftLine aria-hidden="true" className="size-4" />
+            </Link>
+          </Button>
+        ) : (
+          <Button aria-label={back.label} onClick={back.onClick} size="icon" variant="outline">
+            <RiArrowLeftLine aria-hidden="true" className="size-4" />
+          </Button>
+        )}
+        <h1 className="text-xl font-medium tracking-[-0.03em] text-foreground">{title}</h1>
+      </OccludingCluster>
+
+      {actions === undefined ? null : <OccludingCluster>{actions}</OccludingCluster>}
+    </div>
+  );
 }
 
 export function AppPageContainer({ className, ...props }: React.ComponentProps<"div">) {

@@ -1,6 +1,4 @@
 import { useEffect, useState } from "react";
-import { Link } from "@tanstack/react-router";
-import { RiArrowLeftLine } from "@remixicon/react";
 import { Button } from "@unimatrix/ui/public";
 
 import { getAlgorithmSet } from "@/features/algorithms/algorithm-sets";
@@ -11,7 +9,7 @@ import { PreviewModeToggle } from "@/features/algorithms/components/preview-mode
 import { resolvePreviewMode } from "@/features/algorithms/preview-mode";
 import type { AlgorithmSetId } from "@/features/algorithms/types";
 import { usePreviewMode } from "@/features/algorithms/use-preview-mode";
-import { OccludingCluster } from "@/features/cube-trainer-site/components";
+import { OccludingCluster, ToolTitleBar } from "@/features/cube-trainer-site/components";
 import { DrillCasesGrid } from "@/features/trainer/components/drill-cases-grid";
 import { TrainerPanel } from "@/features/trainer/components/trainer-panel";
 
@@ -36,21 +34,8 @@ export function DrillSetView() {
   if (mode === "cases") {
     return (
       <div className="space-y-8">
-        <div className="flex items-center justify-between gap-4">
-          <OccludingCluster>
-            <Button
-              aria-label="Back to drilling"
-              onClick={() => {
-                setMode("drill");
-              }}
-              size="icon"
-              variant="outline"
-            >
-              <RiArrowLeftLine aria-hidden="true" className="size-4" />
-            </Button>
-            <h1 className="text-xl font-medium tracking-[-0.03em] text-foreground">Choose cases</h1>
-          </OccludingCluster>
-          <OccludingCluster>
+        <ToolTitleBar
+          actions={
             <CaseCategoryFilter
               groups={algorithmSet.groupOrder}
               mode={caseFilterMode}
@@ -58,8 +43,15 @@ export function DrillSetView() {
               onSelectedGroupsChange={setSelectedGroups}
               selectedGroups={selectedGroups}
             />
-          </OccludingCluster>
-        </div>
+          }
+          back={{
+            label: "Back to drilling",
+            onClick: () => {
+              setMode("drill");
+            },
+          }}
+          title="Choose cases"
+        />
 
         <DrillCasesGrid
           key={setId}
@@ -73,16 +65,8 @@ export function DrillSetView() {
 
   return (
     <div className="space-y-8">
-      <div className="flex items-center justify-between gap-4">
-        <OccludingCluster>
-          <Button asChild aria-label="Home" size="icon" variant="outline">
-            <Link to="/">
-              <RiArrowLeftLine aria-hidden="true" className="size-4" />
-            </Link>
-          </Button>
-          <h1 className="text-xl font-medium tracking-[-0.03em] text-foreground">Drilling</h1>
-        </OccludingCluster>
-        <OccludingCluster>
+      <ToolTitleBar
+        actions={
           <Button
             onClick={() => {
               setMode("cases");
@@ -91,8 +75,10 @@ export function DrillSetView() {
           >
             Choose cases
           </Button>
-        </OccludingCluster>
-      </div>
+        }
+        back={{ label: "Home", to: "/" }}
+        title="Drilling"
+      />
 
       <TrainerPanel
         cases={algorithmSet.cases}
