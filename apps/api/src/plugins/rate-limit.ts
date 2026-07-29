@@ -32,10 +32,18 @@ const RATE_LIMIT_WINDOW = "1 minute";
  * effective ceiling is `RATE_LIMIT_MAX` × instances; a shared Redis store is
  * the fix if that ever matters, and this plugin takes one.
  */
+/**
+ * The ceiling itself, exported so the feature modules can install the same one
+ * inside their own encapsulated scope — see the note at each `register` call.
+ */
+export const RATE_LIMIT_OPTIONS = {
+  max: RATE_LIMIT_MAX,
+  timeWindow: RATE_LIMIT_WINDOW,
+} as const;
+
 export function setupRateLimit(app: FastifyInstance): void {
   app.register(fastifyRateLimit, {
-    max: RATE_LIMIT_MAX,
-    timeWindow: RATE_LIMIT_WINDOW,
+    ...RATE_LIMIT_OPTIONS,
     // No `errorResponseBuilder`. The plugin throws a 429 and the app's own
     // error handler turns it into the envelope every other error uses — see
     // the 429 branch in `normalizeError`. Building the body here instead put

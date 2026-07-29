@@ -14,6 +14,17 @@ import { afterEach } from "vitest";
 // `if` guard keeps this from clobbering such a stub on re-entry.
 if (!("ResizeObserver" in globalThis)) {
   class NoopResizeObserver implements ResizeObserver {
+    // Takes the callback and drops it. Not decoration: without a declared
+    // parameter this shim is the narrowest `ResizeObserver` in the repo, and
+    // static analysis reading it as the real constructor reports every
+    // `new ResizeObserver(callback)` in `src` as passing a superfluous
+    // argument.
+    readonly callback: ResizeObserverCallback;
+
+    constructor(callback: ResizeObserverCallback) {
+      this.callback = callback;
+    }
+
     observe(): void {}
     unobserve(): void {}
     disconnect(): void {}
