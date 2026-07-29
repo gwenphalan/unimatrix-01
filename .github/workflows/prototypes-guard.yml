@@ -68,8 +68,14 @@ jobs:
           # this job enforces. Blocking edits to those would mean the check
           # fails on the pull request that creates it and on every later
           # documentation fix — for no gain, since neither is a prototype.
+          #
+          # `--diff-filter=d` excludes deletions. Without it this job blocks the
+          # one pull request it should welcome most: the cleanup that removes a
+          # prototype that reached `main`, which is exactly what the error
+          # message below tells people to open. A deleted prototype is the
+          # desired end state, not an offence.
           offending="$(
-            git diff --name-only "${BASE_SHA}" HEAD -- 'lab/prototypes/' \
+            git diff --name-only --diff-filter=d "${BASE_SHA}" HEAD -- 'lab/prototypes/' \
               | grep -v -x -e 'lab/prototypes/.gitkeep' -e 'lab/prototypes/README.md' \
               || true
           )"
