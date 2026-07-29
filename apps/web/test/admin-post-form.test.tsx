@@ -213,4 +213,22 @@ describe("PostForm", () => {
     // Closing on failure would discard whatever the admin had typed.
     expect(onDone).not.toHaveBeenCalled();
   });
+  /**
+   * The `pattern` attribute is compiled with the `v` flag, and an invalid
+   * pattern does not fail the field — the browser drops the constraint
+   * silently. `[a-z0-9-]` is legal under `u` and rejected under `v`, so the
+   * check has to be the stricter of the two.
+   */
+  it("uses a slug pattern that compiles under the flag browsers apply", async () => {
+    const { PostForm } = await import("@/features/admin/post-form");
+
+    renderForm(<PostForm onDone={vi.fn()} post={null} title="Edit post" type="blog" />);
+
+    const pattern = screen.getByLabelText("Slug").getAttribute("pattern");
+
+    expect(pattern).not.toBeNull();
+    expect(() => new RegExp(`^(?:${pattern ?? ""})$`, "v")).not.toThrow();
+    expect(new RegExp(`^(?:${pattern ?? ""})$`, "v").test("cube-trainer")).toBe(true);
+    expect(new RegExp(`^(?:${pattern ?? ""})$`, "v").test("-leading-hyphen")).toBe(false);
+  });
 });

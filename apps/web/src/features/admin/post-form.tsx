@@ -261,6 +261,12 @@ export function PostForm({ post, type, title, onDone }: PostFormProps) {
 
             <div className="grid gap-2">
               <Label htmlFor={`${fieldPrefix}-slug`}>Slug</Label>
+              {/* The hyphen in `pattern` is escaped because the attribute is
+                  compiled with the `v` flag, which rejects a bare `-` at the
+                  end of a character class. Firefox reported it as "not a valid
+                  regexp" and then skipped the check entirely — an invalid
+                  pattern silently disables validation rather than failing the
+                  field, so the slug input had no client-side check at all. */}
               <Input
                 id={`${fieldPrefix}-slug`}
                 onChange={(event) => {
@@ -269,7 +275,7 @@ export function PostForm({ post, type, title, onDone }: PostFormProps) {
                   setIsSlugEdited(slug.length > 0);
                   update("slug", slug);
                 }}
-                pattern="[a-z0-9][a-z0-9-]*"
+                pattern="[a-z0-9][a-z0-9\-]*"
                 required
                 title="Lowercase letters, numbers and hyphens, not starting with a hyphen."
                 value={form.slug}
