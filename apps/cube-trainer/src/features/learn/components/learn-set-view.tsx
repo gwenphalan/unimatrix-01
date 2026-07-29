@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ToolTitleBar } from "@unimatrix/chrome/tool";
 import { Button } from "@unimatrix/ui/public";
 
 import { AlgorithmSetToggle } from "@/features/algorithms/components/algorithm-set-toggle";
@@ -6,7 +7,6 @@ import { PreviewModeToggle } from "@/features/algorithms/components/preview-mode
 import { resolvePreviewMode } from "@/features/algorithms/preview-mode";
 import type { AlgorithmSetId } from "@/features/algorithms/types";
 import { usePreviewMode } from "@/features/algorithms/use-preview-mode";
-import { ToolTitleBar } from "@/features/cube-trainer-site/components";
 import { LearnCasesGrid } from "@/features/learn/components/learn-cases-grid";
 import { LearnPanel } from "@/features/learn/components/learn-panel";
 

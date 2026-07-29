@@ -15,7 +15,7 @@
 ## Workspace
 - Monorepo: `apps/*` and `packages/*` from `pnpm-workspace.yaml`; root scripts fan out through Turbo
 - Live apps: `apps/web`, `apps/api`, `apps/cube-trainer`, `apps/auth` (package `@unimatrix/auth-app`) — all Vite + React + TanStack Router except `apps/api` (Fastify); see Workspace Responsibilities for what each owns
-- Live packages: `packages/ui`, `packages/shared`, `packages/api-client`, `packages/content`, `packages/db`, `packages/auth`, `packages/user-data`, `packages/config-typescript`, `packages/config-eslint`, `packages/config-vitest`, `packages/e2e-helpers`
+- Live packages: `packages/ui`, `packages/chrome`, `packages/shared`, `packages/api-client`, `packages/content`, `packages/db`, `packages/auth`, `packages/user-data`, `packages/config-typescript`, `packages/config-eslint`, `packages/config-vitest`, `packages/e2e-helpers`
 - Live content: `content/home`, `content/projects`, `content/blog`
 - Repo-internal docs: `docs/`; infra/runtime helpers: `infra/scripts`, `infra/deployment`, `infra/docker`
 - Reserved, not live: `apps/workers`, `content/docs`, `content/notes`, future packages like `packages/bmd-parser`
@@ -28,6 +28,7 @@
 - `apps/cube-trainer`: OLL/PLL Learn (guided teaching order) and Drill (keyboard-driven flashcard drill) UI, bundled algorithm data, `localStorage`-backed progress, training pool, and diagram preview mode
 - `apps/auth`: central Clerk auth hub — sign-in/up and account settings (`UserProfile`); redirect target for other services' sign-in
 - `packages/ui`: shared shadcn primitives, shared styles, safe markdown rendering, `@unimatrix/ui/public`
+- `packages/chrome`: the two shared application shells — `./tool` (desktop-app chrome for tools, dashboards, admin surfaces) and `./public` (site header, nav tabs, breadcrumbs, site footer). Every service gets its chrome by importing one of the two rather than growing an app-local shell
 - `packages/shared`: framework-agnostic API contracts, Zod schemas, exported shared types only
 - `packages/api-client`: typed fetch transport consuming `@unimatrix/shared` contracts; pluggable `getAuthToken` provider
 - `packages/content`: pure parsing, frontmatter validation, repo-backed loaders for live public content only
@@ -65,6 +66,7 @@
 - `apps/api`: keep `buildApp()` wiring in `src/app.ts`, cross-cutting setup in `src/plugins`, feature routes in `src/modules`, reusable HTTP helpers in `src/lib/http`; verify Clerk tokens networklessly via the `@unimatrix/auth/server` plugin/guards and read the acting user only from the verified session (`getAuthUserId`), never from client input
 - `apps/cube-trainer`: keep the same non-lazy/`*.lazy.tsx` route split as `apps/web`; do not add `@unimatrix/api-client`, `@unimatrix/shared`, `@unimatrix/content`, or `@tanstack/react-query` dependencies unless a real server-backed feature is added
 - `apps/auth`: same non-lazy/`*.lazy.tsx` route split as `apps/web`; consume Clerk only through `@unimatrix/auth/react` (never `@clerk/clerk-react` directly); validate any inbound `redirect_url` against the same-family allowlist before use
+- `packages/chrome`: composes `@unimatrix/ui` and nothing else — never `@unimatrix/auth`. Both shells take the account control as a `ReactNode` slot, which is what lets a sign-in-free tool like `apps/cube-trainer` import one without pulling Clerk into its dependency tree. Route knowledge (nav items, breadcrumb trails, sign-in hrefs) is passed in by the app, not computed here. Source-only like `@unimatrix/e2e-helpers`: consumers resolve `src/*.ts` through a vite alias plus a tsconfig `paths` entry, so its tsconfig extends `base.json` rather than `library.json` — `composite` forbids the cross-package `paths` mapping onto `packages/ui/src` and the emit would be dead weight nothing reads. Keep `@tanstack/react-router` a peer dependency and listed in each consuming app's vite `dedupe`: two resolved copies means the shell's `useRouterState` reads a router context the app's `RouterProvider` never wrote to
 - `packages/shared`: no transport code, UI code, or content-loading logic; `ApiContract` paths stay static (no path params) — use query/body schemas instead
 - `packages/api-client`: do not redefine endpoints or response shapes locally; consume `@unimatrix/shared`; stays auth-library-agnostic (the consumer supplies `getAuthToken`) and DOM/Node-lib-free
 - `packages/content`: keep loaders synchronous and filesystem-based unless the package boundary intentionally changes

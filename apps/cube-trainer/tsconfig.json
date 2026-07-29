@@ -10,6 +10,7 @@
       // Playwright will not compile, and the e2e run dies on a syntax error that
       // says nothing about the cause.
       "@unimatrix/e2e-helpers": ["../../packages/e2e-helpers/src/index.ts"],
+      "@unimatrix/chrome/tool": ["../../packages/chrome/src/tool.ts"],
       "@unimatrix/ui/public": ["../../packages/ui/src/public.ts"],
       "@unimatrix/ui": ["../../packages/ui/src/index.ts"]
     },

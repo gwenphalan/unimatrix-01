@@ -36,10 +36,17 @@ const ALLOWED_PACKAGE_IMPORTS = {
   "apps/api": ["auth", "content", "db", "shared"],
   // Deliberately narrow. AGENTS.md: cube-trainer must not gain
   // `@unimatrix/api-client`, `@unimatrix/shared`, or `@unimatrix/content`
-  // unless a real server-backed feature is added.
-  "apps/cube-trainer": ["e2e-helpers", "ui"],
+  // unless a real server-backed feature is added. `chrome` does not widen that:
+  // it carries no auth, transport, or content dependency of its own, which is
+  // the whole reason its shells take the account control as a slot.
+  "apps/cube-trainer": ["chrome", "e2e-helpers", "ui"],
   "apps/auth": ["auth", "ui"],
   "packages/api-client": ["shared"],
+  // The shared chrome composes `ui` primitives and nothing else. It must never
+  // gain `auth`: both of its shells take the account control as a `ReactNode`
+  // slot precisely so a sign-in-free tool can import one without pulling Clerk
+  // into its dependency tree.
+  "packages/chrome": ["ui"],
   "packages/user-data": ["api-client", "auth", "shared"],
   // Leaves. `packages/shared` in particular must stay free of transport, UI,
   // and content-loading code, which starts with importing none of it.
