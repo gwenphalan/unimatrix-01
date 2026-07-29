@@ -17,9 +17,14 @@ function BlogRoute() {
 
   return (
     <div className="space-y-5">
-      <PublicSectionHeading headingLevel={1} title="Blog" />
-
-      <AdminSlot kind="new-post" type="blog" />
+      {/* The create button rides the heading's trailing slot rather than a row
+          of its own: it is chrome for one reader, and a full-width row under
+          the title pushed the first entry down for everyone else. */}
+      <PublicSectionHeading
+        headingLevel={1}
+        title="Blog"
+        trailing={<AdminSlot kind="new-post" type="blog" />}
+      />
 
       {entries.length === 0 ? (
         <PublicNotice
