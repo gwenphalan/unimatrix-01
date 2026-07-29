@@ -9,6 +9,13 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref_name }}
   cancel-in-progress: true
 
+# Both jobs already declare `contents: read`, so this changes nothing today. It
+# is the floor for a job added later without a permissions block of its own,
+# which would otherwise inherit the repository default — and it is what
+# Scorecard's Token-Permissions check reads.
+permissions:
+  contents: read
+
 jobs:
   verify:
     name: Verify
