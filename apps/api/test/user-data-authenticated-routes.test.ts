@@ -136,7 +136,7 @@ interface TestContext {
  * the duration of the call keeps these tests off the repository's local
  * database — and gives every test a database of its own.
  */
-function createTestApp(): TestContext {
+function createTestApp(envOverrides: Partial<ApiRuntimeEnv> = {}): TestContext {
   const directory = mkdtempSync(join(tmpdir(), "unimatrix-user-data-"));
   const filePath = join(directory, "user-data.sqlite");
   const previousDatabaseUrl = process.env.DATABASE_URL;
@@ -149,7 +149,7 @@ function createTestApp(): TestContext {
   process.env.DATABASE_URL = filePath;
 
   const app = buildApp(
-    loadApiRuntimeConfig({ LOG_LEVEL: "error", NODE_ENV: "test", ...CLERK_ENV }),
+    loadApiRuntimeConfig({ LOG_LEVEL: "error", NODE_ENV: "test", ...CLERK_ENV, ...envOverrides }),
   );
 
   if (previousDatabaseUrl === undefined) {
@@ -676,6 +676,135 @@ void test("one session's data is invisible to another session", async () => {
       0,
       "the second session must not have deleted or overwritten the first's blob",
     );
+  } finally {
+    await app.close();
+    cleanup();
+  }
+});
+
+/**
+ * A cumulative storage cap small enough to reach in a couple of writes, but
+ * comfortably above the framing of the payloads below.
+ */
+const SMALL_STORAGE_CAP = "400";
+
+void test("PUT /me/data returns 413 QUOTA_EXCEEDED once the cumulative cap is reached", async () => {
+  const { app, cleanup } = createTestApp({ MAX_USER_STORAGE_BYTES: SMALL_STORAGE_CAP });
+
+  try {
+    assertStatus(await putDocument(app, USER_ONE, "a", "x".repeat(200)), 200, "PUT under cap");
+
+    const overCap = await putDocument(app, USER_ONE, "b", "x".repeat(300));
+
+    assert.equal(overCap.statusCode, 413);
+
+    const body: { error: { code: string; message: string; statusCode: number } } = overCap.json();
+
+    // The centralized envelope, not an ad-hoc response.
+    assert.equal(body.error.code, "QUOTA_EXCEEDED");
+    assert.equal(body.error.statusCode, 413);
+    assert.match(body.error.message, /Storage quota exceeded/u);
+
+    // The rejected write left nothing behind.
+    const get = await app.inject({
+      method: "GET",
+      url: `/me/data?namespace=${NAMESPACE}&key=b`,
+      headers: authHeaders(USER_ONE),
+    });
+
+    assert.equal(get.statusCode, 404);
+  } finally {
+    await app.close();
+    cleanup();
+  }
+});
+
+void test("the cumulative cap counts uploaded files alongside documents", async () => {
+  const { app, cleanup } = createTestApp({ MAX_USER_STORAGE_BYTES: SMALL_STORAGE_CAP });
+
+  try {
+    assertStatus(await putDocument(app, USER_ONE, "a", "x".repeat(300)), 200, "PUT under cap");
+
+    const boundary = "----unimatrixtest";
+    const fileBytes = "y".repeat(200);
+    const payload = [
+      `--${boundary}`,
+      'Content-Disposition: form-data; name="file"; filename="blob.bin"',
+      "Content-Type: application/octet-stream",
+      "",
+      fileBytes,
+      `--${boundary}--`,
+      "",
+    ].join("\r\n");
+
+    const upload = await app.inject({
+      method: "POST",
+      url: `/me/files?namespace=${NAMESPACE}&key=blob.bin`,
+      headers: {
+        ...authHeaders(USER_ONE),
+        "content-type": `multipart/form-data; boundary=${boundary}`,
+      },
+      payload,
+    });
+
+    assert.equal(upload.statusCode, 413);
+    assert.equal(upload.json<{ error: { code: string } }>().error.code, "QUOTA_EXCEEDED");
+  } finally {
+    await app.close();
+    cleanup();
+  }
+});
+
+void test("the cumulative cap is per user, not global", async () => {
+  const { app, cleanup } = createTestApp({ MAX_USER_STORAGE_BYTES: SMALL_STORAGE_CAP });
+
+  try {
+    assertStatus(await putDocument(app, USER_ONE, "a", "x".repeat(300)), 200, "user one");
+    assertStatus(await putDocument(app, USER_TWO, "a", "x".repeat(300)), 200, "user two");
+  } finally {
+    await app.close();
+    cleanup();
+  }
+});
+
+void test("PUT /me/data carries its own per-route rate limit below the global ceiling", async () => {
+  const { app, cleanup } = createTestApp();
+
+  try {
+    // `inject` presents every request as one IP, so this is the whole window.
+    // 60 writes are allowed; the 61st is refused. That is well under the
+    // global 300/min, so a 429 here can only come from the per-route limiter
+    // this change added.
+    let last = await putDocument(app, USER_ONE, "settings", { theme: "dark" });
+
+    for (let sent = 1; sent < 60; sent += 1) {
+      last = await putDocument(app, USER_ONE, "settings", { theme: "dark" });
+    }
+
+    assertStatus(last, 200, "the 60th write");
+
+    const refused = await putDocument(app, USER_ONE, "settings", { theme: "dark" });
+
+    assert.equal(refused.statusCode, 429);
+
+    const body: { error: { code: string; statusCode: number } } = refused.json();
+
+    assert.equal(body.error.code, "RATE_LIMITED");
+    assert.equal(body.error.statusCode, 429);
+  } finally {
+    await app.close();
+    cleanup();
+  }
+});
+
+void test("an over-cap document value is refused by the schema before it reaches the store", async () => {
+  const { app, cleanup } = createTestApp();
+
+  try {
+    const response = await putDocument(app, USER_ONE, "big", { v: "x".repeat(300_000) });
+
+    assert.equal(response.statusCode, 400);
+    assert.equal(response.json<{ error: { code: string } }>().error.code, "VALIDATION_ERROR");
   } finally {
     await app.close();
     cleanup();

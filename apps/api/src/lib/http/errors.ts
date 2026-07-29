@@ -9,6 +9,10 @@ export type ApiErrorCode =
   | "UNAUTHORIZED"
   | "FORBIDDEN"
   | "RATE_LIMITED"
+  // Nameable for the same reason as RATE_LIMITED: a client that hit its
+  // storage quota needs to know that deleting data is the fix, not that it
+  // sent something malformed.
+  | "QUOTA_EXCEEDED"
   | "INTERNAL_ERROR";
 
 export interface ApiValidationIssue {

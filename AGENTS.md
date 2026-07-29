@@ -54,7 +54,7 @@
 - `pnpm setup:local` only copies missing env files; it never overwrites existing local env
 - `pnpm setup:worktree` runs frozen install, env bootstrap, and default DB migrations; use it for fresh worktrees
 - API loads `apps/api/.env.local` first, then `apps/api/.env`; existing shell env wins
-- API auth is opt-in: `CLERK_SECRET_KEY`/`CLERK_PUBLISHABLE_KEY`/`CLERK_JWT_KEY` are required in production but optional in dev/test (the API boots with auth + the user-data routes disabled when they are absent); `MAX_UPLOAD_BYTES` defaults to 5 MiB
+- API auth is opt-in: `CLERK_SECRET_KEY`/`CLERK_PUBLISHABLE_KEY`/`CLERK_JWT_KEY` are required in production but optional in dev/test (the API boots with auth + the user-data routes disabled when they are absent); `MAX_UPLOAD_BYTES` defaults to 5 MiB and `MAX_USER_STORAGE_BYTES` (the cumulative per-user cap across documents and files) to 50 MiB
 - Web uses normal Vite `apps/web/.env*` behavior; Clerk is optional there (`VITE_CLERK_PUBLISHABLE_KEY` enables it, `VITE_AUTH_APP_URL` points at the auth hub)
 - auth app needs `VITE_CLERK_PUBLISHABLE_KEY` (required) and `VITE_API_BASE_URL` (default `/api`); cube-trainer has no `.env` files and no backend dependency
 - CI uses the same root commands and installs Playwright Chromium for web and cube-trainer smoke coverage (the auth app ships unit tests only — no smoke suite, since it needs live Clerk keys)

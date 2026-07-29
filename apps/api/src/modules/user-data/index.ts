@@ -24,7 +24,11 @@ import type { ZodTypeProvider } from "fastify-type-provider-zod";
 
 import { resolveContentDisposition } from "../../lib/http/content-types.js";
 import { ApiError } from "../../lib/http/errors.js";
-import { RATE_LIMIT_OPTIONS, UPLOAD_RATE_LIMIT_OPTIONS } from "../../plugins/rate-limit.js";
+import {
+  DOCUMENT_WRITE_RATE_LIMIT_OPTIONS,
+  RATE_LIMIT_OPTIONS,
+  UPLOAD_RATE_LIMIT_OPTIONS,
+} from "../../plugins/rate-limit.js";
 import {
   deleteDocument,
   deleteFile,
@@ -108,23 +112,36 @@ export const userDataModule: FastifyPluginAsync = async (app) => {
     },
   });
 
-  app.withTypeProvider<ZodTypeProvider>().route({
-    method: putDocumentContract.method,
-    url: putDocumentContract.path,
-    preHandler: requireAuth(),
-    schema: {
-      body: putDocumentBodySchema,
-      response: {
-        200: putDocumentContract.responseSchema,
+  // Shorthand rather than `app.route({...})`, for the same reason as the
+  // upload routes: a per-route ceiling declared on a route object is
+  // invisible to the analysis that asks for one. `withTypeProvider` still
+  // applies, so the zod body/response typing is unchanged.
+  app.withTypeProvider<ZodTypeProvider>().put(
+    putDocumentContract.path,
+    {
+      config: { rateLimit: DOCUMENT_WRITE_RATE_LIMIT_OPTIONS },
+      preHandler: requireAuth(),
+      schema: {
+        body: putDocumentBodySchema,
+        response: {
+          200: putDocumentContract.responseSchema,
+        },
       },
     },
-    handler: async (request) => {
+    async (request) => {
       const userId = getRequiredAuthUserId(request);
       const { namespace, key, value } = request.body;
 
-      return putDocument(app.db, userId, namespace, key, value);
+      return putDocument(
+        app.db,
+        userId,
+        namespace,
+        key,
+        value,
+        app.runtimeConfig.maxUserStorageBytes,
+      );
     },
-  });
+  );
 
   app.withTypeProvider<ZodTypeProvider>().route({
     method: deleteDocumentContract.method,
@@ -252,6 +269,7 @@ export const userDataModule: FastifyPluginAsync = async (app) => {
         file.mimetype,
         data.length,
         data,
+        app.runtimeConfig.maxUserStorageBytes,
       );
 
       const responseBody: UserFileMetadata = userFileMetadataSchema.parse(metadata);

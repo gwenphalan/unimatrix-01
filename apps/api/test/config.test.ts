@@ -38,6 +38,7 @@ void test("loadApiRuntimeConfig uses documented defaults", () => {
     },
     clerk: null,
     maxUploadBytes: 5_242_880,
+    maxUserStorageBytes: 52_428_800,
     runDatabaseMigrations: false,
   });
 });
@@ -92,6 +93,7 @@ void test("loadApiRuntimeConfig trims and validates explicit values", () => {
         jwtKey: "jwt_key_123",
       },
       maxUploadBytes: 5_242_880,
+      maxUserStorageBytes: 52_428_800,
       runDatabaseMigrations: false,
     },
   );
@@ -365,5 +367,44 @@ void test("loadApiRuntimeConfig rejects a blank MAX_UPLOAD_BYTES", () => {
   assert.throws(
     () => loadApiRuntimeConfig({ MAX_UPLOAD_BYTES: "   " }),
     /MAX_UPLOAD_BYTES must not be empty when it is set/,
+  );
+});
+
+void test("loadApiRuntimeConfig defaults maxUserStorageBytes to 50 MiB", () => {
+  assert.equal(loadApiRuntimeConfig({}).maxUserStorageBytes, 52_428_800);
+});
+
+void test("loadApiRuntimeConfig parses an explicit MAX_USER_STORAGE_BYTES", () => {
+  assert.equal(
+    loadApiRuntimeConfig({ MAX_USER_STORAGE_BYTES: " 1048576 " }).maxUserStorageBytes,
+    1_048_576,
+  );
+});
+
+void test("loadApiRuntimeConfig rejects a zero MAX_USER_STORAGE_BYTES", () => {
+  assert.throws(
+    () => loadApiRuntimeConfig({ MAX_USER_STORAGE_BYTES: "0" }),
+    /MAX_USER_STORAGE_BYTES must be a positive integer/,
+  );
+});
+
+void test("loadApiRuntimeConfig rejects a non-integer MAX_USER_STORAGE_BYTES", () => {
+  assert.throws(
+    () => loadApiRuntimeConfig({ MAX_USER_STORAGE_BYTES: "1.5" }),
+    /MAX_USER_STORAGE_BYTES must be a positive integer/,
+  );
+});
+
+void test("loadApiRuntimeConfig rejects a negative MAX_USER_STORAGE_BYTES", () => {
+  assert.throws(
+    () => loadApiRuntimeConfig({ MAX_USER_STORAGE_BYTES: "-5" }),
+    /MAX_USER_STORAGE_BYTES must be a positive integer/,
+  );
+});
+
+void test("loadApiRuntimeConfig rejects a blank MAX_USER_STORAGE_BYTES", () => {
+  assert.throws(
+    () => loadApiRuntimeConfig({ MAX_USER_STORAGE_BYTES: "   " }),
+    /MAX_USER_STORAGE_BYTES must not be empty when it is set/,
   );
 });

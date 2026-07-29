@@ -47,7 +47,49 @@ const summarySchema = z.string().min(1).max(500);
 const descriptionSchema = z.string().min(1).max(1000);
 const bodySchema = z.string().min(1).max(CONTENT_BODY_MAX_LENGTH);
 const projectStatusSchema = z.string().min(1).max(64);
-const urlSchema = z.url().max(2048);
+/**
+ * Schemes a stored, later-rendered URL may use.
+ *
+ * `z.url()` on its own accepts anything the WHATWG parser accepts, including
+ * `javascript:` and `data:`. `packages/ui`'s `sanitizeMarkdownLink` already
+ * allows only http/https on the markdown path, so without this the two paths
+ * disagree about what a safe URL is.
+ *
+ * Not currently exploitable — React 19 refuses to render a `javascript:`
+ * href, `data:` loads with an opaque origin, and the only writer today is
+ * admin-gated. The point is that the contract stops depending on all three
+ * of those staying true; the planned unauthenticated feedback-intake route
+ * would be the first writer none of them covers.
+ */
+const ALLOWED_URL_PROTOCOLS = new Set(["http:", "https:"]);
+
+/**
+ * Declared for the same reason as `TextEncoder` in `./user-data.ts`: this
+ * package's `lib` is `["ES2023"]` with no DOM and no `@types/node`, and
+ * widening it would weaken the boundary. Module-scoped, so nothing leaks.
+ *
+ * The parser rather than a `/^https?:\/\//` regex on purpose. `https:/a.dev`
+ * and `https:a.dev` are accepted by `z.url()` and normalize to
+ * `https://a.dev`, but a lexical `//` check rejects them — verified against
+ * zod 4.4.3. For a scheme allowlist, agreeing with the parser that the
+ * browser will also use is what makes the check meaningful.
+ */
+declare const URL: {
+  new (url: string): { protocol: string };
+};
+
+function hasAllowedUrlProtocol(value: string): boolean {
+  try {
+    return ALLOWED_URL_PROTOCOLS.has(new URL(value).protocol);
+  } catch {
+    return false;
+  }
+}
+
+const urlSchema = z
+  .url()
+  .max(2048)
+  .refine(hasAllowedUrlProtocol, { message: "URL must use the http or https scheme." });
 
 /**
  * A post as it appears in a list: everything needed to render an index row
