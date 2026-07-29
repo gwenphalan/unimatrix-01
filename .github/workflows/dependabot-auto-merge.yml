@@ -73,4 +73,4 @@ jobs:
       - name: Note that base images are now CI-verified
         if: steps.meta.outputs.package-ecosystem == 'docker'
         run: |
-          echo "Docker base-image update — auto-merge is armed on the same terms as any other minor or patch, because the required \`Images\` checks build all four Dockerfiles." >> "$GITHUB_STEP_SUMMARY"
+          echo "Docker base-image update — auto-merge is armed on the same terms as any other minor or patch, because the required \`Images\` checks build every apps/*/Dockerfile." >> "$GITHUB_STEP_SUMMARY"
