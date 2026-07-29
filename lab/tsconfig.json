@@ -1,0 +1,35 @@
+{
+  "extends": "@unimatrix/config-typescript/vite-app.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    // Every `@unimatrix/*` entry maps to package *source*, not `dist`.
+    //
+    // For `ui` and `shared` that is the whole point of the harness: both
+    // publish `./dist` through their `exports` map and are built with `tsc`, so
+    // resolving them the normal way means editing a shared component or a
+    // contract shows nothing here until a rebuild. It also means `pnpm
+    // --filter @unimatrix/lab typecheck` would depend on those packages having
+    // been built, and turbo's `typecheck` task declares `^typecheck`, not
+    // `^build`. The apps keep consuming `dist`; only the lab sees source.
+    //
+    // `chrome` is source-only already, so its mapping is the same one every
+    // other consumer carries.
+    "paths": {
+      "@/*": ["./src/*"],
+      // The `.` entry only. `./react` is browser Clerk and `./server` is a
+      // Fastify plugin; neither has any business in a harness whose whole
+      // premise is "no Clerk keys, no API, no database". Both are banned by
+      // name in `eslint.config.mjs`, and no mapping exists for them here.
+      "@unimatrix/auth": ["../packages/auth/src/index.ts"],
+      "@unimatrix/chrome/tool": ["../packages/chrome/src/tool.ts"],
+      "@unimatrix/shared": ["../packages/shared/src/index.ts"],
+      "@unimatrix/ui/public": ["../packages/ui/src/public.ts"],
+      "@unimatrix/ui": ["../packages/ui/src/index.ts"]
+    },
+    "types": ["vite/client", "node"]
+  },
+  // `prototypes/` is deliberately absent. Prototypes are throwaway code on
+  // `lab/*` branches; typechecking them would make a half-finished sketch a
+  // failing check, and on `main` the directory is empty anyway.
+  "include": ["src/**/*.ts", "src/**/*.tsx", "vite.config.ts"]
+}
