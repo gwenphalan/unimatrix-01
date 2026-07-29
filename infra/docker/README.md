@@ -275,6 +275,7 @@ combined validation:
 ```bash
 VITE_API_BASE_URL=http://localhost:3001 \
 VITE_CLERK_PUBLISHABLE_KEY=pk_test_xxx \
+VITE_AUTH_APP_URL=http://localhost:8082 \
 CORS_ALLOWED_ORIGINS=http://localhost:8080,http://127.0.0.1:8080 \
 docker compose \
   -f infra/docker/api-compose.yaml \
@@ -303,7 +304,7 @@ docker run --rm -p 8081:8080 unimatrix-cube-trainer:local
 docker build -f apps/auth/Dockerfile --build-arg VITE_API_BASE_URL=http://localhost:3001 --build-arg VITE_CLERK_PUBLISHABLE_KEY=pk_test_xxx -t unimatrix-auth:local .
 docker run --rm -p 8082:8080 unimatrix-auth:local
 
-docker build -f apps/admin/Dockerfile --build-arg VITE_API_BASE_URL=http://localhost:3001 --build-arg VITE_CLERK_PUBLISHABLE_KEY=pk_test_xxx -t unimatrix-admin:local .
+docker build -f apps/admin/Dockerfile --build-arg VITE_API_BASE_URL=http://localhost:3001 --build-arg VITE_CLERK_PUBLISHABLE_KEY=pk_test_xxx --build-arg VITE_AUTH_APP_URL=http://localhost:8082 -t unimatrix-admin:local .
 docker run --rm -p 8083:8080 unimatrix-admin:local
 ```
 
