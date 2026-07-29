@@ -127,7 +127,10 @@ function assertWithinStorageQuota(
  *
  * `behavior: "immediate"` takes the write lock up front, so the guarantee
  * also holds across processes: a second API instance on the same file blocks
- * rather than reading a stale total.
+ * rather than reading a stale total. Verified rather than assumed — with
+ * better-sqlite3's `verbose` hook, drizzle emits `BEGIN IMMEDIATE` with this
+ * option and `BEGIN DEFERRED` without it. A deferred transaction would read
+ * the total under a shared lock and only contend on upgrade.
  *
  * Returns a promise even though the work is already done, so the store keeps
  * the async contract the rest of this module and its callers use — and so a
