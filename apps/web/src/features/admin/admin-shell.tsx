@@ -28,7 +28,11 @@ import { adminPostsQueryOptions } from "./queries";
  * Everything below lives in the admin chunk, reached through `AdminSlot`'s
  * single dynamic import — a non-admin never downloads this file.
  */
-export function AdminShell({ children }: { children: ReactNode }) {
+export type AdminShellProps = {
+  children: ReactNode;
+};
+
+export function AdminShell({ children }: AdminShellProps) {
   return (
     <>
       {/* Viewport-height only from `lg` up. The fill-the-viewport frame is what

@@ -21,6 +21,11 @@ function phase(property: string): number {
 }
 
 afterEach(() => {
+  // `restoreAllMocks` does not undo `stubGlobal`, and `unstubGlobals` is not set
+  // in the shared vitest config — so without this, a case that fails *before* its
+  // own cleanup line leaves its fake `ResizeObserver` installed for every case
+  // after it. Reproduced before adding it.
+  vi.unstubAllGlobals();
   vi.restoreAllMocks();
   document.documentElement.removeAttribute("style");
 });
@@ -100,7 +105,6 @@ describe("GraphBackground", () => {
     notify?.();
 
     expect(phase("--grid-phase-x")).toBe((((985 / 2) % GRID) + GRID) % GRID);
-    vi.unstubAllGlobals();
   });
 
   it("disconnects its observer on unmount", () => {
@@ -118,6 +122,5 @@ describe("GraphBackground", () => {
     render(<GraphBackground />).unmount();
 
     expect(disconnect).toHaveBeenCalledTimes(1);
-    vi.unstubAllGlobals();
   });
 });
