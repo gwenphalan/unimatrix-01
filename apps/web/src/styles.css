@@ -2,6 +2,7 @@
 
 @source "../../../packages/ui/src/**/*.{ts,tsx}";
 @source "../../../packages/auth/src/**/*.{ts,tsx}";
+@source "../../../packages/chrome/src/**/*.{ts,tsx}";
 
 @layer components {
   .site-atlas-link {

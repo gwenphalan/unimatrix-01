@@ -1,21 +1,23 @@
 import type { ReactNode } from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useRouterState } from "@tanstack/react-router";
+import { useMemo } from "react";
+import { useRouterState } from "@tanstack/react-router";
 import {
   RiArticleLine,
-  RiArrowRightSLine,
   RiFolderLine,
+  RiGithubLine,
   RiHome5Line,
   RiLoginBoxLine,
+  RiMailLine,
   RiShieldUserLine,
   RiUserLine,
 } from "@remixicon/react";
 import { SignedIn, SignedOut, UserButton } from "@unimatrix/auth/react";
+import type { PublicBreadcrumbItem, PublicNavItem } from "@unimatrix/chrome/public";
+import { PublicFooterLink, PublicShell } from "@unimatrix/chrome/public";
 
 import { AdminSlot, useAdminAccess } from "@/features/admin/admin-slot";
-import { PublicPageContainer, PublicSiteFooter } from "@/features/public-site/components";
+import { emailAddress, githubProfileUrl } from "@/features/public-site/site-links";
 import { isAuthEnabled, loadWebRuntimeConfig } from "@/lib/config";
-import { CircuitField, CircuitOccluderProvider, cn } from "@unimatrix/ui/public";
 
 const runtimeConfig = loadWebRuntimeConfig({
   VITE_API_BASE_URL: import.meta.env.VITE_API_BASE_URL,
@@ -28,8 +30,12 @@ type AppShellProps = {
   children: ReactNode;
 };
 
-const STICKY_BAR_TOP_OFFSET = 12;
-
+/**
+ * Which routes exist and how a path maps onto a tab stays here rather than in
+ * `@unimatrix/chrome`: the package renders the frame, the app owns the route
+ * knowledge. `exact` is consumed by `isNavItemActive` below and never leaves
+ * this file — the shell receives an already-resolved `active` flag.
+ */
 const navItems = [
   {
     exact: true,
@@ -57,99 +63,8 @@ const navItems = [
   },
 ];
 
-type BreadcrumbItem = {
-  label: string;
-  to?: "/" | "/about" | "/projects" | "/blog";
-};
-
 function isNavItemActive(pathname: string, exact: boolean, to: (typeof navItems)[number]["to"]) {
   return exact ? pathname === to : pathname.startsWith(to);
-}
-
-/**
- * Below `sm` only the leading crumb survives, so the narrow header reads as
- * the site name beside the logo rather than a trail — the nav tabs already
- * carry which page is current. Every segment stays in the DOM and is hidden
- * with a responsive class so this stays a pure CSS breakpoint rather than a
- * JS-measured one; hiding a whole segment takes its leading separator with
- * it, which is why no separator is left dangling on mobile.
- *
- * Rendered as a real `nav` landmark, with the home logo link inside it. It was
- * a plain `div` beside a bare `Link`, and in the condensed header — which is
- * not inside `header` — that left both outside any landmark, which is what
- * axe's `region` rule reports. `nav[aria-label="Breadcrumb"]` is also just the
- * correct markup for a breadcrumb trail.
- *
- * `label` exists because both header bars render one of these, and two
- * landmarks sharing a role and an accessible name is exactly what
- * `landmark-unique` reports.
- */
-function Breadcrumbs({
-  items,
-  label,
-  logoClassName,
-}: {
-  items: BreadcrumbItem[];
-  label: string;
-  logoClassName: string;
-}) {
-  return (
-    <nav
-      aria-label={label}
-      // `flex-nowrap` is load-bearing. The logo and the trail live in one flex
-      // line; letting that line wrap drops the logo onto a row of its own at
-      // 640-768px, where the trail is long enough to need the space. Measured:
-      // with `flex-wrap` here the header's breadcrumb grew from 24px to 102px
-      // tall at 640px and the trail broke across three lines.
-      className="flex min-w-0 flex-1 flex-nowrap items-center gap-2.5 text-sm text-muted-foreground"
-    >
-      <Link aria-label="Unimatrix-01 home" to="/">
-        <img alt="" className={logoClassName} src="/logo.png" />
-      </Link>
-      {/* `flex-nowrap` here too, not just on the `nav`. Wrapping was moved onto
-          this span when the logo-drop was fixed, which kept the logo in place
-          but let the trail stack instead: at 640-768px "Unimatrix-01" and
-          "> Home" sat on two rows beside a `shrink-0` logo.
-
-          This is now a backstop rather than the fix. The header gives the nav
-          its own row below `lg`, so the trail has the width it needs and never
-          reaches the point of stacking; keeping `flex-nowrap` means a longer
-          trail added later degrades by truncating the crumb labels — which
-          already carry `truncate`, with `min-w-0` on every ancestor so the
-          shrink reaches them — rather than by silently growing the header. */}
-      <span className="flex min-w-0 flex-nowrap items-center gap-1">
-        {items.map((item, index) => {
-          // The root crumb links home on every route, including ones that add
-          // no crumb of their own (`/admin`). Trailing crumbs are plain text
-          // because they are the current page, but the root never is — leaving
-          // it as text on a one-crumb route made the site name stop being a way
-          // back.
-          const isPlainText = item.to === undefined || (index > 0 && index === items.length - 1);
-
-          return (
-            <span
-              className={cn(
-                "flex min-w-0 items-center gap-1",
-                index === 0 ? undefined : "hidden sm:flex",
-              )}
-              key={`${item.to ?? "current"}:${item.label}:${index}`}
-            >
-              {index > 0 ? (
-                <RiArrowRightSLine aria-hidden="true" className="size-3.5 shrink-0" />
-              ) : null}
-              {isPlainText || item.to === undefined ? (
-                <span className="truncate font-medium text-foreground">{item.label}</span>
-              ) : (
-                <Link className="truncate transition-colors hover:text-foreground" to={item.to}>
-                  {item.label}
-                </Link>
-              )}
-            </span>
-          );
-        })}
-      </span>
-    </nav>
-  );
 }
 
 function buildSignInHref(): string {
@@ -159,10 +74,14 @@ function buildSignInHref(): string {
 }
 
 /**
- * Header sign-in affordance. Renders nothing when Clerk auth is disabled
- * (the default for this public site) — `SignedIn`/`SignedOut` are Clerk
- * components that require a mounted `AuthProvider`, so they must never be
- * rendered when one isn't present.
+ * Header sign-in affordance, passed to the shell as `accountControl`. It stays
+ * in this app rather than moving into `@unimatrix/chrome` because it is the
+ * whole reason the shell takes a slot: the package must not gain
+ * `@unimatrix/auth`, or a sign-in-free tool could not import a shell from it.
+ *
+ * Renders nothing when Clerk auth is disabled (the default for this public
+ * site) — `SignedIn`/`SignedOut` are Clerk components that require a mounted
+ * `AuthProvider`, so they must never be rendered when one isn't present.
  *
  * The admin entry point lives in the `UserButton` menu rather than beside it:
  * it is an account-scoped affordance, not a site section, and the header
@@ -219,19 +138,26 @@ function AuthHeaderAction() {
   );
 }
 
-// Nothing here registers a circuit occluder any more: `CircuitOccluderProvider`
-// scans the DOM and registers whatever visually paints over the background,
-// which covers this header, the condensed bar, the footer, and every card
-// without a per-component call. Two decisions that used to be spelled out here
-// now fall out of that scan: `main` still does not occlude (it paints nothing),
-// and the condensed bar occludes only while visible (its wrapper is `opacity-0`
-// and `inert` when hidden, so the scan prunes the subtree).
-//
-// `headerRef` survives for the scroll-condense measurement below, not for
-// occlusion.
-function AppShellContent({ children }: AppShellProps) {
-  const headerRef = useRef<HTMLElement | null>(null);
-  const [isCondensed, setIsCondensed] = useState(false);
+/**
+ * Contact and profile links for the site footer. Site data, not chrome, so the
+ * shell takes them as a slot the same way it takes the account control.
+ */
+function SiteFooterLinks() {
+  return (
+    <>
+      <PublicFooterLink href={`mailto:${emailAddress}`}>
+        <RiMailLine aria-hidden="true" className="size-3.5" />
+        {emailAddress}
+      </PublicFooterLink>
+      <PublicFooterLink href={githubProfileUrl} rel="noreferrer" target="_blank">
+        <RiGithubLine aria-hidden="true" className="size-3.5" />
+        github.com/gwenphalan
+      </PublicFooterLink>
+    </>
+  );
+}
+
+export function AppShell({ children }: AppShellProps) {
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
   });
@@ -258,23 +184,8 @@ function AppShellContent({ children }: AppShellProps) {
     },
   });
 
-  useEffect(() => {
-    const updateCollapsedState = () => {
-      const headerBottom = headerRef.current?.getBoundingClientRect().bottom ?? 0;
-
-      setIsCondensed(headerBottom <= STICKY_BAR_TOP_OFFSET);
-    };
-
-    updateCollapsedState();
-    window.addEventListener("scroll", updateCollapsedState, { passive: true });
-
-    return () => {
-      window.removeEventListener("scroll", updateCollapsedState);
-    };
-  }, []);
-
   const breadcrumbItems = useMemo(() => {
-    const items: BreadcrumbItem[] = [{ label: "Unimatrix-01", to: "/" }];
+    const items: PublicBreadcrumbItem[] = [{ label: "Unimatrix-01", to: "/" }];
 
     if (pathname === "/") {
       items.push({ label: "Home" });
@@ -315,169 +226,34 @@ function AppShellContent({ children }: AppShellProps) {
     return items;
   }, [activeEntryTitle, pathname]);
 
-  return (
-    <PublicPageContainer>
-      <CircuitField routeKey={pathname} />
-
-      <a
-        className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:border focus:border-primary/45 focus:bg-background focus:px-3 focus:py-2 focus:text-sm"
-        href="#main-content"
-      >
-        Skip to main content
-      </a>
-
-      <header className="site-panel site-shell overflow-hidden" ref={headerRef}>
-        {/* One flex line that wraps instead of two nested clusters: below
-            `lg` the nav is pushed to its own row by `w-full` + `order-last`,
-            which leaves the title row free for the auth action. DOM order
-            stays title → nav → auth so desktop tab order matches what's on
-            screen.
-
-            The nav keeps its own row all the way to `lg`, not just to `sm`.
-            Between 640 and 1023px the four tabs plus the auth action leave the
-            breadcrumb no width to live in, and forcing all of it onto one line
-            does not fix that — it only changes how the trail fails. Measured
-            against a real build at 700px: with the row shared, the trail either
-            stacked ("Unimatrix-01" over "› Home", the reported bug) or, once
-            wrapping was disabled, truncated to "U… › C". Giving the nav its own
-            row below `lg` is what lets the full trail render untruncated at
-            every width, at the cost of a two-row header in that band. */}
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-3 px-5 py-4 lg:flex-nowrap lg:px-8 lg:py-5">
-          <Breadcrumbs items={breadcrumbItems} label="Breadcrumb" logoClassName="size-6 shrink-0" />
-
-          <nav
-            aria-label="Primary"
-            className="order-last grid w-full grid-cols-2 gap-2 sm:flex sm:w-full sm:flex-wrap sm:justify-end lg:w-auto lg:order-none"
-          >
-            {navItems.map(({ icon: Icon, label, to, exact }) => {
-              const active = isNavItemActive(pathname, exact, to);
-
-              return (
-                <Link
-                  aria-current={active ? "page" : undefined}
-                  className={cn(
-                    "inline-flex w-full items-center justify-center gap-2 border px-3 py-1.5 text-sm font-medium transition-[border-color,background-color,color] duration-200 outline-none focus-visible:ring-2 focus-visible:ring-primary/45 sm:w-auto",
-                    active
-                      ? "border-primary/45 bg-primary/12 text-foreground"
-                      : "border-border bg-secondary/60 text-foreground/75 hover:border-primary/35 hover:bg-secondary hover:text-foreground",
-                  )}
-                  key={to}
-                  to={to}
-                >
-                  <Icon aria-hidden="true" className="size-3.5" />
-                  <span>{label}</span>
-                </Link>
-              );
-            })}
-          </nav>
-
-          {authEnabled ? (
-            <div className="flex shrink-0 items-center justify-end gap-2">
-              <AuthHeaderAction />
-            </div>
-          ) : null}
-        </div>
-      </header>
-
-      {/* `opacity-0 pointer-events-none` hides this bar from sight and from
-          the mouse, but not from the keyboard: before `inert`, tabbing an
-          unscrolled page walked an invisible duplicate of the entire nav.
-          `inert` removes it from the tab order and the accessibility tree
-          while it is hidden, and gives it back — fully interactive — the
-          moment it is shown. `aria-hidden` alone would be wrong here: it
-          hides content from assistive technology while leaving it focusable,
-          which is a WCAG 4.1.2 failure rather than a fix. */}
-      {/* Not shown on a phone. Its nav stacks two-up below `lg`, so the bar
-          lands about 110px tall over an 844px viewport — an eighth of the
-          screen, permanently, sitting on top of whatever is being read. The
-          header it condenses is one scroll away, which is where a phone
-          expects to find it. `hidden` also keeps it out of the tab order at
-          those widths, so the `inert` toggle below still describes the only
-          case where it exists. */}
-      <div
-        className={cn(
-          "fixed top-3 inset-x-0 z-40 hidden transition-opacity duration-300 ease-out sm:block",
-          isCondensed ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0",
-        )}
-        inert={!isCondensed}
-      >
-        <div className="mx-auto w-full max-w-[92rem] px-4 sm:px-6 lg:px-8 xl:px-10">
-          <div className="site-panel site-shell overflow-hidden border-primary/45 shadow-[0_0_0_1px_color-mix(in_oklab,var(--primary)_35%,transparent),0_18px_48px_-32px_color-mix(in_oklab,var(--primary)_35%,transparent)] px-3 py-2 lg:px-4 lg:py-2">
-            {/* This bar keeps an `lg` nav breakpoint while the main header
-                uses `sm`. Below `lg` the nav is already `order-last w-full`,
-                so the auth action sits on the title row at every stacked
-                width — the user-visible fix holds. Switching this to `sm`
-                was tried and reverted: at 640px the full breadcrumb, four
-                tabs, and the auth action do not fit this fixed overlay, and
-                the trail is squeezed down to "Uni… > B… > P…". */}
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-2 lg:flex-nowrap">
-              <Breadcrumbs
-                items={breadcrumbItems}
-                label="Breadcrumb, condensed header"
-                logoClassName="size-5 shrink-0"
-              />
-
-              <nav
-                aria-label="Primary, condensed header"
-                className="order-last grid w-full grid-cols-2 gap-2 lg:flex lg:w-auto lg:flex-wrap lg:justify-end lg:order-none"
-              >
-                {navItems.map(({ icon: Icon, label, to, exact }) => {
-                  const active = isNavItemActive(pathname, exact, to);
-
-                  return (
-                    <Link
-                      aria-current={active ? "page" : undefined}
-                      className={cn(
-                        "inline-flex w-full items-center justify-center gap-2 border px-3 py-1 text-sm font-medium transition-[border-color,background-color,color] duration-200 outline-none focus-visible:ring-2 focus-visible:ring-primary/45 lg:w-auto",
-                        active
-                          ? "border-primary/45 bg-primary/12 text-foreground"
-                          : "border-border/70 bg-background/72 text-muted-foreground hover:border-primary/35 hover:text-foreground",
-                      )}
-                      key={to}
-                      to={to}
-                    >
-                      <Icon aria-hidden="true" className="size-4" />
-                      <span>{label}</span>
-                    </Link>
-                  );
-                })}
-              </nav>
-
-              {authEnabled ? (
-                <div className="flex shrink-0 items-center justify-end gap-2">
-                  <AuthHeaderAction />
-                </div>
-              ) : null}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <main id="main-content" className="-mt-4 grid flex-1 gap-8 lg:-mt-5 lg:gap-10">
-        {children}
-      </main>
-
-      <PublicSiteFooter />
-
-      {/* Mounted once, here, rather than beside each admin control: every
-          admin action reports through one toast host, and two hosts would
-          render two stacks. Nothing for a non-admin — the slot returns null
-          and loads no chunk.
-
-          Taken out of flow. The host renders a zero-height element, but a
-          zero-height *flex item* still earns the column's `gap-10`, so an
-          admin saw 40px of dead space under the footer that nobody else did. */}
-      <div className="absolute">
-        <AdminSlot kind="toaster" />
-      </div>
-    </PublicPageContainer>
+  const shellNavItems = useMemo<PublicNavItem[]>(
+    () =>
+      navItems.map(({ exact, icon, label, to }) => ({
+        active: isNavItemActive(pathname, exact, to),
+        icon,
+        label,
+        to,
+      })),
+    [pathname],
   );
-}
 
-export function AppShell({ children }: AppShellProps) {
   return (
-    <CircuitOccluderProvider>
-      <AppShellContent>{children}</AppShellContent>
-    </CircuitOccluderProvider>
+    <PublicShell
+      // `undefined` rather than a rendered `null`: the shell drops the whole
+      // right-hand cluster when there is no account control, and the no-Clerk
+      // build must not pay for an empty flex child.
+      accountControl={authEnabled ? <AuthHeaderAction /> : undefined}
+      breadcrumbItems={breadcrumbItems}
+      footerLinks={<SiteFooterLinks />}
+      navItems={shellNavItems}
+      // Mounted once, here, rather than beside each admin control: every admin
+      // action reports through one toast host, and two hosts would render two
+      // stacks. Nothing for a non-admin — the slot returns null and loads no
+      // chunk. The shell takes it out of flow so it does not earn the column's
+      // gap under the footer.
+      trailing={<AdminSlot kind="toaster" />}
+    >
+      {children}
+    </PublicShell>
   );
 }

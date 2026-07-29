@@ -228,7 +228,12 @@ describe("public UI package usage", () => {
   it("apps/web owns its public-site compositions while consuming shared ui primitives", () => {
     const publicSiteSource = readRepositoryFile("apps/web/src/features/public-site/components.tsx");
 
-    expect(publicSiteSource).toMatch(/PublicPageContainer/u);
+    // `PublicPageContainer` and `PublicSiteFooter` are deliberately absent:
+    // both are chrome and now live in `@unimatrix/chrome/public`. What stays
+    // here is app-owned public-site *composition*, which is the distinction
+    // this case exists to hold.
+    expect(publicSiteSource).not.toMatch(/PublicPageContainer/u);
+    expect(publicSiteSource).not.toMatch(/PublicSiteFooter/u);
     expect(publicSiteSource).toMatch(/PublicSectionHeading/u);
     expect(publicSiteSource).toMatch(/PublicDecisionCard/u);
     expect(publicSiteSource).toMatch(/PublicProjectLedgerItem/u);
@@ -255,6 +260,7 @@ describe("public UI package usage", () => {
 
   it("apps/web consumes shared primitives from @unimatrix/ui/public and keeps route composition in lazy files", () => {
     const appShellSource = readRepositoryFile("apps/web/src/app/app-shell.tsx");
+    const publicShellSource = readRepositoryFile("packages/chrome/src/public-shell.tsx");
     const lazyMarkdownSource = readRepositoryFile(
       "apps/web/src/features/content/lazy-public-markdown.tsx",
     );
@@ -275,12 +281,34 @@ describe("public UI package usage", () => {
       "apps/web/src/routes/blog_.$slug.lazy.tsx",
     );
 
-    expect(appShellSource).toMatch(/PublicPageContainer/u);
-    expect(appShellSource).toMatch(/@\/features\/public-site\/components/u);
-    expect(appShellSource).toMatch(/@unimatrix\/ui\/public/u);
+    // The shell delegates its chrome to `@unimatrix/chrome/public` rather than
+    // building a header of its own. What must stay in the app is the knowledge
+    // the package deliberately refuses to hold: the route-to-tab mapping, the
+    // breadcrumb trail, and the auth control it passes in as a slot.
+    expect(appShellSource).toMatch(/from "@unimatrix\/chrome\/public"/u);
+    expect(appShellSource).toMatch(/PublicShell/u);
     expect(appShellSource).toMatch(/Unimatrix-01/u);
-    expect(appShellSource).toMatch(/grid-cols-2 gap-2 sm:flex/u);
-    expect(appShellSource).toMatch(/aria-label="Primary"/u);
+    expect(appShellSource).toMatch(/accountControl=/u);
+    expect(appShellSource).toMatch(/breadcrumbItems=/u);
+    expect(appShellSource).not.toMatch(/aria-label="Primary"/u);
+
+    // The header markup itself, pinned where it now lives. Both of these
+    // encode measured fixes: the two-column mobile nav grid, and the landmark
+    // name that keeps the two header bars from colliding under axe's
+    // `landmark-unique` rule.
+    expect(publicShellSource).toMatch(/grid-cols-2 gap-2 sm:flex/u);
+    // Both bars render a nav landmark, and the two names must stay distinct —
+    // two landmarks sharing a role and an accessible name is exactly what axe's
+    // `landmark-unique` rule reports. The name arrives as a prop, so the
+    // literal lives at the call sites and `aria-label` at the element.
+    expect(publicShellSource).toMatch(/aria-label=\{label\}/u);
+    expect(publicShellSource).toMatch(/label="Primary"/u);
+    expect(publicShellSource).toMatch(/label="Primary, condensed header"/u);
+    expect(publicShellSource).toMatch(/label="Breadcrumb"/u);
+    expect(publicShellSource).toMatch(/label="Breadcrumb, condensed header"/u);
+    // The breadcrumb trail must not be free to wrap: with it wrapping, the
+    // trail stacks beside the `shrink-0` logo at 640-768px.
+    expect(publicShellSource).toMatch(/flex min-w-0 flex-nowrap items-center gap-1/u);
 
     expect(lazyMarkdownSource).toMatch(/lazy\(/u);
     expect(lazyMarkdownSource).toMatch(/import\("@unimatrix\/ui\/public"\)/u);

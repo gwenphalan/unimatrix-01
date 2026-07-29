@@ -10,6 +10,7 @@
       // mapping the import resolves through the pnpm symlink to raw TypeScript
       // Playwright will not compile, and the e2e run dies on a syntax error that
       // says nothing about the cause.
+      "@unimatrix/chrome/public": ["../../packages/chrome/src/public.ts"],
       "@unimatrix/e2e-helpers": ["../../packages/e2e-helpers/src/index.ts"],
       "@unimatrix/auth/react": ["../../packages/auth/src/react.tsx"],
       "@unimatrix/auth": ["../../packages/auth/src/index.ts"],
