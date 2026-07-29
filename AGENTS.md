@@ -36,7 +36,7 @@
 - `packages/auth`: single source of truth for the permission scheme (`.`), Clerk Fastify guards (`./server`), and Clerk React provider/hooks (`./react`); never reads `process.env`
 - `packages/user-data`: unified per-user store (settings as JSON documents, files as blobs) with an account adapter (via `@unimatrix/api-client`) and a browser-only IndexedDB guest adapter
 - `packages/config-vitest`: shared Vitest coverage configuration; owns the provider, reporters, and exclusions, while each workspace supplies its own thresholds
-- `packages/e2e-helpers`: shared Playwright assertion helpers (accessibility scan, circuit-field occlusion measurement, page-error collection) for the app e2e suites; source-only, consumed through tsconfig `paths`
+- `packages/e2e-helpers`: shared Playwright assertion helpers (accessibility scan, page-error collection) for the app e2e suites; source-only, consumed through tsconfig `paths`
 
 ## File-Scoped Commands
 

@@ -1,8 +1,8 @@
 import type * as React from "react";
-import { Link, useRouterState } from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
 import { RiArrowLeftLine } from "@remixicon/react";
 
-import { Button, CircuitField, CircuitOccluderProvider, cn } from "@unimatrix/ui/public";
+import { Button, GraphBackground, cn } from "@unimatrix/ui/public";
 
 /**
  * The desktop-app shell every tool, dashboard, and admin surface in this repo
@@ -147,7 +147,7 @@ function ToolFooter({
   );
 }
 
-function ToolShellContent({
+export function ToolShell({
   accountControl,
   children,
   className,
@@ -156,9 +156,6 @@ function ToolShellContent({
   homeLabel,
   ownerName = DEFAULT_OWNER_NAME,
 }: ToolShellProps) {
-  const pathname = useRouterState({
-    select: (state) => state.location.pathname,
-  });
   // A tool with neither an account control nor a wordmark has nothing to put in
   // a title bar, and an empty bar would only cost vertical space. `apps/cube-trainer`
   // is that case today, which is why migrating it onto this shell is a no-op on
@@ -167,7 +164,7 @@ function ToolShellContent({
 
   return (
     <ToolPageContainer className={className}>
-      <CircuitField routeKey={pathname} />
+      <GraphBackground />
 
       <a
         className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:border focus:border-primary/45 focus:bg-background focus:px-3 focus:py-2 focus:text-sm"
@@ -200,13 +197,5 @@ function ToolShellContent({
 
       <ToolFooter end={footerEnd} homeHref={homeHref} ownerName={ownerName} />
     </ToolPageContainer>
-  );
-}
-
-export function ToolShell(props: ToolShellProps) {
-  return (
-    <CircuitOccluderProvider>
-      <ToolShellContent {...props} />
-    </CircuitOccluderProvider>
   );
 }

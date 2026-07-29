@@ -23,12 +23,9 @@ type AppShellProps = {
  * No `accountControl` either. Signing in and out is what this app *is*, so an
  * account control in its own chrome would be circular.
  *
- * The `CircuitOccluderProvider` comes from the shell now. The comment this
- * replaced claimed all five routes registered an occluder and named which ref
- * each used; none of those registrations exist, and `sign-in.lazy.tsx` and
- * `account.lazy.tsx` both carry a "no longer registers an occluder" note. The
- * provider is still mounted — it is what `CircuitField` reads — but nothing
- * feeds it.
+ * The grid background comes from the shell, via `GraphBackground`. Nothing in
+ * this app registers anything with it: it measures the viewport, not the page's
+ * contents.
  */
 export function AppShell({ children }: AppShellProps) {
   return (

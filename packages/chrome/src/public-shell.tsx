@@ -1,9 +1,9 @@
 import type * as React from "react";
 import { useEffect, useRef, useState } from "react";
-import { Link, useRouterState } from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
 import { RiArrowRightSLine } from "@remixicon/react";
 
-import { CircuitField, CircuitOccluderProvider, cn } from "@unimatrix/ui/public";
+import { GraphBackground, cn } from "@unimatrix/ui/public";
 
 /**
  * The public site's chrome: sticky header, nav tabs, breadcrumb trail, the
@@ -268,9 +268,6 @@ function PublicShellContent({
 }) {
   const headerRef = useRef<HTMLElement | null>(null);
   const [isCondensed, setIsCondensed] = useState(false);
-  const pathname = useRouterState({
-    select: (state) => state.location.pathname,
-  });
 
   useEffect(() => {
     const updateCollapsedState = () => {
@@ -289,7 +286,7 @@ function PublicShellContent({
 
   return (
     <PublicPageContainer>
-      <CircuitField routeKey={pathname} />
+      <GraphBackground />
 
       <a
         className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:border focus:border-primary/45 focus:bg-background focus:px-3 focus:py-2 focus:text-sm"
@@ -433,19 +430,17 @@ export function PublicShell({
   trailing,
 }: PublicShellProps) {
   return (
-    <CircuitOccluderProvider>
-      <PublicShellContent
-        accountControl={accountControl}
-        breadcrumbItems={breadcrumbItems}
-        footerLinks={footerLinks}
-        homeLabel={homeLabel}
-        logoSrc={logoSrc}
-        navItems={navItems}
-        ownerName={ownerName}
-        trailing={trailing}
-      >
-        {children}
-      </PublicShellContent>
-    </CircuitOccluderProvider>
+    <PublicShellContent
+      accountControl={accountControl}
+      breadcrumbItems={breadcrumbItems}
+      footerLinks={footerLinks}
+      homeLabel={homeLabel}
+      logoSrc={logoSrc}
+      navItems={navItems}
+      ownerName={ownerName}
+      trailing={trailing}
+    >
+      {children}
+    </PublicShellContent>
   );
 }
