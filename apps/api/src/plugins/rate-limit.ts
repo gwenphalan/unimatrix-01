@@ -41,6 +41,18 @@ export const RATE_LIMIT_OPTIONS = {
   timeWindow: RATE_LIMIT_WINDOW,
 } as const;
 
+/**
+ * A tighter ceiling for the binary upload routes, attached per route through
+ * `config.rateLimit`. Uploads are the most expensive thing this API does — a
+ * request can carry `MAX_UPLOAD_BYTES`, is hashed, and is written to SQLite —
+ * so the rate that is generous for reading a page is not the rate that should
+ * be allowed for filling a disk.
+ */
+export const UPLOAD_RATE_LIMIT_OPTIONS = {
+  max: 30,
+  timeWindow: RATE_LIMIT_WINDOW,
+} as const;
+
 export function setupRateLimit(app: FastifyInstance): void {
   app.register(fastifyRateLimit, {
     ...RATE_LIMIT_OPTIONS,

@@ -30,7 +30,7 @@ import type { ZodTypeProvider } from "fastify-type-provider-zod";
 
 import { isInlineSafeContentType } from "../../lib/http/content-types.js";
 import { ApiError } from "../../lib/http/errors.js";
-import { RATE_LIMIT_OPTIONS } from "../../plugins/rate-limit.js";
+import { RATE_LIMIT_OPTIONS, UPLOAD_RATE_LIMIT_OPTIONS } from "../../plugins/rate-limit.js";
 import {
   createPost,
   deletePosts,
@@ -427,6 +427,7 @@ export const contentModule: FastifyPluginAsync = async (app) => {
   app.route({
     method: "POST",
     url: "/content/admin/assets",
+    config: { rateLimit: UPLOAD_RATE_LIMIT_OPTIONS },
     preHandler: requireAdmin,
     handler: async (request, reply) => {
       const userId = getRequiredAuthUserId(request);

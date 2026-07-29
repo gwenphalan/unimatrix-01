@@ -24,7 +24,7 @@ import type { ZodTypeProvider } from "fastify-type-provider-zod";
 
 import { resolveContentDisposition } from "../../lib/http/content-types.js";
 import { ApiError } from "../../lib/http/errors.js";
-import { RATE_LIMIT_OPTIONS } from "../../plugins/rate-limit.js";
+import { RATE_LIMIT_OPTIONS, UPLOAD_RATE_LIMIT_OPTIONS } from "../../plugins/rate-limit.js";
 import {
   deleteDocument,
   deleteFile,
@@ -208,6 +208,7 @@ export const userDataModule: FastifyPluginAsync = async (app) => {
   app.route({
     method: "POST",
     url: "/me/files",
+    config: { rateLimit: UPLOAD_RATE_LIMIT_OPTIONS },
     preHandler: requireAuth(),
     handler: async (request, reply) => {
       const userId = getRequiredAuthUserId(request);
