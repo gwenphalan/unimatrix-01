@@ -100,14 +100,24 @@ function Breadcrumbs({
       // line; letting that line wrap drops the logo onto a row of its own at
       // 640-768px, where the trail is long enough to need the space. Measured:
       // with `flex-wrap` here the header's breadcrumb grew from 24px to 102px
-      // tall at 640px and the trail broke across three lines. Wrapping belongs
-      // on the inner trail span, which already has it, so only the crumbs move.
+      // tall at 640px and the trail broke across three lines.
       className="flex min-w-0 flex-1 flex-nowrap items-center gap-2.5 text-sm text-muted-foreground"
     >
       <Link aria-label="Unimatrix-01 home" to="/">
         <img alt="" className={logoClassName} src="/logo.png" />
       </Link>
-      <span className="flex min-w-0 flex-wrap items-center gap-1">
+      {/* `flex-nowrap` here too, not just on the `nav`. Wrapping was moved onto
+          this span when the logo-drop was fixed, which kept the logo in place
+          but let the trail stack instead: at 640-768px "Unimatrix-01" and
+          "> Home" sat on two rows beside a `shrink-0` logo.
+
+          This is now a backstop rather than the fix. The header gives the nav
+          its own row below `lg`, so the trail has the width it needs and never
+          reaches the point of stacking; keeping `flex-nowrap` means a longer
+          trail added later degrades by truncating the crumb labels — which
+          already carry `truncate`, with `min-w-0` on every ancestor so the
+          shrink reaches them — rather than by silently growing the header. */}
+      <span className="flex min-w-0 flex-nowrap items-center gap-1">
         {items.map((item, index) => {
           // The root crumb links home on every route, including ones that add
           // no crumb of their own (`/admin`). Trailing crumbs are plain text
@@ -318,16 +328,26 @@ function AppShellContent({ children }: AppShellProps) {
 
       <header className="site-panel site-shell overflow-hidden" ref={headerRef}>
         {/* One flex line that wraps instead of two nested clusters: below
-            `sm` the nav is pushed to its own row by `w-full` + `order-last`,
+            `lg` the nav is pushed to its own row by `w-full` + `order-last`,
             which leaves the title row free for the auth action. DOM order
             stays title → nav → auth so desktop tab order matches what's on
-            screen. */}
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-3 px-5 py-4 sm:flex-nowrap lg:px-8 lg:py-5">
+            screen.
+
+            The nav keeps its own row all the way to `lg`, not just to `sm`.
+            Between 640 and 1023px the four tabs plus the auth action leave the
+            breadcrumb no width to live in, and forcing all of it onto one line
+            does not fix that — it only changes how the trail fails. Measured
+            against a real build at 700px: with the row shared, the trail either
+            stacked ("Unimatrix-01" over "› Home", the reported bug) or, once
+            wrapping was disabled, truncated to "U… › C". Giving the nav its own
+            row below `lg` is what lets the full trail render untruncated at
+            every width, at the cost of a two-row header in that band. */}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-3 px-5 py-4 lg:flex-nowrap lg:px-8 lg:py-5">
           <Breadcrumbs items={breadcrumbItems} label="Breadcrumb" logoClassName="size-6 shrink-0" />
 
           <nav
             aria-label="Primary"
-            className="order-last grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:justify-end sm:order-none"
+            className="order-last grid w-full grid-cols-2 gap-2 sm:flex sm:w-full sm:flex-wrap sm:justify-end lg:w-auto lg:order-none"
           >
             {navItems.map(({ icon: Icon, label, to, exact }) => {
               const active = isNavItemActive(pathname, exact, to);
@@ -389,7 +409,7 @@ function AppShellContent({ children }: AppShellProps) {
                 width — the user-visible fix holds. Switching this to `sm`
                 was tried and reverted: at 640px the full breadcrumb, four
                 tabs, and the auth action do not fit this fixed overlay, and
-                the trail truncates to "Uni… > B… > P…" across three lines. */}
+                the trail is squeezed down to "Uni… > B… > P…". */}
             <div className="flex flex-wrap items-center gap-x-3 gap-y-2 lg:flex-nowrap">
               <Breadcrumbs
                 items={breadcrumbItems}

@@ -50,6 +50,12 @@ for (const width of WIDTHS) {
           const logoRect = logo.getBoundingClientRect();
           const trailRect = trail.getBoundingClientRect();
 
+          // Crumb segments hidden below `sm` measure 0×0, so they are dropped
+          // rather than counted as a row of their own.
+          const crumbs = [...trail.children].filter(
+            (crumb) => crumb.getBoundingClientRect().height > 0,
+          );
+
           return {
             label: nav.getAttribute("aria-label"),
             // "Same row" is judged against the logo's own height rather than an
@@ -57,14 +63,20 @@ for (const width of WIDTHS) {
             // and are centre-aligned, so their tops differ by a couple of
             // pixels even when they are visually on one line.
             sameRow: Math.abs(logoRect.top - trailRect.top) < logoRect.height,
+            // The trail itself must not break either. Keeping the logo on the
+            // trail's row is only half the invariant: with the trail free to
+            // wrap, "Unimatrix-01" and "> Home" stack beside a `shrink-0` logo
+            // and the header reads as squashed rather than as one line.
+            trailRows: new Set(crumbs.map((crumb) => Math.round(crumb.getBoundingClientRect().top)))
+              .size,
           };
         }),
     );
 
-    const expected = [{ label: "Breadcrumb", sameRow: true }];
+    const expected = [{ label: "Breadcrumb", sameRow: true, trailRows: 1 }];
 
     if (width >= 640) {
-      expected.push({ label: "Breadcrumb, condensed header", sameRow: true });
+      expected.push({ label: "Breadcrumb, condensed header", sameRow: true, trailRows: 1 });
     }
 
     expect(rows, `unexpected set of visible header breadcrumbs at ${width}px`).toEqual(expected);
