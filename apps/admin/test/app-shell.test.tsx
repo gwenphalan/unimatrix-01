@@ -67,6 +67,12 @@ describe("AppShell", () => {
     for (const label of ["Home", "Projects", "Blog", "About"]) {
       expect(screen.queryByRole("link", { name: label })).not.toBeInTheDocument();
     }
+    // The other half of the name, and it is not "no `contentinfo` at all":
+    // `ToolShell` renders its own slim footer beside `main`, so one landmark is
+    // expected. What must not appear is `PublicSiteFooter`, the `site-shell`
+    // panel that only `PublicShell` mounts. `getByRole` throws on a second
+    // `contentinfo`, so this also catches the site footer arriving alongside.
+    expect(screen.getByRole("contentinfo")).not.toHaveClass("site-shell");
   });
 
   it("sends the signed-out visitor to the auth hub with a return address", async () => {
