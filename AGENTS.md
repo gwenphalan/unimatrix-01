@@ -13,33 +13,12 @@
 - If host Node/pnpm mismatch: `./infra/scripts/pnpm-with-pinned-node.sh <pnpm-args>`
 
 ## Workspace
-- Monorepo: `apps/*`, `packages/*`, and `lab` from `pnpm-workspace.yaml`; root scripts fan out through Turbo
-- Live apps: `apps/web`, `apps/api`, `apps/cube-trainer`, `apps/auth` (package `@unimatrix/auth-app`), `apps/admin` — all Vite + React + TanStack Router except `apps/api` (Fastify); see Workspace Responsibilities for what each owns
-- Live packages: `packages/ui`, `packages/chrome`, `packages/shared`, `packages/api-client`, `packages/content`, `packages/db`, `packages/auth`, `packages/user-data`, `packages/config-typescript`, `packages/config-eslint`, `packages/config-vitest`, `packages/e2e-helpers`
-- `lab` (package `@unimatrix/lab`) is the third top-level workspace entry: a **local-dev-only** UX prototyping harness. `pnpm --filter @unimatrix/lab dev` and nothing else — no `build` script, no Dockerfile, no compose file, no domain, no CI `Images` entry, no route in any deployed app. See `lab/AGENTS.md`
-- Live content: `content/home`, `content/projects`, `content/blog`
-- Repo-internal docs: `docs/`; infra/runtime helpers: `infra/scripts`, `infra/deployment`, `infra/docker`
-- Reserved, not live: `apps/workers`, `content/docs`, `content/notes`, future packages like `packages/bmd-parser`
-- Keep repo facts current-first; do not treat reserved paths as active runtime surface
+- Monorepo: `apps/*`, `packages/*`, and `lab` from `pnpm-workspace.yaml`; root scripts fan out through Turbo. The roster is the filesystem — read it there rather than from a list here that drifts
+- Apps are Vite + React + TanStack Router except `apps/api` (Fastify). **`apps/auth` is the package `@unimatrix/auth-app`** — the one workspace whose package name does not follow its directory
+- `lab` (package `@unimatrix/lab`) is a **local-dev-only** UX prototyping harness: `pnpm --filter @unimatrix/lab dev` and nothing else — no build script, no Dockerfile, no domain, no CI `Images` entry. See `lab/AGENTS.md`
+- Two packages own something the code does not make obvious: `packages/ui` holds the shared shadcn primitives, shared styles and safe markdown rendering; `packages/config-vitest` owns the coverage provider, reporters and exclusions, while each workspace supplies its own thresholds. Per-package rules for everything else are in Boundaries below
+- Reserved, not live: `apps/workers`, `content/docs`, `content/notes`, future packages like `packages/bmd-parser`. Never describe a reserved path as an active runtime surface
 - Nearest nested `AGENTS.md` overrides this file
-
-## Workspace Responsibilities
-- `apps/web`: route-driven public site, public content rendering, app-owned public-site compositions
-- `apps/api`: runtime config validation, Fastify plugins, feature route modules, HTTP error normalization
-- `apps/cube-trainer`: OLL/PLL Learn (guided teaching order) and Drill (keyboard-driven flashcard drill) UI, bundled algorithm data, `localStorage`-backed progress, training pool, and diagram preview mode
-- `apps/auth`: central Clerk auth hub — sign-in/up and account settings (`UserProfile`); redirect target for other services' sign-in
-- `apps/admin`: the administration console on `admin.unimatrix-01.dev`. Scaffold today — one ungated placeholder route on the shared tool shell. It is the origin the CMS moves onto out of `apps/web`, and the home for operator surfaces with no relationship to the public site's route tree
-- `packages/ui`: shared shadcn primitives, shared styles, safe markdown rendering, `@unimatrix/ui/public`
-- `packages/chrome`: the two shared application shells — `./tool` (desktop-app chrome for tools, dashboards, admin surfaces) and `./public` (site header, nav tabs, breadcrumbs, site footer). Every service gets its chrome by importing one of the two rather than growing an app-local shell
-- `packages/shared`: framework-agnostic API contracts, Zod schemas, exported shared types only
-- `packages/api-client`: typed fetch transport consuming `@unimatrix/shared` contracts; pluggable `getAuthToken` provider
-- `packages/content`: pure parsing, frontmatter validation, repo-backed loaders for live public content only
-- `packages/db`: Drizzle + SQLite persistence, schema barrel, migrations, local DB path resolution
-- `packages/auth`: single source of truth for the permission scheme (`.`), Clerk Fastify guards (`./server`), and Clerk React provider/hooks (`./react`); never reads `process.env`
-- `packages/user-data`: unified per-user store (settings as JSON documents, files as blobs) with an account adapter (via `@unimatrix/api-client`) and a browser-only IndexedDB guest adapter
-- `packages/config-vitest`: shared Vitest coverage configuration; owns the provider, reporters, and exclusions, while each workspace supplies its own thresholds
-- `packages/e2e-helpers`: shared Playwright assertion helpers (accessibility scan, page-error collection) for the app e2e suites; source-only, consumed through tsconfig `paths`
-- `lab`: UX prototyping harness — an index page, a hand-written router, and `lab/src/mocks/` (a mock API client, session, and user-data store, every one typed against the real contracts). `lab/prototypes/` is empty on `main`; prototypes live on `lab/*` branches and are never merged. It is a personal design tool, not a component gallery and not a documentation site
 
 ## File-Scoped Commands
 
@@ -113,27 +92,18 @@ Four packages sit deliberately below `latest`. Each has a reason that is not "we
 - Admin app deeper checks: `pnpm --filter @unimatrix/admin test` (unit only — no smoke suite, same reason as the auth app), `pnpm --filter @unimatrix/admin build`
 - Auth / user-data package checks: `pnpm --filter @unimatrix/auth test`, `pnpm --filter @unimatrix/user-data test`
 - Any change to a web component or live site (`apps/web`, `apps/cube-trainer`, `apps/auth`, `apps/admin`, `packages/ui`, `packages/chrome`) must be live-tested in a real browser before being reported as done — automated tests verify correctness, not that the feature actually works on screen. If no Chromium instance is running, launch one to run this check.
-- Never report work as done, working, or verified on the strength of the code looking correct — run the check and report what it actually printed
-- State plainly what you could not verify rather than omitting it; an unmentioned gap reads as a confirmed result
+- **Never report work as done, working, or verified on the strength of the code looking correct** — run the check and report what it actually printed. This binds hardest on explanations of *why* something behaves as it does: a plausible mechanism reached quickly is still a guess. Test it, or label it a hypothesis
 - **Do not assert what you have not verified.** This binds hardest on explanations of *why* something behaves as it does: a plausible mechanism reached quickly is still a guess, and stating it as fact is how wrong conclusions get acted on. Test it, or label it a hypothesis
-- One corroborating signal is not verification. A hook's output, a doc's phrasing, or another tool's claim can all be wrong — prefer what the system actually does (observed behavior, a command you ran, a reproduction) over what it says about itself
-- When observed behavior contradicts a source you trusted, the behavior wins; go back and find what the source actually got wrong rather than explaining the contradiction away
+- One corroborating signal is not verification. A hook's output, a doc's phrasing, or another tool's claim can each be wrong — prefer what the system actually does (a command you ran, a reproduction) over what it says about itself. When observed behavior contradicts a source you trusted, the behavior wins: find what the source got wrong rather than explaining the contradiction away
+- State plainly what you could not verify rather than omitting it; an unmentioned gap reads as a confirmed result
 
 ## CI And Automation
-- `main` accepts changes by pull request only, and the `Verify` CI job is a required status check; work on a branch and open a PR
-- Dependabot runs daily with a 14-day `cooldown`; `pnpm-workspace.yaml` sets `minimumReleaseAge` to 3 days. The pnpm value must stay **below** Dependabot's or updates fail with a misleading "no matching version" error
-- All three Dependabot ecosystems set a `cooldown`: 14 days for `npm` and `docker`, **7 days for `github-actions`** — an action bump is a SHA change against a public, reviewable repo rather than an opaque registry tarball, and frequent releasers like `github/codeql-action` make a long window costly. `github-actions` supports only `default-days`; the `semver-*-days` keys are not valid there, and an unsupported key makes Dependabot reject the whole file, silently disabling npm updates too. After editing `.github/dependabot.yml`, check `/network/updates` for a config error: a rejected file looks exactly like a quiet week
-- **Dependabot's npm updater runs inside its own image — Node 24, pnpm 10.16.0, npm 11.17.0** (`npm_and_yarn/Dockerfile` in dependabot-core). Root `engines.node` must stay satisfiable by *their* Node, not ours: it was `>=22 <23` with `engine-strict=true` in `.npmrc`, and every npm job errored with "Dependabot does not support your Node version" — no npm PR was ever opened, for the repo's entire life, while the github-actions ecosystem worked fine because it needs no Node. It is now `>=22`, an open-ended floor, so a future Dependabot Node bump cannot re-break it. The real pin for humans and CI is `.node-version` plus CI's `node-version-file`, not `engines`
-- `minimumReleaseAge` needs pnpm >= 10.16 and Dependabot ships exactly **10.16.0** — no margin. If they ever ship older, that setting silently becomes a no-op
-- Check `/network/updates` (Insights → Dependency graph → Dependabot) after touching anything Dependabot reads. The `.github/dependabot.yml` status check on a PR proves only that the *file parses*; it says nothing about whether the updater can run
-- Auto-merge is armed for grouped minor/patch Dependabot PRs only, and gates on CI rather than on any review
-- CI's `Images` job builds every `apps/*/Dockerfile`, and all five matrix checks — `Images (admin)`, `Images (api)`, `Images (auth)`, `Images (cube-trainer)`, `Images (web)` — are required on `main` alongside `Verify`, `Review dependency changes`, `Analyze`, and `CodeQL`. This job exists because `Verify` is Vite and tsc only and never touches a Dockerfile, so a dependency could pass every check while making the deployable image unbuildable. `better-sqlite3@13` is the live example: no published prebuilds, so it falls back to `node-gyp` and dies on alpine. If you add a Dockerfile, add it to the matrix **and** to the required checks, or it is unverified
-- `infra/scripts/check-app-wiring.sh` (run by `pnpm check` and `pnpm verify`) is the mechanical guard on three things nothing else sees: the `packages/chrome` `@source` line in each Vite app's stylesheet, `@tanstack/react-router` in its vite `dedupe`, and every `apps/*/Dockerfile` appearing in the `Images` matrix. It is also the app template — a new app satisfies it or the check goes red. **CI does not run `pnpm check`/`pnpm verify`** — the `Verify` job runs the underlying steps individually — so the script gets its own `App wiring` step in `.github/workflows/ci.yml`, placed before `pnpm install` because it reads only `apps/*` and `ci.yml` and needs no `node_modules`. Adding it to `pnpm check` alone is not a pre-merge gate: the only thing that would run it is the scheduled `maintenance.yml` pass against already-merged `main`
-- Two workflows serve `lab`. `Prototypes guard` (job `No prototypes on main`) runs on **every** pull request to `main` with no `paths:` filter and fails when the diff adds a file under `lab/prototypes/` — the `.gitkeep` and `README.md` scaffolding are allow-listed. The filter is omitted deliberately: a path-filtered workflow that does not run reports nothing, and a required check that never reports blocks a PR forever instead of passing it. This is repo hygiene, not a security control — the lab is local-dev only, so a prototype on `main` costs clutter and rot, not exposure. `Lab` runs lint + typecheck of `lab/src` on `lab/**` branches; full `Verify` there would fail on coverage thresholds and burn minutes for nothing. Neither is armed as a required check
-- CodeRabbit is advisory and non-blocking: treat its comments as leads to verify against primary sources, never as conclusions to act on directly
-- Never add self-hosted Actions runners — this repo is public, so fork PRs would execute untrusted code on the owner's hardware
+- `main` accepts changes by pull request only. `Verify`, the five `Images (*)` matrix checks, `Review dependency changes`, `Analyze`, and `CodeQL` are required status checks; merges are squash-only with required linear history; work on a branch and open a PR
+- **Never add self-hosted Actions runners** — this repo is public, so fork PRs would execute untrusted code on the owner's hardware
 - Pin third-party actions to a commit SHA with the version in a trailing comment
-- Several workflow settings that look redundant are load-bearing and carry a comment saying why; read the comment before removing one
+- Adding a Dockerfile means adding it to CI's `Images` matrix **and** to the required checks, or it is unverified
+- CodeRabbit is advisory and non-blocking: treat its comments as leads to verify against primary sources, never as conclusions to act on directly
+- Dependabot and CI mechanics — cooldowns, the `engines.node` trap that silently disabled npm updates, `minimumReleaseAge`, the `Images` matrix rationale — are in `.github/AGENTS.md`, which loads when you work in that directory. Read it before editing anything Dependabot or CI reads
 
 ## Git And PR Rules
 - Keep PRs small and issue-aligned; avoid unrelated scaffolding or setup churn
