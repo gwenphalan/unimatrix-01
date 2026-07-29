@@ -122,12 +122,17 @@ jobs:
       contents: read
 
     strategy:
-      # Do not cancel the other three on the first failure — knowing whether a
-      # break is confined to one image or affects all of them is most of the
+      # Do not cancel the others on the first failure — knowing whether a break
+      # is confined to one image or affects all of them is most of the
       # diagnosis, and re-running to find out costs another full cycle.
       fail-fast: false
+      # Every `apps/*/Dockerfile` must appear here, and
+      # `infra/scripts/check-app-wiring.sh` fails the build if one does not.
+      # Adding an entry is only half the job: the matching `Images (<app>)`
+      # check also has to be armed as required on `main`, or the image is built
+      # and its result ignored.
       matrix:
-        app: [api, auth, cube-trainer, web]
+        app: [admin, api, auth, cube-trainer, web]
 
     steps:
       - name: Check out repository

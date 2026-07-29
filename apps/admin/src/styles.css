@@ -1,0 +1,12 @@
+@import "@unimatrix/ui/styles.css";
+
+/* Tailwind v4 source detection does not reach a sibling workspace package: it
+   scans this app's own tree and stops. Without these three lines the utility
+   classes written inside @unimatrix/ui, @unimatrix/auth and @unimatrix/chrome
+   are simply never emitted, and the layout collapses in a browser while lint,
+   types, unit tests and the build all stay green. The chrome line is the one
+   that matters most here — every visible frame this app has comes from
+   `ToolShell`. */
+@source "../../../packages/ui/src/**/*.{ts,tsx}";
+@source "../../../packages/auth/src/**/*.{ts,tsx}";
+@source "../../../packages/chrome/src/**/*.{ts,tsx}";

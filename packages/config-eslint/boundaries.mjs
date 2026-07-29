@@ -41,6 +41,11 @@ const ALLOWED_PACKAGE_IMPORTS = {
   // the whole reason its shells take the account control as a slot.
   "apps/cube-trainer": ["chrome", "e2e-helpers", "ui"],
   "apps/auth": ["auth", "chrome", "ui"],
+  // The admin scaffold, and deliberately as narrow as `apps/auth`. It is not
+  // the CMS yet: `api-client` and `shared` are the edges the content move will
+  // need, and they get added when code actually uses them rather than now, so
+  // this stays a statement of fact instead of a permission slip.
+  "apps/admin": ["auth", "chrome", "ui"],
   "packages/api-client": ["shared"],
   // The shared chrome composes `ui` primitives and nothing else. It must never
   // gain `auth`: both of its shells take the account control as a `ReactNode`
