@@ -31,7 +31,7 @@ Object.defineProperty(window, "matchMedia", {
 });
 
 // Polyfill ResizeObserver for the jsdom environment used by Vitest.
-// CircuitOccluderProvider (mounted in the app shell) observes elements and
+// GraphBackground (mounted in the app shell) observes `documentElement` and
 // will throw without this.
 class MockResizeObserver implements ResizeObserver {
   observe(): void {}

@@ -191,11 +191,12 @@
     /* Each tiled layer is phased so one of its lines lands exactly on the
        page's centerline: the 240px tier (bold lines + intersection dots) by
        `--grid-bold-phase-*`, the 40px tier by `--grid-phase-*`. Both are
-       written by `CircuitField`, which translates its own traces by the
-       same fine phase so the drawn circuit sits on this very lattice; the
-       two tiers stay seam-locked because 240 is a whole multiple of 40. The
-       last layer is the full-size vignette, which has no lattice. Falls
-       back to the plain `0 0` origin without JS. */
+       written by `GraphBackground`, which is the only reader/writer of them;
+       the two tiers stay seam-locked because 240 is a whole multiple of 40.
+       The last layer is the full-size vignette, which has no lattice. Falls
+       back to the plain `0 0` origin without JS — visibly off-center against
+       centered content, which is why the component is mounted in both
+       shells. */
     background-position:
       var(--grid-bold-phase-x, 0px) var(--grid-bold-phase-y, 0px),
       var(--grid-bold-phase-x, 0px) var(--grid-bold-phase-y, 0px),
@@ -204,119 +205,6 @@
       var(--grid-phase-x, 0px) var(--grid-phase-y, 0px),
       0 0;
     background-attachment: fixed;
-  }
-
-  /*
-   * No static circuit-trace layer: it can only ever approximate the grid
-   * (a fixed-canvas mask scaled to the viewport drifts off the real 40px
-   * grid at most aspect ratios). CircuitField (JS) draws the real,
-   * grid-exact traces; without it, the plain dual-tier grid above is the
-   * fallback, which is intentional and complete on its own.
-   */
-
-  .circuit-field-glow {
-    filter: drop-shadow(0 0 2px color-mix(in oklab, var(--primary) 65%, transparent));
-  }
-
-  .circuit-field-trace {
-    animation: circuit-draw 650ms ease-out forwards;
-  }
-
-  .circuit-field-via {
-    opacity: 0;
-    animation: circuit-via-in 250ms ease-out forwards;
-  }
-
-  /*
-   * Session E2 idle packets: full-strength `--primary` (the strokes/vias are
-   * mixed down to 60% against the background, so packets read as brighter
-   * moving current on a dimmer board), fill supplied by the pooled group's
-   * own `fill` attribute in circuit-field.tsx (same pattern the tip/
-   * intersection pools already use, no per-element class needed for color).
-   * The two stacked drop-shadows are a tight core plus a wide halo, layered
-   * on top of the group's own 2px shadow — deliberately a `filter`, not an
-   * `opacity`, so overlapping packets never composite brighter than a lone
-   * one (the exact artifact Session C removed the group `opacity` for). No
-   * keyframe here — position and opacity are written directly per idle frame
-   * (`advanceIdlePackets`), never CSS-animated. Only ever mounted/written to
-   * in `full` motion mode; every other mode's pool sits at its initial
-   * `opacity: 0` forever, so no `prefers-reduced-motion` override is needed.
-   */
-  .circuit-field-packet {
-    animation: none;
-    filter: drop-shadow(0 0 3px var(--primary))
-      drop-shadow(0 0 7px color-mix(in oklab, var(--primary) 70%, transparent));
-  }
-
-  @keyframes circuit-draw {
-    to {
-      stroke-dashoffset: 0;
-    }
-  }
-
-  @keyframes circuit-via-in {
-    to {
-      opacity: 1;
-    }
-  }
-
-  /*
-   * Static motion mode (see capability.ts): traces render one frozen frame,
-   * no rAF at all. `.circuit-field-idle-glow` (see capability.ts's
-   * `canShowIdleGlow`) is a second, JS-applied class layered on top only
-   * when static mode came from a touch/pointer signal, not an accessibility
-   * or performance one — `(update: slow)`, reduced-data, low
-   * `hardwareConcurrency`, and frame-budget-watchdog demotion all leave a
-   * device in `.circuit-field-static` without it, since a permanent 3.2s
-   * compositor animation is exactly what those devices can't afford.
-   * Applied to the root <svg>, never to either inner `.circuit-field-glow`
-   * group — a root-level opacity pulse rasterizes both groups together once
-   * before alpha applies, so it doesn't reintroduce the overlap-brightening
-   * artifact a *group*-level opacity would (two independently
-   * drop-shadow-filtered siblings compositing over each other). Reads as
-   * faint current still flowing rather than fully dead.
-   */
-  .circuit-field-idle-glow {
-    animation: circuit-idle-glow 3200ms ease-in-out infinite alternate;
-  }
-
-  @keyframes circuit-idle-glow {
-    to {
-      opacity: 0.75;
-    }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .circuit-field-trace,
-    .circuit-field-via {
-      animation: none;
-    }
-
-    /*
-     * Defense in depth: `canShowIdleGlow` already excludes reduced-motion
-     * from ever getting this class, but the reduced-motion block is the
-     * canonical place every motion override in this file lives, so a future
-     * change to that gating still can't ship a glow under this preference.
-     */
-    .circuit-field-idle-glow {
-      animation: none;
-    }
-
-    /*
-     * Pin both to their finished-animation state, not just "no animation" —
-     * the JS boot path already skips writing these inline styles when
-     * reduced motion is on from the start, but a preference flipped mid-
-     * session leaves boot's inline stroke-dashoffset/opacity: 0 in place,
-     * which `animation: none` alone doesn't clear.
-     */
-    .circuit-field-trace {
-      stroke-dasharray: none !important;
-      stroke-dashoffset: 0 !important;
-    }
-
-    .circuit-field-via {
-      opacity: 1;
-    }
   }
 
   .site-panel {

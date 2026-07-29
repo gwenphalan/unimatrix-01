@@ -7,11 +7,10 @@ import { afterEach } from "vitest";
 ).IS_REACT_ACT_ENVIRONMENT = true;
 
 // jsdom ships no `ResizeObserver`, so components that construct one
-// unconditionally (`CircuitField`'s grid-phase effect, the occluder provider)
-// throw on mount in every suite. This inert default just lets them mount;
-// suites that actually assert on observer behaviour still `vi.stubGlobal` a
-// controllable mock over it (see `circuit-occluder.test.tsx`), and the
-// `if` guard keeps this from clobbering such a stub on re-entry.
+// unconditionally (`GraphBackground`'s grid-phase effect) throw on mount in
+// every suite. This inert default just lets them mount; suites that actually
+// assert on observer behaviour still `vi.stubGlobal` a controllable mock over
+// it, and the `if` guard keeps this from clobbering such a stub on re-entry.
 if (!("ResizeObserver" in globalThis)) {
   class NoopResizeObserver implements ResizeObserver {
     // Takes the callback and drops it. Not decoration: without a declared

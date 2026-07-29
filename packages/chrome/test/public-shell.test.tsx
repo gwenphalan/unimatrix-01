@@ -23,9 +23,8 @@ const navItems: PublicNavItem[] = [
 ];
 
 /**
- * Mounts `ui` under a real router. The shell reads the pathname for the circuit
- * field's route key and renders `Link`s for both the logo and every nav tab, so
- * every case here needs one.
+ * Mounts `ui` under a real router. The shell renders `Link`s for both the logo
+ * and every nav tab, so every case here needs one.
  */
 async function renderInRouter(ui: ReactNode) {
   const rootRoute = createRootRoute();

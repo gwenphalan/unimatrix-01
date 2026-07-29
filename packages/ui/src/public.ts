@@ -1,9 +1,7 @@
 export { Badge } from "./components/ui/badge.js";
 export { Button } from "./components/ui/button.js";
 export { Card } from "./components/ui/card.js";
-export { CircuitField } from "./components/circuit-field.js";
-export type { CircuitFieldProps } from "./components/circuit-field.js";
-export { CircuitOccluderProvider, useCircuitOccluder } from "./components/circuit-occluder.js";
+export { GraphBackground } from "./components/graph-background.js";
 export {
   DropdownMenu,
   DropdownMenuCheckboxItem,

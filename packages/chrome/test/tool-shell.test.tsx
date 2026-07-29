@@ -13,9 +13,8 @@ import { describe, expect, it, vi } from "vitest";
 import { ToolFooterLink, ToolShell, ToolTitleBar } from "../src/tool.js";
 
 /**
- * Mounts `ui` under a real router. Both `ToolShell` (which reads the pathname
- * for the circuit field's route key) and `ToolTitleBar` (whose `to` form
- * renders a `Link`) need one, so every case here goes through this.
+ * Mounts `ui` under a real router. `ToolTitleBar`'s `to` form renders a `Link`,
+ * which needs one, so every case here goes through this.
  */
 async function renderInRouter(ui: ReactNode) {
   const rootRoute = createRootRoute();

@@ -5,7 +5,7 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import { UserButton } from "@unimatrix/auth/react";
 import { useIsMobile } from "@unimatrix/ui/editor";
 import { Toaster } from "@unimatrix/ui/editor";
-import { CircuitField, CircuitOccluderProvider } from "@unimatrix/ui/public";
+import { GraphBackground } from "@unimatrix/ui/public";
 import { useId, type ReactNode } from "react";
 
 import { useApiClient } from "@/lib/api-client";
@@ -21,16 +21,20 @@ import { adminPostsQueryOptions } from "./queries";
  * title bar naming the tool, one way back out, the account control, and a dense
  * content region that owns the rest of the viewport.
  *
- * The circuit field stays. It is the site's visual identity rather than page
- * furniture, and `CircuitOccluderProvider` measures what actually paints, so
- * the panels here register themselves without a per-component call.
+ * The grid background stays. It is the site's visual identity rather than page
+ * furniture, and `GraphBackground` keeps its lattice centered here the same way
+ * it does on every other surface.
  *
  * Everything below lives in the admin chunk, reached through `AdminSlot`'s
  * single dynamic import — a non-admin never downloads this file.
  */
-export function AdminShell({ children }: { children: ReactNode }) {
+export type AdminShellProps = {
+  children: ReactNode;
+};
+
+export function AdminShell({ children }: AdminShellProps) {
   return (
-    <CircuitOccluderProvider>
+    <>
       {/* Viewport-height only from `lg` up. The fill-the-viewport frame is what
           makes this read as an application rather than a page, but it only
           works while the content fits: on a phone the editor's fields alone are
@@ -39,7 +43,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
           the frame grows and the page scrolls, which is what a phone does
           anyway. */}
       <div className="relative mx-auto flex min-h-[100dvh] w-full max-w-[92rem] flex-col gap-4 px-4 py-4 sm:px-6 lg:h-[100dvh] lg:px-8 lg:py-6 xl:px-10">
-        <CircuitField routeKey="admin" />
+        <GraphBackground />
 
         {/* Carried over from the public shell rather than dropped with the rest
             of it: losing the skip link would be a real accessibility regression
@@ -75,7 +79,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
             mounted at a time because the two shells are mutually exclusive. */}
         <Toaster position="bottom-right" />
       </div>
-    </CircuitOccluderProvider>
+    </>
   );
 }
 
