@@ -26,5 +26,5 @@ This package stays intentionally small and focused on the current public-site do
 - repo-internal operating docs belong under `docs/`, not under `content/`
 - operational queue-status posts, policy-page migrations, and future docs or notes collections stay out of scope unless a later issue expands the boundary
 - `apps/web/src/features/content/site-content.ts` raw-imports `content/home/index.md` and nothing else
-- `apps/web/test/content-registry.test.ts` keeps blog and project markdown *out* of the web bundle; a `?raw` import would be a second, silently stale source of truth beside the content database
+- `apps/web/test/content-registry.test.ts` keeps blog and project markdown *out* of the web bundle; a `?raw` import of blog or project markdown would be a second, silently stale source of truth beside the content database
 

@@ -42,7 +42,13 @@ const tracked = execFileSync("git", ["ls-files", "*.ts", "*.tsx"], {
   .filter(Boolean);
 
 const COMMENT_LINE = /^\s*(?:\/\/|\*|\/\*)/;
-const BACKTICKED_PASCAL = /`([A-Z][a-z0-9]+(?:[A-Z][A-Za-z0-9]*)+)`/g;
+// Each repeated group starts with the one uppercase letter and then takes only
+// non-uppercase characters. The obvious spelling of this — `[A-Z][A-Za-z0-9]*`
+// repeated — lets a run like `AB` be split more than one way, and CodeQL's
+// `js/redos` flags the exponential backtracking that follows on input like
+// `` `A0AAAA...` ``. Matching is unchanged for PascalCase: the leading
+// `[a-z0-9]+` already rejected all-caps names such as `HTML` either way.
+const BACKTICKED_PASCAL = /`([A-Z][a-z0-9]+(?:[A-Z][a-z0-9]*)+)`/g;
 
 const codeLines = [];
 const commentLines = [];

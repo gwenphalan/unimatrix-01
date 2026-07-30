@@ -22,7 +22,7 @@ Four details are load-bearing:
 
 Raising a threshold after genuinely improving coverage is the intended workflow. Lowering one should be a deliberate, explained edit, not a quiet fix for a red build.
 
-One such edit already happened, and the mechanism is worth knowing because it looks like a regression. Adding `test/user-data-routes.test.ts` made the function threshold **fall** from 89 to 85 while coverage genuinely improved: before it, `userDataModule` was never registered (no test configured Clerk), so its eight route handlers were never created and never counted. Registering the module put them in the denominator while the auth guard still rejected before any handler ran. That gap is closed — `test/user-data-authenticated-routes.test.ts` mints a signed Clerk session, and `src/modules/user-data/index.ts` now reports 100% function coverage.
+A new test can make the function percentage **fall** while coverage genuinely improves, so read a drop against this before treating it as a regression: registering a module creates its route handlers and puts them in the denominator, and an auth guard that rejects before any handler runs leaves every one of them uncovered. The fix is to authenticate, never to lower the floor — `test/user-data-authenticated-routes.test.ts` mints a signed Clerk session, which is why `src/modules/user-data/index.ts` reports 100% function coverage.
 
 ## 3. Core Behaviors & Patterns
 - **App wiring**: `buildApp()` in `src/app.ts` creates the Fastify instance, decorates `runtimeConfig`, installs core plugins, and centralizes error and not-found handling before modules are registered.

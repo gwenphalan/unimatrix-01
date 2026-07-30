@@ -34,10 +34,11 @@ the most damaging thing a reference doc can contain. If you did not run it, say 
 
 **Delete stale text; don't append a correction beside it.**
 
-## The five drifts this repo actually had
+## The drifts this repo actually had
 
-From an audit of every tracked doc and comment. Each of these was written by someone being helpful,
-and each became a lie within weeks. When you catch yourself about to do one, don't.
+Each was written by someone being helpful, and each became a lie within weeks. When you catch
+yourself about to do one, don't. The incidents stay because each is the only thing that makes its
+rule concrete — they are the exception above, not licence to narrate elsewhere.
 
 **Never commit a count of anything the filesystem knows.** "Create four Dokploy services" survived
 into five; "the four applications under `apps/`" left one deployed app outside the security policy.

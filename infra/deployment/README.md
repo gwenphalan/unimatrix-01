@@ -249,8 +249,8 @@ scheme.
 
 ## Auto-updates from `main`
 
-Enable automatic Dokploy redeploys from the repository `main` branch for all
-every service, using service-specific watch paths. This avoids rebuilding every
+Enable automatic Dokploy redeploys from the repository `main` branch for every
+service, using service-specific watch paths. This avoids rebuilding every
 service for an unrelated monorepo change while still rebuilding when its image
 inputs change.
 

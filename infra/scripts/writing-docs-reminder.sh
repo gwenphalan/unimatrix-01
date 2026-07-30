@@ -28,7 +28,7 @@ path=$(printf '%s' "$payload" | jq -r '.tool_response.filePath // .tool_input.fi
 [ -n "$path" ] || exit 0
 
 case "$path" in
-*.md) ;;
+*.md | *.mdx) ;;
 *) exit 0 ;;
 esac
 

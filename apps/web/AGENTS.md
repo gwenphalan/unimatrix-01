@@ -4,7 +4,7 @@
 `apps/web` is the Vite + React public site for Unimatrix. Blog and project content is fetched from the API at runtime; `content/home/index.md` is the only file compiled into the bundle. Public-site composition stays separate from shared UI primitives.
 
 ## 2. Folder Structure
-- `src/app`: `router.tsx` (router creation), `app-shell.tsx` (shell layout), `auth-boundary.tsx` (Clerk-gated route wrapper), `providers.tsx` (provider wiring).
+- `src/app`: `router.tsx` (router creation), `app-shell.tsx` (shell layout), `auth-boundary.tsx` (mounts Clerk's `AuthProvider`; not a route gate), `providers.tsx` (provider wiring).
 - `src/features`: feature-local code grouped by concern. The CMS is `src/features/admin`, gated by `useAdminAccess` rather than by `require-auth.tsx`.
   - `auth`: `require-auth.tsx` guards routes that need a signed-in user, redirecting to the auth app when needed.
   - `content`: registry wiring, markdown helpers, lookup utilities, and lazy markdown loading.
@@ -21,7 +21,7 @@
 - **Shared UI boundary**: App code consumes shared primitives from `@unimatrix/ui/public`, while `src/features/public-site/components.tsx` owns public-site-specific compositions such as `PublicSectionHeading`, `PublicDecisionCard`, and `PublicProjectLedgerItem`.
 - **Package aliasing**: `vite.config.ts` resolves `@unimatrix/content`, `@unimatrix/shared`, `@unimatrix/auth/react`, and `@unimatrix/ui/public` straight to those packages' source, so they are real build inputs.
 - **Auth gating**: `src/app/auth-boundary.tsx` only mounts Clerk's `AuthProvider` (skipped entirely when auth is disabled); `src/features/auth/require-auth.tsx` is the actual signed-in-only route gate (redirect-if-signed-out, render-if-signed-in), not yet applied to any route. Sign-in itself redirects to the separate `apps/auth` hub via `VITE_AUTH_APP_URL`, not an in-app flow.
-- **Content loading**: Blog and project entries are fetched at runtime from the API (`src/features/content/queries`). `src/features/content/site-content.ts` holds only the home/about singleton, the one file still compiled into the bundle. That registry so tests and route loaders stay aligned.
+- **Content loading**: Blog and project entries are fetched at runtime from the API (`src/features/content/queries`). `src/features/content/site-content.ts` holds only the home/about singleton, the one file still compiled into the bundle.
 - **Safe markdown rendering**: Route components use `LazyPublicMarkdown` plus `renderPublicMarkdownInternalLink` to render authored markdown. Raw HTML and runtime MDX stay disabled; safe GFM rendering lives in `@unimatrix/ui`.
 - **Testing split**: Behavior-heavy UI and content rules live under `test/`, while a minimal smoke path for the running site lives under `e2e/public-site.smoke.spec.ts`.
 

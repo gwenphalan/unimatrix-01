@@ -47,23 +47,37 @@ function packageDirectories() {
   return map;
 }
 
-/** Every `@unimatrix/*` specifier that appears anywhere under the app's `src/`. */
+/**
+ * Every `@unimatrix/*` specifier under the app's `src/`, plus its `vite.config.ts`.
+ *
+ * `vite.config.ts` counts because it configures the production build, so a
+ * package imported only there is still a real build input and still belongs in
+ * the watch paths. `vitest.config.ts` is deliberately excluded: it imports
+ * `@unimatrix/config-vitest`, which no deployed image contains, so counting it
+ * would force every app to redeploy on a test-config change — the exact waste
+ * watch paths exist to prevent.
+ */
 function importedPackages(appDir) {
   const found = new Set();
+  const scan = (path) => {
+    for (const match of readFileSync(path, "utf8").matchAll(/@unimatrix\/[a-z0-9-]+/g)) {
+      found.add(match[0]);
+    }
+  };
   const walk = (dir) => {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
       const path = join(dir, entry.name);
       if (entry.isDirectory()) {
         walk(path);
       } else if (/\.(ts|tsx|css)$/.test(entry.name)) {
-        for (const match of readFileSync(path, "utf8").matchAll(/@unimatrix\/[a-z0-9-]+/g)) {
-          found.add(match[0]);
-        }
+        scan(path);
       }
     }
   };
   const src = join(appDir, "src");
   if (existsSync(src)) walk(src);
+  const viteConfig = join(appDir, "vite.config.ts");
+  if (existsSync(viteConfig)) scan(viteConfig);
   return found;
 }
 

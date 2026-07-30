@@ -86,13 +86,21 @@ convinced yourself the code is correct, and any reviewer whose input passes thro
 inherits that conviction. A subagent spawned from this session gets a fresh *context* but not a
 fresh *framing* — you still write its prompt, choose what it looks at, and decide what is settled.
 
+**Every required check must be green before you request any review.** Not merely reported — green. A
+reviewer pointed at a branch that then goes red reviews code you are about to change, and the fix
+either wastes the review or costs a second one. This is not a formality: CodeQL and the `Images`
+matrix both land well after the PR opens, and CodeQL can fail on a *new* alert introduced by the diff
+even when its own workflow succeeds, so "the PR opened without complaint" tells you nothing yet. Wait
+for green, then ping.
+
 So the pre-merge check goes to a reader with no path back to this conversation. Pick the reviewer by
 what the change is, not by what is cheapest:
 
-1. **CodeRabbit is the default, and you request it yourself.** Ping it as soon as the diff is final
-   (see the section below for the exact mechanics and why timing matters). It is the only reviewer
-   that is a *different tool* rather than a different context, so it does not share your model's
-   blind spots — that is what makes it the first choice rather than the consolation prize.
+1. **CodeRabbit is the default, and you request it yourself.** Ping it once the diff is final *and*
+   the required checks are green (see the section below for the exact mechanics and why timing
+   matters). It is the only reviewer that is a *different tool* rather than a different context, so it
+   does not share your model's blind spots — that is what makes it the first choice rather than the
+   consolation prize.
 2. **If CodeRabbit is rate-limited, fall back to a reviewer subagent from this session.** Do not sit
    and wait out the window, and do not merge with no review at all. Give the subagent the diff and
    the PR body — not your reasoning, which is the thing that would contaminate it. Say in the merge
@@ -187,7 +195,10 @@ contract, `packages/*`.
 ### Ask for the review — it does not run automatically
 
 `.coderabbit.yaml` sets `reviews.auto_review.enabled: false`. Comment `@coderabbitai review`
-**once, when the diff is finished**, not while you are still pushing.
+**once, when the diff is finished and every required check is green** — not while you are still
+pushing, and not while CI is still running. A ping at PR-open is the common mistake: the checks have
+not reported yet, so a red one arrives afterwards and the review you just spent covers code you are
+about to change.
 
 **One CodeRabbit review per PR** — not one per push. Once you have pinged it, that PR's CodeRabbit
 budget is normally spent: fix what it found, push the fixes, and merge on the required checks
@@ -246,6 +257,17 @@ comment at all**. Use instead:
   `review in progress by coderabbit.ai`.
 
 Read the newest review's **body** as well as its inline comments.
+
+**Poll until one of exactly two things is certain: the review completed, or it was rate-limited.**
+Nothing else ends the wait. A zero read once is not an answer — the review count sits at the baseline
+for as long as the review takes, so an early zero is indistinguishable from "never ran" and reporting
+it as the latter is simply wrong. The `Review finished` acknowledgement is not the signal either; it
+lands seconds after any ping, including one that reviewed nothing.
+
+Two states in particular look like completion and are not: an "✅ Action performed / Review finished"
+comment on a repository with auto-review disabled, and a `pass` check whose summary says
+`Review rate limited`. Distinguish them with the three signals above, not the checks list. And do not
+report the outcome of a review still in flight — say it is still running, or wait.
 
 For each comment:
 

@@ -19,5 +19,5 @@
 - **Route files**: TanStack Router file naming with paired `*.tsx` + `*.lazy.tsx`, matching `apps/web`; keep route data (loaders, `validateSearch`) in the non-lazy file and UI in the lazy file.
 - **Imports**: external first, then `@/` aliases, then relative. Prefer `@unimatrix/ui/public`.
 - **Naming**: `PascalCase` components; `camelCase` helpers exported from kebab-case files.
-- **Dependencies**: the visible frame is `ToolShell` from `@unimatrix/chrome/tool` (see `src/app/app-shell.tsx`), so layout changes belong in `packages/chrome`, not here; Clerk comes only through `@unimatrix/auth`. `package.json` is the roster. It is not part of `pnpm dev` (run it with `pnpm --filter @unimatrix/auth-app dev`, port 5175). Tests are unit-only (no Playwright smoke — that would need live Clerk keys).
+- **Dependencies**: the visible frame is `ToolShell` from `@unimatrix/chrome/tool` (see `src/app/app-shell.tsx`), so layout changes belong in `packages/chrome`, not here; Clerk comes only through `@unimatrix/auth/react`. `package.json` is the roster. It is not part of `pnpm dev` (run it with `pnpm --filter @unimatrix/auth-app dev`, port 5175). Tests are unit-only (no Playwright smoke — that would need live Clerk keys).
 

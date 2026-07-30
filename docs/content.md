@@ -44,11 +44,16 @@ model.
 
 ## Authoring checklist
 
-Use this sequence when you add a new public content file.
+The sequence differs by collection, because only one of them is still a file.
 
-1. Create the markdown file under the correct live collection.
-2. Match the frontmatter to the current typed schema in `packages/content`.
-3. Run the relevant content and web validation commands.
+1. **Home** — edit `content/home/index.md`, match the frontmatter to the typed schema in
+   `packages/content`, and run the validation commands below. It is compiled into the bundle, so it
+   ships with the next build.
+2. **A blog or project entry** — create it through the admin surface. It lands in the content
+   database and is live without a deploy. Do not add a markdown file for it.
+3. **A seed file** under `content/blog` or `content/projects` — match the same schema, then re-seed
+   with `pnpm --filter @unimatrix/api seed:content`. Editing one changes nothing on the live site
+   until that runs.
 
 ## Validation commands
 
