@@ -331,14 +331,26 @@ To wait: compute the deadline with the `updated_at` + countdown arithmetic above
 review rather than sleeping blind — poll the review count and the rate-limit marker on an interval,
 so a refusal on the retry is visible instead of looking like silence:
 
+**Record the baseline count before the ping, and compare against it** — not against zero. A PR that
+has already been reviewed once starts at `n >= 1`, so a loop testing `n > 0` reports success on its
+first iteration and you merge believing a review ran that never did.
+
 ```sh
-for i in $(seq 1 20); do
-  n=$(gh api repos/<owner>/<repo>/pulls/<pr>/reviews \
-        --jq '[.[] | select(.user.login=="coderabbitai[bot]")] | length')
-  [ "$n" -gt 0 ] && { echo "review landed: count=$n"; break; }
+count() { gh api repos/<owner>/<repo>/pulls/<pr>/reviews \
+            --jq '[.[] | select(.user.login=="coderabbitai[bot]")] | length'; }
+base=$(count)            # before the ping
+# ... ping, then poll until the cooldown deadline computed above, not a fixed count:
+while [ "$(date -u +%s)" -lt "$deadline" ]; do
+  [ "$(count)" -gt "$base" ] && { echo "review landed"; break; }
+  gh api repos/<owner>/<repo>/issues/<pr>/comments \
+    --jq '.[] | select(.user.login=="coderabbitai[bot]") | .body' \
+    | grep -q 'rate limited by coderabbit.ai' && { echo "refused again"; break; }
   sleep 30
 done
 ```
+
+Stop on a conclusive outcome — the count rising, or a fresh refusal — rather than on a fixed number
+of iterations. An iteration cap that expires mid-cooldown looks identical to a silent failure.
 
 Then re-ping **once**, after the deadline has actually passed, and confirm with the three signals
 below. If that ping is refused again, the window was longer than advertised: recompute from the new
@@ -391,6 +403,11 @@ Do not let an unresolved advisory comment block a merge. Do let a real defect it
 Merge once every required check is green, **a fresh reader has reviewed the branch**, and review
 comments are handled. Report what actually happened: which checks ran, who reviewed and how, what
 was raised and how each was resolved, and anything left undone.
+
+The fresh-reader precondition has exactly three documented exceptions, all of them about a reviewer
+being *unavailable* rather than unnecessary: the owner is waiting on this PR, the PR blocks other
+work, or CodeRabbit's cooldown is long and the diff is trivial. Taking one means naming it in the
+report — see "Wait out the cooldown and re-ping" for when waiting is the better trade.
 
 Name the reviewer in the report: CodeRabbit, a subagent because CodeRabbit was rate-limited, or
 `/code-review ultra` because the change was large or security-sensitive. If none of the three
