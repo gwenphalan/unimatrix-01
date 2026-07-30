@@ -238,14 +238,21 @@ and not while CI is still running. A ping at PR-open is the common mistake: the 
 reported yet, so a red one arrives afterwards and the review you just spent covers code you are about
 to change.
 
-**`@coderabbitai review` is the wrong command on this repo, and it fails silently.** With auto-review
-disabled it replies "✅ Action performed / Review finished" within seconds, adds the note that
-CodeRabbit "does not re-review already reviewed commits", and produces *no review at all* — the review
-count stays at its baseline, there are no threads, and the checks list still reads
-`Review skipped: automatic reviews are disabled`. Measured on #153 and #154: the plain form returned
-the ack and nothing else, and `full review` on the same unchanged commit returned a real review with a
-Major finding in 180 seconds. The plain form is indistinguishable from "reviewed clean" unless you
-check the review count, so use `full review` and never the bare form.
+**A ping can silently produce no review, and the failure looks like success.** CodeRabbit replies
+"✅ Action performed / Review finished" within seconds of *any* ping, sometimes adding that it "does
+not re-review already reviewed commits" — while the review count stays at its baseline, no threads
+appear, and the checks list still reads `Review skipped: automatic reviews are disabled`. That state
+is indistinguishable from "reviewed clean" at a glance. **So the ack is never the confirmation: check
+the review count, as below.**
+
+Prefer `full review` over the bare form, but hold that loosely — the evidence is thin and points both
+ways. Across #153–#155: the bare form returned the ack and nothing twice; `full review` returned a
+real Major finding once (#153, 180 seconds) and nothing twice (#154, #155, both still empty 8 minutes
+later). n=1 success against n=2 failure with the *same* command, so command form does not explain the
+data. What fits better is exhaustion: those were five pings across three PRs inside ~20 minutes, and
+the one that worked was the second ping on a PR. Treat "one ping per PR, on a rested window, verified
+by review count" as the thing that matters, and `full review` as the cheap default rather than the
+fix. A single `full review` on one PR with no other recent pings is the test that would settle it.
 
 **One CodeRabbit review per PR** — not one per push. Once you have pinged it, that PR's CodeRabbit
 budget is normally spent: fix what it found, push the fixes, and merge on the required checks
