@@ -23,8 +23,8 @@ The default production shape is separate-origin:
 - `https://site.example.com` -> web
 - `https://api.example.com` -> api
 - `https://cflop.unimatrix-01.dev` -> cflop
-- `https://cube.unimatrix-01.dev` -> 301 to `cflop.unimatrix-01.dev` (pre-rebrand
-  hostname; see "CFLOP service" below)
+- `https://cube.unimatrix-01.dev` -> should 301 to `cflop.unimatrix-01.dev`
+  (pre-rebrand hostname, not yet configured; see "CFLOP service" below)
 - `https://auth.unimatrix-01.dev` -> auth
 
 In this shape:
@@ -116,18 +116,30 @@ routing. It has no API dependency, so it does not need an entry in
 #### The pre-rebrand `cube.` hostname
 
 The tool was served from `cube.unimatrix-01.dev` before it was renamed to CFLOP,
-so that hostname permanently 301s to `cflop.unimatrix-01.dev`. The redirect is a
-Traefik middleware attached to the `cube.unimatrix-01.dev` domain entry in
-Dokploy — **not** a Cloudflare Redirect Rule and **not** a `server` block in the
-container's Nginx config.
+so that hostname should permanently 301 to `cflop.unimatrix-01.dev`.
 
-Cloudflare is out because Redirect Rules only execute on proxied traffic, and
-these records are DNS-only; a rule added there would be silently inert. Nginx was
-the other candidate and would have been repo-owned, which is a real advantage —
-the trade accepted here is that the redirect lives in Dokploy's database instead,
-so it is invisible to anyone reading this repository. That is what this section is
-for. If the Dokploy service is ever recreated from scratch, the redirect has to be
-re-added by hand; nothing in CI or the image will notice it is missing.
+**This is the chosen design, not the current state — as of the rebrand it is not
+configured.** `cube.` still routes straight to the container. Nothing in this
+repository can configure it, which is exactly why it is written down here.
+
+The redirect belongs in Traefik — **not** a Cloudflare Redirect Rule and **not**
+a `server` block in the container's Nginx config. Cloudflare is out because
+Redirect Rules only execute on proxied traffic, and these records are DNS-only;
+a rule added there would be silently inert. Nginx was the other candidate and
+would have been repo-owned, which is a real advantage — the trade accepted here
+is that the redirect lives on the Dokploy host instead, invisible to anyone
+reading this repository.
+
+Two surfaces make it up, both confirmed present on the live host:
+
+- `/etc/dokploy/traefik/dynamic/middlewares.yml` defines named middlewares under
+  `http.middlewares` (it already holds `redirect-to-https`). A path-preserving
+  301 wants a `redirectRegex` entry with `permanent: true`.
+- each Dokploy domain record carries a `middlewares` array, which is how the
+  named middleware gets attached to the `cube.unimatrix-01.dev` entry.
+
+If the Dokploy service is ever recreated from scratch, both have to be re-added
+by hand; nothing in CI or the image will notice they are missing.
 
 Both hostnames must stay pointed at the Dokploy host in DNS: Traefik can only
 answer for `cube.` (and terminate TLS for it) if the request actually reaches it.
