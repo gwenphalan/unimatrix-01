@@ -58,7 +58,7 @@ export default defineConfig({
       // That file was 13 statements and 7 functions of *fully covered* code —
       // every app-shell render exercised it — so removing it took more from
       // the numerator than the denominator. Nothing became less tested.
-      thresholds: { statements: 56, functions: 51 },
+      thresholds: { statements: 59, functions: 60 },
     }),
     environment: "jsdom",
     include: ["test/**/*.test.ts", "test/**/*.test.tsx"],

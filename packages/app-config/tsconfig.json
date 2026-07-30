@@ -1,0 +1,11 @@
+{
+  "extends": "@unimatrix/config-typescript/base.json",
+  // Not `library.json`: consumers resolve this package's raw source through
+  // tsconfig `paths` (and vite bundles it straight from `src/`), the same
+  // source-only arrangement as `@unimatrix/chrome` and
+  // `@unimatrix/e2e-helpers` — a `dist` here would be dead weight nothing
+  // reads. Unlike chrome this package maps no cross-package `paths`, so
+  // `library.json` would *work*; it is skipped for uniformity among the
+  // source-only packages, not out of necessity.
+  "include": ["src/**/*.ts", "test/**/*.ts", "vitest.config.ts"]
+}
