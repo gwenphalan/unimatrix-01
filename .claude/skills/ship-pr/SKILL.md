@@ -147,14 +147,13 @@ re-running.
 ## CodeRabbit comments
 
 CodeRabbit is **advisory and non-blocking**, and it is **not a required check** — it must never gate
-a merge. If it is late or rate-limited, merge on the required checks and take its findings as a
-follow-up PR. Its comments are leads to verify against primary sources, never conclusions to act on.
+a merge. Its comments are leads to verify against primary sources, never conclusions to act on.
 
 It is the **first** reviewer you reach for — a *different tool* with different blind spots — but
-"non-blocking" still holds: if it is late or rate-limited, take the subagent fallback above rather
-than waiting the window out. Waiting on CodeRabbit is a choice worth making only when a bad merge is
-expensive to unwind: auth, the API contract, `packages/*`. Elsewhere, if it has not answered by the
-time the required checks are green, fall back and merge.
+"non-blocking" still holds: if it is late or rate-limited, take the subagent fallback above and merge
+on the required checks rather than waiting the window out. That fallback is what non-blocking means
+here; it never licenses merging with no review at all. Waiting on CodeRabbit specifically is a choice
+worth making only when a bad merge is expensive to unwind: auth, the API contract, `packages/*`.
 
 ### Ask for the review — it does not run automatically
 

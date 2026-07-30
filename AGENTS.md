@@ -3,7 +3,7 @@
 ## Who You Are Working For
 - The repo owner is a software developer and architects this project — choosing the services, shared packages, and tools. What is scarce is time, not ability: explain trade-offs at full engineering depth and never simplify them
 - **Present options for dependency, tooling, and architectural choices** — those are the owner's call. Give a recommendation alongside the options, not instead of them
-- Once an approach is chosen, implement it without further checkpoints, and report the implementation decisions you made along the way
+- Once an approach is chosen, implement it without further checkpoints, and report the implementation decisions you made along the way. The one stop is before opening a PR — see the `ship-pr` skill
 - Do not assume a diff will be read line by line. Verification has to come from checks you actually ran, so treat a red check as the signal it is and never route around one
 - Be conservative wherever a mistake would fail silently rather than loudly
 - The repo owner likes ambitious ideas, simple systems, and software that feels obvious. Do not preserve complexity just because it already exists. Do not introduce machinery just because it looks architecturally impressive. Understand the real constraint, then fight for the smallest model that makes the correct behavior unsurprising
@@ -17,7 +17,7 @@
 - Monorepo: `apps/*`, `packages/*`, and `lab` from `pnpm-workspace.yaml`; root scripts fan out through Turbo. The roster is the filesystem — read it there rather than from a list here that drifts
 - Apps are Vite + React + TanStack Router except `apps/api` (Fastify). **`apps/auth` is the package `@unimatrix/auth-app`** — the one workspace whose package name does not follow its directory
 - `lab` (package `@unimatrix/lab`) is a **local-dev-only** UX prototyping harness: `pnpm --filter @unimatrix/lab dev` and nothing else — no build script, no Dockerfile, no domain, no CI `Images` entry. See `lab/AGENTS.md`
-- Two packages own something the code does not make obvious: `packages/ui` holds the shared shadcn primitives, shared styles and safe markdown rendering; `packages/config-vitest` owns the coverage provider, reporters and exclusions, while each workspace supplies its own thresholds. Per-package rules for everything else are in Boundaries below
+- `packages/config-vitest` owns the coverage provider, reporters and exclusions, while each workspace supplies its own thresholds. Per-package rules for everything else are in Boundaries below
 - Reserved, not live: `apps/workers`, `content/docs`, `content/notes`, future packages like `packages/bmd-parser`. Never describe a reserved path as an active runtime surface
 - Nearest nested `AGENTS.md` overrides this file
 
@@ -45,8 +45,8 @@
 
 ## Boundaries
 - `apps/web`: keep route data in non-lazy route files and UI in paired `*.lazy.tsx`; `src/routes/routeTree.gen.ts` is generated
-- `apps/web`: prefer `@unimatrix/ui/public`; keep public-site compositions in `src/features/public-site`; keep site-only styling in `src/styles.css`. The site chrome itself is **not** app-owned: header, nav tabs, breadcrumbs, and the site footer come from `@unimatrix/chrome/public`, and `PublicPageContainer`/`PublicSiteFooter` moved there out of `features/public-site`. What stays in the app is the knowledge the package refuses to hold — the route-to-tab mapping, the breadcrumb trail, and `AuthHeaderAction`, which is passed in as the `accountControl` slot so the package never gains `@unimatrix/auth`
 - `apps/web`: safe markdown only; keep raw HTML and runtime MDX disabled
+- `apps/web`: prefer `@unimatrix/ui/public`; keep public-site compositions in `src/features/public-site`; keep site-only styling in `src/styles.css`. The site chrome itself is **not** app-owned: header, nav tabs, breadcrumbs, and the site footer come from `@unimatrix/chrome/public`. What stays in the app is the knowledge the package refuses to hold — the route-to-tab mapping, the breadcrumb trail, and `AuthHeaderAction`, which is passed in as the `accountControl` slot so the package never gains `@unimatrix/auth`
 - `apps/api`: keep `buildApp()` wiring in `src/app.ts`, cross-cutting setup in `src/plugins`, feature routes in `src/modules`, reusable HTTP helpers in `src/lib/http`; verify Clerk tokens networklessly via the `@unimatrix/auth/server` plugin/guards and read the acting user only from the verified session (`getAuthUserId`), never from client input
 - `apps/cflop`: keep the same non-lazy/`*.lazy.tsx` route split as `apps/web`; do not add `@unimatrix/api-client`, `@unimatrix/shared`, `@unimatrix/content`, or `@tanstack/react-query` dependencies unless a real server-backed feature is added
 - `apps/auth`: same non-lazy/`*.lazy.tsx` route split as `apps/web`; consume Clerk only through `@unimatrix/auth/react` (never `@clerk/clerk-react` directly); validate any inbound `redirect_url` against the same-family allowlist before use
@@ -63,7 +63,7 @@
 - `lab`: local-dev only, and that is what makes its security question disappear — prototype code has no production surface to leak onto. **Never add a deploy artifact of any kind** (Dockerfile, compose file, domain, `Images` matrix entry, `build` script, or a route in a deployed app). Prototypes reach data through `lab/src/mocks/` and nowhere else: `@unimatrix/api-client`, `@unimatrix/user-data`, `@unimatrix/auth/react`, `@unimatrix/auth/server` and `@clerk/*` are lint errors there, because the real client with a base URL pointed at production can mutate live content from a laptop. The API base URL is a hardcoded `http://localhost:3000` asserted local at module load — there is deliberately no `VITE_API_BASE_URL`. Unlike the apps, `@unimatrix/ui` and `@unimatrix/shared` resolve to package **source** through lab's own vite alias and tsconfig `paths`; both are `tsc`-built and publish `./dist`, so without that, editing a shared component shows nothing in the lab until a rebuild. The shared `boundaries`/`no-restricted-imports` configs are silent no-ops for a one-level-deep workspace (verified: they derive the repo root and the workspace id from a two-level path), which is why lab's bans live in `lab/eslint.config.mjs`. `lab/prototypes/` is excluded from lint, typecheck and prettier but **included** in the stylesheet's `@source` globs
 
 ## Dependency Ceilings
-Four packages sit deliberately below `latest`. Each has a reason that is not "we have not got round to it", so do not merge a Dependabot PR proposing them without re-checking the reason still holds.
+Five packages sit deliberately below `latest`. Each has a reason that is not "we have not got round to it", so do not merge a Dependabot PR proposing them without re-checking the reason still holds.
 
 - **`typescript` is capped at the 6 line.** 7.0.2 is `latest`, but the current `typescript-eslint` (8.65.0) declares `typescript: ">=4.8.4 <6.1.0"`. Installing 7 breaks lint in every workspace at once. The enforcement is the `^6.0.3` caret in each workspace, **not** the `>=5.0.0 <6.1.0` peer in `@unimatrix/config-eslint` — `.npmrc` does not set `strict-peer-dependencies` and pnpm 10 defaults it to false, so a peer mismatch installs silently. Verified, not assumed. Lift the cap when typescript-eslint widens its range.
 - **`@types/node` tracks the runtime, not `latest`.** It stays on the major in `.node-version` (24). 26.x describes APIs that do not exist in the Node actually running.
@@ -96,7 +96,6 @@ Four packages sit deliberately below `latest`. Each has a reason that is not "we
 - Auth / user-data package checks: `pnpm --filter @unimatrix/auth test`, `pnpm --filter @unimatrix/user-data test`
 - Any change to a web component or live site (`apps/web`, `apps/cflop`, `apps/auth`, `apps/admin`, `packages/ui`, `packages/chrome`) must be live-tested in a real browser before being reported as done — automated tests verify correctness, not that the feature actually works on screen. If no Chromium instance is running, launch one to run this check.
 - **Never report work as done, working, or verified on the strength of the code looking correct** — run the check and report what it actually printed. This binds hardest on explanations of *why* something behaves as it does: a plausible mechanism reached quickly is still a guess. Test it, or label it a hypothesis
-- **Do not assert what you have not verified.** This binds hardest on explanations of *why* something behaves as it does: a plausible mechanism reached quickly is still a guess, and stating it as fact is how wrong conclusions get acted on. Test it, or label it a hypothesis
 - One corroborating signal is not verification. A hook's output, a doc's phrasing, or another tool's claim can each be wrong — prefer what the system actually does (a command you ran, a reproduction) over what it says about itself. When observed behavior contradicts a source you trusted, the behavior wins: find what the source got wrong rather than explaining the contradiction away
 - State plainly what you could not verify rather than omitting it; an unmentioned gap reads as a confirmed result
 
@@ -115,4 +114,4 @@ Four packages sit deliberately below `latest`. Each has a reason that is not "we
 - Use conventional commits
 
 ## Commit Attribution
-AI commits MUST include attribution matching the acting AI agent or model identity in the `Co-Authored-By` header (e.g. `Co-Authored-By: Antigravity <noreply@google.com>` or `Co-Authored-By: Gemini <noreply@google.com>`).
+AI commits MUST include attribution matching the acting AI agent or model identity in the `Co-Authored-By` header.

@@ -1,61 +1,19 @@
 # Docker and Compose
 
-This directory documents the repo-owned container workflow for the current live
-surface:
-
-- `apps/web` as a static Vite SPA image
-- `apps/api` as a Fastify Node runtime image
-- `apps/cflop` as a static Vite SPA image
-- `apps/auth` as a static Vite SPA image
-- `apps/admin` as a static Vite SPA image
-
-Dokploy plus Traefik is the primary production target for now. The Docker and
+Dokploy plus Traefik is the primary production target. The Dockerfiles and
 Compose files here are the secondary, manual deployment path and the local
 validation path for containerized builds.
-
-## Files
-
-- `apps/web/Dockerfile`: multi-stage web image build
-- `apps/web/nginx.conf`: static file server config with SPA fallback
-- `apps/api/Dockerfile`: multi-stage API image build
-- `apps/cflop/Dockerfile`: multi-stage cflop image build
-- `apps/cflop/nginx.conf`: static file server config with SPA fallback
-- `apps/auth/Dockerfile`: multi-stage auth app image build
-- `apps/auth/nginx.conf`: static file server config with SPA fallback
-- `apps/admin/Dockerfile`: multi-stage admin app image build
-- `apps/admin/nginx.conf`: static file server config with SPA fallback
-- `infra/docker/web-compose.yaml`: single-service `web` stack, used both for
-  local validation and as a Dokploy Compose deployment
-- `infra/docker/api-compose.yaml`: single-service `api` stack, used both for
-  local validation and as a Dokploy Compose deployment
-- `infra/docker/cflop-compose.yaml`: single-service `cflop`
-  stack, used both for local validation and as a Dokploy Compose deployment
-- `infra/docker/auth-compose.yaml`: single-service `auth` stack, used both for
-  local validation and as a Dokploy Compose deployment
-- `infra/docker/admin-compose.yaml`: single-service `admin` stack, used both
-  for local validation and as a Dokploy Compose deployment
-- `.dockerignore`: root build hygiene for repo-root Docker contexts
 
 ## Monorepo build rules
 
 Build all five images from the repo root, not from an individual app
 directory.
 
-That is required because:
-
-- `apps/web` resolves workspace source aliases from `apps/web/vite.config.ts`
-  and `apps/web/tsconfig.json`
-- `apps/web` imports public markdown directly from `content/`
-- `apps/api` depends on `@unimatrix/shared`, and the compiled API still imports
-  that package by workspace name at runtime
-- `apps/cflop` resolves its `@unimatrix/ui` workspace source alias from
-  `apps/cflop/vite.config.ts` and `apps/cflop/tsconfig.json`
-- `apps/auth` resolves its `@unimatrix/auth`, `@unimatrix/api-client`,
-  `@unimatrix/shared`, and `@unimatrix/ui` workspace source aliases from
-  `apps/auth/vite.config.ts` and `apps/auth/tsconfig.json`
-- `apps/admin` resolves its `@unimatrix/auth`, `@unimatrix/chrome`, and
-  `@unimatrix/ui` workspace source aliases from `apps/admin/vite.config.ts`
-  and `apps/admin/tsconfig.json`
+Each app resolves workspace source aliases from its own `vite.config.ts` and
+`tsconfig.json` and reads files outside its own directory, so an app-directory
+build context cannot resolve them. `apps/api` needs the repo root at runtime as
+well as at build time: the compiled output still imports `@unimatrix/shared` by
+workspace name.
 
 The checked-in images assume these repo-root build contexts:
 
@@ -90,11 +48,6 @@ The web image builds `apps/web/dist` and serves it from a small internal Nginx
 container. Nginx is only the static file server inside the container. It is not
 the public edge proxy; Traefik stays the edge router in Dokploy.
 
-### Web build inputs
-
-See [`apps/web/README.md`](../../apps/web/README.md) for the canonical,
-up-to-date list of build inputs and Dokploy watch paths.
-
 ### Web runtime contract
 
 - container port: `8080`
@@ -124,25 +77,17 @@ docker build \
 The API image builds `@unimatrix/shared`, compiles `apps/api`, then uses
 `pnpm deploy` to package the runtime with production dependencies.
 
-### API build inputs
-
-See [`apps/api/README.md`](../../apps/api/README.md) for the canonical,
-up-to-date list of build inputs and Dokploy watch paths.
-
 ### API runtime contract
 
 - entrypoint: `node dist/server.js`
 - container port: `3001`
 - healthcheck path: `/health`
-- required runtime env:
-  - `HOST`
-  - `PORT`
-  - `NODE_ENV`
-  - `LOG_LEVEL`
-  - `TRUST_PROXY`
-  - `CORS_ALLOWED_ORIGINS`
+- runtime env that has to be supplied: `TRUST_PROXY=1` behind a proxy, and
+  `CORS_ALLOWED_ORIGINS` to override the built-in defaults (which include local
+  development origins, so production logs a warning when it is unset).
+  `NODE_ENV`, `HOST`, `PORT`, `LOG_LEVEL` and `DATABASE_URL` have image
+  defaults in `apps/api/Dockerfile`.
 
-The image defaults `HOST=0.0.0.0`, `PORT=3001`, and `NODE_ENV=production`.
 Optional runtime env: `MAX_UPLOAD_BYTES` (per-request file upload size limit
 for the user-data file endpoints; defaults to 5 MiB),
 `MAX_USER_STORAGE_BYTES` (cumulative per-user cap across documents and files
@@ -172,11 +117,6 @@ backend dependency: algorithm data is bundled at build time and per-case
 learning progress lives in the browser's `localStorage`, so there is no
 build-time or runtime env to configure.
 
-### CFLOP build inputs
-
-See [`apps/cflop/README.md`](../../apps/cflop/README.md) for the
-canonical, up-to-date list of build inputs and Dokploy watch paths.
-
 ### CFLOP runtime contract
 
 - container port: `8080`
@@ -199,11 +139,6 @@ The auth image builds `apps/auth/dist` and serves it from a small internal
 Nginx container, same pattern as the web and cflop images. It is the
 central Clerk-backed accounts app (sign-in/sign-up and account management).
 
-### Auth build inputs
-
-See [`apps/auth/README.md`](../../apps/auth/README.md) for the canonical,
-up-to-date list of build inputs and Dokploy watch paths.
-
 ### Auth runtime contract
 
 - container port: `8080`
@@ -211,11 +146,8 @@ up-to-date list of build inputs and Dokploy watch paths.
 - required SPA fallback: unknown application routes must serve `index.html`
 - build-time env: `VITE_API_BASE_URL`, `VITE_CLERK_PUBLISHABLE_KEY`
 
-Both `VITE_API_BASE_URL` and `VITE_CLERK_PUBLISHABLE_KEY` are compiled into the
-frontend bundle. `VITE_CLERK_PUBLISHABLE_KEY` is a public key (safe to ship in
-a browser bundle), but it still must be set at build time to the real key for
-the target Clerk instance, since Vite inlines `import.meta.env.VITE_*` values
-at build time, not at container start.
+`VITE_CLERK_PUBLISHABLE_KEY` is a public key and safe to ship in a browser
+bundle, but it must be the real key for the target Clerk instance.
 
 Example build:
 
@@ -234,11 +166,6 @@ The admin image builds `apps/admin/dist` and serves it from a small internal
 Nginx container, same pattern as the other SPA images. It is the operator
 console behind Cloudflare Access; the container itself carries no secrets.
 
-### Admin build inputs
-
-See [`apps/admin/README.md`](../../apps/admin/README.md) for the canonical,
-up-to-date list of build inputs and Dokploy watch paths.
-
 ### Admin runtime contract
 
 - container port: `8080`
@@ -251,8 +178,7 @@ up-to-date list of build inputs and Dokploy watch paths.
 `VITE_CLERK_PUBLISHABLE_KEY` has no Dockerfile default on purpose:
 `loadAdminAppRuntimeConfig` throws without it, so an image built without the
 key fails loudly in the browser rather than rendering an admin console that
-can never sign anyone in. All `VITE_*` values are inlined at build time, not
-container start.
+can never sign anyone in.
 
 Example build:
 
@@ -308,18 +234,6 @@ docker build -f apps/admin/Dockerfile --build-arg VITE_API_BASE_URL=http://local
 docker run --rm -p 8083:8080 unimatrix-admin:local
 ```
 
-To stop the compose stack:
-
-```bash
-docker compose \
-  -f infra/docker/api-compose.yaml \
-  -f infra/docker/web-compose.yaml \
-  -f infra/docker/cflop-compose.yaml \
-  -f infra/docker/auth-compose.yaml \
-  -f infra/docker/admin-compose.yaml \
-  down
-```
-
 ## Verification
 
 After startup, verify:
@@ -332,31 +246,13 @@ curl -I http://localhost:8082/
 curl -I http://localhost:8083/
 ```
 
-Then open these web routes in a browser and confirm they render after both a
-normal navigation and a refresh:
-
-- `/`
-- `/about`
-- `/blog`
-- `/projects`
-
-And these cflop routes:
-
-- `/`
-- `/learn`
-- `/drill`
-
-And these auth app routes:
-
-- `/`
-- `/sign-in`
-- `/account`
+Then confirm a deep route in each SPA renders after both a normal navigation
+and a refresh — that is what exercises the nginx `index.html` fallback.
 
 ## Current database posture
 
-`apps/api` depends on `@unimatrix/db` for the user-data module (per-user
-settings and files), so the API is not database-free. The container workflow
-persists that data:
+`apps/api` stores per-user settings and files in SQLite through
+`@unimatrix/db`. The container workflow persists that data:
 
 - **SQLite volume**: the API Dockerfile defaults `DATABASE_URL` to
   `/data/unimatrix.sqlite` and creates `/data` owned by the non-root `node`
@@ -370,7 +266,7 @@ persists that data:
 
 Remaining caveat: SQLite is single-writer, so this shape assumes a single API
 instance. Horizontal scaling would need a different database or a shared
-storage strategy — document that here if it is ever adopted.
+storage strategy.
 
 ## Dokploy Compose deployment
 
@@ -399,15 +295,9 @@ environment-dependent values to set. `auth-compose.yaml` reads
 `VITE_API_BASE_URL` and `VITE_CLERK_PUBLISHABLE_KEY` the same way, and
 `admin-compose.yaml` reads those two plus an optional `VITE_AUTH_APP_URL`.
 
-These five files are Dokploy **Compose** apps, and Dokploy has no preview
-deployment support for that service type — every `preview*` field lives on its
-`applications` record and none exist on `compose`. Previews are therefore
-configured on *separate* Application-type services that reuse these same
-Dockerfiles unchanged, rather than by turning something on here. Don't try to
-enable previews on these apps; there is nothing to enable.
-
-See `infra/deployment/README.md` for the full Dokploy service setup, including
-the preview deployment section.
+Previews cannot be enabled on these apps — Dokploy supports them only on
+Application-type services. See `infra/deployment/README.md` for the full
+Dokploy service setup, including how previews are configured instead.
 
 ## Base image updates
 
@@ -421,19 +311,10 @@ these files and find nothing. Don't add one.
 Two consequences worth knowing before treating a quiet Dependabot as "nothing
 to update":
 
-- Only the `nginx:1.29-alpine` pins are tracked. Every
+- Only the `nginx` base-image pins are tracked. Every
   `FROM node:${NODE_VERSION}-alpine` is invisible: Dependabot does no ARG
   interpolation and its tag regex cannot match a leading `$`. That is
   deliberate — the Node version stays owned by `.node-version` and CI's
   `node-version-file` rather than gaining a second, competing owner.
-- Base-image PRs auto-merge on the same terms as any other minor/patch,
-  because CI's required `Images` checks now build every `apps/*/Dockerfile`.
-  The history of that decision lives in the comment in
-  `.github/workflows/dependabot-auto-merge.yml`.
-
-## Relationship to production deployment docs
-
-- `infra/docker/README.md`: repo-owned Dockerfiles, Compose, and manual
-  container workflow
-- `infra/deployment/README.md`: Dokploy plus Traefik production deployment
-  guidance
+- Base-image PRs auto-merge on the same terms as any other minor/patch: the
+  required `Images` checks build every `apps/*/Dockerfile`.

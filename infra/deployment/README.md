@@ -42,9 +42,9 @@ path for now.
 
 ## Dokploy service layout
 
-Create four Dokploy services from the same repository and the same `main`
-branch, all using Dokploy's **Compose** application type (not the plain
-Dockerfile application type).
+Create one Dokploy service per `infra/docker/*-compose.yaml`, all from the same
+repository and the same `main` branch, all using Dokploy's **Compose**
+application type (not the plain Dockerfile application type).
 
 ### Web service
 
@@ -176,6 +176,23 @@ sign-in/sign-up, and account management), so it needs `CORS_ALLOWED_ORIGINS` on
 the API service to include
 `https://auth.unimatrix-01.dev` if it calls the API directly from the browser.
 
+### Admin service
+
+- application type: Compose
+- compose path: `infra/docker/admin-compose.yaml`
+- environment variables (set in Dokploy's UI, not in the file):
+  `VITE_CLERK_PUBLISHABLE_KEY=pk_live_...` (required — `loadAdminAppRuntimeConfig`
+  throws without it, so a keyless image fails loudly in the browser),
+  `VITE_API_BASE_URL=https://api.example.com`, and optionally
+  `VITE_AUTH_APP_URL` (defaults to `https://auth.unimatrix-01.dev`)
+- Domains page: route `admin.unimatrix-01.dev` to the `admin` service,
+  container port `8080`
+
+Access control is Cloudflare Access on the proxied hostname, not app code —
+`curl https://admin.unimatrix-01.dev/` returns a 302 to
+`unimatrix-01.cloudflareaccess.com`. That is what makes the scaffold's ungated
+placeholder route safe; see `apps/admin/AGENTS.md`.
+
 ## Traefik expectations
 
 Traefik is the public edge proxy in Dokploy, and Dokploy's Domains page is the
@@ -238,31 +255,14 @@ scheme.
   `https://*.example.com`
 - wildcard rules match subdomains only; they do not match the apex domain, so
   the apex must also be listed explicitly
-- if `CORS_ALLOWED_ORIGINS` is unset, the API uses repo defaults:
-  - `https://unimatrix-01.dev`
-  - `https://*.unimatrix-01.dev`
-  - `https://omnimatrix.dev`
-  - `https://*.omnimatrix.dev`
-  - `http://localhost:5173`
-  - `http://127.0.0.1:5173`
-  - `http://localhost:4173`
-  - `http://127.0.0.1:4173`
-- if `CORS_ALLOWED_ORIGINS` is set, it fully replaces those defaults
-- API CORS stays intentionally narrow: no credentials; browser methods are
-  `GET`, `HEAD`, `POST`, `PUT`, `PATCH`, and `DELETE` (the writes are needed by
-  the user-data endpoints); the `authorization` header is allowed
-  (needed for Clerk-authenticated requests); and `x-request-id` is exposed to
-  browser clients
-- `apps/api/.env.production.example` shows the checked-in production env
-  template, including `MAX_UPLOAD_BYTES` (per-request file upload size limit
-  for the user-data file endpoints; defaults to 5 MiB when unset) and
-  `MAX_USER_STORAGE_BYTES` (cumulative per-user cap across documents and files
-  together; defaults to 50 MiB when unset)
+- if `CORS_ALLOWED_ORIGINS` is unset, the API falls back to
+  `DEFAULT_API_CORS_ALLOWED_ORIGINS` in `apps/api/src/config.ts`, which includes
+  local development origins — set it explicitly in production
 
 ## Auto-updates from `main`
 
 Enable automatic Dokploy redeploys from the repository `main` branch for all
-four services, using service-specific watch paths. This avoids rebuilding every
+every service, using service-specific watch paths. This avoids rebuilding every
 service for an unrelated monorepo change while still rebuilding when its image
 inputs change.
 
@@ -272,6 +272,7 @@ Each live app owns the canonical list for its Dokploy service:
 - `apps/api/README.md`
 - `apps/cflop/README.md`
 - `apps/auth/README.md`
+- `apps/admin/README.md`
 
 Copy each list exactly into that service's Dokploy watch-path configuration.
 The lists include the app directory, directly imported workspace packages,
@@ -313,7 +314,7 @@ two disagree.
 > HTTP 500 to GitHub. `push`, `opened`, and `closed` deliveries return 200.
 >
 > The credentials are **not** actually missing: the same provider record clones
-> fine for all four production Compose services, and `authGithub` succeeds
+> fine for every production Compose service, and `authGithub` succeeds
 > earlier in that very request — it is what emits the SECURITY line. A second
 > provider lookup later in the preview path resolves to nothing. Ruled out by
 > testing: webhook signature, `previewWildcard` format (the `*.` prefix is
@@ -321,12 +322,12 @@ two disagree.
 > git-provider ownership/sharing.
 >
 > Do **not** "fix" this by recreating the GitHub provider — that would re-point
-> all four production services for no reason. Next step is a Dokploy upgrade
+> every production service for no reason. Next step is a Dokploy upgrade
 > past v0.29.13 and, failing that, an upstream bug report.
 
 ### Previews need Application services, not the existing Compose apps
 
-The four `infra/docker/*-compose.yaml` files run as Dokploy **Compose** apps,
+The `infra/docker/*-compose.yaml` files run as Dokploy **Compose** apps,
 and Dokploy has no preview support for that service type: all thirteen
 `preview*` columns live on `applications`, and `compose` has none of them.
 This is not a configuration gap that can be filled in — the fields do not
@@ -348,7 +349,7 @@ Defaults quoted verbatim from the schema (see the verification note above).
 
 | Setting | Dokploy default | Needs to be | Why |
 | --- | --- | --- | --- |
-| `previewPort` | `.default(3000)` | `8080` | Both previewable images serve on 8080 (`listen 8080` in all three `nginx.conf` files). Leaving the default produces a domain that resolves and then dead-ends. |
+| `previewPort` | `.default(3000)` | `8080` | Both previewable images serve on 8080 (`listen 8080` in every `apps/*/nginx.conf`). Leaving the default produces a domain that resolves and then dead-ends. |
 | `previewHttps` | `.notNull().default(false)` | `true` | An `http://` preview origin is rejected by the API's CORS rule — every entry in `DEFAULT_API_CORS_ALLOWED_ORIGINS` (`apps/api/src/config.ts:5`) is scheme-qualified `https://` for the public domains. With HTTPS on, the existing `https://*.unimatrix-01.dev` entry already matches preview hosts, so no repo change is needed. |
 | `previewCertificateType` | `.notNull().default("none")` | issue certs | TLS is not automatic. Needs either per-host Let's Encrypt or a wildcard cert covering the preview domain. |
 | `isPreviewDeploymentsActive` | `.default(false)` | `true` | Off until switched on per application. |
@@ -529,11 +530,3 @@ request.
   `VITE_API_BASE_URL` baked into the bundle): the compose files pass these through
   as `${VAR}` build args, so they must be set in the Dokploy service's environment
   before the build runs — Vite inlines them at build time, not runtime.
-- **New service has no compose file / app on the deploy branch**: `apps/auth` and
-  `infra/docker/auth-compose.yaml` only exist once the auth feature branch is
-  merged to `main`. Point the service at the feature branch to deploy before merge.
-
-## Related docs
-
-- `infra/docker/README.md`: Dockerfiles, Compose, and manual container workflow
-- `infra/deployment/README.md`: Dokploy plus Traefik production guidance

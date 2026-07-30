@@ -4,9 +4,9 @@ The administration console is a Vite SPA built from `apps/admin/Dockerfile`
 and served by nginx on port 8080, matching the other three static apps.
 
 It is scaffold-only today: one placeholder route on `@unimatrix/chrome`'s tool
-shell. The compose file, the Dokploy service, the `admin.unimatrix-01.dev`
-domain entry and the Cloudflare Access application in front of it are separate
-work and are **not** in this directory.
+shell. It is nonetheless deployed and reachable: `infra/docker/admin-compose.yaml`
+is the Dokploy Compose file, and `admin.unimatrix-01.dev` sits behind Cloudflare
+Access, which is what makes the ungated placeholder route safe.
 
 ## Build arguments
 
