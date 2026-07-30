@@ -11,6 +11,17 @@
           }
         ]
       }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PROJECT_DIR:-.}/infra/scripts/problem-solving-reminder.sh\"",
+            "timeout": 10
+          }
+        ]
+      }
     ]
   }
 }
