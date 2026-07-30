@@ -50,7 +50,9 @@ while hand-written ones gave about +4%. Their conclusion was to carry only indis
 operational constraints and skip architectural overviews.
 
 So: put gotchas in `AGENTS.md`, push detail into a skill that loads when it is relevant, and
-resist the urge to make any one file the place where everything lives.
+resist the urge to make any one file the place where everything lives. `/doctor` proposes trims
+for a checked-in `CLAUDE.md`, cutting what is derivable from the codebase and keeping pitfalls and
+rationale (Claude Code 2.1.206+).
 
 ## Structure
 
