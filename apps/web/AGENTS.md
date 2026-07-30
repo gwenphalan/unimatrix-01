@@ -1,7 +1,7 @@
 # AGENTS.md
 
 ## 1. Overview
-`apps/web` is the Vite + React public site for Unimatrix. It renders repo-backed content through TanStack Router while keeping public-site composition separate from shared UI primitives.
+`apps/web` is the Vite + React public site for Unimatrix. Blog and project content is fetched from the API at runtime; `content/home/index.md` is the only file compiled into the bundle. Public-site composition stays separate from shared UI primitives.
 
 ## 2. Folder Structure
 - `src/app`: `router.tsx` (router creation), `app-shell.tsx` (shell layout), `auth-boundary.tsx` (Clerk-gated route wrapper), `providers.tsx` (provider wiring).
@@ -18,10 +18,10 @@
 
 ## 3. Core Behaviors & Patterns
 - **Route composition**: Each route keeps data loading in the non-lazy file (`index.tsx`, `blog.tsx`, `projects_.$slug.tsx`) and renders UI from the matching lazy file. `routeTree.gen.ts` is generated and should not become a hand-edited source of truth.
-- **Shared UI boundary**: App code consumes shared primitives from `@unimatrix/ui/public`, while `src/features/public-site/components.tsx` owns public-site-specific compositions such as `PublicPageContainer`, `PublicSiteFooter`, `PublicSectionHeading`, `PublicDecisionCard`, and `PublicProjectLedgerItem`.
-- **Package aliasing**: `vite.config.ts` resolves `@unimatrix/content`, `@unimatrix/shared`, `@unimatrix/auth/react`, and `@unimatrix/ui/public` straight to those packages' source, so they are real build inputs even though only `api-client`, `auth`, and `ui` appear as direct `package.json` dependencies.
+- **Shared UI boundary**: App code consumes shared primitives from `@unimatrix/ui/public`, while `src/features/public-site/components.tsx` owns public-site-specific compositions such as `PublicSectionHeading`, `PublicDecisionCard`, and `PublicProjectLedgerItem`.
+- **Package aliasing**: `vite.config.ts` resolves `@unimatrix/content`, `@unimatrix/shared`, `@unimatrix/auth/react`, and `@unimatrix/ui/public` straight to those packages' source, so they are real build inputs.
 - **Auth gating**: `src/app/auth-boundary.tsx` only mounts Clerk's `AuthProvider` (skipped entirely when auth is disabled); `src/features/auth/require-auth.tsx` is the actual signed-in-only route gate (redirect-if-signed-out, render-if-signed-in), not yet applied to any route. Sign-in itself redirects to the separate `apps/auth` hub via `VITE_AUTH_APP_URL`, not an in-app flow.
-- **Content loading**: Repo-backed content is imported through the explicit registry in `src/features/content/site-content.ts`. Adding project or blog markdown requires updating that registry so tests and route loaders stay aligned.
+- **Content loading**: Blog and project entries are fetched at runtime from the API (`src/features/content/queries`). `src/features/content/site-content.ts` holds only the home/about singleton, the one file still compiled into the bundle. That registry so tests and route loaders stay aligned.
 - **Safe markdown rendering**: Route components use `LazyPublicMarkdown` plus `renderPublicMarkdownInternalLink` to render authored markdown. Raw HTML and runtime MDX stay disabled; safe GFM rendering lives in `@unimatrix/ui`.
 - **Testing split**: Behavior-heavy UI and content rules live under `test/`, while a minimal smoke path for the running site lives under `e2e/public-site.smoke.spec.ts`.
 

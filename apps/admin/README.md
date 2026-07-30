@@ -10,9 +10,8 @@ Access, which is what makes the ungated placeholder route safe.
 
 ## Build arguments
 
-Vite inlines `import.meta.env.VITE_*` at build time, so all three must be
-present when the image is built — setting them on the running container does
-nothing.
+Vite inlines `import.meta.env.VITE_*` at build time, so these are build args
+rather than runtime env — setting them on the running container does nothing.
 
 | Build arg                     | Required | Default                          |
 | ----------------------------- | -------- | -------------------------------- |
@@ -27,6 +26,7 @@ to any of them can change the built browser bundle or its container:
 
 ```text
 apps/admin/**
+packages/app-config/**
 packages/auth/**
 packages/chrome/**
 packages/config-typescript/**
