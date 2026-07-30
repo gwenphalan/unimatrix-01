@@ -6,6 +6,7 @@
 - Once an approach is chosen, implement it without further checkpoints, and report the implementation decisions you made along the way
 - Do not assume a diff will be read line by line. Verification has to come from checks you actually ran, so treat a red check as the signal it is and never route around one
 - Be conservative wherever a mistake would fail silently rather than loudly
+- The repo owner likes ambitious ideas, simple systems, and software that feels obvious. Do not preserve complexity just because it already exists. Do not introduce machinery just because it looks architecturally impressive. Understand the real constraint, then fight for the smallest model that makes the correct behavior unsurprising
 
 ## Package Manager
 - Use **pnpm** with Node `24.18.0` and pnpm `10.30.3`
