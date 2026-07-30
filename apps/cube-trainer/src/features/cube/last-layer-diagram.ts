@@ -100,12 +100,19 @@ export function derivePllCornerDiagram(cube: FaceletCube): CornerDiagram {
   return buildCornerDiagram(cube, colorSticker);
 }
 
+/**
+ * The standard scheme as seen from this app's fixed last-layer viewpoint: yellow U, green F,
+ * white D, blue B. That orientation is the whole constraint on L/R - a cube held white-up
+ * green-front has red on the right, so flipping it to yellow-up green-front (a half turn about
+ * the F-B axis) swaps both U/D and L/R, putting orange on the right and red on the left.
+ * Getting this pair backwards renders a mirror-image cube, which nothing but an eye catches.
+ */
 export const DIAGRAM_PALETTE: Record<FaceLetter, string> = {
   B: "#3b82f6",
   D: "#f8fafc",
   F: "#22c55e",
-  L: "#f97316",
-  R: "#ef4444",
+  L: "#ef4444",
+  R: "#f97316",
   U: "#eab308",
 };
 

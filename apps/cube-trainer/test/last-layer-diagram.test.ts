@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { applyMoves } from "@/features/cube/engine";
 import {
+  DIAGRAM_PALETTE,
   deriveOllDiagram,
   derivePllDiagram,
   diagramStickerColor,
@@ -49,6 +50,21 @@ describe("derivePllDiagram", () => {
     );
 
     expect(frontColors.size).toBeGreaterThan(1);
+  });
+});
+
+describe("DIAGRAM_PALETTE", () => {
+  it("matches the standard scheme held yellow-up with green in front", () => {
+    // Pinned rather than merely "six distinct colors": L/R are the one pair a mirrored
+    // scheme gets wrong, and swapping them is invisible to every other check in the suite.
+    expect(DIAGRAM_PALETTE).toEqual({
+      B: "#3b82f6", // blue
+      D: "#f8fafc", // white
+      F: "#22c55e", // green
+      L: "#ef4444", // red
+      R: "#f97316", // orange
+      U: "#eab308", // yellow
+    });
   });
 });
 
