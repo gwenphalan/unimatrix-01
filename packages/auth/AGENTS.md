@@ -23,5 +23,3 @@
 - **Types**: Keep the permission scheme's exported types (`AppSlug`, `Role`, `UserPermissionsMetadata`, `SessionPermissionsClaim`) as the canonical shapes; don't redefine permission shapes locally in consuming apps.
 - **Structure**: Add new framework-agnostic permission logic to `src/permissions.ts`; add new Fastify-specific behavior to `src/server.ts`; add new React-specific behavior to `src/react.tsx`. Don't collapse the three entry points into one file.
 
-## 5. Working Agreements
-- Follow the shared repo working agreements in the root `AGENTS.md`; this file only adds `packages/auth` structure, patterns, and conventions.

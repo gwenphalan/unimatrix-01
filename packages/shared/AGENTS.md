@@ -19,5 +19,3 @@
 - **Structure**: Add new shared concerns under `src/contracts` or `src/schemas` with barrel exports, rather than flattening everything into `src/index.ts`.
 - **Types**: Prefer exported named types such as `ApiContractResponse<T>` and `HealthResponse` over anonymous inline shapes at package boundaries.
 
-## 5. Working Agreements
-- Follow the shared repo working agreements in the root `AGENTS.md`; this file only adds `packages/shared` structure, patterns, and conventions.

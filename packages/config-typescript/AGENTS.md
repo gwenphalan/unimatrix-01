@@ -19,5 +19,3 @@
 - **Extends flow**: Downstream `tsconfig.json` files should extend one of these presets, then add only local include paths, path aliases, or emit behavior that the preset cannot know.
 - **Change discipline**: Tighten or relax compiler behavior here only when the change is intended for multiple workspaces, because every consumer inherits the preset exports.
 
-## 5. Working Agreements
-- Follow the shared repo working agreements in the root `AGENTS.md`; this file only adds `packages/config-typescript` structure, patterns, and conventions.

@@ -15,7 +15,7 @@
 - `src/lib/preview-mode-storage.ts`: Zod-validated `localStorage` read/write for the diagram preview mode. Keyed by view (`learn`/`drill`), not by case or algorithm set.
 - `src/routes`: file-based route loaders and lazy route components; keep paired `*.ts(x)` and `*.lazy.tsx` files aligned. Routes are `/` (Learn-vs-Drill chooser), `/learn`, and `/drill`. `routeTree.gen.ts` is generated and should not become a hand-edited source of truth.
 - `src/styles.css`: app-specific presentation layered on top of `@unimatrix/ui/styles.css`.
-- `test`: Vitest coverage for algorithm data integrity (`algorithm-sets.test.ts`), the cube engine (`cube-engine.test.ts`), last-layer diagram derivation (`last-layer-diagram.test.ts`), two-sided diagram derivation and its screen geometry (`corner-diagram.test.ts`, `corner-projection.test.ts`), preview modes and their storage (`preview-mode.test.ts`), learn case ordering, drill case setup/selection (`case-setup.test.ts`, `pick-next-case.test.ts`), pool storage, progress storage, and the pre-rebrand key fallback (`local-storage.test.ts`, which asserts against literal key strings on purpose — a test that only round-trips through the writers passes just as happily with the fallback deleted).
+- `test`: Vitest. `local-storage.test.ts` asserts against literal key strings on purpose — a test that only round-trips through the writers passes just as happily with the `cube-trainer:` fallback deleted.
 - `e2e`: Playwright smoke coverage for the running app.
 
 ## 3. Core Behaviors & Patterns
@@ -30,10 +30,7 @@
 - **Fully keyboard-driven**: Drill uses Space to advance to the next drill case; Learn uses ArrowLeft/ArrowRight to move back/forward through the teaching order and Space to mark the current case learned (or unmark it, when the case is pinned — see above). Neither panel has on-screen "Next"/"Back"/"Got it" buttons, and Learn's key hints render only for keys that would actually do something.
 
 ## 4. Conventions
-- **Route files**: Use TanStack Router file naming (`learn.tsx` + `learn.lazy.tsx`, `drill.tsx` + `drill.lazy.tsx`, etc.), matching `apps/web`.
+- **Route files**: paired non-lazy/`*.lazy.tsx`, as in `apps/web`.
 - **Imports**: Group external imports first, then `@/` aliases, then relative imports. Prefer `@unimatrix/ui/public` over the full `@unimatrix/ui` surface.
 - **Naming**: Components use `PascalCase`; helpers and data modules use `camelCase` exports from kebab-case files.
-- **No backend/API dependency**: this app intentionally does not depend on `@unimatrix/api-client`, `@unimatrix/shared`, `@unimatrix/content`, or `@tanstack/react-query` — keep it that way unless a real server-backed feature (e.g. cross-device sync) is added.
 
-## 5. Working Agreements
-- Follow the shared repo working agreements in the root `AGENTS.md`; this file only adds `apps/cflop` structure, patterns, and conventions.

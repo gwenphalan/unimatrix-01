@@ -9,10 +9,8 @@
 - `src/features/auth`: `safe-redirect.ts` — the open-redirect allowlist for the inbound `redirect_url` param.
 - `src/routes`: file-based routes with paired `*.tsx` (route data / `validateSearch`) and `*.lazy.tsx` (components): `index` (sign-in/up card, or redirect to `/account` when signed in), `sign-in`, `sign-up`, `account`. `routeTree.gen.ts` is generated — never hand-edit it.
 - `src/styles.css`: app presentation layered on `@unimatrix/ui/styles.css`.
-- `test`: Vitest coverage (config validation, redirect allowlist).
 
 ## 3. Core Behaviors & Patterns
-- **Consume Clerk only via `@unimatrix/auth/react`** (`AuthProvider`, `usePermissions`, `SignIn`, `SignUp`, `UserProfile`, `UserButton`, `RedirectToSignIn`, etc.) — never import `@clerk/clerk-react` directly.
 - **Session token, not templates**: the `permissions` claim rides the session token via Clerk's session-token customization (see `packages/auth/README.md`). This app mints no API client of its own.
 - **Redirect-back is validated**: `/sign-in` and `/sign-up` read an inbound `redirect_url`, pass it to Clerk's `forceRedirectUrl`, but only after `safeRedirectUrl` confirms it is a `*.unimatrix-01.dev` (https) or localhost origin — otherwise it falls back to the auth landing. Never widen this allowlist without care.
 - **Clerk component routing** uses `routing="hash"` to keep sub-steps on one route without splat routes.
@@ -23,5 +21,3 @@
 - **Naming**: `PascalCase` components; `camelCase` helpers exported from kebab-case files.
 - **Dependencies**: the visible frame is `ToolShell` from `@unimatrix/chrome/tool` (see `src/app/app-shell.tsx`), so layout changes belong in `packages/chrome`, not here; Clerk comes only through `@unimatrix/auth`. `package.json` is the roster. It is not part of `pnpm dev` (run it with `pnpm --filter @unimatrix/auth-app dev`, port 5175). Tests are unit-only (no Playwright smoke — that would need live Clerk keys).
 
-## 5. Working Agreements
-- Follow the shared repo working agreements in the root `AGENTS.md`; this file only adds `apps/auth` structure, patterns, and conventions.

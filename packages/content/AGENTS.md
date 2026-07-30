@@ -23,5 +23,3 @@
 - **Types**: Keep frontmatter and document types explicit and collection-specific rather than collapsing them into generic record types.
 - **Structure**: Put collection-agnostic parsing helpers in `frontmatter.ts` and collection-specific shaping in `parsers.ts`; avoid mixing Node I/O into the pure parser files.
 
-## 5. Working Agreements
-- Follow the shared repo working agreements in the root `AGENTS.md`; this file only adds `packages/content` structure, patterns, and conventions.

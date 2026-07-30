@@ -5,7 +5,7 @@
 
 ## 2. Folder Structure
 - `src/app`: `router.tsx` (router creation), `app-shell.tsx` (shell layout), `auth-boundary.tsx` (Clerk-gated route wrapper), `providers.tsx` (provider wiring).
-- `src/features`: feature-local code grouped by concern.
+- `src/features`: feature-local code grouped by concern. The CMS is `src/features/admin`, gated by `useAdminAccess` rather than by `require-auth.tsx`.
   - `auth`: `require-auth.tsx` guards routes that need a signed-in user, redirecting to the auth app when needed.
   - `content`: registry wiring, markdown helpers, lookup utilities, and lazy markdown loading.
   - `public-site`: app-owned public compositions such as frames, cards, and section headings.
@@ -31,5 +31,3 @@
 - **Naming**: Components and types use `PascalCase`; public-site composition types and components are prefixed with `Public`. Helpers and config modules use `camelCase` exports from kebab-case or descriptive file names.
 - **Styling**: Keep shared tokens and primitives in `@unimatrix/ui/styles.css`; add site-only layout and markdown presentation in `src/styles.css` rather than back-porting public-site presentation into the shared package.
 
-## 5. Working Agreements
-- Follow the shared repo working agreements in the root `AGENTS.md`; this file only adds `apps/web` structure, patterns, and conventions.

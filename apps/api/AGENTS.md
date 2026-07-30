@@ -1,23 +1,22 @@
 # AGENTS.md
 
 ## 1. Overview
-`apps/api` is the Fastify API workspace for Unimatrix. It keeps runtime configuration, core HTTP plumbing, and route modules thin while reusing shared contracts and schemas from `@unimatrix/shared`.
+`apps/api` is the Fastify API workspace for Unimatrix.
 
 ## 2. Folder Structure
 - `src/app.ts`: Fastify construction, runtime config decoration, and global error and not-found handlers.
 - `src/server.ts`: process startup, signal handling, and server listen/shutdown flow.
 - `src/config.ts` and `src/env.ts`: runtime config loading and local env-file support.
-- `src/plugins`: cross-cutting Fastify setup for validation, observability, security, and CORS.
+- `src/plugins`: cross-cutting Fastify setup; `index.ts` is the current list and the registration order.
 - `src/modules`: route modules grouped by feature (`health`, `content`, `user-data`); `index.ts` registers the active modules.
 - `src/lib/http`: shared HTTP-layer helpers such as logging, validation, error normalization, and the inline-safe content-type allowlist.
-- `test`: Node test runner coverage for app construction, config, env loading, and the content and user-data stores and routes.
 
 ## 2a. Coverage Floor
 `pnpm test` here runs under `--experimental-test-coverage` with `--test-coverage-lines=92` and `--test-coverage-functions=89`. They sit deliberately ~3 points under the measurement rather than at it: V8 re-attributes functions between Node majors (see the first bullet below), and a floor set to the exact measured number turns the next runtime bump into a red required check for a reason that is not a regression. Run `pnpm --filter @unimatrix/api test` for where the workspace actually stands, and raise the flags — keeping that margin — when you have genuinely closed a gap. This is the same ratchet policy `@unimatrix/config-vitest` applies to the vitest workspaces — `apps/api` runs the Node test runner instead, so it expresses the policy through flags rather than that shared config. Branch coverage is reported but not gated, matching the shared config's reasoning.
 
 Four details are load-bearing:
 - **The measured number depends on the Node version.** These flags read V8's own coverage accounting, and V8 changes how it attributes functions between majors, so the same tree measures differently on a runtime bump. Lines rising while functions fall is the signature of re-attribution, not of code going unexecuted — check that before treating a drop as a regression.
-- `--test-coverage-include='src/**'` is required. Without it the report also counts `test/` and the `packages/*` sources the tests pull in, which inflated the aggregate from 81.61% to 89.44% and made the floor measure other workspaces' testing.
+- `--test-coverage-include='src/**'` is required. Without it the report also counts `test/` and the `packages/*` sources the tests pull in, so the floor measures other workspaces' testing.
 - Node reports **line %** where vitest reports **statements %**. The two numbers are not directly comparable.
 - `test/module-graph.test.ts` imports every `src/` module and is what keeps the denominator honest — Node only reports files the run loaded, so without it an untested new module is absent from the report entirely and the percentage rises as coverage falls. Read the comment in that file before changing it.
 
@@ -41,5 +40,3 @@ One such edit already happened, and the mechanism is worth knowing because it lo
 - **Structure**: Put reusable HTTP helpers under `src/lib/http`, cross-cutting Fastify bootstrapping under `src/plugins`, and feature routes under `src/modules/<feature>`.
 - **Types**: Prefer explicit exported interfaces and type aliases such as `ApiRuntimeConfig`, `ApiErrorEnvelope`, and `HealthResponse` instead of inferred anonymous shapes at module boundaries.
 
-## 5. Working Agreements
-- Follow the shared repo working agreements in the root `AGENTS.md`; this file only adds `apps/api` structure, patterns, and conventions.

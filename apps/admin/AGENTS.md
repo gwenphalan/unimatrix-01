@@ -15,7 +15,6 @@ It is a **tool** surface, not a content surface. The site header/nav-tabs/footer
 
 ## 3. Core Behaviors & Patterns
 - **The placeholder route is ungated on purpose.** `canAccessAdminSection` from `@unimatrix/auth` is the predicate every admin section will read, but nothing here has anything to guard yet, and a gate around an empty page is a control that looks present and is not. The gate lands with the first real section. The origin's actual protection is Cloudflare Access in front of it, which is deployment config rather than app code.
-- **Consume Clerk only via `@unimatrix/auth/react`** — never import `@clerk/clerk-react` directly.
 - **Runtime config travels through the router context, not a module singleton.** `loadAdminAppRuntimeConfig` throws on a missing Clerk key, so a module-level `router` would move that throw to import time and take down anything that merely imports it, tests included. `main.tsx` is the only file that reads `import.meta.env`.
 - **The three `@source` lines in `src/styles.css` are load-bearing.** Tailwind v4's source detection stops at the workspace boundary. Delete the `packages/chrome` line and the tool shell's utilities are never emitted: lint, tsc, unit tests and the production build all stay green while the layout collapses in a browser. `infra/scripts/check-app-wiring.sh` is the mechanical guard.
 - **`@tanstack/react-router` stays in `resolve.dedupe`** in both `vite.config.ts` and `vitest.config.ts`. `@unimatrix/chrome` declares it as a peer and resolves from its own directory; two copies means the shell's `useRouterState` reads a router context `RouterProvider` never wrote to. `infra/scripts/check-app-wiring.sh` guards the **`vite.config.ts`** one only — it never opens `vitest.config.ts`, so that copy is on you.
@@ -29,5 +28,3 @@ It is a **tool** surface, not a content surface. The site header/nav-tabs/footer
 - **Dependencies**: `@unimatrix/auth`, `@unimatrix/chrome`, `@unimatrix/ui`, `@tanstack/react-router`, `@remixicon/react`. Not part of `pnpm dev` — run it with `pnpm --filter @unimatrix/admin dev`, port 5176 (preview 4176).
 - **Coverage thresholds are this workspace's own**, in `vitest.config.ts`. Raise them by writing tests; never by editing the number down.
 
-## 5. Working Agreements
-- Follow the shared repo working agreements in the root `AGENTS.md`; this file only adds `apps/admin` structure, patterns, and conventions.

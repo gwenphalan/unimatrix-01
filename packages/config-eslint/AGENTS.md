@@ -21,5 +21,3 @@
 - **Exports**: Keep the public API small and explicit; this package exports the shared factories from `index.mjs` rather than a large tree of helper modules.
 - **Rule changes**: Adjust lint rules here only when the behavior should apply repo-wide, since all downstream workspaces inherit the shared factories.
 
-## 5. Working Agreements
-- Follow the shared repo working agreements in the root `AGENTS.md`; this file only adds `packages/config-eslint` structure, patterns, and conventions.

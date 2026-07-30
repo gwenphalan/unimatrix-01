@@ -22,5 +22,3 @@
 - **Imports**: Consume contracts and types from `@unimatrix/shared`, then keep local transport interfaces in `config.ts`; relative imports use explicit `.js` extensions.
 - **Tests**: Mock fetch behavior in `test/client.test.ts` and assert the client against shared contracts rather than hard-coded endpoint strings when possible.
 
-## 5. Working Agreements
-- Follow the shared repo working agreements in the root `AGENTS.md`; this file only adds `packages/api-client` structure, patterns, and conventions.
