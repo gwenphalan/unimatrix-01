@@ -1,6 +1,6 @@
 ---
 name: ship-pr
-description: Run a task end to end and ship it — commit in logical steps as you go, and once the owner confirms the work is in order, open a PR with a body a fresh reader can review from, ping CodeRabbit, fall back to a reviewer subagent if it is rate-limited, escalate to the owner for /code-review ultra when the change is security-sensitive, watch the required checks, triage findings, merge once genuinely green, and clear the originating .notes/issues todo entry. Invoked at the start of a session with either the task itself or a pointer to a .todo.md.
+description: Run a task end to end and ship it — commit in logical steps as you go, and once the owner confirms the work is in order, open a PR with a body a fresh reader can review from, ping CodeRabbit, fall back to a reviewer subagent if it is rate-limited, escalate to the owner for /code-review ultra when the change is large or security-sensitive, watch the required checks, triage findings, merge once genuinely green, and clear the originating .notes/issues todo entry. Invoked at the start of a session with either the task itself or a pointer to a .todo.md.
 ---
 
 # Ship a PR
@@ -97,23 +97,42 @@ what the change is, not by what is cheapest:
    and wait out the window, and do not merge with no review at all. Give the subagent the diff and
    the PR body — not your reasoning, which is the thing that would contaminate it. Say in the merge
    report that the review came from a subagent and why.
-3. **If the change is security-sensitive, stop and tell the owner to run `/code-review ultra`.** It
-   is user-triggered and billed and **you cannot launch it** — so this is a handoff, not a task.
+3. **For a large or security-sensitive change, hand off to the owner for `/code-review ultra`.** It
+   is user-triggered and billed and **you cannot launch it**, so this is a handoff, not a task.
 
-   Hand over something pasteable, never a description of what to type — a fenced block holding
-   `/code-review ultra <pr-number>` with the real number substituted in, never the placeholder. The
-   bare `/code-review ultra` reviews the current branch instead, which is the form to give when there
-   is no PR yet.
+   **`ultra` is not the default.** It spends a fleet of agents, and on an ordinary PR that cost buys
+   nothing CodeRabbit did not already give you. Reserve it for two cases:
 
-   State what you want looked at hardest directly under the block. Do not fold it into the command,
-   which takes a PR number and nothing else. The owner should be able to copy one line and hit enter;
-   anything they have to assemble themselves is friction on the one review step that cannot be
-   delegated.
+   - a **large** diff — many files, or a change spanning workspaces, where no single reader holds all
+     of it at once
+   - a **security-sensitive** one: auth or session handling, permission or role checks, the redirect
+     allowlist, request validation at an input boundary, secrets and env plumbing, upload or quota
+     limits, CI/CD and ruleset config, or the rendering of user-supplied content
 
-   Treat as security-sensitive: anything touching auth or session handling, permission or role
-   checks, the redirect allowlist, request validation at an input boundary, secrets and env
-   plumbing, upload or quota limits, CI/CD and ruleset config, or the rendering of user-supplied
-   content. When in doubt, escalate — the cost of asking is one message.
+   Neither of those is a judgement call you get to skip when unsure — escalate, the cost of asking is
+   one message. `/code-review` also takes cheaper levels (`low` through `max`) if a middle option
+   fits better than either extreme.
+
+   **The handoff is one pasteable line and nothing else:**
+
+   ````
+   ```
+   /code-review ultra <pr-number>
+   ```
+   ````
+
+   with the real number substituted in, never the placeholder. The bare `/code-review ultra` reviews
+   the current branch, which is the form to give when there is no PR yet.
+
+   **Do not write "look hardest at X" in the chat message.** The command's only argument is a PR
+   number — it cannot carry instructions, so anything you say in chat reaches the reviewer only if
+   the owner retypes it. Put the focus in the PR body instead, under a `## Review focus` heading,
+   because the body *is* the reviewer's input. Write it as claims to check, not as emphasis:
+
+   - "Confirm `<file>` still states X after the trim; nothing mechanical reads it."
+   - "Verify the guard fails closed when Y is absent — it was only tested passing."
+
+   not "pay attention to `<file>`", which tells a reviewer nothing it was not already going to do.
 
 A fresh session on the branch is a fine substitute for 2 when you have one available: same property,
 one model instead of a fleet.
@@ -245,7 +264,8 @@ comments are handled. Report what actually happened: which checks ran, who revie
 was raised and how each was resolved, and anything left undone.
 
 Name the reviewer in the report: CodeRabbit, a subagent because CodeRabbit was rate-limited, or
-`/code-review ultra` because the change was security-sensitive. If none of the three happened, say so
+`/code-review ultra` because the change was large or security-sensitive. If none of the three
+happened, say so
 outright rather than letting "checks green" stand in for "reviewed". Also say it if you spent a
 second CodeRabbit review, and why the findings were severe enough to earn it.
 
