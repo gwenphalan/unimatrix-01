@@ -19,7 +19,7 @@
 - `lab` (package `@unimatrix/lab`) is a **local-dev-only** UX prototyping harness: `pnpm --filter @unimatrix/lab dev` and nothing else — no build script, no Dockerfile, no domain, no CI `Images` entry. See `lab/AGENTS.md`
 - `packages/config-vitest` owns the coverage provider, reporters and exclusions, while each workspace supplies its own thresholds. Per-package rules for everything else are in Boundaries below
 - Reserved, not live: `apps/workers`, `content/docs`, `content/notes`, future packages like `packages/bmd-parser`. Never describe a reserved path as an active runtime surface
-- Nearest nested `AGENTS.md` overrides this file
+- Seventeen nested `AGENTS.md` files carry the per-directory detail and override this file where they overlap. **None of them load on their own** — only root `CLAUDE.md` (a symlink to this file) is injected, so open the nested file for the directory you are about to change. That is why anything a session needs *before* it opens a file has to be here
 
 ## File-Scoped Commands
 
@@ -106,7 +106,7 @@ Five packages sit deliberately below `latest`. Each has a reason that is not "we
 - Adding a Dockerfile means adding it to CI's `Images` matrix **and** to the required checks, or it is unverified
 - CodeRabbit is advisory and non-blocking: treat its comments as leads to verify against primary sources, never as conclusions to act on directly. **It is not a required check and must never gate a merge** — if it is late or rate-limited, merge on the required checks and take its findings as a follow-up PR. What a passing CodeRabbit check does *not* tell you is whether it ran: rate-limited runs report `pass` with the literal text `Review rate limited`, so confirm a real review before claiming one
 - **Ask for the CodeRabbit review; it does not run automatically** (`.coderabbit.yaml` sets `reviews.auto_review.enabled: false`). Comment `@coderabbitai review` **once per PR, when the diff is finished** — every run spends a per-developer rate-limit slot, and Pro Plus limits are adaptive, so sustained pinging makes them tighter. Batch fixes into one push before the ping. Spend a second review only when the first surfaced something severe (silent data loss, an auth hole, a correctness bug) *and* the fix for it is substantial enough to be unreviewed code in its own right; nitpicks never earn one. The limit comment's "Next review available in: N minutes" is not a live clock — it is rewritten only when CodeRabbit runs, so compute the reset as its `updated_at` plus that countdown rather than waiting for the text to change
-- Dependabot and CI mechanics — cooldowns, the `engines.node` trap that silently disabled npm updates, `minimumReleaseAge`, the `Images` matrix rationale — are in `.github/AGENTS.md`, which loads when you work in that directory. Read it before editing anything Dependabot or CI reads
+- Dependabot and CI mechanics — cooldowns, the `engines.node` trap that silently disabled npm updates, `minimumReleaseAge`, the `Images` matrix rationale — are in `.github/AGENTS.md`. Read it before editing anything Dependabot or CI reads — it will not appear on its own
 
 ## Git And PR Rules
 - Keep PRs small and issue-aligned; avoid unrelated scaffolding or setup churn
