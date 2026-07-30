@@ -5,13 +5,6 @@ current runtime surface. The repo-owned Dockerfiles and Compose workflow live
 under `infra/docker/`; this document covers how those artifacts map onto a
 production deployment.
 
-## Build artifacts
-
-- Web static output: `apps/web/dist/`
-- API Node runtime entry: `apps/api/dist/server.js`
-- CFLOP static output: `apps/cflop/dist/`
-- Auth app static output: `apps/auth/dist/`
-
 `vite preview` is useful for local smoke testing of the built web app, but it
 is not the production web server for `apps/web/dist/`,
 `apps/cflop/dist/`, or `apps/auth/dist/`.
@@ -36,9 +29,6 @@ In this shape:
 - the auth image is built with `VITE_API_BASE_URL=https://api.example.com` and
   `VITE_CLERK_PUBLISHABLE_KEY` for the shared Clerk application
 - Traefik owns TLS termination and hostname routing
-
-Same-origin deployment remains supported, but it is not the primary documented
-path for now.
 
 ## Dokploy service layout
 
@@ -220,8 +210,6 @@ to rewrite `/api` paths in the primary production setup.
 
 - `apps/web/.env.production.example` shows the checked-in separate-origin
   example: `https://api.unimatrix-01.dev`
-- if `omnimatrix.dev` becomes the public hostname later, replace that example
-  with the new public API origin
 - same-origin deployments can keep the default relative `/api` value, but that
   path is secondary to the separate-origin deployment described here
 
@@ -280,9 +268,6 @@ shared root pnpm manifests, and the service-specific Compose file. When an app
 adds a workspace dependency, new bundled content, or another Docker build
 input, update its README and Dokploy configuration in the same change.
 
-Traefik continues to route to the latest healthy service revision managed by
-Dokploy.
-
 ## Pull request preview deployments
 
 Previews are entirely Dokploy-side. **Nothing in this repository is required**
@@ -298,12 +283,10 @@ over the API returns `previewPort: 3000`, `previewHttps: false`,
 `previewCertificateType: "none"`, `previewLimit: 3`, and
 `isPreviewDeploymentsActive: false` on the fresh record.
 
-The two preview services described here now exist (`web-preview` and
-`cflop-preview`, in the `Unimatrix-01` project's `production`
-environment) and are configured as below. Their settings still live in
-Dokploy's database rather than in this repo, so this document describes intent
-and can drift from the instance — read the instance, not this file, when the
-two disagree.
+The `web-preview` and `cflop-preview` services live in the `Unimatrix-01`
+project's `production` environment, configured as below. Their settings live in
+Dokploy's database rather than in this repo, so this document describes intent —
+read the instance, not this file, when the two disagree.
 
 > **Previews do not currently work, and the cause is upstream.** The services
 > are configured correctly but no preview has ever built. On Dokploy v0.29.13,
@@ -510,12 +493,6 @@ Verify these URLs after each production rollout:
 Also verify that refreshing a deep route on the public site, cflop, or
 the auth app still renders the SPA instead of returning a proxy or
 static-host 404.
-
-## SPA routing
-
-The production web host must fall back to `index.html` for unknown application
-routes so the client-side router can resolve SPA paths after the initial
-request.
 
 ## Troubleshooting
 

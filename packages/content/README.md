@@ -8,56 +8,16 @@ This package stays intentionally small and focused on the current public-site do
 - `content/projects/*.md` for projects
 - `content/blog/*.md` for blog entries
 
-## Belongs here
-
-- content collection definitions
-- frontmatter schemas and validation helpers
-- repo-backed content loading utilities
-
-## Does not belong here
-
-- shared API contracts
-- transport-specific client code
-- UI rendering components
-
 ## Current API shape
 
 - collection metadata in `src/collections.ts`
 - pure parsing and validation helpers from the package root
 - repo-backed Node loaders from `@unimatrix/content/node`
 
-## Required frontmatter
-
-### Home
-
-- `title`
-- `intro`
-- `summary`
-
-### Projects
-
-- `title`
-- `slug`
-- `publishedAt`
-- `summary`
-- `status`
-- optional: `repoUrl`, `liveUrl`, `featured`
-
-### Blog
-
-- `title`
-- `slug`
-- `publishedAt`
-- `summary`
-- optional: `description`
-
-All current content files also require a markdown body after the frontmatter block.
-
 ## Validation behavior
 
 - invalid or missing fields throw a `ContentValidationError`
 - errors include the repo-relative file path and failing field name
-- current tests cover both valid parsing and invalid authored content
 - excerpt derivation stays plain-text even when authored markdown includes GFM features such as tables, task lists, links, images, and fenced code
 
 ## Public v1 scope boundary
@@ -68,17 +28,3 @@ All current content files also require a markdown body after the frontmatter blo
 - `apps/web/src/features/content/site-content.ts` raw-imports `content/home/index.md` and nothing else
 - `apps/web/test/content-registry.test.ts` keeps blog and project markdown *out* of the web bundle; a `?raw` import would be a second, silently stale source of truth beside the content database
 
-## Commands
-
-- `pnpm --filter @unimatrix/content lint`
-- `pnpm --filter @unimatrix/content typecheck`
-- `pnpm --filter @unimatrix/content test`
-- `pnpm --filter @unimatrix/content build`
-
-## Deferred work
-
-- docs and notes collections
-- raw HTML rendering and executable MDX
-- Borg Markdown as a future safe parser and rendering layer
-
-The public site renders authored content with safe GFM, but that renderer belongs in `@unimatrix/ui`, not this package. `@unimatrix/content` continues to own typed contracts, validation, and repo-backed loading only.
