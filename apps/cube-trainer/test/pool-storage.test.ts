@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { isCaseEnabled, readCasePool, setCaseEnabled, setCasesEnabled } from "@/lib/pool-storage";
 
@@ -27,9 +27,24 @@ describe("pool storage", () => {
 
   it("applies a bulk change in one write, merging with what was already stored", () => {
     setCaseEnabled("oll", "oll-1", false);
+
+    // The "one write" half of the claim, not just the merge: spying after the setup call means
+    // only the bulk change is counted. A per-case loop would show one write per id.
+    const setItem = vi.spyOn(Storage.prototype, "setItem");
+
     setCasesEnabled("oll", { "oll-2": false, "oll-3": true });
 
+    expect(setItem).toHaveBeenCalledTimes(1);
     expect(readCasePool("oll")).toEqual({ "oll-1": false, "oll-2": false, "oll-3": true });
+
+    setItem.mockRestore();
+  });
+
+  it("refuses to persist a malformed record rather than storing something reads discard", () => {
+    const badChanges = { "oll-1": "yes" } as unknown as Record<string, boolean>;
+
+    expect(() => setCasesEnabled("oll", badChanges)).toThrow();
+    expect(readCasePool("oll")).toEqual({});
   });
 
   it("lets a bulk change overwrite an existing entry", () => {

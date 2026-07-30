@@ -47,8 +47,16 @@ export function readCasePool(setId: AlgorithmSetId): CasePool {
   return parsed.success ? parsed.data : {};
 }
 
+/**
+ * Validates on the way out as well as the way in, so every writer - single, bulk, or whatever
+ * comes next - shares one guarantee about what can reach storage. It throws rather than
+ * silently dropping the write: a typed caller cannot produce a bad record, so reaching this is
+ * a bug in the caller, and a swallowed write would leave React state and `localStorage`
+ * disagreeing with nothing to show for it. Environment failures (quota, private browsing) are a
+ * different thing and stay swallowed in `writeLocalStorage`.
+ */
 function writeCasePool(setId: AlgorithmSetId, pool: CasePool): void {
-  writeLocalStorage(storageKey(setId), JSON.stringify(pool));
+  writeLocalStorage(storageKey(setId), JSON.stringify(casePoolSchema.parse(pool)));
 }
 
 export function setCaseEnabled(setId: AlgorithmSetId, caseId: string, enabled: boolean): CasePool {
