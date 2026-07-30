@@ -50,8 +50,7 @@ Thumbs.db
 .claude/
 
 # issue workflow artifacts
-.issues/
-.issues/*.md
+.notes/
 
 # design-sync (claude.ai/design)
 .ds-sync/

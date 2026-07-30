@@ -173,7 +173,7 @@ locally.
 - Runs `pnpm test`
 
 Keep ad-hoc browser screenshots and other debug artifacts in ignored
-`.issues/` scratch space, or leave them uncommitted instead of placing them
+`.notes/` scratch space, or leave them uncommitted instead of placing them
 in the repo root.
 
 ## Database workflow
