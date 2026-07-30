@@ -111,7 +111,9 @@ what the change is, not by what is cheapest:
 
    Neither of those is a judgement call you get to skip when unsure — escalate, the cost of asking is
    one message. `/code-review` also takes cheaper levels (`low` through `max`) if a middle option
-   fits better than either extreme.
+   fits better than either extreme, and `/review` is the local alternative that spends nothing in the
+   cloud. Adding `--fix` makes the cloud review apply its own findings locally — offer it only when
+   the owner wants the fixes taken on trust, since it removes the step where you check each one.
 
    **The handoff is one pasteable line and nothing else:**
 
@@ -265,8 +267,7 @@ was raised and how each was resolved, and anything left undone.
 
 Name the reviewer in the report: CodeRabbit, a subagent because CodeRabbit was rate-limited, or
 `/code-review ultra` because the change was large or security-sensitive. If none of the three
-happened, say so
-outright rather than letting "checks green" stand in for "reviewed". Also say it if you spent a
+happened, say so outright rather than letting "checks green" stand in for "reviewed". Also say it if you spent a
 second CodeRabbit review, and why the findings were severe enough to earn it.
 
 Merge on the **required** checks. Do not hold a green PR waiting on an advisory review that is
