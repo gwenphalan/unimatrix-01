@@ -1,6 +1,6 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { isCaseEnabled, readCasePool, setCaseEnabled } from "@/lib/pool-storage";
+import { isCaseEnabled, readCasePool, setCaseEnabled, setCasesEnabled } from "@/lib/pool-storage";
 
 describe("pool storage", () => {
   beforeEach(() => {
@@ -23,6 +23,46 @@ describe("pool storage", () => {
 
     expect(readCasePool("oll")).toEqual({ "oll-1": false });
     expect(readCasePool("pll")).toEqual({ "pll-ua": false });
+  });
+
+  it("applies a bulk change in one write, merging with what was already stored", () => {
+    setCaseEnabled("oll", "oll-1", false);
+
+    // The "one write" half of the claim, not just the merge: spying after the setup call means
+    // only the bulk change is counted. A per-case loop would show one write per id.
+    const setItem = vi.spyOn(Storage.prototype, "setItem");
+
+    setCasesEnabled("oll", { "oll-2": false, "oll-3": true });
+
+    expect(setItem).toHaveBeenCalledTimes(1);
+    expect(readCasePool("oll")).toEqual({ "oll-1": false, "oll-2": false, "oll-3": true });
+    // Restored by the shared `afterEach` in `test/setup.ts`, so a failure above cannot leak it.
+  });
+
+  it("refuses to persist a malformed record rather than storing something reads discard", () => {
+    const badChanges = { "oll-1": "yes" } as unknown as Record<string, boolean>;
+
+    expect(() => setCasesEnabled("oll", badChanges)).toThrow();
+    expect(readCasePool("oll")).toEqual({});
+  });
+
+  it("rejects a missing change set instead of spreading it into a silent no-op", () => {
+    setCaseEnabled("oll", "oll-1", false);
+
+    // `{ ...pool, ...null }` is a no-op, so without parsing `changes` this would rewrite the
+    // pool unchanged and report success - the one failure mode the merged-result check cannot see.
+    for (const bad of [null, undefined]) {
+      expect(() => setCasesEnabled("oll", bad as unknown as Record<string, boolean>)).toThrow();
+    }
+
+    expect(readCasePool("oll")).toEqual({ "oll-1": false });
+  });
+
+  it("lets a bulk change overwrite an existing entry", () => {
+    setCaseEnabled("oll", "oll-1", false);
+    setCasesEnabled("oll", { "oll-1": true });
+
+    expect(readCasePool("oll")).toEqual({ "oll-1": true });
   });
 
   it("discards malformed stored data instead of throwing", () => {
