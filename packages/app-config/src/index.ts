@@ -8,8 +8,7 @@ import { z } from "zod";
  * The field builders exist because the validation rules are identical across
  * apps while the *shapes* legitimately differ (web's Clerk key is optional,
  * admin has an auth-hub URL, auth has neither). Each app composes its own
- * schema from these builders in its `src/lib/config.ts`; what lives here is
- * everything that used to be copied verbatim between those files.
+ * schema from these builders in its `src/lib/config.ts`.
  *
  * Every builder reports failures with the exact message format the app-local
  * validators used, so the apps' existing config tests keep asserting the same

@@ -50,13 +50,8 @@ repository-wide convention.
 ## Security headers
 
 `nginx.conf` ships a deliberately tighter policy than `apps/web` — this app
-renders no user-authored markdown, so it needs less room:
-
-```text
-Content-Security-Policy: frame-ancestors 'self'; base-uri 'none'; object-src 'none'; form-action 'self'
-X-Content-Type-Options: nosniff
-Referrer-Policy: strict-origin-when-cross-origin
-```
+renders no user-authored markdown, so it needs less room. Its `add_header`
+lines are the policy the app actually sends.
 
 `default-src`, `script-src` and `connect-src` are absent on purpose. Clerk
 loads `clerk.browser.js` from its frontend-API host and avatars from

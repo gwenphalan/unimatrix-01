@@ -13,28 +13,9 @@ Browser-side per-user data store for the Unimatrix monorepo. A `UserStore` is bo
 
 ## The store interface
 
-```ts
-interface UserSettingsStore {
-  get<T = unknown>(key: string): Promise<T | undefined>; // undefined when missing, never throws for "missing"
-  set<T = unknown>(key: string, value: T): Promise<void>;
-  delete(key: string): Promise<void>;
-  list(): Promise<Array<{ key: string; value: unknown }>>;
-}
+`src/types.ts` holds the interfaces both adapters implement: `UserStore` (`mode` plus `settings` and `files`), `UserSettingsStore` (JSON documents) and `UserFilesStore` (blobs).
 
-interface UserFilesStore {
-  upload(key: string, file: Blob, options?: { contentType?: string }): Promise<UserFileMetadata>;
-  getBlob(key: string): Promise<Blob | undefined>;
-  getObjectUrl(key: string): Promise<string | undefined>; // convenience over getBlob
-  list(): Promise<UserFileMetadata[]>;
-  delete(key: string): Promise<void>;
-}
-
-interface UserStore {
-  readonly mode: "account" | "guest";
-  settings: UserSettingsStore;
-  files: UserFilesStore;
-}
-```
+A missing document or file resolves `undefined` in both modes rather than throwing — a read miss is never an error path.
 
 Every `namespace` (validated once, at store creation) and `key` (validated on every call) is checked against `@unimatrix/shared`'s `dataNamespaceSchema`/`dataKeySchema` — both adapters throw the same error for the same malformed input, so a service can't accidentally rely on mode-specific validation quirks.
 
@@ -46,20 +27,9 @@ Every `namespace` (validated once, at store creation) and `key` (validated on ev
 - **`createGuestUserStore({ namespace })`** — browser-only, no network. Backed by one shared IndexedDB database (`unimatrix-user-data`) with `documents` and `files` object stores, both keyed by `[namespace, key]`. Files are stored as native `Blob`s. No auth, no server round-trip.
 - **`createUserStore(options)`** — single entry point; pass `{ mode: "account", ... }` or `{ mode: "guest", ... }` and it dispatches to the matching adapter.
 
-Files are SQLite-blob-backed on the server today (see `apps/api`'s `/me/files` implementation) — that's an implementation detail of the account adapter, not something this package's callers need to know, and it's swappable later without changing this package's interface.
-
 ## `useUserStore` (React)
 
-```ts
-function useUserStore(
-  namespace: string,
-  options?: { allowGuest?: boolean; baseUrl?: string },
-): {
-  mode: "account" | "guest" | "unauthenticated";
-  store: UserStore | null;
-  isReady: boolean;
-};
-```
+`useUserStore(namespace, options?)` returns `{ mode, store, isReady }`; `src/react.tsx` holds the signature and the options it accepts.
 
 - Signed in -> `{ mode: "account", store, isReady: true }` (token from `useAuth().getToken`, the plain session token, no template).
 - Signed out, `allowGuest` (default `true`) -> `{ mode: "guest", store, isReady: true }`.
@@ -96,21 +66,7 @@ function AvatarSettings() {
 
 ## Guest -> account migration
 
-```ts
-function migrateGuestDataToAccount(args: {
-  namespace: string;
-  account: UserStore; // must have mode "account"
-  guest: UserStore; // must have mode "guest"
-  options?: { conflictPolicy?: "skip-existing" | "overwrite"; clearGuestAfter?: boolean };
-}): Promise<{
-  documentsMigrated: number;
-  documentsSkipped: number;
-  filesMigrated: number;
-  filesSkipped: number;
-}>;
-```
-
-Copies every guest document and file for `namespace` up to the account store. **Default `conflictPolicy` is `"skip-existing"`** — a key already present on the account is left untouched; pass `"overwrite"` to clobber it instead. `clearGuestAfter` (default `false`) deletes the migrated guest data afterward. It's pure-ish over the two `UserStore` interfaces, so it's testable against fakes without touching a real backend or IndexedDB.
+`migrateGuestDataToAccount({ namespace, account, guest, options })` copies every guest document and file for `namespace` up to the account store, resolving a summary of migrated/skipped counts; it throws if either store's `mode` does not match its argument name. `src/migration.ts` holds the signature. **Default `conflictPolicy` is `"skip-existing"`** — a key already present on the account is left untouched; pass `"overwrite"` to clobber it instead. `clearGuestAfter` (default `false`) deletes the migrated guest data afterward. It's pure-ish over the two `UserStore` interfaces, so it's testable against fakes without touching a real backend or IndexedDB.
 
 `useGuestDataMigration(namespace, options?)` wraps this for React: it is **opt-in** (never called implicitly by `useUserStore`) — a service mounts it deliberately, typically once near the root of a feature that wants guest data carried over on sign-in:
 

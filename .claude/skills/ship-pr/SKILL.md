@@ -41,10 +41,8 @@ A PR opened red wastes a CI cycle and buries the real signal.
 
 **If the change touches `apps/web`, `apps/cflop`, `apps/auth`, `apps/admin`,
 `packages/ui` or `packages/chrome`,
-it must be live-tested in a real browser before the PR is opened.** Launch Chromium if none is
-running. This is not optional and no automated check substitutes for it — the failure modes it
-catches (Tailwind `@source` not reaching a sibling package, two resolved copies of
-`@tanstack/react-router`) leave lint, typecheck, unit and smoke suites all green.
+it must be live-tested in a real browser before the PR is opened**, not after CI goes green. Launch
+Chromium if none is running.
 
 ## Opening it
 
@@ -118,9 +116,8 @@ independence of *context*, and only CodeRabbit and `/code-review ultra` supply t
 
 ## Watching the checks
 
-The required checks on `main` are `Verify`, the **five** `Images (admin|api|auth|cflop|web)`,
-`Review dependency changes`, `Analyze`, and `CodeQL`. All must report before merge is possible.
-Read them from the ruleset rather than from memory if it matters:
+Every required check on `main` must report before merge is possible. Read the list from the ruleset
+rather than from memory:
 
 ```
 gh api repos/<owner>/<repo>/rulesets/<id> \
@@ -150,11 +147,10 @@ re-running.
 CodeRabbit is **advisory and non-blocking**, and it is **not a required check** — it must never gate
 a merge. Its comments are leads to verify against primary sources, never conclusions to act on.
 
-It is the **first** reviewer you reach for — a *different tool* with different blind spots — but
-"non-blocking" still holds: if it is late or rate-limited, take the subagent fallback above and merge
-on the required checks rather than waiting the window out. That fallback is what non-blocking means
-here; it never licenses merging with no review at all. Waiting on CodeRabbit specifically is a choice
-worth making only when a bad merge is expensive to unwind: auth, the API contract, `packages/*`.
+"Non-blocking" never licenses merging with no review at all: if it is late or rate-limited, take the
+subagent fallback above and merge on the required checks rather than waiting the window out. Waiting
+on CodeRabbit specifically is worth it only when a bad merge is expensive to unwind: auth, the API
+contract, `packages/*`.
 
 ### Ask for the review — it does not run automatically
 
@@ -173,10 +169,8 @@ a second ping is the right call. Say in the merge report why you spent the secon
 the severity of what was *found*, not the number of comments: seven nitpicks earn no second review,
 one data-loss bug with a real fix does.
 
-This is the single biggest lever on how long a PR takes. Auto-review fired on every push and each
-run consumed a per-developer rate-limit slot (Pro Plus uses adaptive limits, so sustained activity
-makes them *tighter*). A PR with one commit per round of review fixes burned four slots and spent
-longer queued on the limit than on CI.
+Every run spends a per-developer rate-limit slot, and Pro Plus limits are adaptive — sustained
+pinging makes them *tighter*.
 
 So the ping has to be worth its one shot: **batch every fix into one push before it**, and do not
 ping while anything is still in flight. Getting this wrong no longer costs you a slow PR — it costs
@@ -211,7 +205,7 @@ clean" at a glance.
 ### Confirming a review actually ran
 
 Do not count inline comments. Findings can arrive as **"outside diff range" body text with no inline
-comment at all** — that is how a real defect was nearly missed on #147. Use instead:
+comment at all**. Use instead:
 
 - the CodeRabbit **review count** rising above the baseline you recorded before pinging
   (`gh api repos/<owner>/<repo>/pulls/<pr>/reviews`), and
@@ -226,9 +220,8 @@ For each comment:
 1. Check the claim against the actual code yourself.
 2. If it is right, fix it and say so in a reply.
 3. If it is wrong, reply with the evidence and move on. Do not apply a change you cannot justify
-   independently just to clear a comment. It does concede to a demonstrated counterexample — on
-   #147 it withdrew a finding and stored a learning when shown the actual values — so the reply is
-   worth writing properly rather than just dismissing.
+   independently just to clear a comment. It concedes to a demonstrated counterexample, so the reply
+   is worth writing properly rather than just dismissing.
 4. If it is a matter of taste that contradicts a documented convention in `AGENTS.md`, the
    convention wins — link it in the reply.
 
@@ -264,14 +257,8 @@ Scope rules:
   to resemble what you shipped.
 - Delete only what the merge actually finished. If the item was partially addressed, leave the line
   in place and add an indented sub-bullet under it recording the status — what shipped, what is
-  left, and the PR number:
-
-  ```
-  - (learn) relocate setup above the cube, remove divider
-    - partial (#151): setup relocated; divider still rendered on mobile breakpoint
-  ```
-
-  Never rewrite the original line — the owner wrote it and it stays their wording.
+  left, and the PR number. Never rewrite the original line — the owner wrote it and it stays their
+  wording.
 - `.notes/` is gitignored, so this is a local scratch edit with nothing to commit or push. Do not
   add it to the PR and do not stage it.
 - Name the exact line(s) you removed or annotated in your final report.
