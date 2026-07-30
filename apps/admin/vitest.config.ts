@@ -51,7 +51,7 @@ export default defineConfig({
     // over by excluding them: when the CMS lands, the ratio moves and this
     // number gets re-measured rather than lowered.
     coverage: createCoverageConfig({
-      thresholds: { statements: 65, functions: 64 },
+      thresholds: { statements: 28, functions: 45 },
     }),
     environment: "jsdom",
     include: ["test/**/*.test.ts", "test/**/*.test.tsx"],

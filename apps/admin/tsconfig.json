@@ -4,6 +4,7 @@
     "jsx": "react-jsx",
     "paths": {
       "@/*": ["./src/*"],
+      "@unimatrix/app-config": ["../../packages/app-config/src/index.ts"],
       "@unimatrix/chrome/tool": ["../../packages/chrome/src/tool.ts"],
       "@unimatrix/auth/react": ["../../packages/auth/src/react.tsx"],
       "@unimatrix/auth": ["../../packages/auth/src/index.ts"],

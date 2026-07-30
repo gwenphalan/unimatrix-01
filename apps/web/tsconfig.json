@@ -4,6 +4,7 @@
     "jsx": "react-jsx",
     "paths": {
       "@/*": ["./src/*"],
+      "@unimatrix/app-config": ["../../packages/app-config/src/index.ts"],
       "@unimatrix/api-client": ["../../packages/api-client/src/index.ts"],
       // Load-bearing, and it does not degrade gracefully. Playwright refuses to
       // transpile any file whose path contains `/node_modules/`, so without this
