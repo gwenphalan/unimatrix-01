@@ -14,15 +14,11 @@ Use these pages based on the kind of change you are making.
   bootstrap behavior, CI alignment, and database workflow.
 - [Content workflow](./content.md) for authored content collections,
   validation rules, and manual registry updates.
-- [Workspace map](./workspace-map.md) for where code, docs, and infra
-  concerns belong today.
 - [Deployment docs](../infra/deployment/README.md) for runtime and
   deployment environment behavior.
 - [Local container docs](../infra/docker/README.md) for the current local
   container posture.
 
-## Keep this index current
-
-Update this index when a core operating page is added, renamed, or removed.
-Keep detailed instructions in the leaf documents instead of expanding this
-page into another workflow guide.
+Where a change belongs is answered by the root `AGENTS.md` — its *Workspace*
+section for what exists and what is reserved, its *Boundaries* section for what
+each package may depend on.

@@ -1,86 +1,20 @@
 # Operating model
 
-This page defines the current repo boundary for `unimatrix-01`. Use it when
-you need to distinguish live surface from reserved future shape, or when you
-need the working rules that keep the monorepo coherent.
+`unimatrix-01` is the TypeScript monorepo for the Unimatrix public site, API,
+tools, shared packages, and authored content.
 
-## Repo purpose
-
-`unimatrix-01` is the active TypeScript monorepo for the Unimatrix public
-site, API, shared packages, and Git-backed authored content.
-
-The operating model is current-first.
+The operating model is current-first:
 
 - Keep the repo runnable today.
 - Preserve stable package and app boundaries.
-- Document future surface only when it is clearly marked as reserved.
-- Keep the root scripts as the canonical workflow surface.
+- Document future surface only where it is clearly marked as reserved, and keep
+  present-tense repo facts separate from it. A reserved path is not a runtime
+  surface and must never be described as one.
+- Keep the root scripts as the canonical workflow surface for both local work
+  and CI, so the two cannot diverge.
 
-## Live surface
-
-These paths exist now and are part of normal contributor workflow.
-
-- `apps/web`
-- `apps/api`
-- `apps/cflop`
-- `apps/auth`
-- `packages/ui`
-- `packages/shared`
-- `packages/api-client`
-- `packages/content`
-- `packages/db`
-- `packages/auth`
-- `packages/user-data`
-- `packages/config-typescript`
-- `packages/config-eslint`
-- `content/home`
-- `content/projects`
-- `content/blog`
-- `docs/`
-- `infra/scripts`
-- `infra/deployment`
-- `infra/docker`
-
-## Reserved future surface
-
-These paths are part of the intended monorepo direction, but they are not
-current live workspaces or content domains.
-
-- `apps/workers`
-- `content/docs`
-- `content/notes`
-- Future packages such as `packages/bmd-parser`
-- Future internal tools or operational apps that have not been scaffolded
-  yet
-
-When you document or implement work, keep present-tense repo facts separate
-from reserved future shape.
-
-## Working rules
-
-These rules keep the monorepo aligned with its current scope.
-
-- Treat the root scripts as the canonical workflow surface for local work and
-  CI.
-- Keep PRs small and issue-aligned instead of bundling unrelated setup.
-- Use one issue branch per scoped piece of work.
-- Prefer the Linear-suggested branch name when one exists.
-- Use conventional commits.
-- Avoid app or package scaffolding unless the issue explicitly asks for it.
-- Run relevant validation before review.
-- End PR descriptions with `Closes LOC-<issue-key>`.
-
-## V1-ready baseline
-
-For this repo, v1-ready means the following baseline remains true.
-
-- [x] `apps/web` is runnable as the canonical public web workspace.
-- [x] `apps/api` is runnable as the canonical API workspace.
-- [x] `apps/cflop` is runnable as the canonical OLL/PLL trainer workspace.
-- [x] `apps/auth` is runnable as the canonical Clerk-backed accounts workspace.
-- [x] Root scripts are the canonical operating surface for local work and CI.
-- [x] The toolchain is pinned to Node `24.18.0` and pnpm `10.30.3`.
-- [x] Shared packages are typed and reusable across app boundaries.
-- [x] Git-backed typed content exists for `home`, `projects`, and `blog`.
-- [x] The deployment and environment contract is documented.
-- [x] CI runs against the same root commands contributors use locally.
+The root `AGENTS.md` carries the rest and is the authority where they overlap:
+which workspaces exist and which are reserved, what each package may depend on,
+the toolchain pins, and the branch, commit, and PR rules. The workspace roster
+itself is the filesystem — `pnpm-workspace.yaml` and `ls`, not a list committed
+beside it.

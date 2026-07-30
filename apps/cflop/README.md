@@ -25,12 +25,11 @@ pnpm-workspace.yaml
 `@unimatrix/chrome` from workspace source, and the root workspace files control
 the frozen pnpm install used by the Docker build.
 
-`packages/chrome/**` was missing from this list until the CFLOP rebrand, even
-though `app-shell.tsx` has imported `@unimatrix/chrome/tool` since the shared
-shell landed. A change to the tool shell therefore rebuilt `apps/admin` and not
-this app, leaving the two serving different chrome with nothing to indicate it.
-`@unimatrix/e2e-helpers` stays off the list deliberately: it is imported only
-from `e2e/`, so it cannot change the built bundle.
+`packages/chrome/**` is on the list because `app-shell.tsx` imports
+`@unimatrix/chrome/tool`. Omitting it leaves a tool-shell change rebuilding
+`apps/admin` and not this app, so the two serve different chrome with nothing to
+indicate it. `@unimatrix/e2e-helpers` stays off the list deliberately: it is
+imported only from `e2e/`, so it cannot change the built bundle.
 
 When adding a workspace dependency or another build input, add its path here
 and to the Dokploy service's watch-path configuration. See

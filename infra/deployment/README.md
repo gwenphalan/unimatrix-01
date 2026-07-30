@@ -115,12 +115,13 @@ routing. It has no API dependency, so it does not need an entry in
 
 #### The pre-rebrand `cube.` hostname
 
-The tool was served from `cube.unimatrix-01.dev` before it was renamed to CFLOP,
-so that hostname should permanently 301 to `cflop.unimatrix-01.dev`.
+`cube.unimatrix-01.dev` is the tool's pre-rebrand hostname and still has users
+and links pointing at it, so it should permanently 301 to
+`cflop.unimatrix-01.dev`.
 
-**This is the chosen design, not the current state — as of the rebrand it is not
-configured.** `cube.` still routes straight to the container. Nothing in this
-repository can configure it, which is exactly why it is written down here.
+**This is the chosen design, not the current state — it is not configured.**
+`cube.` routes straight to the container. Nothing in this repository can
+configure it, which is exactly why it is written down here.
 
 The redirect belongs in Traefik — **not** a Cloudflare Redirect Rule and **not**
 a `server` block in the container's Nginx config.
