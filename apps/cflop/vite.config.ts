@@ -17,6 +17,19 @@ export function createCflopViteConfig(): UserConfig {
       react(),
       tailwindcss(),
     ],
+    // No proxy and no env: this app has no backend. The only reason it configures
+    // a server at all is the port. Vite defaults to 5173, which `apps/web` also
+    // wants, and the loser of that race silently moves to 5174 — so which app
+    // answers on which port depended on start order. `strictPort` makes a
+    // collision refuse to start rather than move.
+    server: {
+      port: 5174,
+      strictPort: true,
+    },
+    preview: {
+      port: 4174,
+      strictPort: true,
+    },
     resolve: {
       alias: [
         {

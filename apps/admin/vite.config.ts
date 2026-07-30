@@ -26,6 +26,7 @@ export function createAdminAppViteConfig(mode: string): UserConfig {
     ],
     server: {
       port: 5176,
+      strictPort: true,
       proxy: {
         "/api": {
           changeOrigin: true,
@@ -36,6 +37,7 @@ export function createAdminAppViteConfig(mode: string): UserConfig {
     },
     preview: {
       port: 4176,
+      strictPort: true,
     },
     resolve: {
       alias: [

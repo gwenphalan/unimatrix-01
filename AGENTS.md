@@ -34,7 +34,7 @@
 | Whole-package test (auth, user-data) | `pnpm --filter <package> test` |
 
 ## Runtime And Bootstrap
-- `pnpm dev` starts only `@unimatrix/api` and `@unimatrix/web`; run `pnpm --filter @unimatrix/cflop dev` (port 5173), `pnpm --filter @unimatrix/auth-app dev` (port 5175) and `pnpm --filter @unimatrix/admin dev` (port 5176) separately
+- `pnpm dev` starts only `@unimatrix/api` and `@unimatrix/web`; run `pnpm --filter @unimatrix/cflop dev`, `pnpm --filter @unimatrix/auth-app dev` and `pnpm --filter @unimatrix/admin dev` separately. Each app pins its own dev and preview port in its `vite.config.ts` with `strictPort: true`, so a collision refuses to start instead of silently moving to the next free port and answering on an origin the API's CORS allowlist rejects
 - `pnpm dev` creates missing `apps/api/.env` and `apps/web/.env` from example files
 - `pnpm setup:local` only copies missing env files; it never overwrites existing local env
 - `pnpm setup:worktree` runs frozen install, env bootstrap, and default DB migrations; use it for fresh worktrees

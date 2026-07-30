@@ -198,7 +198,8 @@ async function main() {
       chromePath: await resolveChromePath(),
     });
 
-    for (const route of config.routes) {
+    /** One audit pass: the scores by category, plus the report to persist. */
+    const auditRoute = async (route) => {
       const result = await lighthouse(
         `${baseUrl}${route}`,
         { logLevel: "error", output: "json", port: chrome.port },
@@ -207,11 +208,61 @@ async function main() {
 
       if (!result) throw new Error(`Lighthouse returned no result for ${route}`);
 
+      return {
+        report: result.report,
+        scores: Object.fromEntries(
+          CATEGORIES.map((category) => [category, result.lhr.categories[category]?.score ?? 0]),
+        ),
+      };
+    };
+
+    for (const route of config.routes) {
+      const audit = await auditRoute(route);
+      let scores = audit.scores;
+      let retry = null;
+
+      // A low `performance` sample is retried once, and the second sample
+      // decides.
+      //
+      // Performance is the one category with a timing component, and it moves a
+      // few points between runs on byte-identical input: `apps/web/projects` was
+      // measured at 0.88, 0.89, 0.89, 0.89, 0.89 and 0.84 in six consecutive
+      // runs against a 0.85 budget. A one-sample gate turns that into a red
+      // required check on a diff that changed nothing about the page, and the
+      // only way past it is a re-run — which trains everyone to re-run a red
+      // check instead of reading it. That habit is more expensive than the
+      // flake.
+      //
+      // Deliberately performance only. The other three are fixed sets of
+      // pass/fail audits (see the budget note above) — they do not drift, so a
+      // drop is a real failure and a second sample would only delay reporting
+      // it. A real performance regression fails both samples, so the gate still
+      // catches that; the cost is one extra audit, only on a low route.
+      if (scores.performance < config.budgets.performance) {
+        console.log(
+          `  retry ${appDir}${route}: performance ${scores.performance.toFixed(2)} ` +
+            `below budget ${config.budgets.performance.toFixed(2)} — taking a second sample`,
+        );
+        retry = await auditRoute(route);
+        // Only `performance` is taken from the second sample. Replacing the whole
+        // result would re-read the other three from it as well, so a genuine `seo`
+        // or `accessibility` drop in the first sample could be masked by an audit
+        // that was only ever run because performance was low — which would break
+        // the "they do not drift, so a drop is real" guarantee stated just above.
+        scores = { ...scores, performance: retry.scores.performance };
+      }
+
       const slug = route === "/" ? "index" : route.replaceAll("/", "-").replace(/^-/u, "");
-      await writeFile(path.join(reportDir, `${slug}.json`), result.report, "utf8");
+      // The first sample is the report on disk, because it decides three of the
+      // four categories. A retry is written beside it rather than over it, so every
+      // number printed below can be traced to a file.
+      await writeFile(path.join(reportDir, `${slug}.json`), audit.report, "utf8");
+      if (retry) {
+        await writeFile(path.join(reportDir, `${slug}.retry.json`), retry.report, "utf8");
+      }
 
       for (const category of CATEGORIES) {
-        const score = result.lhr.categories[category]?.score ?? 0;
+        const score = scores[category];
         const budget = config.budgets[category];
         const status = score >= budget ? "ok  " : "FAIL";
 
