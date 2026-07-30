@@ -33,7 +33,7 @@ It is called (and `await`-ed) on every request. When it resolves to a
 non-empty string, the client attaches `Authorization: Bearer <token>`; when
 it resolves to `null`, `undefined`, or `""`, no `Authorization` header is
 sent. Nothing is cached — the provider is invoked fresh per request, so a
-Clerk-backed `getToken()` (added in a later app-side phase) can rotate the
+Clerk-backed `getToken()` can rotate the
 token between calls.
 
 ## Requests with a body or query

@@ -6,7 +6,7 @@
 ## 2. Folder Structure
 - `src/components/ui`: shared shadcn-based primitives and small supporting components.
 - `src/components/public-markdown.tsx`: safe GitHub-flavored markdown rendering for repo-backed content.
-- `src/public.ts`: narrowed public-site-safe export surface used by `apps/web`.
+- `src/public.ts`: narrowed public-safe export surface consumed by every app, `@unimatrix/chrome` and `lab`.
 - `src/index.ts`: full package barrel for broad shared consumers.
 - `src/lib`: shared utilities such as `cn`.
 - `src/hooks`: small shared hooks such as `use-mobile`.
@@ -15,7 +15,7 @@
 
 ## 3. Core Behaviors & Patterns
 - **Shared primitive surface**: Keep broadly reusable primitives in `src/components/ui/*` and export them through the package barrels. App-specific compositions belong in the consuming app, not here.
-- **Two export surfaces**: `src/index.ts` exposes the broader shared package API, while `src/public.ts` exposes a smaller public-safe surface for `apps/web`. Add to `public.ts` only when the export should be safe and stable for the public-site app.
+- **Three export surfaces**: `.` (full barrel), `./public` (narrowed surface every app and `@unimatrix/chrome` consume), `./editor` (the CodeMirror markdown editor, consumed by `apps/web`'s admin features). Add to `public.ts` only when the export should be safe and stable for the public-site app.
 - **Safe markdown rendering**: `PublicMarkdown` sanitizes links, skips raw HTML, applies `remark-gfm`, and renders internal links through an injected callback. It also syntax-highlights fenced code blocks via `prism-react-renderer` with a custom theme and language-alias resolution. Markdown behavior changes should preserve that safe-rendering contract.
 - **Shared styling**: `src/styles.css` carries shared tokens and base presentation; consuming apps layer their own styling on top instead of modifying shared styles to fit a single route.
 

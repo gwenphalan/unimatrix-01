@@ -5,7 +5,10 @@
 
 ## 2. Folder Structure
 - `index.mjs`: shared config factories and common ignore rules.
-- `package.json`: package export and peer dependency contract for downstream workspaces.
+- `boundaries.mjs` and `restricted-imports.mjs`: the actual rule code. Both
+  derive the repo root and the workspace id from a two-level path, so both are
+  silent no-ops for a one-level-deep workspace such as `lab` — which is why
+  `lab/eslint.config.mjs` carries its own bans.
 
 ## 3. Core Behaviors & Patterns
 - **Factory-based configs**: Downstream workspaces import `createPackageConfig(...)` or `createAppConfig(...)` and pass `tsconfigRootDir`. Keep workspace lint files as thin wrappers around those factories.

@@ -29,9 +29,8 @@
  *
  * So the low function floors are honest measurements, not a relaxed standard.
  * They are also genuinely weak protection until the underlying gaps are
- * covered — `@unimatrix/auth` (23%), `@unimatrix/auth-app` (33%) and
- * `@unimatrix/cflop` (41%) are the ones worth attention. Raise them by
- * writing tests, never by editing the number.
+ * covered. Each workspace's own `thresholds` is the authority on where it
+ * stands. Raise them by writing tests, never by editing the number.
  */
 
 /** Never counted: generated output, config, test scaffolding, type-only files. */

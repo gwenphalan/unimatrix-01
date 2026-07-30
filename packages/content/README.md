@@ -65,8 +65,8 @@ All current content files also require a markdown body after the frontmatter blo
 - current live public content is limited to `home`, `projects`, and `blog`
 - repo-internal operating docs belong under `docs/`, not under `content/`
 - operational queue-status posts, policy-page migrations, and future docs or notes collections stay out of scope unless a later issue expands the boundary
-- `apps/web/src/features/content/site-content.ts` still uses an explicit raw-import registry
-- `apps/web/test/content-registry.test.ts` exists to catch missed project and blog wiring when new content files are added
+- `apps/web/src/features/content/site-content.ts` raw-imports `content/home/index.md` and nothing else
+- `apps/web/test/content-registry.test.ts` keeps blog and project markdown *out* of the web bundle; a `?raw` import would be a second, silently stale source of truth beside the content database
 
 ## Commands
 
