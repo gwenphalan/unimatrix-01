@@ -26,6 +26,7 @@ export function createAuthAppViteConfig(mode: string): UserConfig {
     ],
     server: {
       port: 5175,
+      strictPort: true,
       proxy: {
         "/api": {
           changeOrigin: true,
@@ -36,6 +37,7 @@ export function createAuthAppViteConfig(mode: string): UserConfig {
     },
     preview: {
       port: 4175,
+      strictPort: true,
     },
     resolve: {
       alias: [
