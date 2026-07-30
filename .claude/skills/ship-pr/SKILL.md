@@ -101,6 +101,10 @@ what the change is, not by what is cheapest:
    matters). It is the only reviewer that is a *different tool* rather than a different context, so it
    does not share your model's blind spots — that is what makes it the first choice rather than the
    consolation prize.
+
+   Its cost is *latency*, not the owner's budget: the plan is free but rate-limited, so a wasted slot
+   delays the next review instead of billing anything. That is the opposite trade from `ultra` below,
+   and it is why CodeRabbit is the default even on a small PR.
 2. **If CodeRabbit is rate-limited, fall back to a reviewer subagent from this session.** Do not sit
    and wait out the window, and do not merge with no review at all. Give the subagent the diff and
    the PR body — not your reasoning, which is the thing that would contaminate it. Say in the merge
@@ -108,8 +112,10 @@ what the change is, not by what is cheapest:
 3. **For a large or security-sensitive change, hand off to the owner for `/code-review ultra`.** It
    is user-triggered and billed and **you cannot launch it**, so this is a handoff, not a task.
 
-   **`ultra` is not the default.** It spends a fleet of agents, and on an ordinary PR that cost buys
-   nothing CodeRabbit did not already give you. Reserve it for two cases:
+   **`ultra` is not the default.** Its cost is not money — it is the owner's rolling five-hour
+   session window and weekly limit, neither of which reports a precise remaining balance. So the cost
+   is real, paid by them, and hard for either of you to see: a fleet of agents spent on an ordinary PR
+   can eat into shipping the next one, for findings CodeRabbit already had. Reserve it for two cases:
 
    - a **large** diff — many files, or a change spanning workspaces, where no single reader holds all
      of it at once

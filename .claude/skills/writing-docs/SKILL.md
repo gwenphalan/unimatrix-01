@@ -34,6 +34,20 @@ the most damaging thing a reference doc can contain. If you did not run it, say 
 
 **Delete stale text; don't append a correction beside it.**
 
+**Read the whole file before changing one line of it, and grep the repo for the subject first.**
+This is the single most productive rule here, because the contradictions this repo actually shipped
+were mostly *local*: one file called `auth-boundary.tsx` a route gate and denied it sixteen lines
+later; one README banned a `?raw` import on the line directly below the one documenting a `?raw`
+import; one checklist told authors to create a markdown file that two sections above it said to
+create through the admin surface. None needed repo-wide knowledge to catch — only reading past the
+line being edited. Nothing mechanical catches this class, so it is on you.
+
+**A claim about observable behaviour states what the check returned, not what you believe.** Where
+two documents disagree, prose cannot break the tie and the reader has no way to tell which side is
+stale — so anchor the claim to something re-runnable: what `curl` returns, what the ruleset lists,
+what the script prints. This repo has already lost a *true* statement to a confident wrong one that
+sat in a neighbouring file; the one that survived was the one carrying its evidence.
+
 ## The drifts this repo actually had
 
 Each was written by someone being helpful, and each became a lie within weeks. When you catch
