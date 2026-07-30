@@ -232,11 +232,20 @@ contract, `packages/*`.
 
 ### Ask for the review — it does not run automatically
 
-`.coderabbit.yaml` sets `reviews.auto_review.enabled: false`. Comment `@coderabbitai review`
-**once, when the diff is finished and every required check is green** — not while you are still
-pushing, and not while CI is still running. A ping at PR-open is the common mistake: the checks have
-not reported yet, so a red one arrives afterwards and the review you just spent covers code you are
-about to change.
+`.coderabbit.yaml` sets `reviews.auto_review.enabled: false`. Comment **`@coderabbitai full review`**
+once, when the diff is finished and every required check is green — not while you are still pushing,
+and not while CI is still running. A ping at PR-open is the common mistake: the checks have not
+reported yet, so a red one arrives afterwards and the review you just spent covers code you are about
+to change.
+
+**`@coderabbitai review` is the wrong command on this repo, and it fails silently.** With auto-review
+disabled it replies "✅ Action performed / Review finished" within seconds, adds the note that
+CodeRabbit "does not re-review already reviewed commits", and produces *no review at all* — the review
+count stays at its baseline, there are no threads, and the checks list still reads
+`Review skipped: automatic reviews are disabled`. Measured on #153 and #154: the plain form returned
+the ack and nothing else, and `full review` on the same unchanged commit returned a real review with a
+Major finding in 180 seconds. The plain form is indistinguishable from "reviewed clean" unless you
+check the review count, so use `full review` and never the bare form.
 
 **One CodeRabbit review per PR** — not one per push. Once you have pinged it, that PR's CodeRabbit
 budget is normally spent: fix what it found, push the fixes, and merge on the required checks
