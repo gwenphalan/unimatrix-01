@@ -161,8 +161,11 @@ updates:
       default-days: 14
 
     groups:
-      # The same `nginx` pin appears in three Dockerfiles; without grouping each
-      # bump would arrive as three near-identical PRs.
+      # The same `nginx` pin repeats across every app with an nginx runtime
+      # stage (`grep -l '^FROM nginx' apps/*/Dockerfile`); without grouping,
+      # one bump arrives as a near-identical PR per app. It is pinned
+      # `tag@sha256:` and Dependabot updates both halves, so the digest does not
+      # freeze the image — it stops the tag being repointed under a build.
       docker-minor-patch:
         patterns:
           - "*"
