@@ -98,11 +98,22 @@ what the change is, not by what is cheapest:
    the PR body — not your reasoning, which is the thing that would contaminate it. Say in the merge
    report that the review came from a subagent and why.
 3. **If the change is security-sensitive, stop and tell the owner to run `/code-review ultra`.** It
-   is user-triggered and billed and **you cannot launch it** — so this is a handoff, not a task. Say
-   what you want looked at hardest. Treat as security-sensitive: anything touching auth or session
-   handling, permission or role checks, the redirect allowlist, request validation at an input
-   boundary, secrets and env plumbing, upload or quota limits, CI/CD and ruleset config, or the
-   rendering of user-supplied content. When in doubt, escalate — the cost of asking is one message.
+   is user-triggered and billed and **you cannot launch it** — so this is a handoff, not a task.
+
+   Hand over something pasteable, never a description of what to type — a fenced block holding
+   `/code-review ultra <pr-number>` with the real number substituted in, never the placeholder. The
+   bare `/code-review ultra` reviews the current branch instead, which is the form to give when there
+   is no PR yet.
+
+   State what you want looked at hardest directly under the block. Do not fold it into the command,
+   which takes a PR number and nothing else. The owner should be able to copy one line and hit enter;
+   anything they have to assemble themselves is friction on the one review step that cannot be
+   delegated.
+
+   Treat as security-sensitive: anything touching auth or session handling, permission or role
+   checks, the redirect allowlist, request validation at an input boundary, secrets and env
+   plumbing, upload or quota limits, CI/CD and ruleset config, or the rendering of user-supplied
+   content. When in doubt, escalate — the cost of asking is one message.
 
 A fresh session on the branch is a fine substitute for 2 when you have one available: same property,
 one model instead of a fleet.
