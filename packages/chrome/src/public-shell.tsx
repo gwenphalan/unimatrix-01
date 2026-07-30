@@ -10,7 +10,7 @@ import { GraphBackground, cn } from "@unimatrix/ui/public";
  * condensed bar that replaces the header on scroll, and the site footer. This
  * is the content-surface counterpart to `./tool` — per AGENTS.md the split is
  * tool vs content, not signed-in vs public, so a sign-in-free tool like
- * `apps/cube-trainer` takes the tool shell and never this one.
+ * `apps/cflop` takes the tool shell and never this one.
  *
  * Route knowledge is passed in, not computed here. The nav items arrive with
  * `active` already resolved and the breadcrumb trail arrives fully built,

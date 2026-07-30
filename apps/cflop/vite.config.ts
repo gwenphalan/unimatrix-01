@@ -5,7 +5,7 @@ import react from "@vitejs/plugin-react";
 import { tanstackRouter } from "@tanstack/router-plugin/vite";
 import { defineConfig, type UserConfig } from "vite";
 
-export function createCubeTrainerViteConfig(): UserConfig {
+export function createCflopViteConfig(): UserConfig {
   return {
     plugins: [
       tanstackRouter({
@@ -49,4 +49,4 @@ export function createCubeTrainerViteConfig(): UserConfig {
   };
 }
 
-export default defineConfig(() => createCubeTrainerViteConfig());
+export default defineConfig(() => createCflopViteConfig());

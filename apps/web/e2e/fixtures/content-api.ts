@@ -42,8 +42,8 @@ const BLOG_POST = {
 const PROJECT_POST = {
   id: "22222222-2222-4222-8222-222222222222",
   type: "project",
-  slug: "cube-trainer",
-  title: "Cube Trainer",
+  slug: "cflop",
+  title: "CFLOP",
   summary: "A flashcard trainer for memorizing every 3x3 Rubik's Cube OLL and PLL algorithm.",
   description: null,
   publicationState: "published",
@@ -51,10 +51,10 @@ const PROJECT_POST = {
   featured: true,
   projectStatus: "active",
   repoUrl: null,
-  liveUrl: "https://cube.unimatrix-01.dev",
+  liveUrl: "https://cflop.unimatrix-01.dev",
   updatedAt: "2026-07-22T00:00:00.000Z",
   body: [
-    "Cube Trainer is a browser-based drill tool for the last-layer stage of the CFOP speedcubing method: 57 OLL cases for orienting the last layer, and 21 PLL cases for permuting it into place.",
+    "CFLOP is a browser-based drill tool for the last-layer stage of the CFOP speedcubing method: 57 OLL cases for orienting the last layer, and 21 PLL cases for permuting it into place.",
     "",
     "Both modes track per-case progress in the browser, so learning and training pool selections persist between sessions without an account.",
   ].join("\n"),

@@ -6,10 +6,10 @@ const POST_ID = "3f8a1c2e-5b7d-4e91-a0c3-6d2f8b4e1a97";
 
 const BASE_POST = {
   type: "project",
-  slug: "cube-trainer",
-  title: "Cube Trainer",
+  slug: "cflop",
+  title: "CFLOP",
   summary: "A trainer.",
-  body: "# Cube Trainer",
+  body: "# CFLOP",
 } as const;
 
 function parseWithLiveUrl(liveUrl: string): boolean {
@@ -18,14 +18,14 @@ function parseWithLiveUrl(liveUrl: string): boolean {
 
 describe("urlSchema scheme restriction", () => {
   it("accepts http and https URLs", () => {
-    expect(parseWithLiveUrl("https://cube.unimatrix-01.dev")).toBe(true);
+    expect(parseWithLiveUrl("https://cflop.unimatrix-01.dev")).toBe(true);
     expect(parseWithLiveUrl("http://localhost:5173")).toBe(true);
   });
 
   it("accepts the URLs the seed content actually carries", () => {
-    // Both values in `content/projects/cube-trainer.md`. A seed that stops
+    // Both values in `content/projects/cflop.md`. A seed that stops
     // parsing would be a worse outcome than the inconsistency this fixes.
-    expect(parseWithLiveUrl("https://cube.unimatrix-01.dev")).toBe(true);
+    expect(parseWithLiveUrl("https://cflop.unimatrix-01.dev")).toBe(true);
     expect(parseWithLiveUrl("https://jperm.net/algs")).toBe(true);
   });
 

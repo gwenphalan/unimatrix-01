@@ -29,7 +29,7 @@ function isAllowedRedirectUrl(raw: string): boolean {
   }
 
   // Local development across the sibling dev servers (web 5173, auth 5175,
-  // cube 5173, previews 417x, etc.) — any port on loopback, http or https.
+  // cflop 5173, previews 417x, etc.) — any port on loopback, http or https.
   if (hostname === "localhost" || hostname === "127.0.0.1") {
     return protocol === "http:" || protocol === "https:";
   }

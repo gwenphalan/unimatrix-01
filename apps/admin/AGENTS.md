@@ -11,7 +11,7 @@ It is a **tool** surface, not a content surface. The site header/nav-tabs/footer
 - `src/lib/config.ts`: runtime env validation. Requires `VITE_CLERK_PUBLISHABLE_KEY`; `VITE_API_BASE_URL` defaults to `/api`; `VITE_AUTH_APP_URL` defaults to `https://auth.unimatrix-01.dev` and must be an absolute http(s) URL; dev-only `VITE_API_TARGET` defaults to `http://127.0.0.1:3001` and is read by `vite.config.ts` to proxy `/api`. Also exports `buildSignInHref`.
 - `src/routes`: file-based routes with paired `*.tsx` (route data) and `*.lazy.tsx` (components). One route today: `index`. `routeTree.gen.ts` is generated — never hand-edit it.
 - `src/styles.css`: `@unimatrix/ui/styles.css` plus the three `@source` lines. Do not remove them (see Core Behaviors).
-- `test`: Vitest, unit only. No Playwright smoke suite — the surface is Clerk-gated and a smoke run would need live keys, exactly as for `apps/auth`. CI installs Chromium for `web` and `cube-trainer` only; leave it that way.
+- `test`: Vitest, unit only. No Playwright smoke suite — the surface is Clerk-gated and a smoke run would need live keys, exactly as for `apps/auth`. CI installs Chromium for `web` and `cflop` only; leave it that way.
 
 ## 3. Core Behaviors & Patterns
 - **The placeholder route is ungated on purpose.** `canAccessAdminSection` from `@unimatrix/auth` is the predicate every admin section will read, but nothing here has anything to guard yet, and a gate around an empty page is a control that looks present and is not. The gate lands with the first real section. The origin's actual protection is Cloudflare Access in front of it, which is deployment config rather than app code.

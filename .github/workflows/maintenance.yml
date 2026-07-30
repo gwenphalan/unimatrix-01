@@ -56,7 +56,7 @@ jobs:
       - name: Install Playwright Chromium
         run: |
           pnpm --filter @unimatrix/web exec playwright install --with-deps chromium
-          pnpm --filter @unimatrix/cube-trainer exec playwright install --with-deps chromium
+          pnpm --filter @unimatrix/cflop exec playwright install --with-deps chromium
 
       - name: Verify
         run: pnpm verify

@@ -5,7 +5,7 @@ surface:
 
 - `apps/web` as a static Vite SPA image
 - `apps/api` as a Fastify Node runtime image
-- `apps/cube-trainer` as a static Vite SPA image
+- `apps/cflop` as a static Vite SPA image
 - `apps/auth` as a static Vite SPA image
 - `apps/admin` as a static Vite SPA image
 
@@ -18,8 +18,8 @@ validation path for containerized builds.
 - `apps/web/Dockerfile`: multi-stage web image build
 - `apps/web/nginx.conf`: static file server config with SPA fallback
 - `apps/api/Dockerfile`: multi-stage API image build
-- `apps/cube-trainer/Dockerfile`: multi-stage cube-trainer image build
-- `apps/cube-trainer/nginx.conf`: static file server config with SPA fallback
+- `apps/cflop/Dockerfile`: multi-stage cflop image build
+- `apps/cflop/nginx.conf`: static file server config with SPA fallback
 - `apps/auth/Dockerfile`: multi-stage auth app image build
 - `apps/auth/nginx.conf`: static file server config with SPA fallback
 - `apps/admin/Dockerfile`: multi-stage admin app image build
@@ -28,7 +28,7 @@ validation path for containerized builds.
   local validation and as a Dokploy Compose deployment
 - `infra/docker/api-compose.yaml`: single-service `api` stack, used both for
   local validation and as a Dokploy Compose deployment
-- `infra/docker/cube-trainer-compose.yaml`: single-service `cube-trainer`
+- `infra/docker/cflop-compose.yaml`: single-service `cflop`
   stack, used both for local validation and as a Dokploy Compose deployment
 - `infra/docker/auth-compose.yaml`: single-service `auth` stack, used both for
   local validation and as a Dokploy Compose deployment
@@ -48,8 +48,8 @@ That is required because:
 - `apps/web` imports public markdown directly from `content/`
 - `apps/api` depends on `@unimatrix/shared`, and the compiled API still imports
   that package by workspace name at runtime
-- `apps/cube-trainer` resolves its `@unimatrix/ui` workspace source alias from
-  `apps/cube-trainer/vite.config.ts` and `apps/cube-trainer/tsconfig.json`
+- `apps/cflop` resolves its `@unimatrix/ui` workspace source alias from
+  `apps/cflop/vite.config.ts` and `apps/cflop/tsconfig.json`
 - `apps/auth` resolves its `@unimatrix/auth`, `@unimatrix/api-client`,
   `@unimatrix/shared`, and `@unimatrix/ui` workspace source aliases from
   `apps/auth/vite.config.ts` and `apps/auth/tsconfig.json`
@@ -62,7 +62,7 @@ The checked-in images assume these repo-root build contexts:
 ```bash
 docker build -f apps/web/Dockerfile .
 docker build -f apps/api/Dockerfile .
-docker build -f apps/cube-trainer/Dockerfile .
+docker build -f apps/cflop/Dockerfile .
 docker build -f apps/auth/Dockerfile .
 docker build -f apps/admin/Dockerfile .
 ```
@@ -75,7 +75,7 @@ Each live app README is the canonical service-specific list:
 
 - `apps/web/README.md`
 - `apps/api/README.md`
-- `apps/cube-trainer/README.md`
+- `apps/cflop/README.md`
 - `apps/auth/README.md`
 - `apps/admin/README.md`
 
@@ -164,23 +164,23 @@ docker run --rm -p 3001:3001 \
   unimatrix-api:local
 ```
 
-## Cube Trainer image
+## CFLOP image
 
-The cube-trainer image builds `apps/cube-trainer/dist` and serves it from a
+The cflop image builds `apps/cflop/dist` and serves it from a
 small internal Nginx container, same pattern as the web image. It has no
 backend dependency: algorithm data is bundled at build time and per-case
 learning progress lives in the browser's `localStorage`, so there is no
 build-time or runtime env to configure.
 
-### Cube Trainer build inputs
+### CFLOP build inputs
 
-See [`apps/cube-trainer/README.md`](../../apps/cube-trainer/README.md) for the
+See [`apps/cflop/README.md`](../../apps/cflop/README.md) for the
 canonical, up-to-date list of build inputs and Dokploy watch paths.
 
-### Cube Trainer runtime contract
+### CFLOP runtime contract
 
 - container port: `8080`
-- build artifact: `apps/cube-trainer/dist`
+- build artifact: `apps/cflop/dist`
 - required SPA fallback: unknown application routes must serve `index.html`
 - no build-time or runtime env required
 
@@ -188,15 +188,15 @@ Example build:
 
 ```bash
 docker build \
-  -f apps/cube-trainer/Dockerfile \
-  -t unimatrix-cube-trainer:local \
+  -f apps/cflop/Dockerfile \
+  -t unimatrix-cflop:local \
   .
 ```
 
 ## Auth image
 
 The auth image builds `apps/auth/dist` and serves it from a small internal
-Nginx container, same pattern as the web and cube-trainer images. It is the
+Nginx container, same pattern as the web and cflop images. It is the
 central Clerk-backed accounts app (sign-in/sign-up and account management).
 
 ### Auth build inputs
@@ -268,7 +268,7 @@ docker build \
 ## Compose workflow
 
 `infra/docker/web-compose.yaml`, `infra/docker/api-compose.yaml`,
-`infra/docker/cube-trainer-compose.yaml`, `infra/docker/auth-compose.yaml`,
+`infra/docker/cflop-compose.yaml`, `infra/docker/auth-compose.yaml`,
 and `infra/docker/admin-compose.yaml` are each single-service files. Run them together from the repo root for local
 combined validation:
 
@@ -280,7 +280,7 @@ CORS_ALLOWED_ORIGINS=http://localhost:8080,http://127.0.0.1:8080 \
 docker compose \
   -f infra/docker/api-compose.yaml \
   -f infra/docker/web-compose.yaml \
-  -f infra/docker/cube-trainer-compose.yaml \
+  -f infra/docker/cflop-compose.yaml \
   -f infra/docker/auth-compose.yaml \
   -f infra/docker/admin-compose.yaml \
   up --build
@@ -298,8 +298,8 @@ docker run --rm -p 3001:3001 -e CORS_ALLOWED_ORIGINS=http://localhost:8080 unima
 docker build -f apps/web/Dockerfile --build-arg VITE_API_BASE_URL=http://localhost:3001 -t unimatrix-web:local .
 docker run --rm -p 8080:8080 unimatrix-web:local
 
-docker build -f apps/cube-trainer/Dockerfile -t unimatrix-cube-trainer:local .
-docker run --rm -p 8081:8080 unimatrix-cube-trainer:local
+docker build -f apps/cflop/Dockerfile -t unimatrix-cflop:local .
+docker run --rm -p 8081:8080 unimatrix-cflop:local
 
 docker build -f apps/auth/Dockerfile --build-arg VITE_API_BASE_URL=http://localhost:3001 --build-arg VITE_CLERK_PUBLISHABLE_KEY=pk_test_xxx -t unimatrix-auth:local .
 docker run --rm -p 8082:8080 unimatrix-auth:local
@@ -314,7 +314,7 @@ To stop the compose stack:
 docker compose \
   -f infra/docker/api-compose.yaml \
   -f infra/docker/web-compose.yaml \
-  -f infra/docker/cube-trainer-compose.yaml \
+  -f infra/docker/cflop-compose.yaml \
   -f infra/docker/auth-compose.yaml \
   -f infra/docker/admin-compose.yaml \
   down
@@ -340,7 +340,7 @@ normal navigation and a refresh:
 - `/blog`
 - `/projects`
 
-And these cube-trainer routes:
+And these cflop routes:
 
 - `/`
 - `/learn`
@@ -375,7 +375,7 @@ storage strategy — document that here if it is ever adopted.
 ## Dokploy Compose deployment
 
 `infra/docker/web-compose.yaml`, `infra/docker/api-compose.yaml`,
-`infra/docker/cube-trainer-compose.yaml`, `infra/docker/auth-compose.yaml`,
+`infra/docker/cflop-compose.yaml`, `infra/docker/auth-compose.yaml`,
 and `infra/docker/admin-compose.yaml` are single-service compose files meant to be used as Dokploy's "Compose"
 application type, one Dokploy app per file. They intentionally have:
 
@@ -383,17 +383,18 @@ application type, one Dokploy app per file. They intentionally have:
 - no Traefik labels
 
 Dokploy's own Domains page handles routing: pick the service and the
-container port (`8080` for web, `3001` for api, `8080` for cube-trainer,
+container port (`8080` for web, `3001` for api, `8080` for cflop,
 `8080` for auth, `8080` for admin) there, and Dokploy wires Traefik itself. Don't hand-add
-Traefik labels to these files. Point the cube-trainer Dokploy app's domain at
-`cube.unimatrix-01.dev`, the auth Dokploy app's domain at
+Traefik labels to these files. Point the cflop Dokploy app's domain at
+`cflop.unimatrix-01.dev` (plus `cube.unimatrix-01.dev` as a redirect-only entry —
+see `infra/deployment/README.md`), the auth Dokploy app's domain at
 `auth.unimatrix-01.dev`, and the admin Dokploy app's domain at
 `admin.unimatrix-01.dev`.
 
 `web-compose.yaml` and `api-compose.yaml` read their environment-dependent
 values (`VITE_API_BASE_URL`, `CORS_ALLOWED_ORIGINS`) from compose variable
 substitution, so set those in the Dokploy app's environment variables UI
-rather than editing the file. `cube-trainer-compose.yaml` has no
+rather than editing the file. `cflop-compose.yaml` has no
 environment-dependent values to set. `auth-compose.yaml` reads
 `VITE_API_BASE_URL` and `VITE_CLERK_PUBLISHABLE_KEY` the same way, and
 `admin-compose.yaml` reads those two plus an optional `VITE_AUTH_APP_URL`.

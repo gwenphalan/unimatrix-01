@@ -49,7 +49,7 @@ describe("preview mode storage", () => {
   });
 
   it("discards an unrecognized stored value instead of rendering an empty toggle", () => {
-    window.localStorage.setItem("cube-trainer:preview-mode:learn", "isometric");
+    window.localStorage.setItem("cflop:preview-mode:learn", "isometric");
 
     expect(readPreviewMode("learn")).toBe("top-down");
   });

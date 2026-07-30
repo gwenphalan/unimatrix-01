@@ -95,11 +95,11 @@ describe("content_posts", () => {
           ...basePost,
           id: "project-1",
           type: "project",
-          slug: "cube-trainer",
+          slug: "cflop",
           featured: true,
           projectStatus: "live",
-          repoUrl: "https://github.com/example/cube-trainer",
-          liveUrl: "https://cube.unimatrix-01.dev",
+          repoUrl: "https://github.com/example/cflop",
+          liveUrl: "https://cflop.unimatrix-01.dev",
           publicationState: "published",
           publishedAt: "2026-01-01",
         })
@@ -108,14 +108,12 @@ describe("content_posts", () => {
       const [row] = instance.db
         .select()
         .from(contentPostsTable)
-        .where(
-          and(eq(contentPostsTable.type, "project"), eq(contentPostsTable.slug, "cube-trainer")),
-        )
+        .where(and(eq(contentPostsTable.type, "project"), eq(contentPostsTable.slug, "cflop")))
         .all();
 
       expect(row?.featured).toBe(true);
       expect(row?.projectStatus).toBe("live");
-      expect(row?.liveUrl).toBe("https://cube.unimatrix-01.dev");
+      expect(row?.liveUrl).toBe("https://cflop.unimatrix-01.dev");
       expect(row?.publishedAt).toBe("2026-01-01");
     } finally {
       instance.client.close();

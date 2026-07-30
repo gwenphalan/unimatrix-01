@@ -49,18 +49,18 @@ interface RouteCase {
  * 400 and the 401 assertion would pass or fail for the wrong reason.
  */
 const USER_DATA_ROUTES: readonly RouteCase[] = [
-  { method: "GET", url: "/me/data?namespace=cube-trainer&key=settings" },
+  { method: "GET", url: "/me/data?namespace=cflop&key=settings" },
   {
     method: "PUT",
     url: "/me/data",
-    payload: { namespace: "cube-trainer", key: "settings", value: { theme: "dark" } },
+    payload: { namespace: "cflop", key: "settings", value: { theme: "dark" } },
   },
-  { method: "DELETE", url: "/me/data", payload: { namespace: "cube-trainer", key: "settings" } },
-  { method: "GET", url: "/me/data/list?namespace=cube-trainer" },
-  { method: "GET", url: "/me/files?namespace=cube-trainer" },
-  { method: "DELETE", url: "/me/files", payload: { namespace: "cube-trainer", key: "avatar" } },
-  { method: "POST", url: "/me/files?namespace=cube-trainer&key=avatar" },
-  { method: "GET", url: "/me/files/content?namespace=cube-trainer&key=avatar" },
+  { method: "DELETE", url: "/me/data", payload: { namespace: "cflop", key: "settings" } },
+  { method: "GET", url: "/me/data/list?namespace=cflop" },
+  { method: "GET", url: "/me/files?namespace=cflop" },
+  { method: "DELETE", url: "/me/files", payload: { namespace: "cflop", key: "avatar" } },
+  { method: "POST", url: "/me/files?namespace=cflop&key=avatar" },
+  { method: "GET", url: "/me/files/content?namespace=cflop&key=avatar" },
 ];
 
 function createAppWithClerk() {
@@ -131,10 +131,7 @@ void test("every user-data route rejects an unauthenticated request with 401", a
     // preHandler chain. Asserted rather than assumed, because a HEAD that
     // bypassed `requireAuth()` would confirm the existence of a document or
     // file to an unauthenticated caller through the status code alone.
-    for (const url of [
-      "/me/data?namespace=cube-trainer&key=settings",
-      "/me/files?namespace=cube-trainer",
-    ]) {
+    for (const url of ["/me/data?namespace=cflop&key=settings", "/me/files?namespace=cflop"]) {
       const response = await app.inject({ method: "HEAD", url });
 
       assert.equal(response.statusCode, 401, `HEAD ${url} should reject with 401`);

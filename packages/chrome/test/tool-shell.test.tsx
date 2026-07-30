@@ -39,7 +39,7 @@ describe("ToolShell", () => {
   it("renders no title bar when the service supplies neither an account control nor a wordmark", async () => {
     await renderInRouter(<ToolShell>tool content</ToolShell>);
 
-    // The `apps/cube-trainer` case. A bar with nothing in it would only cost
+    // The `apps/cflop` case. A bar with nothing in it would only cost
     // vertical space, so the shell must not reserve one.
     expect(screen.getByRole("main")).toHaveTextContent("tool content");
     expect(screen.queryByRole("link", { name: "Unimatrix-01" })).not.toBeInTheDocument();

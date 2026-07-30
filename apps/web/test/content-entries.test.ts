@@ -86,14 +86,14 @@ describe("project adapters", () => {
     const entry = toProjectEntry(
       buildSummary({
         type: "project",
-        slug: "cube-trainer",
+        slug: "cflop",
         projectStatus: "active",
-        liveUrl: "https://cube.unimatrix-01.dev",
+        liveUrl: "https://cflop.unimatrix-01.dev",
       }),
     );
 
     expect(entry.frontmatter.status).toBe("active");
-    expect(entry.frontmatter.liveUrl).toBe("https://cube.unimatrix-01.dev");
+    expect(entry.frontmatter.liveUrl).toBe("https://cflop.unimatrix-01.dev");
     expect("repoUrl" in entry.frontmatter).toBe(false);
     // A project is persistent rather than sequential, so nothing public
     // renders its date and the adapter does not carry one.

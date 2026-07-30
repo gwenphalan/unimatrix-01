@@ -23,7 +23,7 @@ import { stubContentApi } from "./fixtures/content-api";
  * easy to make quietly to turn a build green.
  *
  * It stays app-local rather than moving into `@unimatrix/e2e-helpers` alongside
- * the scanner: a baseline shared with cube-trainer would let a suppression added
+ * the scanner: a baseline shared with cflop would let a suppression added
  * for one app silently lower the floor for the other.
  */
 const KNOWN_BEST_PRACTICE_VIOLATIONS: readonly string[] = [];
@@ -60,15 +60,15 @@ test("navigation smoke flow", async ({ page }) => {
 
   await main.getByRole("link", { name: "View all projects" }).click();
   await expect(page).toHaveURL(/\/projects$/u);
-  await expect(page.getByRole("link", { name: "Open project Cube Trainer" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Open project CFLOP" })).toBeVisible();
 
   // The list routes were previously visited here but never scanned, so
   // `page-has-heading-one` failed on both of them without failing the build.
   await scanAccessibility(page, "/projects");
 
-  await page.getByRole("link", { name: "Open project Cube Trainer" }).click();
-  await expect(page).toHaveURL(/\/projects\/cube-trainer$/u);
-  await expect(page.getByRole("heading", { name: "Cube Trainer" })).toBeVisible();
+  await page.getByRole("link", { name: "Open project CFLOP" }).click();
+  await expect(page).toHaveURL(/\/projects\/cflop$/u);
+  await expect(page.getByRole("heading", { name: "CFLOP" })).toBeVisible();
 
   await page.getByRole("link", { name: "Back to projects" }).click();
   await expect(page).toHaveURL(/\/projects$/u);
@@ -97,9 +97,9 @@ test("project page render", async ({ page }) => {
 
   await stubContentApi(page);
 
-  await gotoRoute(page, "/projects/cube-trainer");
+  await gotoRoute(page, "/projects/cflop");
 
-  await expect(page.getByRole("heading", { name: "Cube Trainer" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "CFLOP" })).toBeVisible();
   await expect(
     page.getByText(
       "A flashcard trainer for memorizing every 3x3 Rubik's Cube OLL and PLL algorithm.",
@@ -110,12 +110,12 @@ test("project page render", async ({ page }) => {
   ).toBeVisible();
   await expect(page.getByRole("link", { name: "Visit site" })).toHaveAttribute(
     "href",
-    "https://cube.unimatrix-01.dev",
+    "https://cflop.unimatrix-01.dev",
   );
   await expect(page.getByRole("link", { name: "Back to projects" })).toBeVisible();
   await expect(page.getByText(/^(Checking|Live|Offline)$/u)).toBeVisible();
 
-  await scanAccessibility(page, "/projects/cube-trainer");
+  await scanAccessibility(page, "/projects/cflop");
   expectNoPageErrors(pageErrors);
 });
 

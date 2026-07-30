@@ -30,7 +30,7 @@
  * So the low function floors are honest measurements, not a relaxed standard.
  * They are also genuinely weak protection until the underlying gaps are
  * covered — `@unimatrix/auth` (23%), `@unimatrix/auth-app` (33%) and
- * `@unimatrix/cube-trainer` (41%) are the ones worth attention. Raise them by
+ * `@unimatrix/cflop` (41%) are the ones worth attention. Raise them by
  * writing tests, never by editing the number.
  */
 

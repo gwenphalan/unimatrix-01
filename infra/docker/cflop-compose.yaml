@@ -1,6 +1,6 @@
 services:
-  cube-trainer:
+  cflop:
     build:
       context: ../..
-      dockerfile: apps/cube-trainer/Dockerfile
+      dockerfile: apps/cflop/Dockerfile
     restart: unless-stopped

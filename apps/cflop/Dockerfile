@@ -11,10 +11,10 @@ RUN corepack enable
 FROM base AS build
 COPY . .
 RUN find . -name '*.tsbuildinfo' -delete && pnpm install --frozen-lockfile
-RUN pnpm --filter @unimatrix/cube-trainer build
+RUN pnpm --filter @unimatrix/cflop build
 
 FROM nginx:1.29-alpine AS runtime
-COPY apps/cube-trainer/nginx.conf /etc/nginx/conf.d/default.conf
-COPY --from=build /workspace/apps/cube-trainer/dist /usr/share/nginx/html
+COPY apps/cflop/nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=build /workspace/apps/cflop/dist /usr/share/nginx/html
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 CMD wget -q -O /dev/null http://127.0.0.1:8080/ || exit 1

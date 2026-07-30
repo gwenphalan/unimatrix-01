@@ -56,7 +56,7 @@
       "ignore": ["src/routes/routeTree.gen.ts"],
       "ignoreDependencies": ["tailwindcss", "tw-animate-css"],
     },
-    "apps/cube-trainer": {
+    "apps/cflop": {
       "entry": ["test/**/*.test.{ts,tsx}", "e2e/**/*.spec.ts"],
       "project": ["src/**/*.{ts,tsx}", "test/**/*.{ts,tsx}", "e2e/**/*.ts"],
       "ignore": ["src/routes/routeTree.gen.ts"],

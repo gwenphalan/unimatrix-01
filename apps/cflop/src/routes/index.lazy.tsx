@@ -43,7 +43,7 @@ function IndexRoute() {
       <div className="flex items-center justify-center text-center">
         <div className="flex items-center gap-3">
           <img alt="" className="size-9 shrink-0 opacity-90" src="/favicon.svg" />
-          <h1 className="text-3xl font-medium tracking-[-0.03em] text-foreground">Cube Trainer</h1>
+          <h1 className="text-3xl font-medium tracking-[-0.03em] text-foreground">CFLOP</h1>
         </div>
       </div>
 

@@ -185,18 +185,15 @@ void test("public content responses carry an ETag that answers a conditional req
 
     await createPost(app.db, "user_admin", {
       type: "project",
-      slug: "cube-trainer",
-      title: "Cube Trainer",
+      slug: "cflop",
+      title: "CFLOP",
       summary: "A trainer.",
       body: "# Cube",
       publicationState: "published",
       featured: true,
     });
 
-    for (const url of [
-      "/content/posts?type=project",
-      "/content/post?type=project&slug=cube-trainer",
-    ]) {
+    for (const url of ["/content/posts?type=project", "/content/post?type=project&slug=cflop"]) {
       const first = await app.inject({ method: "GET", url });
       const etag = first.headers.etag;
 

@@ -30,7 +30,7 @@ This repo keeps the current runtime surface narrow and explicit.
 
 - `apps/web` contains the Vite + React public site.
 - `apps/api` contains the Fastify API.
-- `apps/cube-trainer` contains the Vite + React OLL/PLL algorithm trainer
+- `apps/cflop` contains the Vite + React OLL/PLL algorithm trainer
   (no backend dependency).
 - `apps/auth` contains the Vite + React accounts app: the central
   Clerk-backed authentication hub for sign-in/sign-up and account management.

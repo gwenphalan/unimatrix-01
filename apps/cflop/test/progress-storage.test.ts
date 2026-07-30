@@ -26,11 +26,11 @@ describe("progress storage", () => {
   });
 
   it("discards malformed stored data instead of throwing", () => {
-    window.localStorage.setItem("cube-trainer:progress:oll", "not valid json");
+    window.localStorage.setItem("cflop:progress:oll", "not valid json");
     expect(readCaseProgress("oll")).toEqual({});
 
     window.localStorage.setItem(
-      "cube-trainer:progress:oll",
+      "cflop:progress:oll",
       JSON.stringify({ "oll-1": "not-a-real-status" }),
     );
     expect(readCaseProgress("oll")).toEqual({});

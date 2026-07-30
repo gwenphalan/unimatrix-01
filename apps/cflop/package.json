@@ -1,5 +1,5 @@
 {
-  "name": "@unimatrix/cube-trainer",
+  "name": "@unimatrix/cflop",
   "version": "0.1.0",
   "private": true,
   "description": "Rubik's Cube OLL/PLL algorithm learning and training app for the Unimatrix monorepo.",

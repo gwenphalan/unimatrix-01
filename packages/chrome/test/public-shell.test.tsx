@@ -101,7 +101,7 @@ describe("PublicShell", () => {
       breadcrumbItems: [
         { label: "Unimatrix-01", to: "/" },
         { label: "Projects", to: "/projects" },
-        { label: "Cube Trainer" },
+        { label: "CFLOP" },
       ],
     });
 
@@ -111,8 +111,8 @@ describe("PublicShell", () => {
     // and the trailing crumb is the current page, so it must not be a link.
     expect(within(trail).getByRole("link", { name: "Unimatrix-01" })).toBeInTheDocument();
     expect(within(trail).getByRole("link", { name: "Projects" })).toBeInTheDocument();
-    expect(within(trail).queryByRole("link", { name: "Cube Trainer" })).not.toBeInTheDocument();
-    expect(trail).toHaveTextContent("Cube Trainer");
+    expect(within(trail).queryByRole("link", { name: "CFLOP" })).not.toBeInTheDocument();
+    expect(trail).toHaveTextContent("CFLOP");
   });
 
   it("omits the account cluster entirely when no control is supplied", async () => {

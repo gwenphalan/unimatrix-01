@@ -42,21 +42,21 @@ void test("putDocument creates a document and getDocument reads it back", async 
     const created = await putDocument(
       db,
       "user_1",
-      "cube-trainer",
+      "cflop",
       "settings",
       { theme: "dark" },
       UNLIMITED_QUOTA_BYTES,
     );
 
     assert.deepEqual(created, {
-      namespace: "cube-trainer",
+      namespace: "cflop",
       key: "settings",
       value: { theme: "dark" },
       updatedAt: created.updatedAt,
     });
     assert.match(created.updatedAt, /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/u);
 
-    const fetched = await getDocument(db, "user_1", "cube-trainer", "settings");
+    const fetched = await getDocument(db, "user_1", "cflop", "settings");
 
     assert.deepEqual(fetched, created);
   } finally {
@@ -68,7 +68,7 @@ void test("getDocument returns undefined when no document matches", async () => 
   const { client, db } = createMigratedInMemoryDatabase();
 
   try {
-    const fetched = await getDocument(db, "user_1", "cube-trainer", "missing");
+    const fetched = await getDocument(db, "user_1", "cflop", "missing");
 
     assert.equal(fetched, undefined);
   } finally {
@@ -80,18 +80,11 @@ void test("putDocument upserts the same composite key, overwriting the value", a
   const { client, db } = createMigratedInMemoryDatabase();
 
   try {
-    await putDocument(
-      db,
-      "user_1",
-      "cube-trainer",
-      "settings",
-      { theme: "dark" },
-      UNLIMITED_QUOTA_BYTES,
-    );
+    await putDocument(db, "user_1", "cflop", "settings", { theme: "dark" }, UNLIMITED_QUOTA_BYTES);
     const updated = await putDocument(
       db,
       "user_1",
-      "cube-trainer",
+      "cflop",
       "settings",
       { theme: "light" },
       UNLIMITED_QUOTA_BYTES,
@@ -99,11 +92,11 @@ void test("putDocument upserts the same composite key, overwriting the value", a
 
     assert.deepEqual(updated.value, { theme: "light" });
 
-    const fetched = await getDocument(db, "user_1", "cube-trainer", "settings");
+    const fetched = await getDocument(db, "user_1", "cflop", "settings");
 
     assert.deepEqual(fetched?.value, { theme: "light" });
 
-    const all = await listDocuments(db, "user_1", "cube-trainer");
+    const all = await listDocuments(db, "user_1", "cflop");
 
     assert.equal(all.length, 1);
   } finally {
@@ -116,8 +109,8 @@ void test("putDocument round-trips arbitrary JSON value shapes", async () => {
 
   try {
     const complexValue = { nested: { array: [1, "two", null, true] }, count: 3 };
-    await putDocument(db, "user_1", "cube-trainer", "complex", complexValue, UNLIMITED_QUOTA_BYTES);
-    const fetched = await getDocument(db, "user_1", "cube-trainer", "complex");
+    await putDocument(db, "user_1", "cflop", "complex", complexValue, UNLIMITED_QUOTA_BYTES);
+    const fetched = await getDocument(db, "user_1", "cflop", "complex");
 
     assert.deepEqual(fetched?.value, complexValue);
   } finally {
@@ -129,12 +122,12 @@ void test("listDocuments only returns documents for the given user and namespace
   const { client, db } = createMigratedInMemoryDatabase();
 
   try {
-    await putDocument(db, "user_1", "cube-trainer", "a", 1, UNLIMITED_QUOTA_BYTES);
-    await putDocument(db, "user_1", "cube-trainer", "b", 2, UNLIMITED_QUOTA_BYTES);
+    await putDocument(db, "user_1", "cflop", "a", 1, UNLIMITED_QUOTA_BYTES);
+    await putDocument(db, "user_1", "cflop", "b", 2, UNLIMITED_QUOTA_BYTES);
     await putDocument(db, "user_1", "other-namespace", "c", 3, UNLIMITED_QUOTA_BYTES);
-    await putDocument(db, "user_2", "cube-trainer", "d", 4, UNLIMITED_QUOTA_BYTES);
+    await putDocument(db, "user_2", "cflop", "d", 4, UNLIMITED_QUOTA_BYTES);
 
-    const documents = await listDocuments(db, "user_1", "cube-trainer");
+    const documents = await listDocuments(db, "user_1", "cflop");
 
     assert.deepEqual(documents.map((document) => document.key).sort(), ["a", "b"]);
   } finally {
@@ -146,22 +139,15 @@ void test("deleteDocument removes a document and reports whether it existed", as
   const { client, db } = createMigratedInMemoryDatabase();
 
   try {
-    await putDocument(
-      db,
-      "user_1",
-      "cube-trainer",
-      "settings",
-      { theme: "dark" },
-      UNLIMITED_QUOTA_BYTES,
-    );
+    await putDocument(db, "user_1", "cflop", "settings", { theme: "dark" }, UNLIMITED_QUOTA_BYTES);
 
-    const firstDelete = await deleteDocument(db, "user_1", "cube-trainer", "settings");
+    const firstDelete = await deleteDocument(db, "user_1", "cflop", "settings");
     assert.equal(firstDelete, true);
 
-    const secondDelete = await deleteDocument(db, "user_1", "cube-trainer", "settings");
+    const secondDelete = await deleteDocument(db, "user_1", "cflop", "settings");
     assert.equal(secondDelete, false);
 
-    const fetched = await getDocument(db, "user_1", "cube-trainer", "settings");
+    const fetched = await getDocument(db, "user_1", "cflop", "settings");
     assert.equal(fetched, undefined);
   } finally {
     client.close();
@@ -176,7 +162,7 @@ void test("putFile stores a blob and getFile reads back matching bytes and metad
     const metadata = await putFile(
       db,
       "user_1",
-      "cube-trainer",
+      "cflop",
       "avatar.png",
       "image/png",
       data.length,
@@ -186,14 +172,14 @@ void test("putFile stores a blob and getFile reads back matching bytes and metad
     );
 
     assert.deepEqual(metadata, {
-      namespace: "cube-trainer",
+      namespace: "cflop",
       key: "avatar.png",
       contentType: "image/png",
       size: data.length,
       updatedAt: metadata.updatedAt,
     });
 
-    const fetched = await getFile(db, "user_1", "cube-trainer", "avatar.png");
+    const fetched = await getFile(db, "user_1", "cflop", "avatar.png");
 
     assert.ok(fetched);
     assert.equal(Buffer.compare(fetched.data, data), 0);
@@ -208,7 +194,7 @@ void test("getFile returns undefined when no file matches", async () => {
   const { client, db } = createMigratedInMemoryDatabase();
 
   try {
-    const fetched = await getFile(db, "user_1", "cube-trainer", "missing.png");
+    const fetched = await getFile(db, "user_1", "cflop", "missing.png");
 
     assert.equal(fetched, undefined);
   } finally {
@@ -226,7 +212,7 @@ void test("putFile upserts the same composite key, overwriting bytes and content
     await putFile(
       db,
       "user_1",
-      "cube-trainer",
+      "cflop",
       "avatar.png",
       "image/png",
       first.length,
@@ -236,7 +222,7 @@ void test("putFile upserts the same composite key, overwriting bytes and content
     await putFile(
       db,
       "user_1",
-      "cube-trainer",
+      "cflop",
       "avatar.png",
       "image/jpeg",
       second.length,
@@ -244,14 +230,14 @@ void test("putFile upserts the same composite key, overwriting bytes and content
       UNLIMITED_QUOTA_BYTES,
     );
 
-    const fetched = await getFile(db, "user_1", "cube-trainer", "avatar.png");
+    const fetched = await getFile(db, "user_1", "cflop", "avatar.png");
 
     assert.ok(fetched);
     assert.equal(Buffer.compare(fetched.data, second), 0);
     assert.equal(fetched.contentType, "image/jpeg");
     assert.equal(fetched.size, second.length);
 
-    const all = await listFiles(db, "user_1", "cube-trainer");
+    const all = await listFiles(db, "user_1", "cflop");
     assert.equal(all.length, 1);
   } finally {
     client.close();
@@ -268,7 +254,7 @@ void test("listFiles returns metadata only, never the blob, scoped to user and n
     await putFile(
       db,
       "user_1",
-      "cube-trainer",
+      "cflop",
       "a.txt",
       "text/plain",
       dataA.length,
@@ -278,7 +264,7 @@ void test("listFiles returns metadata only, never the blob, scoped to user and n
     await putFile(
       db,
       "user_1",
-      "cube-trainer",
+      "cflop",
       "b.txt",
       "text/plain",
       dataB.length,
@@ -298,7 +284,7 @@ void test("listFiles returns metadata only, never the blob, scoped to user and n
     await putFile(
       db,
       "user_2",
-      "cube-trainer",
+      "cflop",
       "d.txt",
       "text/plain",
       dataA.length,
@@ -306,7 +292,7 @@ void test("listFiles returns metadata only, never the blob, scoped to user and n
       UNLIMITED_QUOTA_BYTES,
     );
 
-    const files = await listFiles(db, "user_1", "cube-trainer");
+    const files = await listFiles(db, "user_1", "cflop");
 
     assert.equal(files.length, 2);
     for (const file of files) {
@@ -326,7 +312,7 @@ void test("deleteFile removes a file and reports whether it existed", async () =
     await putFile(
       db,
       "user_1",
-      "cube-trainer",
+      "cflop",
       "avatar.png",
       "image/png",
       data.length,
@@ -334,13 +320,13 @@ void test("deleteFile removes a file and reports whether it existed", async () =
       UNLIMITED_QUOTA_BYTES,
     );
 
-    const firstDelete = await deleteFile(db, "user_1", "cube-trainer", "avatar.png");
+    const firstDelete = await deleteFile(db, "user_1", "cflop", "avatar.png");
     assert.equal(firstDelete, true);
 
-    const secondDelete = await deleteFile(db, "user_1", "cube-trainer", "avatar.png");
+    const secondDelete = await deleteFile(db, "user_1", "cflop", "avatar.png");
     assert.equal(secondDelete, false);
 
-    const fetched = await getFile(db, "user_1", "cube-trainer", "avatar.png");
+    const fetched = await getFile(db, "user_1", "cflop", "avatar.png");
     assert.equal(fetched, undefined);
   } finally {
     client.close();
@@ -352,10 +338,10 @@ void test("putDocument rejects a write that would exceed the cumulative quota wi
 
   try {
     // `"a".repeat(40)` serializes to 42 bytes of JSON (the two quotes).
-    await putDocument(db, "user_1", "cube-trainer", "a", "a".repeat(40), 100);
+    await putDocument(db, "user_1", "cflop", "a", "a".repeat(40), 100);
 
     await assert.rejects(
-      () => putDocument(db, "user_1", "cube-trainer", "b", "a".repeat(80), 100),
+      () => putDocument(db, "user_1", "cflop", "b", "a".repeat(80), 100),
       (error: unknown) => {
         assert.ok(error instanceof ApiError);
         assert.equal(error.statusCode, 413);
@@ -366,7 +352,7 @@ void test("putDocument rejects a write that would exceed the cumulative quota wi
     );
 
     // The rejected write must not have landed.
-    assert.equal(await getDocument(db, "user_1", "cube-trainer", "b"), undefined);
+    assert.equal(await getDocument(db, "user_1", "cflop", "b"), undefined);
   } finally {
     client.close();
   }
@@ -376,10 +362,10 @@ void test("putDocument accepts a write that lands exactly on the cumulative quot
   const { client, db } = createMigratedInMemoryDatabase();
 
   try {
-    await putDocument(db, "user_1", "cube-trainer", "a", "a".repeat(40), 100);
+    await putDocument(db, "user_1", "cflop", "a", "a".repeat(40), 100);
     // 42 bytes already stored + 58 bytes here == the 100 byte cap exactly, so
     // this fails if the comparison is ever loosened from `>` to `>=`.
-    const created = await putDocument(db, "user_1", "cube-trainer", "b", "a".repeat(56), 100);
+    const created = await putDocument(db, "user_1", "cflop", "b", "a".repeat(56), 100);
 
     assert.equal(created.key, "b");
   } finally {
@@ -394,10 +380,10 @@ void test("putDocument counts stored bytes, not characters, when summing the quo
     // 30 three-byte characters -> 90 UTF-8 bytes plus two quotes = 92 bytes,
     // but only 32 JavaScript characters. Summing `length()` on the TEXT
     // column would charge 32 and wrongly let the second write through.
-    await putDocument(db, "user_1", "cube-trainer", "a", "☃".repeat(30), 100);
+    await putDocument(db, "user_1", "cflop", "a", "☃".repeat(30), 100);
 
     await assert.rejects(
-      () => putDocument(db, "user_1", "cube-trainer", "b", "aaaaaaaaaa", 100),
+      () => putDocument(db, "user_1", "cflop", "b", "aaaaaaaaaa", 100),
       (error: unknown) => error instanceof ApiError && error.statusCode === 413,
     );
   } finally {
@@ -409,11 +395,11 @@ void test("putDocument does not charge the row it replaces, so an over-quota key
   const { client, db } = createMigratedInMemoryDatabase();
 
   try {
-    await putDocument(db, "user_1", "cube-trainer", "a", "a".repeat(96), 100);
+    await putDocument(db, "user_1", "cflop", "a", "a".repeat(96), 100);
 
     // Overwriting the same key with a smaller value must succeed: counting
     // the existing row would wedge a user sitting at the cap.
-    const updated = await putDocument(db, "user_1", "cube-trainer", "a", "a".repeat(10), 100);
+    const updated = await putDocument(db, "user_1", "cflop", "a", "a".repeat(10), 100);
 
     assert.equal(updated.value, "a".repeat(10));
   } finally {
@@ -426,10 +412,10 @@ void test("putDocument counts files toward the same cumulative quota", async () 
 
   try {
     const data = Buffer.alloc(80, 0x61);
-    await putFile(db, "user_1", "cube-trainer", "a.bin", "application/octet-stream", 80, data, 100);
+    await putFile(db, "user_1", "cflop", "a.bin", "application/octet-stream", 80, data, 100);
 
     await assert.rejects(
-      () => putDocument(db, "user_1", "cube-trainer", "a", "a".repeat(40), 100),
+      () => putDocument(db, "user_1", "cflop", "a", "a".repeat(40), 100),
       (error: unknown) => error instanceof ApiError && error.statusCode === 413,
     );
   } finally {
@@ -441,13 +427,12 @@ void test("putFile rejects an upload that would exceed the cumulative quota", as
   const { client, db } = createMigratedInMemoryDatabase();
 
   try {
-    await putDocument(db, "user_1", "cube-trainer", "a", "a".repeat(60), 100);
+    await putDocument(db, "user_1", "cflop", "a", "a".repeat(60), 100);
 
     const data = Buffer.alloc(80, 0x61);
 
     await assert.rejects(
-      () =>
-        putFile(db, "user_1", "cube-trainer", "a.bin", "application/octet-stream", 80, data, 100),
+      () => putFile(db, "user_1", "cflop", "a.bin", "application/octet-stream", 80, data, 100),
       (error: unknown) => {
         assert.ok(error instanceof ApiError);
         assert.equal(error.statusCode, 413);
@@ -457,7 +442,7 @@ void test("putFile rejects an upload that would exceed the cumulative quota", as
       },
     );
 
-    assert.equal(await getFile(db, "user_1", "cube-trainer", "a.bin"), undefined);
+    assert.equal(await getFile(db, "user_1", "cflop", "a.bin"), undefined);
   } finally {
     client.close();
   }
@@ -467,10 +452,10 @@ void test("the cumulative quota is scoped per user", async () => {
   const { client, db } = createMigratedInMemoryDatabase();
 
   try {
-    await putDocument(db, "user_1", "cube-trainer", "a", "a".repeat(90), 100);
+    await putDocument(db, "user_1", "cflop", "a", "a".repeat(90), 100);
 
     // user_2 starts from zero rather than inheriting user_1's usage.
-    const created = await putDocument(db, "user_2", "cube-trainer", "a", "a".repeat(90), 100);
+    const created = await putDocument(db, "user_2", "cflop", "a", "a".repeat(90), 100);
 
     assert.equal(created.key, "a");
   } finally {
@@ -483,22 +468,13 @@ void test("a file at the same namespace/key still counts when a document is writ
 
   try {
     const data = Buffer.alloc(80, 0x61);
-    await putFile(
-      db,
-      "user_1",
-      "cube-trainer",
-      "shared",
-      "application/octet-stream",
-      80,
-      data,
-      1000,
-    );
+    await putFile(db, "user_1", "cflop", "shared", "application/octet-stream", 80, data, 1000);
 
     // The document write replaces no *file*, so the file's 80 bytes must still
     // count: 80 + 42 = 122 > 100. Excluding the replaced row from both tables
     // would hide the file and let this through.
     await assert.rejects(
-      () => putDocument(db, "user_1", "cube-trainer", "shared", "a".repeat(40), 100),
+      () => putDocument(db, "user_1", "cflop", "shared", "a".repeat(40), 100),
       (error: unknown) => error instanceof ApiError && error.statusCode === 413,
     );
   } finally {
@@ -510,13 +486,12 @@ void test("a document at the same namespace/key still counts when a file is uplo
   const { client, db } = createMigratedInMemoryDatabase();
 
   try {
-    await putDocument(db, "user_1", "cube-trainer", "shared", "a".repeat(60), 1000);
+    await putDocument(db, "user_1", "cflop", "shared", "a".repeat(60), 1000);
 
     const data = Buffer.alloc(80, 0x61);
 
     await assert.rejects(
-      () =>
-        putFile(db, "user_1", "cube-trainer", "shared", "application/octet-stream", 80, data, 100),
+      () => putFile(db, "user_1", "cflop", "shared", "application/octet-stream", 80, data, 100),
       (error: unknown) => error instanceof ApiError && error.statusCode === 413,
     );
   } finally {
@@ -529,21 +504,12 @@ void test("replacing a document at a key shared with a file still excludes only 
 
   try {
     const data = Buffer.alloc(40, 0x61);
-    await putFile(
-      db,
-      "user_1",
-      "cube-trainer",
-      "shared",
-      "application/octet-stream",
-      40,
-      data,
-      1000,
-    );
-    await putDocument(db, "user_1", "cube-trainer", "shared", "a".repeat(50), 1000);
+    await putFile(db, "user_1", "cflop", "shared", "application/octet-stream", 40, data, 1000);
+    await putDocument(db, "user_1", "cflop", "shared", "a".repeat(50), 1000);
 
     // Shrinking the document must still work: the old document row is excluded
     // (it is replaced), the file is not. 40 + 12 = 52 <= 100.
-    const updated = await putDocument(db, "user_1", "cube-trainer", "shared", "a".repeat(10), 100);
+    const updated = await putDocument(db, "user_1", "cflop", "shared", "a".repeat(10), 100);
 
     assert.equal(updated.value, "a".repeat(10));
   } finally {

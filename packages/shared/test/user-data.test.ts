@@ -26,8 +26,15 @@ import {
 } from "../src/index.js";
 
 describe("dataNamespaceSchema", () => {
-  it("accepts a lowercase hyphenated slug", () => {
-    expect(dataNamespaceSchema.parse("cube-trainer")).toBe("cube-trainer");
+  it("accepts a lowercase slug", () => {
+    expect(dataNamespaceSchema.parse("cflop")).toBe("cflop");
+  });
+
+  // Kept as its own case after the cflop rebrand: the app name used to supply
+  // the hyphen for free, so renaming it left the `-` branch of the pattern
+  // unexercised by any assertion.
+  it("accepts a hyphenated slug", () => {
+    expect(dataNamespaceSchema.parse("cflop-drill")).toBe("cflop-drill");
   });
 
   it("accepts a single character slug", () => {
@@ -35,11 +42,11 @@ describe("dataNamespaceSchema", () => {
   });
 
   it("rejects uppercase characters", () => {
-    expect(dataNamespaceSchema.safeParse("Cube-Trainer").success).toBe(false);
+    expect(dataNamespaceSchema.safeParse("CFLOP").success).toBe(false);
   });
 
   it("rejects a leading hyphen", () => {
-    expect(dataNamespaceSchema.safeParse("-cube-trainer").success).toBe(false);
+    expect(dataNamespaceSchema.safeParse("-cflop").success).toBe(false);
   });
 
   it("rejects an empty string", () => {
@@ -83,7 +90,7 @@ describe("dataKeySchema", () => {
 
 describe("userDocumentSchema", () => {
   const validDocument = {
-    namespace: "cube-trainer",
+    namespace: "cflop",
     key: "settings",
     value: { theme: "dark" },
     updatedAt: "2026-07-22T00:00:00.000Z",
@@ -118,14 +125,14 @@ describe("userDocumentSchema", () => {
 
 describe("getDocumentQuerySchema", () => {
   it("requires namespace and key", () => {
-    expect(getDocumentQuerySchema.parse({ namespace: "cube-trainer", key: "settings" })).toEqual({
-      namespace: "cube-trainer",
+    expect(getDocumentQuerySchema.parse({ namespace: "cflop", key: "settings" })).toEqual({
+      namespace: "cflop",
       key: "settings",
     });
   });
 
   it("rejects a missing key", () => {
-    expect(getDocumentQuerySchema.safeParse({ namespace: "cube-trainer" }).success).toBe(false);
+    expect(getDocumentQuerySchema.safeParse({ namespace: "cflop" }).success).toBe(false);
   });
 });
 
@@ -133,12 +140,12 @@ describe("putDocumentBodySchema", () => {
   it("accepts namespace, key, and an arbitrary value", () => {
     expect(
       putDocumentBodySchema.parse({
-        namespace: "cube-trainer",
+        namespace: "cflop",
         key: "settings",
         value: { theme: "dark" },
       }),
     ).toEqual({
-      namespace: "cube-trainer",
+      namespace: "cflop",
       key: "settings",
       value: { theme: "dark" },
     });
@@ -155,12 +162,12 @@ describe("putDocumentBodySchema", () => {
   });
 
   it("rejects a missing or undefined value (would persist non-JSON into a NOT NULL column)", () => {
-    expect(
-      putDocumentBodySchema.safeParse({ namespace: "cube-trainer", key: "settings" }).success,
-    ).toBe(false);
+    expect(putDocumentBodySchema.safeParse({ namespace: "cflop", key: "settings" }).success).toBe(
+      false,
+    );
     expect(
       putDocumentBodySchema.safeParse({
-        namespace: "cube-trainer",
+        namespace: "cflop",
         key: "settings",
         value: undefined,
       }).success,
@@ -170,8 +177,7 @@ describe("putDocumentBodySchema", () => {
   it("accepts defined falsy JSON values (null, false, 0, empty string)", () => {
     for (const value of [null, false, 0, ""]) {
       expect(
-        putDocumentBodySchema.safeParse({ namespace: "cube-trainer", key: "settings", value })
-          .success,
+        putDocumentBodySchema.safeParse({ namespace: "cflop", key: "settings", value }).success,
       ).toBe(true);
     }
   });
@@ -179,7 +185,7 @@ describe("putDocumentBodySchema", () => {
   it("rejects a missing key field", () => {
     expect(
       putDocumentBodySchema.safeParse({
-        namespace: "cube-trainer",
+        namespace: "cflop",
         value: { theme: "dark" },
       }).success,
     ).toBe(false);
@@ -188,8 +194,8 @@ describe("putDocumentBodySchema", () => {
 
 describe("deleteDocumentBodySchema", () => {
   it("requires namespace and key", () => {
-    expect(deleteDocumentBodySchema.parse({ namespace: "cube-trainer", key: "settings" })).toEqual({
-      namespace: "cube-trainer",
+    expect(deleteDocumentBodySchema.parse({ namespace: "cflop", key: "settings" })).toEqual({
+      namespace: "cflop",
       key: "settings",
     });
   });
@@ -197,8 +203,8 @@ describe("deleteDocumentBodySchema", () => {
 
 describe("listDocumentsQuerySchema and listDocumentsResponseSchema", () => {
   it("requires a namespace on the query", () => {
-    expect(listDocumentsQuerySchema.parse({ namespace: "cube-trainer" })).toEqual({
-      namespace: "cube-trainer",
+    expect(listDocumentsQuerySchema.parse({ namespace: "cflop" })).toEqual({
+      namespace: "cflop",
     });
     expect(listDocumentsQuerySchema.safeParse({}).success).toBe(false);
   });
@@ -207,7 +213,7 @@ describe("listDocumentsQuerySchema and listDocumentsResponseSchema", () => {
     const payload = {
       documents: [
         {
-          namespace: "cube-trainer",
+          namespace: "cflop",
           key: "settings",
           value: { theme: "dark" },
           updatedAt: "2026-07-22T00:00:00.000Z",
@@ -235,7 +241,7 @@ describe("deleteResultSchema", () => {
 
 describe("userFileMetadataSchema", () => {
   const validMetadata = {
-    namespace: "cube-trainer",
+    namespace: "cflop",
     key: "avatar.png",
     contentType: "image/png",
     size: 1024,
@@ -261,8 +267,8 @@ describe("userFileMetadataSchema", () => {
 
 describe("listFilesQuerySchema and listFilesResponseSchema", () => {
   it("requires a namespace on the query", () => {
-    expect(listFilesQuerySchema.parse({ namespace: "cube-trainer" })).toEqual({
-      namespace: "cube-trainer",
+    expect(listFilesQuerySchema.parse({ namespace: "cflop" })).toEqual({
+      namespace: "cflop",
     });
     expect(listFilesQuerySchema.safeParse({}).success).toBe(false);
   });
@@ -271,7 +277,7 @@ describe("listFilesQuerySchema and listFilesResponseSchema", () => {
     const payload = {
       files: [
         {
-          namespace: "cube-trainer",
+          namespace: "cflop",
           key: "avatar.png",
           contentType: "image/png",
           size: 1024,
@@ -285,8 +291,8 @@ describe("listFilesQuerySchema and listFilesResponseSchema", () => {
 
 describe("deleteFileBodySchema", () => {
   it("requires namespace and key", () => {
-    expect(deleteFileBodySchema.parse({ namespace: "cube-trainer", key: "avatar.png" })).toEqual({
-      namespace: "cube-trainer",
+    expect(deleteFileBodySchema.parse({ namespace: "cflop", key: "avatar.png" })).toEqual({
+      namespace: "cflop",
       key: "avatar.png",
     });
   });
@@ -395,7 +401,7 @@ describe("documentValueSchema size bound", () => {
   });
 
   it("still reports a missing value as required rather than as a size problem", () => {
-    const result = putDocumentBodySchema.safeParse({ namespace: "cube-trainer", key: "settings" });
+    const result = putDocumentBodySchema.safeParse({ namespace: "cflop", key: "settings" });
 
     expect(result.success).toBe(false);
     // Exactly one issue: the size refinement must not also fire on a value
@@ -407,7 +413,7 @@ describe("documentValueSchema size bound", () => {
   it("rejects an over-cap value through putDocumentBodySchema", () => {
     expect(
       putDocumentBodySchema.safeParse({
-        namespace: "cube-trainer",
+        namespace: "cflop",
         key: "settings",
         value: valueOfSerializedBytes(DOCUMENT_VALUE_MAX_BYTES + 1),
       }).success,
@@ -423,7 +429,7 @@ describe("documentValueSchema size bound", () => {
     ).toBe(true);
     expect(
       userDocumentSchema.safeParse({
-        namespace: "cube-trainer",
+        namespace: "cflop",
         key: "settings",
         value: valueOfSerializedBytes(DOCUMENT_VALUE_MAX_BYTES + 1000),
         updatedAt: "2026-07-28 00:00:00",

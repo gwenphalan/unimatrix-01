@@ -303,7 +303,7 @@ describe("api client", () => {
         createResponse({
           json: () =>
             Promise.resolve({
-              namespace: "cube-trainer",
+              namespace: "cflop",
               key: "progress",
               value: { streak: 3 },
               updatedAt: "2026-07-01T00:00:00.000Z",
@@ -318,14 +318,14 @@ describe("api client", () => {
       fetch: fetchMock,
     });
 
-    const result = await client.getDocument({ namespace: "cube-trainer", key: "progress" });
+    const result = await client.getDocument({ namespace: "cflop", key: "progress" });
 
     expect(fetchMock).toHaveBeenCalledWith(
-      "https://api.example.test/me/data?namespace=cube-trainer&key=progress",
+      "https://api.example.test/me/data?namespace=cflop&key=progress",
       expect.objectContaining({ method: "GET" }),
     );
     expect(result).toEqual({
-      namespace: "cube-trainer",
+      namespace: "cflop",
       key: "progress",
       value: { streak: 3 },
       updatedAt: "2026-07-01T00:00:00.000Z",
@@ -354,7 +354,7 @@ describe("api client", () => {
       ),
     });
 
-    const rejection = client.getDocument({ namespace: "cube-trainer", key: "missing" });
+    const rejection = client.getDocument({ namespace: "cflop", key: "missing" });
 
     await expect(rejection).rejects.toBeInstanceOf(ApiClientError);
     await rejection.catch((error: unknown) => {
@@ -371,7 +371,7 @@ describe("api client", () => {
         createResponse({
           json: () =>
             Promise.resolve({
-              namespace: "cube-trainer",
+              namespace: "cflop",
               key: "progress",
               value: { streak: 4 },
               updatedAt: "2026-07-02T00:00:00.000Z",
@@ -387,7 +387,7 @@ describe("api client", () => {
     });
 
     const result = await client.putDocument({
-      namespace: "cube-trainer",
+      namespace: "cflop",
       key: "progress",
       value: { streak: 4 },
     });
@@ -397,7 +397,7 @@ describe("api client", () => {
       expect.objectContaining({
         method: "PUT",
         body: JSON.stringify({
-          namespace: "cube-trainer",
+          namespace: "cflop",
           key: "progress",
           value: { streak: 4 },
         }),
@@ -414,7 +414,7 @@ describe("api client", () => {
             Promise.resolve({
               documents: [
                 {
-                  namespace: "cube-trainer",
+                  namespace: "cflop",
                   key: "progress",
                   value: { streak: 4 },
                   updatedAt: "2026-07-02T00:00:00.000Z",
@@ -431,10 +431,10 @@ describe("api client", () => {
       fetch: fetchMock,
     });
 
-    const result = await client.listDocuments({ namespace: "cube-trainer" });
+    const result = await client.listDocuments({ namespace: "cflop" });
 
     expect(fetchMock).toHaveBeenCalledWith(
-      "https://api.example.test/me/data/list?namespace=cube-trainer",
+      "https://api.example.test/me/data/list?namespace=cflop",
       expect.objectContaining({ method: "GET" }),
     );
     expect(result.documents).toHaveLength(1);
@@ -455,13 +455,13 @@ describe("api client", () => {
       fetch: fetchMock,
     });
 
-    const result = await client.deleteDocument({ namespace: "cube-trainer", key: "progress" });
+    const result = await client.deleteDocument({ namespace: "cflop", key: "progress" });
 
     expect(fetchMock).toHaveBeenCalledWith(
       "https://api.example.test/me/data",
       expect.objectContaining({
         method: "DELETE",
-        body: JSON.stringify({ namespace: "cube-trainer", key: "progress" }),
+        body: JSON.stringify({ namespace: "cflop", key: "progress" }),
       }),
     );
     expect(result).toEqual({ deleted: true });
@@ -475,7 +475,7 @@ describe("api client", () => {
             Promise.resolve({
               files: [
                 {
-                  namespace: "cube-trainer",
+                  namespace: "cflop",
                   key: "avatar.png",
                   contentType: "image/png",
                   size: 1024,
@@ -493,10 +493,10 @@ describe("api client", () => {
       fetch: fetchMock,
     });
 
-    const result = await client.listFiles({ namespace: "cube-trainer" });
+    const result = await client.listFiles({ namespace: "cflop" });
 
     expect(fetchMock).toHaveBeenCalledWith(
-      "https://api.example.test/me/files?namespace=cube-trainer",
+      "https://api.example.test/me/files?namespace=cflop",
       expect.objectContaining({ method: "GET" }),
     );
     expect(result.files).toHaveLength(1);
@@ -518,13 +518,13 @@ describe("api client", () => {
       fetch: fetchMock,
     });
 
-    const result = await client.deleteFile({ namespace: "cube-trainer", key: "avatar.png" });
+    const result = await client.deleteFile({ namespace: "cflop", key: "avatar.png" });
 
     expect(fetchMock).toHaveBeenCalledWith(
       "https://api.example.test/me/files",
       expect.objectContaining({
         method: "DELETE",
-        body: JSON.stringify({ namespace: "cube-trainer", key: "avatar.png" }),
+        body: JSON.stringify({ namespace: "cflop", key: "avatar.png" }),
       }),
     );
     expect(result).toEqual({ deleted: true });
