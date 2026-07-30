@@ -5,6 +5,7 @@
 - **Present options for dependency, tooling, and architectural choices** — those are the owner's call. Give a recommendation alongside the options, not instead of them
 - Once an approach is chosen, implement it without further checkpoints, and report the implementation decisions you made along the way. The one stop is before opening a PR — see the `ship-pr` skill
 - Do not assume a diff will be read line by line. Verification has to come from checks you actually ran, so treat a red check as the signal it is and never route around one
+- **Keep a task list, and update it live.** Because the diff is not the progress surface, the task list is — use `TaskCreate`/`TaskUpdate` for anything beyond a couple of trivial steps. Live means the moment the owner raises an issue or a request, including mid-turn, it becomes a task; not batched at the end of a turn, and not reconstructed afterwards. Mark a task in progress before starting it and completed only when it is actually finished — a task list that lags the work is worse than none, because it reads as status
 - Be conservative wherever a mistake would fail silently rather than loudly
 - The repo owner likes ambitious ideas, simple systems, and software that feels obvious. Do not preserve complexity just because it already exists. Do not introduce machinery just because it looks architecturally impressive. Understand the real constraint, then fight for the smallest model that makes the correct behavior unsurprising
 
@@ -20,6 +21,7 @@
 - `packages/config-vitest` owns the coverage provider, reporters and exclusions, while each workspace supplies its own thresholds. Per-package rules for everything else are in Boundaries below
 - Reserved, not live: `apps/workers`, `content/docs`, `content/notes`, future packages like `packages/bmd-parser`. Never describe a reserved path as an active runtime surface
 - Nested `AGENTS.md` files carry the per-directory detail and override this file where they overlap. They load on demand, when a file in their directory is read — **Claude Code reads `CLAUDE.md`, not `AGENTS.md`**, so each one needs a sibling `CLAUDE.md` symlink or it reaches no agent at all. `pnpm check:agents-md` fails closed on a missing, wrong-target, or non-symlink one. Nested files are not re-injected after `/compact`; they reload on the next read in that directory, so anything that must survive compaction belongs in this file
+- **Do not iterate on `.claude/` from a worktree — use the main checkout.** A worktree's own `.claude/` is never scanned: the project root resolves to the main checkout, so the skills, settings and hooks in force are that checkout's, whatever the worktree's branch contains. Committing a `.claude/` change from a worktree is fine; *testing* one there is not, and a skill edited on a feature branch stays inert until it merges. Never infer from a diff that the worktree copy is the one running
 
 ## File-Scoped Commands
 
