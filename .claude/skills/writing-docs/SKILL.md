@@ -34,6 +34,33 @@ the most damaging thing a reference doc can contain. If you did not run it, say 
 
 **Delete stale text; don't append a correction beside it.**
 
+## The five drifts this repo actually had
+
+From an audit of every tracked doc and comment. Each of these was written by someone being helpful,
+and each became a lie within weeks. When you catch yourself about to do one, don't.
+
+**Never commit a count of anything the filesystem knows.** "Create four Dokploy services" survived
+into five; "the four applications under `apps/`" left one deployed app outside the security policy.
+Write the glob or the derivation — "one service per `infra/docker/*-compose.yaml`" — not the number.
+
+**Never paste a list the code owns; point at the file.** A copy of
+`DEFAULT_API_CORS_ALLOWED_ORIGINS` drifted by four entries, a hand-written frontmatter schema was
+thinner than `parsers.ts`, and `nginx:1.29-alpine` was pinned at `1.31`. If a reader could `grep` it,
+name where to grep. A committed copy is a second source of truth that nothing reconciles.
+
+**Never describe shipped work as future, or a change as recent.** "(later phase)", "now exists",
+"no longer", "for now" — six places marked live wiring as unbuilt, which invites a second
+implementation instead of reuse. Write the present tense; git holds the history.
+
+**When you claim a safety net, name the check that provides it.** Two files said a trap was caught
+by "nothing but a browser" while `check-app-wiring.sh` failed closed on it, and
+`packages/db/AGENTS.md` said "nothing in CI would catch this" while `Images (api)` did. An
+overstated gap is as costly as a missed one — it gets budgeted for.
+
+**When you delete a mechanism, grep for its name first.** An "occluder" system was removed and five
+comments across four workspaces survived it, three of them the only stated reason a wrapper element
+existed. `pnpm check:stale-comments` now catches this class.
+
 For code comments, follow the surrounding file's comment density and idiom. Where a comment is
 worth writing, it earns its place by saying what the code cannot say about itself. An invariant
 worth explaining is usually worth asserting instead.

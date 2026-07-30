@@ -52,6 +52,20 @@ this file holds the mechanics, each of which was learned the hard way.
   their directory is read — so an `AGENTS.md` without the symlink reaches no agent, and nothing else
   notices. It fails closed on a missing symlink, a regular file in its place, a wrong target, and a
   `CLAUDE.md` whose `AGENTS.md` was renamed away.
+- Three more guards, all added after a documentation audit found the drift each one now prevents.
+  `check-watch-paths.mjs` (`Watch paths`) is the only one with a production consequence: it derives
+  each app's real inputs from the `@unimatrix/*` specifiers under its `src/` and fails if one is
+  missing from the fenced watch-path list in its README, because Dokploy rebuilds only on those
+  paths — `packages/chrome/**` was absent from three apps, so the shared site chrome could change
+  without them redeploying. `check-stale-comments.mjs` (`Stale comments`) fails when a backticked
+  `PascalCase` name in a comment exists in no code; an "occluder" mechanism was deleted and five
+  comments across four workspaces outlived it. `check-coverage-drift.mjs` (`Coverage drift`) runs
+  **after** `pnpm test` because it reads the `coverage/coverage-summary.json` that run writes, and
+  fails when a floor sits more than 5 points under the measurement — `packages/auth` gated at 26
+  while measuring 73.84. The 5 points are deliberate: V8 re-attributes functions between Node
+  majors, so a floor pinned to the exact figure reddens on the next runtime bump for no real reason.
+- All three were validated by breaking them on purpose, not by watching them pass. A check that
+  cannot be shown to fail is not known to work.
 - Two workflows serve `lab`. `Prototypes guard` (job `No prototypes on main`) runs on **every**
   pull request to `main` with no `paths:` filter and fails when the diff adds a file under
   `lab/prototypes/` — the `.gitkeep` and `README.md` scaffolding are allow-listed. The filter is

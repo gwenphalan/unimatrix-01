@@ -64,7 +64,11 @@ export function createCoverageConfig({ thresholds, exclude = [] }) {
     // coverage number, which makes the floor meaningless.
     include: ["src/**"],
     exclude: [...ALWAYS_EXCLUDED, ...exclude],
-    reporter: ["text-summary", "html"],
+    // `json-summary` exists so `infra/scripts/check-coverage-drift.mjs` can read
+    // the measured figure. Without a machine-readable report the only place the
+    // number appears is human-facing output, which is how `apps/api` drifted to
+    // nine points above its own floor unnoticed.
+    reporter: ["text-summary", "html", "json-summary"],
     reportsDirectory: "./coverage",
     thresholds: {
       statements: thresholds.statements,
