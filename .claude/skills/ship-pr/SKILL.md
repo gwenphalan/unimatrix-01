@@ -245,14 +245,18 @@ appear, and the checks list still reads `Review skipped: automatic reviews are d
 is indistinguishable from "reviewed clean" at a glance. **So the ack is never the confirmation: check
 the review count, as below.**
 
-Prefer `full review` over the bare form, but hold that loosely — the evidence is thin and points both
-ways. Across #153–#155: the bare form returned the ack and nothing twice; `full review` returned a
-real Major finding once (#153, 180 seconds) and nothing twice (#154, #155, both still empty 8 minutes
-later). n=1 success against n=2 failure with the *same* command, so command form does not explain the
-data. What fits better is exhaustion: those were five pings across three PRs inside ~20 minutes, and
-the one that worked was the second ping on a PR. Treat "one ping per PR, on a rested window, verified
-by review count" as the thing that matters, and `full review` as the cheap default rather than the
-fix. A single `full review` on one PR with no other recent pings is the test that would settle it.
+**The command form is not what decides whether a review happens — the rate limit is.** Measured on
+#157: one `@coderabbitai full review`, on a PR with all checks green, and 6 seconds later CodeRabbit
+edited its summary comment to `Review limit reached` / "you've reached your PR review limit, so we
+couldn't start this review" / "Next review available in: 4 minutes". Same command that worked on #153.
+The variable is the limit, and the earlier #153/#154/#155 pattern — `full review` returning a real
+finding once and nothing twice — is explained by five pings across three PRs inside ~20 minutes, not
+by which words were typed. CodeRabbit's own recovery instruction in that warning is the **bare**
+`@coderabbitai review`, so treat the two forms as interchangeable for triggering purposes.
+
+What actually governs throughput: **one ping per PR, on a window that has had time to refill,
+confirmed by the review count rising.** Spend the ping when the diff is final and CI is green,
+because a wasted slot is not recoverable for minutes to hours.
 
 **One CodeRabbit review per PR** — not one per push. Once you have pinged it, that PR's CodeRabbit
 budget is normally spent: fix what it found, push the fixes, and merge on the required checks
