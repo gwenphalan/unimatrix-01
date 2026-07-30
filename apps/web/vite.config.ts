@@ -69,6 +69,13 @@ export function createWebViteConfig(mode: string): UserConfig {
       },
     },
     server: {
+      // Explicit and strict. Vite's default is 5173 for whichever app starts
+      // first and a silent shift to the next free port for the second — so two
+      // apps that both defaulted would swap identities depending on start order,
+      // and `DEFAULT_API_CORS_ALLOWED_ORIGINS` only allows 5173. `strictPort`
+      // turns a collision into a refusal to start instead of a wrong origin.
+      port: 5173,
+      strictPort: true,
       proxy: {
         "/api": {
           changeOrigin: true,
@@ -85,6 +92,13 @@ export function createWebViteConfig(mode: string): UserConfig {
         // forever rather than as a reload storm.
         ignored: ["**/coverage/**", "**/dist/**", "**/.turbo/**", "**/playwright-report/**"],
       },
+    },
+    // `playwright.config.ts` starts the preview server with an explicit
+    // `--port 4173`, which is also what the API's CORS allowlist contains. Stating
+    // it here keeps a bare `vite preview` on the same port as the smoke suite.
+    preview: {
+      port: 4173,
+      strictPort: true,
     },
     resolve: {
       alias: [
