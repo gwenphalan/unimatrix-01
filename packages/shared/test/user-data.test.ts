@@ -26,8 +26,15 @@ import {
 } from "../src/index.js";
 
 describe("dataNamespaceSchema", () => {
-  it("accepts a lowercase hyphenated slug", () => {
+  it("accepts a lowercase slug", () => {
     expect(dataNamespaceSchema.parse("cflop")).toBe("cflop");
+  });
+
+  // Kept as its own case after the cflop rebrand: the app name used to supply
+  // the hyphen for free, so renaming it left the `-` branch of the pattern
+  // unexercised by any assertion.
+  it("accepts a hyphenated slug", () => {
+    expect(dataNamespaceSchema.parse("cflop-drill")).toBe("cflop-drill");
   });
 
   it("accepts a single character slug", () => {

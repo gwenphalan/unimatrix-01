@@ -13,6 +13,13 @@
  * passed — a seeded row that someone has since edited in the CMS is the newer
  * copy, and silently overwriting it would lose that edit.
  *
+ * **Changing a slug in one of these files is not a rename.** The match key is
+ * the slug itself, so the entry under the new slug is *created* and the row
+ * under the old one stays exactly as it was — published and, if it was
+ * featured, still featured. Two live entries for one project, no error. Rename
+ * the slug through the CMS (`PATCH` accepts `slug`) and leave the file to
+ * follow; do not reach for `--force`, which would only overwrite the new row.
+ *
  * Usage:
  *   pnpm --filter @unimatrix/api seed:content [--force] [--user <clerk-user-id>]
  */

@@ -207,7 +207,7 @@ to rewrite `/api` paths in the primary production setup.
 
 Clerk is a single shared application across every Unimatrix service, with
 primary domain `unimatrix-01.dev`. Sessions are shared across all subdomains
-(`auth.`, `api.`, `cube.`, and the apex), so **no satellite domains are
+(`auth.`, `api.`, `cflop.`, and the apex), so **no satellite domains are
 needed**.
 
 A human needs to do the following once in the Clerk Dashboard:
