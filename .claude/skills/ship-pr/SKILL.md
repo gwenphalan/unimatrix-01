@@ -238,14 +238,30 @@ and not while CI is still running. A ping at PR-open is the common mistake: the 
 reported yet, so a red one arrives afterwards and the review you just spent covers code you are about
 to change.
 
-**`@coderabbitai review` is the wrong command on this repo, and it fails silently.** With auto-review
-disabled it replies "✅ Action performed / Review finished" within seconds, adds the note that
-CodeRabbit "does not re-review already reviewed commits", and produces *no review at all* — the review
-count stays at its baseline, there are no threads, and the checks list still reads
-`Review skipped: automatic reviews are disabled`. Measured on #153 and #154: the plain form returned
-the ack and nothing else, and `full review` on the same unchanged commit returned a real review with a
-Major finding in 180 seconds. The plain form is indistinguishable from "reviewed clean" unless you
-check the review count, so use `full review` and never the bare form.
+**The "✅ Action performed / Review finished" ack carries no information at all — not that a review
+ran, and not that one failed.** It lands within seconds of *any* ping, with the same body and the same
+"does not re-review already reviewed commits" note, and CodeRabbit then *edits that same comment* when
+the outcome is known. Measured on #157: the ack posted 6 seconds after the ping and the real review
+arrived 4m43s later as an edit to it; on the ping before that, the identical ack was edited into a
+rate-limit warning instead. So a fast ack is not a failure signal — reading it as one is how a real
+review gets missed, and reading it as success is how an unreviewed PR gets merged.
+
+**Confirm by state, never by the ack**, using the three signals in "Confirming a review actually ran"
+below: the review count above the baseline you recorded, unresolved threads, and a summary comment
+carrying neither `rate limited by coderabbit.ai` nor `review in progress by coderabbit.ai`.
+
+**The command form is not what decides whether a review happens — the rate limit is.** Both halves of
+that were measured on PR 157. One `@coderabbitai full review` with every check green: 6 seconds later
+CodeRabbit edited its summary comment to `Review limit reached` / "you've reached your PR review limit,
+so we couldn't start this review" / "Next review available in: 4 minutes" — the same command that had
+returned a Major finding on 153. Then a single **bare** `@coderabbitai review` once that window
+refilled: a real review with three findings, 4m43s later. So both forms trigger, and both are blocked
+by the limit; the earlier pattern of `full review` working once and failing twice was five pings across
+three PRs inside ~20 minutes, not the wording.
+
+What actually governs throughput: **one ping per PR, on a window that has had time to refill,
+confirmed by the review count rising.** Spend the ping when the diff is final and CI is green,
+because a wasted slot is not recoverable for minutes to hours.
 
 **One CodeRabbit review per PR** — not one per push. Once you have pinged it, that PR's CodeRabbit
 budget is normally spent: fix what it found, push the fixes, and merge on the required checks
