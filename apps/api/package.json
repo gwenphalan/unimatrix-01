@@ -11,7 +11,7 @@
     "start": "node dist/server.js",
     "lint": "eslint .",
     "seed:content": "tsx scripts/seed-content.ts",
-    "test": "node --import tsx --test --experimental-test-coverage --test-coverage-include='src/**' --test-coverage-lines=85 --test-coverage-functions=84 test/**/*.test.ts",
+    "test": "node --import tsx --test --experimental-test-coverage --test-coverage-include='src/**' --test-coverage-lines=92 --test-coverage-functions=89 test/**/*.test.ts",
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
