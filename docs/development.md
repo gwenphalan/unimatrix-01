@@ -52,9 +52,13 @@ Use `pnpm dev` to start the normal local runtime surface.
   `pnpm --filter @unimatrix/cflop dev` separately. It has no `.env`
   files and no backend dependency.
 - Does not start `@unimatrix/auth-app`; run
-  `pnpm --filter @unimatrix/auth-app dev` separately. It serves on port
-  `5175` (preview `4175`) and throws at startup without
-  `VITE_CLERK_PUBLISHABLE_KEY`.
+  `pnpm --filter @unimatrix/auth-app dev` separately. It throws at startup
+  without `VITE_CLERK_PUBLISHABLE_KEY`.
+
+Every app pins its own dev and preview port in its `vite.config.ts`, with
+`strictPort: true` — a port already in use refuses to start rather than moving
+to the next free one, so an app always answers on the port the API's CORS
+allowlist and the Playwright smoke config expect.
 
 ### `pnpm setup:local`
 

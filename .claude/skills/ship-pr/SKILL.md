@@ -56,7 +56,7 @@ Conventional commit for the title, and the scope after the type is the workspace
 file. The rest of the title should read as a sentence a human would say — what the change makes
 true, not which symbols moved.
 
-```
+```text
 feat(cflop): make Drill's picker choose the pool instead of filtering the list   ← yes
 feat(cflop): refactor case-selection.ts and add setCasesEnabled                  ← no
 ```
@@ -78,6 +78,32 @@ The body must carry three things, in this order:
    is precautionary rather than demonstrated, say so — do not let it read as a proven fix.
 
 End the commit message with the attribution header for the acting agent.
+
+## Gather what the reviewer cannot see
+
+Some findings never reach a reviewer, because they live in GitHub rather than in the diff. Collect
+them yourself once the checks are green, and put anything real into the PR body — that body is the
+reviewer's whole input, so a finding you leave in a dashboard is a finding nobody reviews.
+
+**Code-scanning alerts, for the PR's own ref.** These are the ones most easily missed: the `CodeQL`
+check can go red on an alert the diff *introduced* even when the CodeQL workflow itself succeeds, and
+such an alert does not appear in the main-branch alert list. Nothing fetches them for you —
+`/code-review` does not (verified: the string `code-scanning` appears nowhere in the Claude Code
+binary, while `code-review` appears 57 times).
+
+```sh
+gh api "repos/<owner>/<repo>/code-scanning/alerts?ref=refs/pull/<pr>/merge&state=open" \
+  --jq '.[] | "\(.rule.security_severity_level // .rule.severity)\t\(.tool.name)\t\(.rule.id)\t\(.most_recent_instance.location.path):\(.most_recent_instance.location.start_line)"'
+```
+
+Drop `?ref=` to see what is already open on `main`, which is a different list and worth knowing
+before you attribute an alert to your diff. Read `.tool.name`: this repo runs both CodeQL and OSSF
+Scorecard, and a Scorecard finding is a posture recommendation about the repository, not a defect in
+the diff — do not let one block a PR that did not cause it.
+
+**Advisory bots that comment instead of failing.** Socket reports as a passing check and puts its
+findings in a comment, and the dependency review action is separate again. A green checks list does
+not mean nothing was said.
 
 ## Review before merge — hand off to a fresh reader
 
@@ -109,6 +135,12 @@ what the change is, not by what is cheapest:
    and wait out the window, and do not merge with no review at all. Give the subagent the diff and
    the PR body — not your reasoning, which is the thing that would contaminate it. Say in the merge
    report that the review came from a subagent and why.
+
+   The `pr-review-toolkit` plugin supplies the specialist reviewers for this — `code-reviewer`,
+   `silent-failure-hunter`, `comment-analyzer`, `type-design-analyzer`, `pr-test-analyzer`,
+   `code-simplifier` — plus a `/review-pr` command that runs them together. Pick the one or two whose
+   specialism matches the diff rather than running all six; the point of this step is a second opinion
+   on the risky part, not breadth.
 3. **For a large or security-sensitive change, hand off to the owner for `/code-review ultra`.** It
    is user-triggered and billed and **you cannot launch it**, so this is a handoff, not a task.
 
@@ -165,7 +197,7 @@ independence of *context*, and only CodeRabbit and `/code-review ultra` supply t
 Every required check on `main` must report before merge is possible. Read the list from the ruleset
 rather than from memory:
 
-```
+```sh
 gh api repos/<owner>/<repo>/rulesets/<id> \
   --jq '.rules[] | select(.type=="required_status_checks") | .parameters.required_status_checks[].context'
 ```
@@ -179,7 +211,7 @@ budget for it rather than treating the first green as the last.
 
 Poll with a real wait, not a tight loop:
 
-```
+```sh
 gh pr checks <pr> --watch
 ```
 
@@ -200,11 +232,20 @@ contract, `packages/*`.
 
 ### Ask for the review — it does not run automatically
 
-`.coderabbit.yaml` sets `reviews.auto_review.enabled: false`. Comment `@coderabbitai review`
-**once, when the diff is finished and every required check is green** — not while you are still
-pushing, and not while CI is still running. A ping at PR-open is the common mistake: the checks have
-not reported yet, so a red one arrives afterwards and the review you just spent covers code you are
-about to change.
+`.coderabbit.yaml` sets `reviews.auto_review.enabled: false`. Comment **`@coderabbitai full review`**
+once, when the diff is finished and every required check is green — not while you are still pushing,
+and not while CI is still running. A ping at PR-open is the common mistake: the checks have not
+reported yet, so a red one arrives afterwards and the review you just spent covers code you are about
+to change.
+
+**`@coderabbitai review` is the wrong command on this repo, and it fails silently.** With auto-review
+disabled it replies "✅ Action performed / Review finished" within seconds, adds the note that
+CodeRabbit "does not re-review already reviewed commits", and produces *no review at all* — the review
+count stays at its baseline, there are no threads, and the checks list still reads
+`Review skipped: automatic reviews are disabled`. Measured on #153 and #154: the plain form returned
+the ack and nothing else, and `full review` on the same unchanged commit returned a real review with a
+Major finding in 180 seconds. The plain form is indistinguishable from "reviewed clean" unless you
+check the review count, so use `full review` and never the bare form.
 
 **One CodeRabbit review per PR** — not one per push. Once you have pinged it, that PR's CodeRabbit
 budget is normally spent: fix what it found, push the fixes, and merge on the required checks

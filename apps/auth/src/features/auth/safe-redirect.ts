@@ -28,8 +28,10 @@ function isAllowedRedirectUrl(raw: string): boolean {
     return protocol === "https:";
   }
 
-  // Local development across the sibling dev servers (web 5173, auth 5175,
-  // cflop 5173, previews 417x, etc.) — any port on loopback, http or https.
+  // Local development across the sibling dev servers — any port on loopback,
+  // http or https. Each app pins its own port in its `vite.config.ts`; this
+  // deliberately does not enumerate them, because a stale copy here would reject
+  // a redirect that is in fact local.
   if (hostname === "localhost" || hostname === "127.0.0.1") {
     return protocol === "http:" || protocol === "https:";
   }
