@@ -47,6 +47,18 @@ describe("pool storage", () => {
     expect(readCasePool("oll")).toEqual({});
   });
 
+  it("rejects a missing change set instead of spreading it into a silent no-op", () => {
+    setCaseEnabled("oll", "oll-1", false);
+
+    // `{ ...pool, ...null }` is a no-op, so without parsing `changes` this would rewrite the
+    // pool unchanged and report success - the one failure mode the merged-result check cannot see.
+    for (const bad of [null, undefined]) {
+      expect(() => setCasesEnabled("oll", bad as unknown as Record<string, boolean>)).toThrow();
+    }
+
+    expect(readCasePool("oll")).toEqual({ "oll-1": false });
+  });
+
   it("lets a bulk change overwrite an existing entry", () => {
     setCaseEnabled("oll", "oll-1", false);
     setCasesEnabled("oll", { "oll-1": true });
