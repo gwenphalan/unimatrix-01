@@ -1,47 +1,28 @@
-import { useMemo } from "react";
-
-import { getAlgorithmSet, groupCasesByGroup } from "@/features/algorithms/algorithm-sets";
 import { AlgorithmGroupSection } from "@/features/algorithms/components/algorithm-group-section";
-import type { CaseFilterMode } from "@/features/algorithms/components/case-category-filter";
-import type { AlgorithmSetId } from "@/features/algorithms/types";
-import { useCasePool } from "@/features/algorithms/use-case-pool";
-import { useCaseProgress } from "@/features/algorithms/use-case-progress";
+import type { AlgorithmSetId, CaseGroup } from "@/features/algorithms/types";
+import type { CasePool } from "@/lib/pool-storage";
+import type { CaseProgress } from "@/lib/progress-storage";
 
+/**
+ * Always renders every case. The picker used to hide cases behind a filter, which left the
+ * pool it was editing partly invisible - a bulk action could turn cases on or off with no card
+ * on screen to show it. Selection is the only state now, so there is nothing left to hide and
+ * no empty state to render. The pool comes from the parent rather than a local `useCasePool`,
+ * since the selection menu writes the same store - see `DrillChooseCasesView`.
+ */
 export function DrillCasesGrid({
-  mode,
-  selectedGroups,
+  groupedCases,
+  onEnabledChange,
+  pool,
+  progress,
   setId,
 }: {
-  mode: CaseFilterMode;
-  selectedGroups: string[];
+  groupedCases: CaseGroup[];
+  onEnabledChange: (caseId: string, enabled: boolean) => void;
+  pool: CasePool;
+  progress: CaseProgress;
   setId: AlgorithmSetId;
 }) {
-  const algorithmSet = getAlgorithmSet(setId);
-  const { pool, setEnabled } = useCasePool(setId);
-  const { progress } = useCaseProgress(setId);
-
-  const groupedCases = useMemo(
-    () =>
-      groupCasesByGroup(algorithmSet)
-        .filter(({ group }) => selectedGroups.length === 0 || selectedGroups.includes(group))
-        .map(({ cases, group }) => ({
-          cases:
-            mode === "onlyLearned"
-              ? cases.filter((algorithmCase) => progress[algorithmCase.id] === "known")
-              : cases,
-          group,
-        })),
-    [algorithmSet, mode, progress, selectedGroups],
-  );
-
-  if (groupedCases.every(({ cases }) => cases.length === 0)) {
-    return (
-      <p className="py-10 text-center text-sm text-muted-foreground">
-        No cases match the current filters.
-      </p>
-    );
-  }
-
   return (
     <div className="space-y-8">
       {groupedCases.map(({ cases, group }) => (
@@ -49,7 +30,7 @@ export function DrillCasesGrid({
           cases={cases}
           group={group}
           key={group}
-          onEnabledChange={setEnabled}
+          onEnabledChange={onEnabledChange}
           pool={pool}
           progress={progress}
           setId={setId}

@@ -58,6 +58,22 @@ export function setCaseEnabled(setId: AlgorithmSetId, caseId: string, enabled: b
   return next;
 }
 
+/**
+ * Bulk counterpart to `setCaseEnabled`, taking the whole change as one id -> enabled record so
+ * a group toggle or an Enable-all is a single read/write rather than one per case. It takes a
+ * record rather than (ids, enabled) so a mixed change - Enable only learned, which turns some
+ * on and the rest off - stays one atomic write instead of two passes over storage.
+ */
+export function setCasesEnabled(
+  setId: AlgorithmSetId,
+  changes: Readonly<Record<string, boolean>>,
+): CasePool {
+  const next = { ...readCasePool(setId), ...changes };
+
+  writeCasePool(setId, next);
+  return next;
+}
+
 /** Cases with no recorded entry are enabled by default (Tim's-style pool: everything on until turned off). */
 export function isCaseEnabled(pool: CasePool, caseId: string): boolean {
   return pool[caseId] ?? true;

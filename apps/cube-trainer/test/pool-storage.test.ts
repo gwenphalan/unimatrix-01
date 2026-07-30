@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { isCaseEnabled, readCasePool, setCaseEnabled } from "@/lib/pool-storage";
+import { isCaseEnabled, readCasePool, setCaseEnabled, setCasesEnabled } from "@/lib/pool-storage";
 
 describe("pool storage", () => {
   beforeEach(() => {
@@ -23,6 +23,20 @@ describe("pool storage", () => {
 
     expect(readCasePool("oll")).toEqual({ "oll-1": false });
     expect(readCasePool("pll")).toEqual({ "pll-ua": false });
+  });
+
+  it("applies a bulk change in one write, merging with what was already stored", () => {
+    setCaseEnabled("oll", "oll-1", false);
+    setCasesEnabled("oll", { "oll-2": false, "oll-3": true });
+
+    expect(readCasePool("oll")).toEqual({ "oll-1": false, "oll-2": false, "oll-3": true });
+  });
+
+  it("lets a bulk change overwrite an existing entry", () => {
+    setCaseEnabled("oll", "oll-1", false);
+    setCasesEnabled("oll", { "oll-1": true });
+
+    expect(readCasePool("oll")).toEqual({ "oll-1": true });
   });
 
   it("discards malformed stored data instead of throwing", () => {

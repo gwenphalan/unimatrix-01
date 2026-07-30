@@ -1,11 +1,13 @@
 import { useCallback, useState } from "react";
 
 import type { AlgorithmSetId } from "@/features/algorithms/types";
-import { type CasePool, readCasePool, setCaseEnabled } from "@/lib/pool-storage";
+import { type CasePool, readCasePool, setCaseEnabled, setCasesEnabled } from "@/lib/pool-storage";
 
 export interface UseCasePoolResult {
   pool: CasePool;
   setEnabled: (caseId: string, enabled: boolean) => void;
+  /** Applies a whole id -> enabled record at once; see `setCasesEnabled`. */
+  setManyEnabled: (changes: Readonly<Record<string, boolean>>) => void;
 }
 
 export function useCasePool(setId: AlgorithmSetId): UseCasePoolResult {
@@ -18,5 +20,12 @@ export function useCasePool(setId: AlgorithmSetId): UseCasePoolResult {
     [setId],
   );
 
-  return { pool, setEnabled };
+  const setManyEnabled = useCallback(
+    (changes: Readonly<Record<string, boolean>>) => {
+      setPool(setCasesEnabled(setId, changes));
+    },
+    [setId],
+  );
+
+  return { pool, setEnabled, setManyEnabled };
 }
