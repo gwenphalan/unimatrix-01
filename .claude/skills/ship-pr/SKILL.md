@@ -1,6 +1,6 @@
 ---
 name: ship-pr
-description: Run a task end to end and ship it — commit in logical steps as you go, and once the owner confirms the work is in order, open a PR with a body a fresh reader can review from, ping CodeRabbit, fall back to a reviewer subagent if it is rate-limited, escalate to the owner for /code-review ultra when the change is large or security-sensitive, watch the required checks, triage findings, merge once genuinely green, and clear the originating .notes/issues todo entry. Invoked at the start of a session with either the task itself or a pointer to a .todo.md.
+description: Run a task end to end and ship it — commit in logical steps as you go, and once the owner confirms the work is in order, open a PR with a body a fresh reader can review from, ping CodeRabbit and wait out a rate-limit cooldown rather than merging unreviewed, escalate to the owner for /code-review ultra when the change is large or security-sensitive, watch the required checks, triage findings, merge once genuinely green, and clear the originating .notes/issues todo entry. Invoked at the start of a session with either the task itself or a pointer to a .todo.md.
 ---
 
 # Ship a PR
@@ -263,10 +263,14 @@ What actually governs throughput: **one ping per PR, on a window that has had ti
 confirmed by the review count rising.** Spend the ping when the diff is final and CI is green,
 because a wasted slot is not recoverable for minutes to hours.
 
-**One CodeRabbit review per PR** — not one per push. Once you have pinged it, that PR's CodeRabbit
+**One CodeRabbit review per PR** — not one per push. Once it has *reviewed*, that PR's CodeRabbit
 budget is normally spent: fix what it found, push the fixes, and merge on the required checks
 **without** asking it to look again. A finding too large to fix inside this PR's scope becomes a
 follow-up PR with its own single review, not a second ping here.
+
+**A ping that was refused does not count as the review.** Rate-limited means nothing was read, so
+re-pinging after the cooldown is still the *first* review, not a second one — see "Wait out the
+cooldown and re-ping" below. Only a ping that actually produced a review spends the budget.
 
 **Unless the findings were severe.** If the first review surfaced a real defect — silent data loss,
 a security or auth hole, a correctness bug that ships wrong output — and the fix for it is
@@ -307,6 +311,56 @@ clean" at a glance.
    assuming you must keep waiting.
 3. The "✅ Review finished" ack lands seconds after **any** ping and proves nothing. A ping inside
    the window gets the ack and no review.
+
+#### Wait out the cooldown and re-ping — do not merge unreviewed just because you were refused
+
+A refusal is not a review. **Default to waiting**, and merge unreviewed only when waiting is the
+thing that costs something. Two cases where waiting is clearly right:
+
+- **The cooldown is short.** Under about 30 minutes, wait — that is cheaper than merging blind and
+  cheaper than the follow-up PR a missed finding turns into.
+- **The owner is asleep or away, or you are working an overnight batch.** Then wall-clock is free and
+  there is nobody the delay inconveniences. Wait however long the window takes, even hours. Nothing
+  merges into a review the owner will read in the morning anyway, so trading time for a real review
+  is pure gain.
+
+Merge unreviewed when the owner is actively waiting on this PR, or when it blocks other work, or the
+window is long and the diff is trivial. Say which in the merge report.
+
+To wait: compute the deadline with the `updated_at` + countdown arithmetic above, then watch for the
+review rather than sleeping blind — poll the review count and the rate-limit marker on an interval,
+so a refusal on the retry is visible instead of looking like silence:
+
+**Record the baseline count before the ping, and compare against it** — not against zero. A PR that
+has already been reviewed once starts at `n >= 1`, so a loop testing `n > 0` reports success on its
+first iteration and you merge believing a review ran that never did.
+
+```sh
+count() { gh api repos/<owner>/<repo>/pulls/<pr>/reviews \
+            --jq '[.[] | select(.user.login=="coderabbitai[bot]")] | length'; }
+base=$(count)            # before the ping
+# ... ping, then poll until the cooldown deadline computed above, not a fixed count:
+while [ "$(date -u +%s)" -lt "$deadline" ]; do
+  [ "$(count)" -gt "$base" ] && { echo "review landed"; break; }
+  gh api repos/<owner>/<repo>/issues/<pr>/comments \
+    --jq '.[] | select(.user.login=="coderabbitai[bot]") | .body' \
+    | grep -q 'rate limited by coderabbit.ai' && { echo "refused again"; break; }
+  sleep 30
+done
+```
+
+Stop on a conclusive outcome — the count rising, or a fresh refusal — rather than on a fixed number
+of iterations. An iteration cap that expires mid-cooldown looks identical to a silent failure.
+
+Then re-ping **once**, after the deadline has actually passed, and confirm with the three signals
+below. If that ping is refused again, the window was longer than advertised: recompute from the new
+comment's `updated_at` and wait again. Two refusals in a row on a lengthening window is the point to
+stop waiting and merge with the gap stated.
+
+Measured on PR 157: a `full review` was refused with a 4-minute countdown, and a bare
+`@coderabbitai review` 4m39s later returned a real three-finding review. The wait cost five minutes
+and caught a defect in the branch. Overnight, #154 and #155 were refused and merged unreviewed
+instead — that is the mistake this rule exists to stop.
 
 ### Confirming a review actually ran
 
@@ -350,13 +404,21 @@ Merge once every required check is green, **a fresh reader has reviewed the bran
 comments are handled. Report what actually happened: which checks ran, who reviewed and how, what
 was raised and how each was resolved, and anything left undone.
 
+The fresh-reader precondition has exactly three documented exceptions, all of them about a reviewer
+being *unavailable* rather than unnecessary: the owner is waiting on this PR, the PR blocks other
+work, or CodeRabbit's cooldown is long and the diff is trivial. Taking one means naming it in the
+report — see "Wait out the cooldown and re-ping" for when waiting is the better trade.
+
 Name the reviewer in the report: CodeRabbit, a subagent because CodeRabbit was rate-limited, or
 `/code-review ultra` because the change was large or security-sensitive. If none of the three
 happened, say so outright rather than letting "checks green" stand in for "reviewed". Also say it if you spent a
 second CodeRabbit review, and why the findings were severe enough to earn it.
 
-Merge on the **required** checks. Do not hold a green PR waiting on an advisory review that is
-rate-limited — fall back to the subagent, say what was and was not reviewed, and merge.
+Merge on the **required** checks — but a rate-limited CodeRabbit is a reason to *wait*, not a reason
+to merge blind. Hold the green PR through a short cooldown, and through any cooldown at all when the
+owner is asleep or away; re-ping once the window refills. The rule and its arithmetic are in "Wait out
+the cooldown and re-ping" above. Merge unreviewed only when the owner is waiting on this PR, it blocks
+other work, or the window is long and the diff trivial — and say which in the report.
 
 `gh pr merge` may print `fatal: 'main' is already used by worktree at ...` when run from a worktree.
 That is `gh` failing to check out `main` locally *after* merging; confirm with
