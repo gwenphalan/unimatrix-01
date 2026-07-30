@@ -15,6 +15,9 @@ type ViewMode = "session" | "cases";
 export function LearnSetView() {
   const [setId, setSetId] = useState<AlgorithmSetId>("oll");
   const [mode, setMode] = useState<ViewMode>("session");
+  // Which case the session should open on. Picking one in the grid is the only way back to a
+  // learned case's algorithm, since the teaching walk skips anything already marked known.
+  const [openCaseId, setOpenCaseId] = useState<string | undefined>(undefined);
   const { previewMode, setPreviewMode } = usePreviewMode("learn");
   // The stored preference is kept as-is so "two-sided" survives a trip through OLL, but
   // everything that renders - the toggle's own value included - must use the resolved mode.
@@ -33,7 +36,14 @@ export function LearnSetView() {
           title="Choose cases"
         />
 
-        <LearnCasesGrid key={setId} setId={setId} />
+        <LearnCasesGrid
+          key={setId}
+          onSelectCase={(algorithmCase) => {
+            setOpenCaseId(algorithmCase.id);
+            setMode("session");
+          }}
+          setId={setId}
+        />
       </div>
     );
   }
@@ -55,10 +65,23 @@ export function LearnSetView() {
         title="Learning"
       />
 
-      <LearnPanel key={setId} previewMode={resolvedPreviewMode} setId={setId} />
+      <LearnPanel
+        initialCaseId={openCaseId}
+        key={setId}
+        previewMode={resolvedPreviewMode}
+        setId={setId}
+      />
 
       <div className="flex items-center justify-between gap-4">
-        <AlgorithmSetToggle onChange={setSetId} setId={setId} />
+        <AlgorithmSetToggle
+          onChange={(nextSetId) => {
+            // A case id only means anything within its own set, and `key={setId}` remounts the
+            // panel anyway - carrying it across would open the new set on nothing.
+            setOpenCaseId(undefined);
+            setSetId(nextSetId);
+          }}
+          setId={setId}
+        />
         <PreviewModeToggle mode={resolvedPreviewMode} onChange={setPreviewMode} setId={setId} />
       </div>
     </div>

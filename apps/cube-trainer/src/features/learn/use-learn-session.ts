@@ -12,14 +12,32 @@ export interface LearnSessionState {
   /** The case's cube state; the view derives whichever diagram the active preview mode needs. */
   cube: FaceletCube | undefined;
   setupMoves: string | undefined;
+  /** Whether the current case is marked known - drives the label on the mark/unmark key. */
+  learned: boolean;
   canGoBack: boolean;
   canGoNext: boolean;
   next: () => void;
   back: () => void;
-  markLearned: () => void;
+  /** Marks the current case known, or - for a case opened from the grid - hands it back. */
+  toggleLearned: () => void;
 }
 
-export function useLearnSession(setId: AlgorithmSetId): LearnSessionState {
+/**
+ * The teaching walk, plus one exception to it.
+ *
+ * The walk (`orderedLearnCases`) deliberately excludes learned cases, which is what made a
+ * learned case unreachable: marking it known was the action that removed its algorithm from
+ * the screen. `initialCaseId` is the way back in. A learned case opened that way is *pinned*
+ * - shown outside the walk, with Back/Next reporting nothing to go to, because there is no
+ * position in the walk for it to be at. Unmarking it hands it straight back: the cursor moves
+ * to wherever it lands in the re-ordered walk and the pin drops, so navigation returns with
+ * that case under the cursor rather than dumping you back at the start.
+ *
+ * `initialCaseId` is read once, on mount. The panel is unmounted while the Choose-cases grid
+ * is up, so every trip through the grid mounts a fresh session - there is no second render
+ * to keep in sync with, and nothing here has to watch the prop.
+ */
+export function useLearnSession(setId: AlgorithmSetId, initialCaseId?: string): LearnSessionState {
   const algorithmSet = getAlgorithmSet(setId);
   const groupedCases = useMemo(() => groupCasesByGroup(algorithmSet), [algorithmSet]);
   const { progress, updateStatus } = useCaseProgress(setId);
@@ -29,40 +47,88 @@ export function useLearnSession(setId: AlgorithmSetId): LearnSessionState {
     [groupedCases, progress],
   );
 
-  const [cursor, setCursor] = useState(0);
+  const [cursor, setCursor] = useState(() => {
+    if (!initialCaseId) return 0;
+
+    return Math.max(
+      orderedCases.findIndex((algorithmCase) => algorithmCase.id === initialCaseId),
+      0,
+    );
+  });
+  const [pinnedCaseId, setPinnedCaseId] = useState<string | undefined>(() =>
+    initialCaseId && progress[initialCaseId] === "known" ? initialCaseId : undefined,
+  );
+
+  const pinnedCase = useMemo(
+    () =>
+      pinnedCaseId
+        ? algorithmSet.cases.find((algorithmCase) => algorithmCase.id === pinnedCaseId)
+        : undefined,
+    [algorithmSet, pinnedCaseId],
+  );
 
   const clampedCursor =
     orderedCases.length === 0 ? 0 : Math.min(Math.max(cursor, 0), orderedCases.length - 1);
-  const currentCase = orderedCases[clampedCursor];
+  const currentCase = pinnedCase ?? orderedCases[clampedCursor];
+  const learned = currentCase ? progress[currentCase.id] === "known" : false;
 
   const setup = useMemo(() => (currentCase ? getCaseSetup(currentCase) : undefined), [currentCase]);
 
   const next = useCallback(() => {
+    if (pinnedCase) return;
+
     setCursor((previous) => Math.min(previous + 1, orderedCases.length - 1));
-  }, [orderedCases.length]);
+  }, [orderedCases.length, pinnedCase]);
 
   const back = useCallback(() => {
-    setCursor((previous) => Math.max(previous - 1, 0));
-  }, []);
+    if (pinnedCase) return;
 
-  const markLearned = useCallback(() => {
+    setCursor((previous) => Math.max(previous - 1, 0));
+  }, [pinnedCase]);
+
+  const toggleLearned = useCallback(() => {
     if (!currentCase) return;
-    updateStatus(currentCase.id, "known");
-    // The current case drops out of `orderedCases` on the next render, so the same
-    // cursor index naturally slides onto what was the next case - no explicit advance.
-  }, [currentCase, updateStatus]);
+
+    if (!learned) {
+      updateStatus(currentCase.id, "known");
+      // The current case drops out of `orderedCases` on the next render, so the same
+      // cursor index naturally slides onto what was the next case - no explicit advance.
+      return;
+    }
+
+    // Where the case will sit once it rejoins the walk. Computed from the progress this call
+    // is about to write rather than read back afterwards, so the cursor and the status land in
+    // the same render and Back/Next never point at the old ordering.
+    const rejoined = orderedLearnCases(groupedCases, { ...progress, [currentCase.id]: "new" });
+    const index = rejoined.findIndex((algorithmCase) => algorithmCase.id === currentCase.id);
+
+    setCursor(Math.max(index, 0));
+    setPinnedCaseId(undefined);
+    updateStatus(currentCase.id, "new");
+  }, [currentCase, groupedCases, learned, progress, updateStatus]);
 
   return useMemo(
     () => ({
       back,
-      canGoBack: clampedCursor > 0,
-      canGoNext: clampedCursor < orderedCases.length - 1,
+      canGoBack: !pinnedCase && clampedCursor > 0,
+      canGoNext: !pinnedCase && clampedCursor < orderedCases.length - 1,
       cube: setup?.cube,
       currentCase,
-      markLearned,
+      learned,
       next,
       setupMoves: setup?.setupMoves,
+      toggleLearned,
     }),
-    [back, clampedCursor, currentCase, markLearned, next, orderedCases.length, setup],
+    [
+      back,
+      clampedCursor,
+      currentCase,
+      learned,
+      next,
+      orderedCases.length,
+      pinnedCase,
+      setup,
+      toggleLearned,
+    ],
   );
 }
