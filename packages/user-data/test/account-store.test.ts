@@ -23,7 +23,7 @@ function fetchMockOf(response: AccountFetchResponse) {
   return vi.fn<AccountFetch>(() => Promise.resolve(response));
 }
 
-const NAMESPACE = "cube-trainer";
+const NAMESPACE = "cflop";
 const BASE_URL = "https://api.example.test";
 
 describe("createAccountUserStore", () => {

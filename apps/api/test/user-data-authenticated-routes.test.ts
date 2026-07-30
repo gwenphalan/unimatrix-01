@@ -67,7 +67,7 @@ const CLERK_ENV: ApiRuntimeEnv = {
 const USER_ONE = "user_2aaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const USER_TWO = "user_2bbbbbbbbbbbbbbbbbbbbbbbbbbb";
 
-const NAMESPACE = "cube-trainer";
+const NAMESPACE = "cflop";
 const OTHER_NAMESPACE = "other-namespace";
 
 const PNG_KEY = "avatar.png";

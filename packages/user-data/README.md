@@ -74,7 +74,7 @@ The store is memoized on the relevant deps (`namespace`, `baseUrl`, `allowGuest`
 import { useUserStore } from "@unimatrix/user-data/react";
 
 function AvatarSettings() {
-  const { mode, store, isReady } = useUserStore("cube-trainer");
+  const { mode, store, isReady } = useUserStore("cflop");
 
   async function saveNickname(nickname: string) {
     await store?.settings.set("nickname", nickname);
@@ -117,12 +117,12 @@ Copies every guest document and file for `namespace` up to the account store. **
 ```tsx
 import { useGuestDataMigration, useUserStore } from "@unimatrix/user-data/react";
 
-function CubeTrainerRoot() {
+function CflopRoot() {
   // Runs migrateGuestDataToAccount exactly once, the first time this
   // component observes a signed-out -> signed-in transition.
-  useGuestDataMigration("cube-trainer");
+  useGuestDataMigration("cflop");
 
-  const { store } = useUserStore("cube-trainer");
+  const { store } = useUserStore("cflop");
   // ...
 }
 ```

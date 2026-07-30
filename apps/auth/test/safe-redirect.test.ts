@@ -10,8 +10,8 @@ describe("safeRedirectUrl", () => {
   });
 
   it("honors subdomains over https", () => {
-    expect(safeRedirectUrl("https://cube.unimatrix-01.dev/oll")).toBe(
-      "https://cube.unimatrix-01.dev/oll",
+    expect(safeRedirectUrl("https://cflop.unimatrix-01.dev/oll")).toBe(
+      "https://cflop.unimatrix-01.dev/oll",
     );
   });
 
