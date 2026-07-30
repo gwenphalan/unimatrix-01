@@ -36,8 +36,7 @@ describe("pool storage", () => {
 
     expect(setItem).toHaveBeenCalledTimes(1);
     expect(readCasePool("oll")).toEqual({ "oll-1": false, "oll-2": false, "oll-3": true });
-
-    setItem.mockRestore();
+    // Restored by the shared `afterEach` in `test/setup.ts`, so a failure above cannot leak it.
   });
 
   it("refuses to persist a malformed record rather than storing something reads discard", () => {
