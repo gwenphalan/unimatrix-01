@@ -11,7 +11,7 @@ If you would rather use email, `gwen.phalan@unimatrix-01.dev` reaches the same
 person.
 
 Include what you need to make the problem reproducible: the affected surface
-(one of the four apps, the API, or a package), the version or commit, and the
+(an app, the API, or a package), the version or commit, and the
 steps. A proof of concept helps and is welcome; you do not need one to report.
 
 This is a personal project maintained by one person, so expect an
@@ -21,7 +21,7 @@ not to be.
 
 ## Scope
 
-In scope: this repository's own code — the four applications under `apps/`, the
+In scope: this repository's own code — the applications under `apps/`, the
 shared packages under `packages/`, the Dockerfiles and Compose files under
 `infra/`, and the GitHub Actions workflows.
 

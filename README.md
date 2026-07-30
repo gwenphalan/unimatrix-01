@@ -1,7 +1,7 @@
 # Unimatrix-01
 
-Unimatrix-01 is the active TypeScript monorepo for the public site, API,
-shared packages, and Git-backed content.
+Unimatrix-01 is the TypeScript monorepo for the public site, API, tools, and
+shared packages.
 
 ## Quick start
 
@@ -36,7 +36,9 @@ This repo keeps the current runtime surface narrow and explicit.
   Clerk-backed authentication hub for sign-in/sign-up and account management.
 - `packages/` contains shared UI, content, database, config, contract, auth,
   and user-data packages.
-- `content/` contains the public authored content rendered by the web app.
+- `content/home/index.md` is site copy compiled into the web bundle;
+  `content/blog` and `content/projects` are seed input for the content database
+  (`pnpm --filter @unimatrix/api seed:content`).
 
 ## Docs
 

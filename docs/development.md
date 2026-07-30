@@ -42,7 +42,7 @@ The root scripts are the main entry surface for local work.
 
 Use `pnpm dev` to start the normal local runtime surface.
 
-- Requires Node `22.x`
+- Requires the Node major pinned in `.node-version`; exits non-zero on any other
 - Verifies workspace dependencies are already installed
 - Creates missing `apps/api/.env` and `apps/web/.env` from their example
   files
@@ -53,8 +53,8 @@ Use `pnpm dev` to start the normal local runtime surface.
   files and no backend dependency.
 - Does not start `@unimatrix/auth-app`; run
   `pnpm --filter @unimatrix/auth-app dev` separately. It serves on port
-  `5175` (preview `4175`) and needs `VITE_CLERK_PUBLISHABLE_KEY` set to sign
-  in against Clerk.
+  `5175` (preview `4175`) and throws at startup without
+  `VITE_CLERK_PUBLISHABLE_KEY`.
 
 ### `pnpm setup:local`
 
@@ -159,18 +159,11 @@ Run the narrowest relevant command set for the change you made.
 
 ## CI behavior
 
-GitHub Actions CI stays aligned to the same root command surface used
-locally.
-
-- Checks out the repo without persisted credentials
-- Sets up pnpm `10.30.3`
-- Reads Node from `.node-version`
-- Runs `pnpm install --frozen-lockfile`
-- Installs Playwright Chromium for `@unimatrix/web` and `@unimatrix/cflop`
-- Runs `pnpm build`
-- Runs `pnpm lint`
-- Runs `pnpm typecheck`
-- Runs `pnpm test`
+CI runs the same root gates as `pnpm verify`, individually rather than through
+the wrapper, plus the `App wiring` script. A separate `Images` job builds every
+`apps/*/Dockerfile`; those checks are required on `main`, and `Verify` never
+touches a Dockerfile. `.github/workflows/ci.yml` is the authority on the exact
+step list.
 
 Keep ad-hoc browser screenshots and other debug artifacts in ignored
 `.notes/` scratch space, or leave them uncommitted instead of placing them
@@ -202,6 +195,6 @@ local Node and pnpm versions active.
 ./infra/scripts/pnpm-with-pinned-node.sh verify
 ```
 
-When the host already matches Node `22.x` and pnpm `10.30.3`, the wrapper
-takes a fast path and reuses them. Otherwise it bootstraps `node@24.18.0`
-and `pnpm@10.30.3` through `npm exec`.
+When the host already matches the pins in `.node-version` and `packageManager`,
+the wrapper takes a fast path and reuses them. Otherwise it bootstraps both
+through `npm exec`.
