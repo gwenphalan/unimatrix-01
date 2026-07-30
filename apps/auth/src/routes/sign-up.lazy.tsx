@@ -14,7 +14,6 @@ function SignUpRoute() {
   const { redirect_url } = routeApi.useSearch();
   // Validated against the same-family allowlist before use (see sign-in.lazy.tsx).
   const target = safeRedirectUrl(redirect_url);
-  // The wrapper no longer registers an occluder (see sign-in.lazy.tsx).
 
   return (
     /* See the comment in sign-in.lazy.tsx for why this uses routing="hash",

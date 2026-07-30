@@ -39,7 +39,8 @@ Run the narrowest relevant checks for what changed before opening the PR, not af
 the normal gate; `pnpm verify` when the change spans workspaces or touches runtime/build behavior.
 A PR opened red wastes a CI cycle and buries the real signal.
 
-**If the change touches `apps/web`, `apps/cflop`, `apps/auth`, `apps/admin` or `packages/ui`,
+**If the change touches `apps/web`, `apps/cflop`, `apps/auth`, `apps/admin`,
+`packages/ui` or `packages/chrome`,
 it must be live-tested in a real browser before the PR is opened.** Launch Chromium if none is
 running. This is not optional and no automated check substitutes for it — the failure modes it
 catches (Tailwind `@source` not reaching a sibling package, two resolved copies of

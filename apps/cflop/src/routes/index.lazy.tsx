@@ -11,10 +11,9 @@ const MODES = [
   { icon: RiFlashlightLine, label: "Drill", to: "/drill" as const },
 ];
 
-// The tile is discovered as an occluder automatically: `.site-panel` paints,
-// and the wrapping `div` — not the `Link` inside it — is the element that
-// carries that class, so what registers is still the surface rather than the
-// interactive element.
+// The wrapping `div`, not the `Link` inside it, carries `.site-panel` — the
+// painted surface is the wrapper, so moving the class onto the `Link` changes
+// what is drawn.
 function ModeTile({
   icon: Icon,
   label,

@@ -20,7 +20,6 @@ function AccountRoute() {
 }
 
 function AccountProfile() {
-  // The wrapper no longer registers an occluder (see sign-in.lazy.tsx).
   return (
     <div className="w-fit">
       {/* See the comment in sign-in.lazy.tsx for why this uses routing="hash". */}
