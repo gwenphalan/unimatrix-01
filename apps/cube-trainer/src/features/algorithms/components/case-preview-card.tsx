@@ -8,10 +8,12 @@ import { getCaseSetup } from "@/features/trainer/case-setup";
 import { cn } from "@unimatrix/ui/public";
 
 /**
- * A single case as a diagram + name, where the whole card is the interactive element
- * (a toggle in a training/learn pool) rather than hosting a separate control inside it.
- * `learned` overlays a badge in the top-left corner (absolutely positioned, so it never
- * changes the card's height) instead of adding a row to the layout.
+ * A single case as a diagram + name, where the whole card is the interactive element rather
+ * than hosting a separate control inside it. What the click means is the caller's business:
+ * Drill toggles the training pool and passes `pressed`, Learn opens the case in its session
+ * and passes neither `pressed` nor `dimmed`. `learned` overlays a badge in the top-left corner
+ * (absolutely positioned, so it never changes the card's height) instead of adding a row to
+ * the layout.
  */
 export function CasePreviewCard({
   algorithmCase,

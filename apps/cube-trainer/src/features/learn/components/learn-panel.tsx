@@ -8,12 +8,24 @@ import type { AlgorithmSetId } from "@/features/algorithms/types";
 import { useLearnSession } from "@/features/learn/use-learn-session";
 
 export interface LearnPanelProps {
+  /** A case picked in the Choose-cases grid; opens the session on it instead of at the start. */
+  initialCaseId?: string | undefined;
   previewMode: DiagramPreviewMode;
   setId: AlgorithmSetId;
 }
 
-export function LearnPanel({ previewMode, setId }: LearnPanelProps) {
-  const { back, cube, currentCase, markLearned, next, setupMoves } = useLearnSession(setId);
+export function LearnPanel({ initialCaseId, previewMode, setId }: LearnPanelProps) {
+  const {
+    back,
+    canGoBack,
+    canGoNext,
+    cube,
+    currentCase,
+    learned,
+    next,
+    setupMoves,
+    toggleLearned,
+  } = useLearnSession(setId, initialCaseId);
   const [showAlternates, setShowAlternates] = useState(false);
 
   useEffect(() => {
@@ -28,7 +40,7 @@ export function LearnPanel({ previewMode, setId }: LearnPanelProps) {
         next();
       } else if (event.code === "Space") {
         event.preventDefault();
-        markLearned();
+        toggleLearned();
       }
     }
 
@@ -36,7 +48,7 @@ export function LearnPanel({ previewMode, setId }: LearnPanelProps) {
     return () => {
       window.removeEventListener("keydown", onKeyDown);
     };
-  }, [back, markLearned, next]);
+  }, [back, next, toggleLearned]);
 
   if (!currentCase || !cube) {
     return (
@@ -102,23 +114,32 @@ export function LearnPanel({ previewMode, setId }: LearnPanelProps) {
         ) : null}
       </div>
 
+      {/*
+        Hints are shown only for keys that would actually do something. A case opened from the
+        grid after being marked learned sits outside the teaching walk, so it has nowhere to go
+        back or next to - and advertising two dead keys is worse than advertising none.
+      */}
       <div className="flex flex-wrap items-center justify-center gap-4 text-xs text-muted-foreground">
-        <span className="inline-flex items-center gap-1.5">
-          <Kbd>
-            <RiArrowLeftLine aria-hidden="true" className="size-3" />
-          </Kbd>
-          Back
-        </span>
+        {canGoBack ? (
+          <span className="inline-flex items-center gap-1.5">
+            <Kbd>
+              <RiArrowLeftLine aria-hidden="true" className="size-3" />
+            </Kbd>
+            Back
+          </span>
+        ) : null}
         <span className="inline-flex items-center gap-1.5">
           <Kbd>Space</Kbd>
-          Mark learned
+          {learned ? "Unmark learned" : "Mark learned"}
         </span>
-        <span className="inline-flex items-center gap-1.5">
-          <Kbd>
-            <RiArrowRightLine aria-hidden="true" className="size-3" />
-          </Kbd>
-          Next
-        </span>
+        {canGoNext ? (
+          <span className="inline-flex items-center gap-1.5">
+            <Kbd>
+              <RiArrowRightLine aria-hidden="true" className="size-3" />
+            </Kbd>
+            Next
+          </span>
+        ) : null}
       </div>
     </Card>
   );
