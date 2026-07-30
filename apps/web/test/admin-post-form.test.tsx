@@ -45,8 +45,8 @@ import { PostForm } from "@/features/admin/post-form";
 const PROJECT: ContentPost = {
   id: "33333333-3333-4333-8333-333333333333",
   type: "project",
-  slug: "cube-trainer",
-  title: "Cube Trainer",
+  slug: "cflop",
+  title: "CFLOP",
   summary: "A trainer.",
   description: null,
   body: "# Heading\n",
@@ -132,9 +132,9 @@ describe("PostForm", () => {
   it("never rewrites an existing post's slug from its title", () => {
     renderForm(<PostForm title="Edit post" onDone={() => {}} post={PROJECT} type="project" />);
 
-    type("Title", "Cube Trainer Renamed");
+    type("Title", "CFLOP Renamed");
 
-    expect(screen.getByLabelText("Slug")).toHaveValue("cube-trainer");
+    expect(screen.getByLabelText("Slug")).toHaveValue("cflop");
   });
 
   it("offers no project fields on a blog post", () => {
@@ -172,17 +172,17 @@ describe("PostForm", () => {
 
     renderForm(<PostForm title="Edit post" onDone={() => {}} post={PROJECT} type="project" />);
 
-    expect(screen.getByLabelText("Title")).toHaveValue("Cube Trainer");
+    expect(screen.getByLabelText("Title")).toHaveValue("CFLOP");
     expect(screen.getByLabelText("Repository URL")).toHaveValue("https://example.com/repo");
 
-    type("Title", "Cube Trainer 2");
+    type("Title", "CFLOP 2");
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => {
       expect(apiClient.updatePost).toHaveBeenCalledWith(
         expect.objectContaining({
           id: PROJECT.id,
-          title: "Cube Trainer 2",
+          title: "CFLOP 2",
           featured: true,
         }),
       );
@@ -225,7 +225,7 @@ describe("PostForm", () => {
 
     expect(pattern).not.toBeNull();
     expect(() => new RegExp(`^(?:${pattern ?? ""})$`, "v")).not.toThrow();
-    expect(new RegExp(`^(?:${pattern ?? ""})$`, "v").test("cube-trainer")).toBe(true);
+    expect(new RegExp(`^(?:${pattern ?? ""})$`, "v").test("cflop")).toBe(true);
     expect(new RegExp(`^(?:${pattern ?? ""})$`, "v").test("-leading-hyphen")).toBe(false);
   });
 });

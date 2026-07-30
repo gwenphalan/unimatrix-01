@@ -37,7 +37,7 @@ describe("ProjectStatusBadge", () => {
 
     renderWithQueryClient(
       <ProjectStatusBadge
-        frontmatter={{ liveUrl: "https://cube.unimatrix-01.dev", status: "active" }}
+        frontmatter={{ liveUrl: "https://cflop.unimatrix-01.dev", status: "active" }}
       />,
     );
 
@@ -49,7 +49,7 @@ describe("ProjectStatusBadge", () => {
 
     renderWithQueryClient(
       <ProjectStatusBadge
-        frontmatter={{ liveUrl: "https://cube.unimatrix-01.dev", status: "active" }}
+        frontmatter={{ liveUrl: "https://cflop.unimatrix-01.dev", status: "active" }}
       />,
     );
 
@@ -61,7 +61,7 @@ describe("ProjectStatusBadge", () => {
 
     renderWithQueryClient(
       <ProjectStatusBadge
-        frontmatter={{ liveUrl: "https://cube.unimatrix-01.dev", status: "active" }}
+        frontmatter={{ liveUrl: "https://cflop.unimatrix-01.dev", status: "active" }}
       />,
     );
 

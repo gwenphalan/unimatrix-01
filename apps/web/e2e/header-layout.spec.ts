@@ -24,7 +24,7 @@ for (const width of WIDTHS) {
   test(`header breadcrumb keeps the logo on the trail's row at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 800 });
     await stubContentApi(page);
-    await page.goto("/projects/cube-trainer", { waitUntil: "domcontentloaded" });
+    await page.goto("/projects/cflop", { waitUntil: "domcontentloaded" });
 
     // Measuring straight after `domcontentloaded` reads the pre-hydration DOM
     // and reports a collapsed layout. Caught as a flake: without this wait the

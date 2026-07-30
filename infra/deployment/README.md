@@ -123,12 +123,20 @@ configured.** `cube.` still routes straight to the container. Nothing in this
 repository can configure it, which is exactly why it is written down here.
 
 The redirect belongs in Traefik — **not** a Cloudflare Redirect Rule and **not**
-a `server` block in the container's Nginx config. Cloudflare is out because
-Redirect Rules only execute on proxied traffic, and these records are DNS-only;
-a rule added there would be silently inert. Nginx was the other candidate and
-would have been repo-owned, which is a real advantage — the trade accepted here
-is that the redirect lives on the Dokploy host instead, invisible to anyone
-reading this repository.
+a `server` block in the container's Nginx config.
+
+A Cloudflare Redirect Rule would in fact work: there is no per-host `cube.` or
+`cflop.` DNS record at all, both are served by the wildcard `*.unimatrix-01.dev`
+A record, and that record is proxied. Redirect Rules only execute on proxied
+traffic, so the posture matters — and it is the reason to keep the redirect out
+of Cloudflare rather than a reason it is impossible. Flipping that one wildcard
+to DNS-only would silently stop a Redirect Rule from firing, with no error
+anywhere and no signal beyond `cube.` quietly serving the app again. Traefik sits
+below that switch and keeps working either way.
+
+Nginx-in-the-container was the other candidate and would have been repo-owned,
+which is a real advantage. The trade accepted here is that the redirect lives on
+the Dokploy host instead, invisible to anyone reading this repository.
 
 Two surfaces make it up, both confirmed present on the live host:
 
@@ -141,8 +149,10 @@ Two surfaces make it up, both confirmed present on the live host:
 If the Dokploy service is ever recreated from scratch, both have to be re-added
 by hand; nothing in CI or the image will notice they are missing.
 
-Both hostnames must stay pointed at the Dokploy host in DNS: Traefik can only
-answer for `cube.` (and terminate TLS for it) if the request actually reaches it.
+Both hostnames must keep resolving to the Dokploy host — today neither has its
+own record and both come from the proxied `*.unimatrix-01.dev` wildcard, so this
+needs no DNS work. Traefik can only answer for `cube.` (and terminate TLS for it)
+if the request actually reaches it.
 
 ### Auth service
 

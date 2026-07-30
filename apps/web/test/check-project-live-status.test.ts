@@ -12,9 +12,9 @@ describe("checkProjectLiveStatus", () => {
     const fetchMock = vi.fn().mockResolvedValue({});
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(checkProjectLiveStatus("https://cube.unimatrix-01.dev")).resolves.toBe("live");
+    await expect(checkProjectLiveStatus("https://cflop.unimatrix-01.dev")).resolves.toBe("live");
     expect(fetchMock).toHaveBeenCalledWith(
-      "https://cube.unimatrix-01.dev",
+      "https://cflop.unimatrix-01.dev",
       expect.objectContaining({ method: "HEAD", mode: "no-cors" }),
     );
   });
@@ -22,7 +22,7 @@ describe("checkProjectLiveStatus", () => {
   it("resolves to offline when the fetch rejects", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")));
 
-    await expect(checkProjectLiveStatus("https://cube.unimatrix-01.dev")).resolves.toBe("offline");
+    await expect(checkProjectLiveStatus("https://cflop.unimatrix-01.dev")).resolves.toBe("offline");
   });
 
   it("resolves to offline when the request times out", async () => {
@@ -39,7 +39,7 @@ describe("checkProjectLiveStatus", () => {
       ),
     );
 
-    const pendingCheck = checkProjectLiveStatus("https://cube.unimatrix-01.dev");
+    const pendingCheck = checkProjectLiveStatus("https://cflop.unimatrix-01.dev");
 
     await vi.advanceTimersByTimeAsync(5000);
 
