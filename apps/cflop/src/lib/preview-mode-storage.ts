@@ -6,6 +6,8 @@ import {
   type DiagramPreviewMode,
 } from "@/features/algorithms/preview-mode";
 
+import { readStoredValue, writeStoredValue } from "./local-storage";
+
 /**
  * Learn and Drill keep separate preferences on purpose: drilling is a recall test, so hiding
  * the preview there is the common case, while a teaching pass usually wants it visible. One
@@ -16,28 +18,15 @@ export type PreviewModeScope = "drill" | "learn";
 const previewModeSchema = z.enum(DIAGRAM_PREVIEW_MODES);
 
 function storageKey(scope: PreviewModeScope): string {
-  return `cube-trainer:preview-mode:${scope}`;
+  return `preview-mode:${scope}`;
 }
 
 export function readPreviewMode(scope: PreviewModeScope): DiagramPreviewMode {
-  let raw: string | null;
-
-  try {
-    raw = window.localStorage.getItem(storageKey(scope));
-  } catch {
-    return DEFAULT_PREVIEW_MODE;
-  }
-
-  const parsed = previewModeSchema.safeParse(raw);
+  const parsed = previewModeSchema.safeParse(readStoredValue(storageKey(scope)));
 
   return parsed.success ? parsed.data : DEFAULT_PREVIEW_MODE;
 }
 
 export function writePreviewMode(scope: PreviewModeScope, mode: DiagramPreviewMode): void {
-  try {
-    window.localStorage.setItem(storageKey(scope), mode);
-  } catch {
-    // Storage can be unavailable (private browsing, quota). The preference is
-    // best-effort and safe to drop silently in that case.
-  }
+  writeStoredValue(storageKey(scope), mode);
 }

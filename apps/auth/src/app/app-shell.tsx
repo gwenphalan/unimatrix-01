@@ -32,7 +32,7 @@ export function AppShell({ children }: AppShellProps) {
     <ToolShell homeHref="https://unimatrix-01.dev/">
       {/* Horizontal centring is this app's business, not the shell's. The tool
           shell's `main` centres vertically only, because a tool's content is
-          normally full-width — cube-trainer's grids would be pinched by an
+          normally full-width — cflop's grids would be pinched by an
           `items-center` there. Every route here is one narrow card, so the
           centring wraps the children instead. */}
       <div className="flex w-full flex-col items-center">{children}</div>

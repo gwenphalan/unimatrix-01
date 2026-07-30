@@ -23,7 +23,7 @@ import { stubContentApi } from "./fixtures/content-api";
  * easy to make quietly to turn a build green.
  *
  * It stays app-local rather than moving into `@unimatrix/e2e-helpers` alongside
- * the scanner: a baseline shared with cube-trainer would let a suppression added
+ * the scanner: a baseline shared with cflop would let a suppression added
  * for one app silently lower the floor for the other.
  */
 const KNOWN_BEST_PRACTICE_VIOLATIONS: readonly string[] = [];

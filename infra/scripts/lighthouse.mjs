@@ -53,7 +53,7 @@ const APPS = {
   // Measured 2026-07-27: performance 0.95-0.97, accessibility 1.00,
   // best-practices 1.00, seo 1.00. No env of any kind, so local and CI builds
   // are identical.
-  "apps/cube-trainer": {
+  "apps/cflop": {
     routes: ["/", "/learn", "/drill"],
     budgets: { performance: 0.9, accessibility: 0.95, "best-practices": 0.95, seo: 1 },
   },

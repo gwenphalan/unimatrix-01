@@ -13,7 +13,7 @@
  */
 
 /** App slugs that participate in the Unimatrix permission scheme. */
-export const APP_SLUGS = ["web", "cube-trainer", "auth", "admin", "api"] as const;
+export const APP_SLUGS = ["web", "cflop", "auth", "admin", "api"] as const;
 
 /** A registered app slug. */
 export type AppSlug = (typeof APP_SLUGS)[number];

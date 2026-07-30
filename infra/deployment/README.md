@@ -9,12 +9,12 @@ production deployment.
 
 - Web static output: `apps/web/dist/`
 - API Node runtime entry: `apps/api/dist/server.js`
-- Cube Trainer static output: `apps/cube-trainer/dist/`
+- CFLOP static output: `apps/cflop/dist/`
 - Auth app static output: `apps/auth/dist/`
 
 `vite preview` is useful for local smoke testing of the built web app, but it
 is not the production web server for `apps/web/dist/`,
-`apps/cube-trainer/dist/`, or `apps/auth/dist/`.
+`apps/cflop/dist/`, or `apps/auth/dist/`.
 
 ## Default production topology
 
@@ -22,14 +22,16 @@ The default production shape is separate-origin:
 
 - `https://site.example.com` -> web
 - `https://api.example.com` -> api
-- `https://cube.unimatrix-01.dev` -> cube-trainer
+- `https://cflop.unimatrix-01.dev` -> cflop
+- `https://cube.unimatrix-01.dev` -> 301 to `cflop.unimatrix-01.dev` (pre-rebrand
+  hostname; see "CFLOP service" below)
 - `https://auth.unimatrix-01.dev` -> auth
 
 In this shape:
 
 - the web image is built with `VITE_API_BASE_URL=https://api.example.com`
 - the API runtime allows the public web origin through `CORS_ALLOWED_ORIGINS`
-- the cube-trainer image needs no build-time or runtime env; it has no API
+- the cflop image needs no build-time or runtime env; it has no API
   dependency
 - the auth image is built with `VITE_API_BASE_URL=https://api.example.com` and
   `VITE_CLERK_PUBLISHABLE_KEY` for the shared Clerk application
@@ -98,18 +100,37 @@ Clerk auth is required in production: set `CLERK_SECRET_KEY`,
 `CLERK_PUBLISHABLE_KEY`, and `CLERK_JWT_KEY` in Dokploy's UI (all three, never
 just some). See "Clerk setup" below.
 
-### Cube Trainer service
+### CFLOP service
 
 - application type: Compose
-- compose path: `infra/docker/cube-trainer-compose.yaml`
+- compose path: `infra/docker/cflop-compose.yaml`
 - no environment variables required
-- Domains page: route `cube.unimatrix-01.dev` to the `cube-trainer` service,
+- Domains page: route `cflop.unimatrix-01.dev` to the `cflop` service,
   container port `8080`
 
-The cube-trainer container is a static SPA container, same shape as the web
+The cflop container is a static SPA container, same shape as the web
 service. Preserve SPA fallback behavior inside the container regardless of
 routing. It has no API dependency, so it does not need an entry in
 `CORS_ALLOWED_ORIGINS`.
+
+#### The pre-rebrand `cube.` hostname
+
+The tool was served from `cube.unimatrix-01.dev` before it was renamed to CFLOP,
+so that hostname permanently 301s to `cflop.unimatrix-01.dev`. The redirect is a
+Traefik middleware attached to the `cube.unimatrix-01.dev` domain entry in
+Dokploy — **not** a Cloudflare Redirect Rule and **not** a `server` block in the
+container's Nginx config.
+
+Cloudflare is out because Redirect Rules only execute on proxied traffic, and
+these records are DNS-only; a rule added there would be silently inert. Nginx was
+the other candidate and would have been repo-owned, which is a real advantage —
+the trade accepted here is that the redirect lives in Dokploy's database instead,
+so it is invisible to anyone reading this repository. That is what this section is
+for. If the Dokploy service is ever recreated from scratch, the redirect has to be
+re-added by hand; nothing in CI or the image will notice it is missing.
+
+Both hostnames must stay pointed at the Dokploy host in DNS: Traefik can only
+answer for `cube.` (and terminate TLS for it) if the request actually reaches it.
 
 ### Auth service
 
@@ -122,7 +143,7 @@ routing. It has no API dependency, so it does not need an entry in
   container port `8080`
 
 The auth container is a static SPA container, same shape as the web and
-cube-trainer services. Preserve SPA fallback behavior inside the container
+cflop services. Preserve SPA fallback behavior inside the container
 regardless of routing. It is the central Clerk-backed accounts app (landing,
 sign-in/sign-up, and account management), so it needs `CORS_ALLOWED_ORIGINS` on
 the API service to include
@@ -140,7 +161,9 @@ Production routing still needs to satisfy:
 
 - the public site hostname routes to the web service
 - the API hostname routes to the API service
-- the `cube.unimatrix-01.dev` hostname routes to the cube-trainer service
+- the `cflop.unimatrix-01.dev` hostname routes to the cflop service
+- the `cube.unimatrix-01.dev` hostname 301s to `cflop.unimatrix-01.dev` via a
+  Traefik middleware, and still terminates TLS so the redirect is reachable
 - the `auth.unimatrix-01.dev` hostname routes to the auth service
 - TLS terminates at Traefik
 - standard proxy headers are forwarded so the API can run with
@@ -220,7 +243,7 @@ Each live app owns the canonical list for its Dokploy service:
 
 - `apps/web/README.md`
 - `apps/api/README.md`
-- `apps/cube-trainer/README.md`
+- `apps/cflop/README.md`
 - `apps/auth/README.md`
 
 Copy each list exactly into that service's Dokploy watch-path configuration.
@@ -248,7 +271,7 @@ over the API returns `previewPort: 3000`, `previewHttps: false`,
 `isPreviewDeploymentsActive: false` on the fresh record.
 
 The two preview services described here now exist (`web-preview` and
-`cube-trainer-preview`, in the `Unimatrix-01` project's `production`
+`cflop-preview`, in the `Unimatrix-01` project's `production`
 environment) and are configured as below. Their settings still live in
 Dokploy's database rather than in this repo, so this document describes intent
 and can drift from the instance — read the instance, not this file, when the
@@ -287,7 +310,7 @@ production Compose app, of type Application, reusing the same Dockerfile
 unchanged:
 
 - Build type: `Dockerfile`
-- Dockerfile path: `apps/web/Dockerfile` / `apps/cube-trainer/Dockerfile`
+- Dockerfile path: `apps/web/Dockerfile` / `apps/cflop/Dockerfile`
 - Docker context path: `.` — the repo root, matching the build rule in
   `infra/docker/README.md`
 - Preview port: **8080**
@@ -318,7 +341,7 @@ fails every API call. A half-working preview is worse than a broken one.
 
 Set `previewWildcard` to a wildcard under `unimatrix-01.dev` (e.g.
 `*.preview.unimatrix-01.dev`) and point a wildcard `A`/`CNAME` record at the
-Dokploy server before enabling previews. `apps/cube-trainer` would survive the
+Dokploy server before enabling previews. `apps/cflop` would survive the
 default (no API dependency), but there is no reason to split them.
 
 ### Three behaviours that are invisible from the UI
@@ -335,7 +358,7 @@ default (no API dependency), but there is no reason to split them.
   deployment with no PR comment and no error, so a missing preview is not
   evidence that something broke.
 - **Web previews run the new frontend against the *production* API.** Only web
-  and cube-trainer are previewed, and web's preview build arg points
+  and cflop are previewed, and web's preview build arg points
   `VITE_API_BASE_URL` at the live API. A PR that changes both `apps/web` and
   `apps/api` therefore previews the new UI against the old backend: a contract
   change can look broken in preview when it is fine, and — the dangerous
@@ -362,7 +385,7 @@ survivable here, so do not disable it.
 
 ### Which apps to preview
 
-- **`apps/cube-trainer`** — the clean case. No build args, no backend, no env;
+- **`apps/cflop`** — the clean case. No build args, no backend, no env;
   progress lives in `localStorage`.
 - **`apps/web`** — point previews at the production API and leave
   `VITE_CLERK_PUBLISHABLE_KEY` unset so previews stay anonymous.
@@ -381,7 +404,7 @@ survivable here, so do not disable it.
 2. Create a new **Application** service for `apps/web` (alongside, not
    replacing, the existing Compose app). Set build type Dockerfile, Dockerfile
    path `apps/web/Dockerfile`, context path `.`.
-3. Repeat for `apps/cube-trainer` with `apps/cube-trainer/Dockerfile`.
+3. Repeat for `apps/cflop` with `apps/cflop/Dockerfile`.
 4. On each, open Preview Settings and enable preview deployments.
 5. Set Preview Port to `8080` on both — the default of 3000 is wrong here.
 6. Enable Preview HTTPS and choose a certificate type. This is required, not
@@ -447,14 +470,16 @@ Verify these URLs after each production rollout:
 - `https://site.example.com/blog`
 - `https://site.example.com/projects`
 - `https://api.example.com/health`
-- `https://cube.unimatrix-01.dev/`
-- `https://cube.unimatrix-01.dev/learn`
-- `https://cube.unimatrix-01.dev/drill`
+- `https://cflop.unimatrix-01.dev/`
+- `https://cflop.unimatrix-01.dev/learn`
+- `https://cflop.unimatrix-01.dev/drill`
+- `https://cube.unimatrix-01.dev/learn` — must 301 to
+  `https://cflop.unimatrix-01.dev/learn`, preserving the path
 - `https://auth.unimatrix-01.dev/`
 - `https://auth.unimatrix-01.dev/sign-in`
 - `https://auth.unimatrix-01.dev/account`
 
-Also verify that refreshing a deep route on the public site, cube-trainer, or
+Also verify that refreshing a deep route on the public site, cflop, or
 the auth app still renders the SPA instead of returning a proxy or
 static-host 404.
 

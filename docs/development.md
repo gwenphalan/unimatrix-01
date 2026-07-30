@@ -48,8 +48,8 @@ Use `pnpm dev` to start the normal local runtime surface.
   files
 - Leaves existing local env files untouched
 - Starts only `@unimatrix/api` and `@unimatrix/web` through Turbo
-- Does not start `@unimatrix/cube-trainer`; run
-  `pnpm --filter @unimatrix/cube-trainer dev` separately. It has no `.env`
+- Does not start `@unimatrix/cflop`; run
+  `pnpm --filter @unimatrix/cflop dev` separately. It has no `.env`
   files and no backend dependency.
 - Does not start `@unimatrix/auth-app`; run
   `pnpm --filter @unimatrix/auth-app dev` separately. It serves on port
@@ -130,10 +130,10 @@ pnpm --filter @unimatrix/web test:smoke
 pnpm --filter @unimatrix/web test
 pnpm --filter @unimatrix/api dev
 pnpm --filter @unimatrix/api test
-pnpm --filter @unimatrix/cube-trainer dev
-pnpm --filter @unimatrix/cube-trainer test:unit
-pnpm --filter @unimatrix/cube-trainer test:smoke
-pnpm --filter @unimatrix/cube-trainer test
+pnpm --filter @unimatrix/cflop dev
+pnpm --filter @unimatrix/cflop test:unit
+pnpm --filter @unimatrix/cflop test:smoke
+pnpm --filter @unimatrix/cflop test
 pnpm --filter @unimatrix/auth-app dev
 pnpm --filter @unimatrix/auth-app test
 pnpm --filter @unimatrix/auth typecheck
@@ -166,7 +166,7 @@ locally.
 - Sets up pnpm `10.30.3`
 - Reads Node from `.node-version`
 - Runs `pnpm install --frozen-lockfile`
-- Installs Playwright Chromium for `@unimatrix/web` and `@unimatrix/cube-trainer`
+- Installs Playwright Chromium for `@unimatrix/web` and `@unimatrix/cflop`
 - Runs `pnpm build`
 - Runs `pnpm lint`
 - Runs `pnpm typecheck`

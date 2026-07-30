@@ -11,7 +11,7 @@
 - Composes `@unimatrix/ui` for its own UI, and **never `@unimatrix/auth`.** That prohibition is
   the load-bearing one. It is not a claim of zero dependencies: `@tanstack/react-router`, `react`
   and `react-dom` are declared **peers** and are supplied by the consuming app (see §5 for why
-  the router in particular must not resolve twice). Both shells take the account control as a `ReactNode` slot, which is what lets a sign-in-free tool like `apps/cube-trainer` import a shell without pulling Clerk into its dependency tree.
+  the router in particular must not resolve twice). Both shells take the account control as a `ReactNode` slot, which is what lets a sign-in-free tool like `apps/cflop` import a shell without pulling Clerk into its dependency tree.
 - Route knowledge — nav items, breadcrumb trails, sign-in hrefs — is passed in by the app, never computed here.
 
 ## 4. Conventions

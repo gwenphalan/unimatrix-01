@@ -43,12 +43,12 @@ const ALLOWED_PACKAGE_IMPORTS = {
   // uses it; `@unimatrix/content` stays a devDependency of `apps/api` so it is
   // absent from the deployable image.
   "apps/api": ["auth", "content", "db", "shared"],
-  // Deliberately narrow. AGENTS.md: cube-trainer must not gain
+  // Deliberately narrow. AGENTS.md: cflop must not gain
   // `@unimatrix/api-client`, `@unimatrix/shared`, or `@unimatrix/content`
   // unless a real server-backed feature is added. `chrome` does not widen that:
   // it carries no auth, transport, or content dependency of its own, which is
   // the whole reason its shells take the account control as a slot.
-  "apps/cube-trainer": ["chrome", "e2e-helpers", "ui"],
+  "apps/cflop": ["chrome", "e2e-helpers", "ui"],
   "apps/auth": ["app-config", "auth", "chrome", "ui"],
   // The admin scaffold, and deliberately as narrow as `apps/auth`. It is not
   // the CMS yet: `api-client` and `shared` are the edges the content move will

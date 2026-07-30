@@ -12,7 +12,7 @@ All Unimatrix services are subdomains of `unimatrix-01.dev`. Clerk's primary dom
 | `@unimatrix/auth/server` | Node (Fastify 5) | `registerClerkAuth`, `requireAuth`, `requirePermission`, `requireAdminSection`, `getAuthUserId`, `getSessionPermissionsClaim`, `AuthError` |
 | `@unimatrix/auth/react` | browser (React 19) | `AuthProvider`, `usePermissions`, plus re-exports of `SignIn`, `SignUp`, `UserButton`, `UserProfile`, `SignedIn`, `SignedOut`, `RedirectToSignIn`, `useAuth`, `useUser` |
 
-Use `.` from anywhere you only need types or the pure permission-check helpers (e.g. shared validation logic). Use `./server` only in `apps/api` (or another Fastify backend). Use `./react` only in a Vite/React frontend (`apps/web`, `apps/cube-trainer`, a future `apps/auth`).
+Use `.` from anywhere you only need types or the pure permission-check helpers (e.g. shared validation logic). Use `./server` only in `apps/api` (or another Fastify backend). Use `./react` only in a Vite/React frontend (`apps/web`, `apps/cflop`, a future `apps/auth`).
 
 ## Permission scheme
 
@@ -22,13 +22,13 @@ Permissions are stored in Clerk `user.publicMetadata` under a single `permission
 {
   "permissions": {
     "web": ["viewer"],
-    "cube-trainer": ["viewer", "editor"],
+    "cflop": ["viewer", "editor"],
     "auth": ["admin"]
   }
 }
 ```
 
-- App slugs: `"web"`, `"cube-trainer"`, `"auth"`, `"admin"`, `"api"` (see `AppSlug`).
+- App slugs: `"web"`, `"cflop"`, `"auth"`, `"admin"`, `"api"` (see `AppSlug`).
 - Roles: `"viewer"`, `"editor"`, `"admin"` (see `Role`).
 - The platform-wide administrator role is `auth: ["admin"]` — `isAdmin(perms)` is shorthand for `hasPermission(perms, "auth", "admin")`.
 
@@ -82,7 +82,7 @@ This package never reads `process.env` itself — every value below is read by t
 | `CLERK_SECRET_KEY` | backend (`apps/api`) | Backend API authentication (`registerClerkAuth`'s `secretKey`) |
 | `CLERK_PUBLISHABLE_KEY` | backend (`apps/api`) | Deriving the Clerk Frontend API URL (`registerClerkAuth`'s `publishableKey`) |
 | `CLERK_JWT_KEY` | backend (`apps/api`) | Networkless session JWT verification (`registerClerkAuth`'s `jwtKey`) |
-| `VITE_CLERK_PUBLISHABLE_KEY` | frontend (`apps/web`, `apps/cube-trainer`, future `apps/auth`) | `AuthProvider`'s `publishableKey` prop |
+| `VITE_CLERK_PUBLISHABLE_KEY` | frontend (`apps/web`, `apps/cflop`, future `apps/auth`) | `AuthProvider`'s `publishableKey` prop |
 
 These keys are provisioned by the repo owner in the Clerk Dashboard and are not committed. Local dev and tests can run without them — nothing in this package requires them to be set at import time; they are only required once `registerClerkAuth`/`AuthProvider` is actually invoked with them at app runtime.
 

@@ -32,7 +32,7 @@ test("homepage load", async ({ page }) => {
 
   await gotoRoute(page, "/");
 
-  await expect(main.getByRole("heading", { name: "Cube Trainer" })).toBeVisible();
+  await expect(main.getByRole("heading", { name: "CFLOP" })).toBeVisible();
   await expect(main.getByRole("link", { name: "Learn" })).toBeVisible();
   await expect(main.getByRole("link", { name: "Drill" })).toBeVisible();
 

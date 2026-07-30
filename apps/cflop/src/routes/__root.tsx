@@ -8,7 +8,7 @@ export const Route = createRootRoute({
   component: RootComponent,
   head: () => ({
     meta: [
-      { title: "Cube Trainer" },
+      { title: "CFLOP" },
       {
         name: "description",
         content: "A flashcard trainer for memorizing every 3x3 Rubik's Cube OLL and PLL algorithm.",
@@ -37,7 +37,7 @@ function RootNotFound() {
         </Badge>
         <div className="space-y-3">
           <h2 className="text-3xl leading-tight font-medium tracking-[-0.05em] text-foreground">
-            That page is not part of Cube Trainer.
+            That page is not part of CFLOP.
           </h2>
           <p className="max-w-2xl text-sm leading-7 text-muted-foreground lg:text-base lg:leading-8">
             Return home, or jump straight to Learn or Drill.

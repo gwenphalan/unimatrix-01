@@ -1,25 +1,25 @@
-# Cube Trainer service
+# CFLOP service
 
-Cube Trainer is a static Vite SPA deployed from `apps/cube-trainer/Dockerfile`
-through `infra/docker/cube-trainer-compose.yaml`.
+CFLOP is a static Vite SPA deployed from `apps/cflop/Dockerfile`
+through `infra/docker/cflop-compose.yaml`.
 
 ## Dokploy redeploy watch paths
 
-Configure the Cube Trainer Dokploy service to watch these repository paths. A
+Configure the CFLOP Dokploy service to watch these repository paths. A
 change to any of them can change the built browser bundle or its container:
 
 ```text
-apps/cube-trainer/**
+apps/cflop/**
 packages/config-typescript/**
 packages/ui/**
-infra/docker/cube-trainer-compose.yaml
+infra/docker/cflop-compose.yaml
 package.json
 pnpm-lock.yaml
 pnpm-workspace.yaml
 .dockerignore
 ```
 
-`apps/cube-trainer/**` includes its Dockerfile and Nginx configuration. The
+`apps/cflop/**` includes its Dockerfile and Nginx configuration. The
 trainer resolves `@unimatrix/ui` from workspace source, and the root workspace
 files control the frozen pnpm install used by the Docker build.
 

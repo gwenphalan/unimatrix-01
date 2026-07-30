@@ -66,13 +66,10 @@ describe("pool storage", () => {
   });
 
   it("discards malformed stored data instead of throwing", () => {
-    window.localStorage.setItem("cube-trainer:pool:oll", "not valid json");
+    window.localStorage.setItem("cflop:pool:oll", "not valid json");
     expect(readCasePool("oll")).toEqual({});
 
-    window.localStorage.setItem(
-      "cube-trainer:pool:oll",
-      JSON.stringify({ "oll-1": "not-a-boolean" }),
-    );
+    window.localStorage.setItem("cflop:pool:oll", JSON.stringify({ "oll-1": "not-a-boolean" }));
     expect(readCasePool("oll")).toEqual({});
   });
 });

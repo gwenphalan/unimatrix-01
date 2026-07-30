@@ -23,7 +23,7 @@
     "format:check": "prettier --check .",
     "deps:check": "syncpack lint",
     "deps:fix": "syncpack fix",
-    "lighthouse": "node ./infra/scripts/lighthouse.mjs apps/web && node ./infra/scripts/lighthouse.mjs apps/cube-trainer",
+    "lighthouse": "node ./infra/scripts/lighthouse.mjs apps/web && node ./infra/scripts/lighthouse.mjs apps/cflop",
     "check:app-wiring": "bash ./infra/scripts/check-app-wiring.sh",
     "check": "pnpm format:check && pnpm deps:check && pnpm check:app-wiring && turbo run lint typecheck test",
     "knip": "knip",

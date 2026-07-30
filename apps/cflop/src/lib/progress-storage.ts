@@ -2,6 +2,8 @@ import { z } from "zod";
 
 import type { AlgorithmSetId } from "@/features/algorithms/types";
 
+import { readStoredValue, writeStoredValue } from "./local-storage";
+
 export const CASE_STATUSES = ["new", "learning", "known"] as const;
 
 export type CaseStatus = (typeof CASE_STATUSES)[number];
@@ -11,28 +13,11 @@ export type CaseProgress = Record<string, CaseStatus>;
 const caseProgressSchema = z.record(z.string(), z.enum(CASE_STATUSES));
 
 function storageKey(setId: AlgorithmSetId): string {
-  return `cube-trainer:progress:${setId}`;
-}
-
-function readLocalStorage(key: string): string | null {
-  try {
-    return window.localStorage.getItem(key);
-  } catch {
-    return null;
-  }
-}
-
-function writeLocalStorage(key: string, value: string): void {
-  try {
-    window.localStorage.setItem(key, value);
-  } catch {
-    // Storage can be unavailable (private browsing, quota). Progress is
-    // best-effort and safe to drop silently in that case.
-  }
+  return `progress:${setId}`;
 }
 
 export function readCaseProgress(setId: AlgorithmSetId): CaseProgress {
-  const raw = readLocalStorage(storageKey(setId));
+  const raw = readStoredValue(storageKey(setId));
 
   if (raw === null) {
     return {};
@@ -52,7 +37,7 @@ export function readCaseProgress(setId: AlgorithmSetId): CaseProgress {
 }
 
 function writeCaseProgress(setId: AlgorithmSetId, progress: CaseProgress): void {
-  writeLocalStorage(storageKey(setId), JSON.stringify(progress));
+  writeStoredValue(storageKey(setId), JSON.stringify(progress));
 }
 
 export function setCaseStatus(

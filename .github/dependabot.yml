@@ -146,7 +146,7 @@ updates:
       - /apps/admin
       - /apps/api
       - /apps/auth
-      - /apps/cube-trainer
+      - /apps/cflop
       - /apps/web
     schedule:
       interval: daily

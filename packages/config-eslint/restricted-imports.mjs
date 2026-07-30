@@ -26,7 +26,7 @@ const SHIPPED_SOURCE = ["src/**/*.{ts,tsx,mts,cts}"];
 const ALL_SOURCE = ["**/*.{ts,tsx,mts,cts}"];
 
 const WORKSPACE_RESTRICTIONS = {
-  "apps/cube-trainer": {
+  "apps/cflop": {
     files: ALL_SOURCE,
     patterns: [
       {
@@ -41,7 +41,7 @@ const WORKSPACE_RESTRICTIONS = {
           "@tanstack/react-query/*",
         ],
         message:
-          "cube-trainer is intentionally backend-free: no api-client, shared contracts, content loading, or react-query. Adding one of these means adding a real server-backed feature — update AGENTS.md and this rule together if that is the intent.",
+          "cflop is intentionally backend-free: no api-client, shared contracts, content loading, or react-query. Adding one of these means adding a real server-backed feature — update AGENTS.md and this rule together if that is the intent.",
       },
     ],
   },

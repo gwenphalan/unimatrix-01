@@ -7,7 +7,7 @@ type AppShellProps = {
 
 // The chrome itself lives in `@unimatrix/chrome/tool` — this app supplies only
 // what is specific to it: the source link and the algorithm-data attribution.
-// No `accountControl` is passed, because Cube Trainer is a public, sign-in-free
+// No `accountControl` is passed, because CFLOP is a public, sign-in-free
 // tool; the shell renders no title bar at all in that case, which is why this
 // migration changes nothing on screen.
 //
@@ -19,7 +19,7 @@ export function AppShell({ children }: AppShellProps) {
     <ToolShell
       footerEnd={
         <>
-          <ToolFooterLink href="https://github.com/unimatrixcore/unimatrix-01/tree/main/apps/cube-trainer">
+          <ToolFooterLink href="https://github.com/unimatrixcore/unimatrix-01/tree/main/apps/cflop">
             GitHub source
           </ToolFooterLink>{" "}
           · Algorithm data from{" "}

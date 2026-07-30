@@ -14,7 +14,7 @@ import { Button, GraphBackground, cn } from "@unimatrix/ui/public";
  *
  * Auth is a slot, not a dependency. `accountControl` takes whatever the service
  * wants there (a Clerk `UserButton`, a sign-in link, nothing at all), which is
- * what keeps this package free of `@unimatrix/auth`: `apps/cube-trainer` is a
+ * what keeps this package free of `@unimatrix/auth`: `apps/cflop` is a
  * public, sign-in-free tool and must not gain an auth dependency by importing
  * its shell. The public shell in `./public` takes the same slot for the same
  * reason.
@@ -157,7 +157,7 @@ export function ToolShell({
   ownerName = DEFAULT_OWNER_NAME,
 }: ToolShellProps) {
   // A tool with neither an account control nor a wordmark has nothing to put in
-  // a title bar, and an empty bar would only cost vertical space. `apps/cube-trainer`
+  // a title bar, and an empty bar would only cost vertical space. `apps/cflop`
   // is that case today, which is why migrating it onto this shell is a no-op on
   // screen rather than a redesign.
   const hasTitleBar = accountControl !== undefined || homeLabel !== undefined;

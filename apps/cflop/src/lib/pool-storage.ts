@@ -2,33 +2,18 @@ import { z } from "zod";
 
 import type { AlgorithmSetId } from "@/features/algorithms/types";
 
+import { readStoredValue, writeStoredValue } from "./local-storage";
+
 export type CasePool = Record<string, boolean>;
 
 const casePoolSchema = z.record(z.string(), z.boolean());
 
 function storageKey(setId: AlgorithmSetId): string {
-  return `cube-trainer:pool:${setId}`;
-}
-
-function readLocalStorage(key: string): string | null {
-  try {
-    return window.localStorage.getItem(key);
-  } catch {
-    return null;
-  }
-}
-
-function writeLocalStorage(key: string, value: string): void {
-  try {
-    window.localStorage.setItem(key, value);
-  } catch {
-    // Storage can be unavailable (private browsing, quota). The pool is
-    // best-effort and safe to drop silently in that case.
-  }
+  return `pool:${setId}`;
 }
 
 export function readCasePool(setId: AlgorithmSetId): CasePool {
-  const raw = readLocalStorage(storageKey(setId));
+  const raw = readStoredValue(storageKey(setId));
 
   if (raw === null) {
     return {};
@@ -53,10 +38,10 @@ export function readCasePool(setId: AlgorithmSetId): CasePool {
  * silently dropping the write: a typed caller cannot produce a bad record, so reaching this is
  * a bug in the caller, and a swallowed write would leave React state and `localStorage`
  * disagreeing with nothing to show for it. Environment failures (quota, private browsing) are a
- * different thing and stay swallowed in `writeLocalStorage`.
+ * different thing and stay swallowed in `writeStoredValue`.
  */
 function writeCasePool(setId: AlgorithmSetId, pool: CasePool): void {
-  writeLocalStorage(storageKey(setId), JSON.stringify(casePoolSchema.parse(pool)));
+  writeStoredValue(storageKey(setId), JSON.stringify(casePoolSchema.parse(pool)));
 }
 
 export function setCaseEnabled(setId: AlgorithmSetId, caseId: string, enabled: boolean): CasePool {

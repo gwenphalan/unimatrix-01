@@ -17,7 +17,7 @@ if (!firstCase || !secondCase || !lateCase || lateCase === firstCase) {
 }
 
 function markKnown(caseId: string) {
-  window.localStorage.setItem("cube-trainer:progress:pll", JSON.stringify({ [caseId]: "known" }));
+  window.localStorage.setItem("cflop:progress:pll", JSON.stringify({ [caseId]: "known" }));
 }
 
 describe("useLearnSession", () => {

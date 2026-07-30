@@ -13,7 +13,7 @@ type AccountControlProps = {
  *
  * It lives in the app rather than in `@unimatrix/chrome` for the reason the
  * slot exists at all: the shell package must never gain `@unimatrix/auth`, or
- * a sign-in-free tool like `apps/cube-trainer` could not import a shell from
+ * a sign-in-free tool like `apps/cflop` could not import a shell from
  * it.
  *
  * Signed out it offers a way to the auth hub — it does **not** redirect. This
