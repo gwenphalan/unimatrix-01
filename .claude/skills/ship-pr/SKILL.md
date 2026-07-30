@@ -173,8 +173,8 @@ Every run spends a per-developer rate-limit slot, and Pro Plus limits are adapti
 pinging makes them *tighter*.
 
 So the ping has to be worth its one shot: **batch every fix into one push before it**, and do not
-ping while anything is still in flight. Getting this wrong no longer costs you a slow PR — it costs
-you the review.
+ping while anything is still in flight. Getting this wrong does not cost you a slow PR — it costs you
+the review.
 
 ### Rate limits, when you do hit one
 
