@@ -51,6 +51,11 @@ jobs:
       - name: App wiring
         run: bash ./infra/scripts/check-app-wiring.sh
 
+      # Same placement rationale as App wiring above: no `node_modules` needed,
+      # and a missing symlink means a workspace's AGENTS.md reaches no agent.
+      - name: AGENTS.md symlinks
+        run: bash ./infra/scripts/check-agents-md-symlinks.sh
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 

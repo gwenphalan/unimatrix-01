@@ -46,6 +46,12 @@ this file holds the mechanics, each of which was learned the hard way.
   satisfies it or the check goes red. Adding it to `pnpm check` alone is not a pre-merge gate: the
   only other thing that runs it is the scheduled `maintenance.yml` pass against already-merged
   `main`.
+- `infra/scripts/check-agents-md-symlinks.sh` (same placement and rationale, as the `AGENTS.md
+  symlinks` step) asserts every `AGENTS.md` has a sibling `CLAUDE.md` symlink pointing at it.
+  Claude Code reads `CLAUDE.md`, not `AGENTS.md`, and discovers nested ones on demand when a file in
+  their directory is read — so an `AGENTS.md` without the symlink reaches no agent, and nothing else
+  notices. It fails closed on a missing symlink, a regular file in its place, a wrong target, and a
+  `CLAUDE.md` whose `AGENTS.md` was renamed away.
 - Two workflows serve `lab`. `Prototypes guard` (job `No prototypes on main`) runs on **every**
   pull request to `main` with no `paths:` filter and fails when the diff adds a file under
   `lab/prototypes/` — the `.gitkeep` and `README.md` scaffolding are allow-listed. The filter is

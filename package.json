@@ -25,9 +25,10 @@
     "deps:fix": "syncpack fix",
     "lighthouse": "node ./infra/scripts/lighthouse.mjs apps/web && node ./infra/scripts/lighthouse.mjs apps/cflop",
     "check:app-wiring": "bash ./infra/scripts/check-app-wiring.sh",
-    "check": "pnpm format:check && pnpm deps:check && pnpm check:app-wiring && turbo run lint typecheck test",
+    "check:agents-md": "bash ./infra/scripts/check-agents-md-symlinks.sh",
+    "check": "pnpm format:check && pnpm deps:check && pnpm check:app-wiring && pnpm check:agents-md && turbo run lint typecheck test",
     "knip": "knip",
-    "verify": "pnpm format:check && pnpm deps:check && pnpm check:app-wiring && turbo run build lint typecheck test"
+    "verify": "pnpm format:check && pnpm deps:check && pnpm check:app-wiring && pnpm check:agents-md && turbo run build lint typecheck test"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^7.0.0",

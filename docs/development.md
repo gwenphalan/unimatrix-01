@@ -160,7 +160,7 @@ Run the narrowest relevant command set for the change you made.
 ## CI behavior
 
 CI runs the same root gates as `pnpm verify`, individually rather than through
-the wrapper, plus the `App wiring` script. A separate `Images` job builds every
+the wrapper, plus the `App wiring` and `AGENTS.md symlinks` scripts. A separate `Images` job builds every
 `apps/*/Dockerfile`; those checks are required on `main`, and `Verify` never
 touches a Dockerfile. `.github/workflows/ci.yml` is the authority on the exact
 step list.
