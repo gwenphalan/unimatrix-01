@@ -45,9 +45,14 @@ Thumbs.db
 # misc
 *.log
 
-# Claude Code local state — all of it. Nothing under .claude/ was ever
-# tracked; skills, settings, and scheduler state are per-developer.
-.claude/
+# Claude Code state. Settings, scheduler state and the agent worktrees under
+# .claude/worktrees/ are per-developer; skills are repo conventions and are
+# tracked, because AGENTS.md points at them and a clone that lacks them reads an
+# instruction it cannot follow. The two lines are not interchangeable: git does
+# not descend into an excluded directory, so the exclusion has to be `.claude/*`
+# for the negation below to be reachable at all.
+.claude/*
+!.claude/skills/
 
 # issue workflow artifacts
 .notes/
