@@ -1,7 +1,7 @@
 # AGENTS.md
 
 ## 1. Overview
-`packages/db` is the monorepo's persistence boundary. It keeps the current SQLite + Drizzle baseline small so later database work can extend the schema without moving the package boundary.
+`packages/db` is the persistence boundary: SQLite + Drizzle. §3a is the part that bites — the `better-sqlite3` version ceiling.
 
 ## 2. Folder Structure
 - `src/config.ts`: database path resolution and runtime config helpers.
@@ -25,7 +25,7 @@
 
 That is fine on a developer machine and fatal in `apps/api/Dockerfile`. The `node:*-alpine` base has neither, so the build dies at `pnpm install --frozen-lockfile` with `gyp ERR! find Python`. Verified by building the image, not inferred.
 
-**The dangerous part is that nothing in CI would catch this.** No CI job builds a Docker image, so `pnpm verify` passes on the glibc runner while the deployable image is broken. A Dependabot PR proposing `better-sqlite3@13` will look completely green. Reject it until upstream ships prebuilds, or accept adding `python3` and `build-base` to the Dockerfile's build stage as a deliberate trade.
+**CI catches this now.** The `Images (api)` matrix check builds `apps/api/Dockerfile` on every PR and is required on `main`, so a `better-sqlite3@13` bump goes red rather than green. Reject it until upstream ships prebuilds, or accept adding `python3` and `build-base` to the Dockerfile's build stage as a deliberate trade.
 
 This also cuts the other way: 12.11.1 already publishes a `node-v137` prebuild, so it supports the pinned Node 24 fully. A local `NODE_MODULE_VERSION` mismatch means a stale `node_modules` built under a different Node, not missing support — reinstall rather than upgrade.
 
@@ -33,6 +33,3 @@ This also cuts the other way: 12.11.1 already publishes a `node-v137` prebuild, 
 - **Naming**: Use `create*` for client factories, `resolve*` for config helpers, and `*Table` suffixes for Drizzle table exports such as `systemSettingsTable`.
 - **Schema style**: SQLite table names and column names stay snake_case at the database layer, while exported TypeScript types stay `PascalCase`.
 - **Boundaries**: Keep route logic, UI concerns, and product-specific business workflows out of this package unless the persistence boundary is intentionally widened.
-
-## 5. Working Agreements
-- Follow the shared repo working agreements in the root `AGENTS.md`; this file only adds `packages/db` structure, patterns, and conventions.

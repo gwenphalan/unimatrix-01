@@ -28,8 +28,8 @@ export function createWebViteConfig(mode: string): UserConfig {
       rolldownOptions: {
         output: {
           // Rolldown emits a separate chunk for every module shared by two or
-          // more chunks. Mounting `AdminSlot` in the app shell and in six lazy
-          // routes crossed that threshold for a handful of small modules and
+          // more chunks. Mounting `AdminSlot` in the app shell and in the blog,
+          // projects and admin lazy routes crossed that threshold for a handful of small modules and
           // shattered the eager set from 6 chunks into 11 — the same ~950 kB
           // of JavaScript, but nearly twice the requests on the critical path.
           // Measured cost: homepage Lighthouse performance 0.87 to 0.83, with

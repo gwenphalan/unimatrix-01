@@ -2,9 +2,10 @@
 
 **This directory is empty on `main`, and stays that way.**
 
-Prototypes live on `lab/*` branches and are never merged. A required check on
-pull requests to `main` fails if the diff touches `lab/prototypes/`, which is
-what keeps this directory empty rather than branch-naming discipline.
+Prototypes live on `lab/*` branches and are never merged. The
+`No prototypes on main` check fails if the diff adds a file under
+`lab/prototypes/`. It is advisory — not armed as a required status check — so it
+reports rather than blocks.
 
 That check is **repo hygiene, not a security control** — worth saying plainly,
 because a rule that sounds like a security boundary gets trusted like one. The

@@ -2,9 +2,7 @@
 
 Zod-backed validation for the two external config boundaries every Vite app
 has: the browser runtime env (`import.meta.env.VITE_*`) and the dev-proxy env
-read by `vite.config.ts`. Before this package existed, `apps/web`, `apps/auth`
-and `apps/admin` each carried a verbatim copy of the same hand-rolled
-validators — this is where that copy lives now, written once, in Zod.
+read by `vite.config.ts`.
 
 ## Shape
 
@@ -14,7 +12,8 @@ validators — this is where that copy lives now, written once, in Zod.
   its own schema in its `src/lib/config.ts` from `apiBaseUrl()`,
   `requiredEnvString()`, `optionalHttpUrl()` etc., and keeps its own explicit
   exported config interfaces. The one whole loader here is
-  `loadDevProxyConfig` — it was byte-identical in every app.
+  `loadDevProxyConfig` — the dev-proxy env has the same shape in every
+  app, so there is nothing for an app to compose.
 - **`zod` is this package's implementation detail.** Apps compose schemas via
   `envSchema(shape)` and never import `zod` themselves; no app gains a `zod`
   dependency by consuming this.

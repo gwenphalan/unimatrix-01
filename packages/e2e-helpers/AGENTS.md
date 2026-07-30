@@ -15,6 +15,3 @@ Test-only and **app-agnostic**. Helpers take the selectors, route labels, and ac
 - Import it only from `e2e/`, never from `src/`.
 - Consumers resolve it through a tsconfig `paths` entry pointing at `src/index.ts`, **not** through the `exports` map. Playwright will not transpile a path containing `node_modules`, so the symlinked resolution fails on raw TypeScript.
 - Keep `@playwright/test` a **peer** dependency. Two resolved copies means `expect` cannot see the running test.
-
-## 5. Working Agreements
-The circuit-field occlusion-measurement helper that used to live here was removed with the circuit field itself (`f65333b`, #136). Do not reintroduce it or references to it.

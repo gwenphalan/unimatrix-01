@@ -43,35 +43,10 @@ Keep `LabUserStore` in step with `packages/user-data/src/types.ts` by hand. If t
 - **`@unimatrix/ui` and `@unimatrix/shared` resolve to package *source*** through `vite.config.ts` aliases and `tsconfig.json` paths, unlike the apps, which consume `dist`. Both are built with `tsc` and publish `./dist` via their `exports` map, so without the alias, editing a shared component shows nothing here until a rebuild — which defeats the entire purpose.
 - **`@tanstack/react-router` is in `dedupe`** alongside `react`/`react-dom`. `@unimatrix/chrome` declares it as a peer; two resolved copies means the shell's `useRouterState` reads a router context `RouterProvider` never wrote to.
 - **The stylesheet carries `@source` lines for `ui`, `chrome` and `prototypes`.** Tailwind v4 source detection does not reach a sibling workspace. Nothing but a browser catches its absence — lint, types and every automated check stay green while the layout collapses.
-- **Banned imports** (enforced by `no-restricted-imports` in `eslint.config.mjs`, not by prose): `@unimatrix/api-client`, `@unimatrix/user-data`, `@unimatrix/auth/react`, `@unimatrix/auth/server`, `@clerk/*`. The bare `@unimatrix/auth` entry is allowed and used — it is the permission scheme, and nothing else.
+- **Banned imports** (enforced by `no-restricted-imports` in `eslint.config.mjs`, and **only under `lab/src/`** — `lab/prototypes/` is excluded from lint, so nothing stops a prototype importing them; containment is the absence of a deploy artifact, not this rule): `@unimatrix/api-client`, `@unimatrix/user-data`, `@unimatrix/auth/react`, `@unimatrix/auth/server`, `@clerk/*`. The bare `@unimatrix/auth` entry is allowed and used — it is the permission scheme, and nothing else.
 
 ## 6. Known costs, accepted rather than solved
 
 - `pnpm install` installs lab's dependencies in CI, which never needs them.
 - **Dependabot watches `lab/package.json`** and will open PRs for a dev-only harness. Accepted deliberately: an unsupported or malformed key makes Dependabot reject `.github/dependabot.yml` entirely, silently disabling npm updates repo-wide, and a rejected config looks exactly like a quiet week. A few dev-harness PRs is the cheaper failure.
 - `lab/*` branches rot against `packages/ui` and `packages/chrome` changes. Correct for throwaway work.
-
-## 7. Working Agreements
-
-Follow the shared repo working agreements in the root `AGENTS.md`; this file only adds `lab`'s structure, patterns, and conventions.
-
-## What is enforced mechanically, and what is not
-
-Worth stating precisely, because a rule that reads like a security boundary gets
-trusted like one.
-
-**Enforced by ESLint** — but only under `lab/src/`, which is the linted tree:
-imports of `@unimatrix/api-client`, `@unimatrix/user-data`, `@unimatrix/auth/react`,
-`@unimatrix/auth/server` and `@clerk/*` are banned by name.
-
-**Not enforced under `lab/prototypes/`.** That directory is deliberately excluded
-from lint, typecheck, Prettier and coverage, so nothing stops a prototype from
-importing whatever it likes. There is no vite alias to those modules, so an
-import would fail to resolve rather than silently reach a real transport — but
-that is a consequence of the wiring, **convention, not a mechanism** aimed at
-prototypes.
-
-**What actually keeps this contained** is that the lab has no Dockerfile, no
-compose entry, no CI `Images` row and no build script, plus the
-`No prototypes on main` check keeping `lab/prototypes/` empty on the default
-branch. Containment is structural; the lint rule is hygiene for the harness.

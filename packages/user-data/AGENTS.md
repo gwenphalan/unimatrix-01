@@ -29,5 +29,3 @@
 - **DOM types are allowed here** (unlike `@unimatrix/api-client`): this package's `tsconfig.json` includes `"DOM"`/`"DOM.Iterable"` in `lib` because the guest adapter needs IndexedDB and both adapters use `Blob`/`FormData`/`URL`/`fetch`.
 - **Tests**: `migration.test.ts` uses hand-rolled in-memory fakes (no real IndexedDB/fetch) so it stays fast and isolates the pure migration logic; `guest-store.test.ts` uses `fake-indexeddb/auto` (installed globally via `test/setup.ts`); `account-store.test.ts` injects a fake `AccountFetch` — don't hit a live Clerk/backend from any test here.
 
-## 5. Working Agreements
-- Follow the shared repo working agreements in the root `AGENTS.md`; this file only adds `packages/user-data` structure, patterns, and conventions.

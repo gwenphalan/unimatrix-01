@@ -6,9 +6,9 @@ import { afterEach } from "vitest";
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
 
-// jsdom ships no `ResizeObserver`, and `ToolShell` mounts a
-// `CircuitOccluderProvider` that constructs one unconditionally — any suite
-// rendering the shell throws without this inert default. Same shim as
+// jsdom ships no `ResizeObserver`, and `GraphBackground` (mounted by
+// `ToolShell`) constructs one unconditionally on mount — any suite rendering
+// the shell throws without this inert default. Same shim as
 // `packages/chrome/test/setup.ts` and `packages/ui/test/setup.ts`.
 if (!("ResizeObserver" in globalThis)) {
   class NoopResizeObserver implements ResizeObserver {

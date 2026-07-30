@@ -1,7 +1,7 @@
 # Unimatrix-01
 
-Unimatrix-01 is the active TypeScript monorepo for the public site, API,
-shared packages, and Git-backed content.
+Unimatrix-01 is the TypeScript monorepo for the public site, API, tools, and
+shared packages.
 
 ## Quick start
 
@@ -26,23 +26,18 @@ versions, use `./infra/scripts/pnpm-with-pinned-node.sh install
 
 ## What lives here
 
-This repo keeps the current runtime surface narrow and explicit.
+The workspace roster is `pnpm-workspace.yaml`; `AGENTS.md` carries the
+per-package boundaries.
 
-- `apps/web` contains the Vite + React public site.
-- `apps/api` contains the Fastify API.
-- `apps/cflop` contains the Vite + React OLL/PLL algorithm trainer
-  (no backend dependency).
-- `apps/auth` contains the Vite + React accounts app: the central
-  Clerk-backed authentication hub for sign-in/sign-up and account management.
-- `packages/` contains shared UI, content, database, config, contract, auth,
-  and user-data packages.
-- `content/` contains the public authored content rendered by the web app.
+`content/home/index.md` is site copy compiled into the web bundle;
+`content/blog` and `content/projects` are seed input for the content
+database (`pnpm --filter @unimatrix/api seed:content`).
 
 ## Docs
 
-Use the short index below to jump to the right source of truth.
-
-- Human operating guide: [docs/README.md](docs/README.md)
+- Operating model: [docs/operating-model.md](docs/operating-model.md)
+- Development workflow: [docs/development.md](docs/development.md)
+- Content workflow: [docs/content.md](docs/content.md)
 - Deployment contract: [infra/deployment/README.md](infra/deployment/README.md)
 - Local container posture: [infra/docker/README.md](infra/docker/README.md)
 - Agent contract: [AGENTS.md](AGENTS.md)

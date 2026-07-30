@@ -10,10 +10,7 @@ export interface LearnCasesGridProps {
   setId: AlgorithmSetId;
 }
 
-// Kept as its own component for the `useCaseProgress`-driven props below; it no
-// longer registers an occluder. The `section` paints nothing, so the field now
-// routes around the `h2`'s ink and each `CasePreviewCard.site-panel` instead of
-// around one rect spanning the whole group.
+// Kept as its own component for the `useCaseProgress`-driven props below.
 function LearnGroupSection({
   cases,
   group,

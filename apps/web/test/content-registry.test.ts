@@ -7,13 +7,9 @@ function readSiteContentSource(): string {
 }
 
 /**
- * This file used to assert that every authored markdown file under
- * `content/blog` and `content/projects` was registered in `site-content.ts`,
- * because a file that was not listed simply never appeared on the site.
- *
- * Those two collections now live in the content database behind the API and
- * are fetched at runtime, so there is no registry left to drift. What remains
- * is the inverse property: the home singleton stays bundled, and no blog or
+ * Blog and project content lives in the content database behind the API and is
+ * fetched at runtime, so there is no registry left to drift. What remains is
+ * the inverse property: the home singleton stays bundled, and no blog or
  * project markdown may creep back into the bundle. A `?raw` import of one
  * would be a second, silently stale source of truth alongside the database.
  */

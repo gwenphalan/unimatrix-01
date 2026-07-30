@@ -15,10 +15,8 @@ function SignInRoute() {
   // Validated against the same-family allowlist before it can ever be used
   // as a post-auth redirect target; falls back to the auth landing ("/").
   const target = safeRedirectUrl(redirect_url);
-  // Clerk's hosted widget mounts asynchronously and paints its own `.cl-card`,
-  // which the provider's DOM scan discovers on its own — this wrapper no longer
-  // registers anything. It stays because `w-fit` shrink-wraps the widget inside
-  // the shell's centering column; removing it is a layout change, not a cleanup.
+  // `w-fit` shrink-wraps Clerk's widget inside the shell's centering column;
+  // removing this wrapper is a layout change, not a cleanup.
 
   return (
     <div className="w-fit">

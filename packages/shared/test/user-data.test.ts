@@ -30,9 +30,8 @@ describe("dataNamespaceSchema", () => {
     expect(dataNamespaceSchema.parse("cflop")).toBe("cflop");
   });
 
-  // Kept as its own case after the cflop rebrand: the app name used to supply
-  // the hyphen for free, so renaming it left the `-` branch of the pattern
-  // unexercised by any assertion.
+  // Its own case so the `-` branch of the pattern stays covered even if the
+  // namespace fixture above changes to a name without one.
   it("accepts a hyphenated slug", () => {
     expect(dataNamespaceSchema.parse("cflop-drill")).toBe("cflop-drill");
   });

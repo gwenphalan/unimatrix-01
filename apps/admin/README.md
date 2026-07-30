@@ -4,15 +4,14 @@ The administration console is a Vite SPA built from `apps/admin/Dockerfile`
 and served by nginx on port 8080, matching the other three static apps.
 
 It is scaffold-only today: one placeholder route on `@unimatrix/chrome`'s tool
-shell. The compose file, the Dokploy service, the `admin.unimatrix-01.dev`
-domain entry and the Cloudflare Access application in front of it are separate
-work and are **not** in this directory.
+shell. It is nonetheless deployed and reachable: `infra/docker/admin-compose.yaml`
+is the Dokploy Compose file, and `admin.unimatrix-01.dev` sits behind Cloudflare
+Access, which is what makes the ungated placeholder route safe.
 
 ## Build arguments
 
-Vite inlines `import.meta.env.VITE_*` at build time, so all three must be
-present when the image is built — setting them on the running container does
-nothing.
+Vite inlines `import.meta.env.VITE_*` at build time, so these are build args
+rather than runtime env — setting them on the running container does nothing.
 
 | Build arg                     | Required | Default                          |
 | ----------------------------- | -------- | -------------------------------- |
@@ -27,6 +26,7 @@ to any of them can change the built browser bundle or its container:
 
 ```text
 apps/admin/**
+packages/app-config/**
 packages/auth/**
 packages/chrome/**
 packages/config-typescript/**
@@ -50,13 +50,8 @@ repository-wide convention.
 ## Security headers
 
 `nginx.conf` ships a deliberately tighter policy than `apps/web` — this app
-renders no user-authored markdown, so it needs less room:
-
-```text
-Content-Security-Policy: frame-ancestors 'self'; base-uri 'none'; object-src 'none'; form-action 'self'
-X-Content-Type-Options: nosniff
-Referrer-Policy: strict-origin-when-cross-origin
-```
+renders no user-authored markdown, so it needs less room. Its `add_header`
+lines are the policy the app actually sends.
 
 `default-src`, `script-src` and `connect-src` are absent on purpose. Clerk
 loads `clerk.browser.js` from its frontend-API host and avatars from

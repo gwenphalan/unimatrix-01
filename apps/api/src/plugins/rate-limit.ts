@@ -14,25 +14,6 @@ const RATE_LIMIT_MAX = 300;
 const RATE_LIMIT_WINDOW = "1 minute";
 
 /**
- * Registers a global request ceiling.
- *
- * Global rather than per-route. Every authenticated route is a candidate — an
- * unlimited endpoint that checks a password is a place to guess passwords, and
- * an unlimited upload endpoint is a place to fill a disk — so the default is
- * the limit and an exception has to be argued for, not the other way round.
- * Registered in the root scope, before any route, so it covers the modules
- * whether or not they are conditionally registered.
- *
- * Keyed by IP through Fastify's own `request.ip`, which honours
- * `trustProxy` — set from `TRUST_PROXY` in {@link ApiRuntimeConfig}. Behind a
- * proxy with that unset, every request appears to come from the proxy and the
- * whole deployment shares one bucket.
- *
- * The store is in-memory and per-process. With more than one instance the
- * effective ceiling is `RATE_LIMIT_MAX` × instances; a shared Redis store is
- * the fix if that ever matters, and this plugin takes one.
- */
-/**
  * The ceiling itself, exported so the feature modules can install the same one
  * inside their own encapsulated scope — see the note at each `register` call.
  */
@@ -76,6 +57,25 @@ export const DOCUMENT_WRITE_RATE_LIMIT_OPTIONS = {
   timeWindow: RATE_LIMIT_WINDOW,
 } as const;
 
+/**
+ * Registers a global request ceiling.
+ *
+ * Global rather than per-route. Every authenticated route is a candidate — an
+ * unlimited endpoint that checks a password is a place to guess passwords, and
+ * an unlimited upload endpoint is a place to fill a disk — so the default is
+ * the limit and an exception has to be argued for, not the other way round.
+ * Registered in the root scope, before any route, so it covers the modules
+ * whether or not they are conditionally registered.
+ *
+ * Keyed by IP through Fastify's own `request.ip`, which honours
+ * `trustProxy` — set from `TRUST_PROXY` in {@link ApiRuntimeConfig}. Behind a
+ * proxy with that unset, every request appears to come from the proxy and the
+ * whole deployment shares one bucket.
+ *
+ * The store is in-memory and per-process. With more than one instance the
+ * effective ceiling is `RATE_LIMIT_MAX` × instances; a shared Redis store is
+ * the fix if that ever matters, and this plugin takes one.
+ */
 export function setupRateLimit(app: FastifyInstance): void {
   app.register(fastifyRateLimit, {
     ...RATE_LIMIT_OPTIONS,

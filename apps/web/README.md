@@ -14,7 +14,9 @@ content/blog/**
 content/home/**
 content/projects/**
 packages/api-client/**
+packages/app-config/**
 packages/auth/**
+packages/chrome/**
 packages/config-typescript/**
 packages/content/**
 packages/shared/**
@@ -30,6 +32,10 @@ pnpm-workspace.yaml
 the listed content directories and imports source directly from the listed
 workspace packages, so each must trigger a rebuild. The root workspace files
 control the frozen pnpm install used by the Docker build.
+
+`packages/chrome/**` is on the list because the app's shell imports from
+`@unimatrix/chrome`. Omitting it lets the shared chrome change without this app
+rebuilding, so two apps serve different chrome with nothing to indicate it.
 
 When adding a workspace dependency or another build input, add its path here
 and to the Dokploy service's watch-path configuration. See

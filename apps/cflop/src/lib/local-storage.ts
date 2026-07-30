@@ -2,9 +2,8 @@
  * The one place this app decides what its `localStorage` keys look like.
  *
  * Three separate key families live behind it (`progress:<setId>`,
- * `pool:<setId>`, `preview-mode:<scope>`), and they used to each carry their own
- * copy of the prefix and of the try/catch read/write pair. Collapsing that here
- * is what makes the legacy-prefix fallback below a single implementation rather
+ * `pool:<setId>`, `preview-mode:<scope>`). Routing all three through here is
+ * what keeps the legacy-prefix fallback below a single implementation rather
  * than three that can drift.
  */
 
