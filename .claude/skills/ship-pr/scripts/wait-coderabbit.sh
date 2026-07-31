@@ -101,6 +101,10 @@ no_baseline() {
   exit 1
 }
 
+# Ahead of the baseline call, not after it: a comment landing during that round
+# trip is invisible to a `since=` taken once it returns.
+since=${SHIP_PR_SINCE:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}
+
 if [ "$offline" -eq 1 ]; then
   case "${fixtures[0]:-ERROR=empty fixture list}" in
     ERROR=*) no_baseline ;;
@@ -110,7 +114,6 @@ else
   base=$(count) || no_baseline
 fi
 
-since=${SHIP_PR_SINCE:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}
 n=$base
 body=""
 fails=0
@@ -190,7 +193,7 @@ while true; do
 
   i=$((i + 1))
   if [ $((i % 10)) -eq 0 ]; then
-    echo "still waiting, count=$n, $((i / 2))m elapsed"
+    echo "still waiting, count=$n, $(((i * poll) / 60))m elapsed"
   fi
 
   sleep "$poll"
