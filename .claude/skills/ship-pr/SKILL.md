@@ -73,6 +73,15 @@ closes when it is done.
 workstreams you cannot see; the pieces you will check afterwards are verification checkpoints and
 stay pending until you have checked them.
 
+**To move an agent off its default tier, name an effort skill in the dispatch prompt.** Each agent's
+`effort:` frontmatter is fixed for every dispatch — the `Agent` tool takes a `model` parameter but no
+`effort` one — so "tell it to invoke `effort-xhigh` first" is the only per-dispatch lever, and a
+skill's effort outranks the agent's. Raising it is the case worth remembering: `monorepo-implementer`
+sits at `medium`, which is right for following an approved plan and thin for a large one.
+
+`CLAUDE_CODE_EFFORT_LEVEL` outranks both, so where it is set the knob is inert and nothing says so —
+check the environment before concluding a dispatch ran at the level you asked for.
+
 ## Before opening anything
 
 Run the narrowest relevant checks for what changed before opening the PR, not after. `pnpm check` is
