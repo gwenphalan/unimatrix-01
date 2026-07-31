@@ -11,10 +11,11 @@ the push earns no new review, but CodeRabbit does answer thread replies, and
 that answer is where it either concedes or produces a counterexample. A reply
 that raises something new is a finding in its own right.
 
-This reads `pulls/.../comments` — review-thread replies, a different endpoint
-from the `issues/.../comments` where the summary comment lives. It makes one
-call and exits, so arm it under `Monitor` if you would rather the reply found
-you.
+This reads `pulls/.../comments` — the review threads, a different endpoint from
+the `issues/.../comments` where the summary comment lives. Only comments
+carrying an `in_reply_to_id` are printed, so the findings themselves stay out of
+the way and what you see is an answer to something you said. It polls once and
+exits, so arm it under `Monitor` if you would rather the reply found you.
 
 Arguments:
   <owner/repo>  e.g. gwenphalan/unimatrix-01
@@ -56,10 +57,14 @@ repo=$1
 pr=$2
 since=$3
 
-filter='.[] | select(.user.login=="coderabbitai[bot]") | "\(.path):\(.line)\t\(.body)"'
+# shellcheck disable=SC2016  # jq filter, not shell.
+# in_reply_to_id is what separates a reply from a top-level finding. Without it
+# the whole review lands here on the round it was posted, burying the answer
+# this script exists to surface.
+filter='.[] | select(.user.login=="coderabbitai[bot]" and .in_reply_to_id != null) | "\(.path):\(.line)\t\(.body)"'
 
 if [ -n "${SHIP_PR_THREAD_COMMENTS_FIXTURE:-}" ]; then
   jq -r "$filter" "$SHIP_PR_THREAD_COMMENTS_FIXTURE"
 else
-  gh api "repos/$repo/pulls/$pr/comments?since=$since" --jq "$filter"
+  gh api "repos/$repo/pulls/$pr/comments?since=$since" --paginate --jq "$filter"
 fi
