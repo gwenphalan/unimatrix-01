@@ -25,7 +25,7 @@ Environment:
                             is how this script is exercised without a live PR.
 
 Output, one line, whichever applies:
-  updated=<iso8601> countdown=<n> <unit>   the newest rate-limit comment
+  updated=<iso8601> countdown=<n> <unit>   the last-edited rate-limit comment
   updated=<iso8601> countdown=unknown      marker present, no countdown in it
   no rate-limit comment found              the PR is not rate limited
 
@@ -51,11 +51,12 @@ fi
 repo=$1
 pr=$2
 
+# shellcheck disable=SC2016  # jq filter, not shell: $m and $c are jq bindings.
 filter='
   [.[] | select(.user.login=="coderabbitai[bot]" and (.body | contains("rate limited by coderabbit.ai")))]
   | if length == 0 then "no rate-limit comment found"
     else
-      last as $m
+      max_by(.updated_at) as $m
       | ([$m.body | scan("Next review available in:[^0-9]*([0-9]+) ([a-z]+)")] | first) as $c
       | if $c == null then "updated=\($m.updated_at) countdown=unknown"
         else "updated=\($m.updated_at) countdown=\($c[0]) \($c[1])"
@@ -65,5 +66,11 @@ filter='
 if [ -n "${SHIP_PR_COMMENTS_FIXTURE:-}" ]; then
   jq -r "$filter" "$SHIP_PR_COMMENTS_FIXTURE"
 else
-  gh api "repos/$repo/issues/$pr/comments" --jq "$filter"
+  # `--jq` runs per page, so the aggregating filter has to see every page at
+  # once or a page without a marker prints "no rate-limit comment found" of its
+  # own. Stream the objects out and slurp them back into one array. Held in a
+  # variable rather than piped, so a failed `gh` exits here instead of feeding
+  # jq an empty stream and reporting "no rate-limit comment found".
+  raw=$(gh api "repos/$repo/issues/$pr/comments" --paginate --jq '.[]')
+  jq -sr "$filter" <<<"$raw"
 fi
