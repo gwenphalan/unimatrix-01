@@ -1,6 +1,6 @@
 ---
 name: browser-verifier
-description: Load a changed surface in a real browser and report what actually rendered. Use before opening a PR that touches apps/web, apps/cflop, apps/auth, apps/admin, packages/ui or packages/chrome — the failure modes this catches leave lint, typecheck, unit and smoke suites all green.
+description: Load a changed surface in a real browser and report what actually rendered. Use before opening a PR that touches anything rendering in a browser — any workspace with a vite.config.ts, plus packages/ui and packages/chrome — because the failure modes this catches leave lint, typecheck, unit and smoke suites all green.
 tools: Bash, Read, Grep, Glob, mcp__claude-in-chrome__tabs_context_mcp, mcp__claude-in-chrome__tabs_create_mcp, mcp__claude-in-chrome__navigate, mcp__claude-in-chrome__computer, mcp__claude-in-chrome__read_page, mcp__claude-in-chrome__get_page_text, mcp__claude-in-chrome__find, mcp__claude-in-chrome__read_console_messages, mcp__claude-in-chrome__resize_window
 ---
 

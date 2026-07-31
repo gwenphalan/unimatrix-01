@@ -1,22 +1,20 @@
 ---
 name: ship-pr
-description: Take a task all the way to merged. Use at the start of any session whose end state is a merge — given the task itself, or a pointer to a .notes/issues/*.todo.md. Carries the ordered steps — plan through a subagent, attack the plan, get approval, implement through a subagent, check in, then PR, review and merge — plus the PR body a fresh reader can review from, the review ladder and its costs, and clearing the todo entry.
+description: Take a task all the way to merged. Use at the start of any session whose end state is a merge — given the task itself, or a pointer to a .notes/issues/*.todo.md. Carries the ordered steps — plan through a subagent, attack the plan, get approval, implement through a subagent, check in, then PR, review and merge — plus the PR body a fresh reader can review from, the review ladder and its costs, and striking the shipped line from .notes/.
 ---
 
 # Ship a PR
 
-The owner invokes or implies this instead of typing "pr, merge, monitor, respond to review comments, then merge
-when ready" every session. Read that as: take it all the way to merged, come back only when you need
-a decision or when something is actually wrong.
-
 ## How this is invoked
 
-**This is normally called at the *start* of a session, not the end.** The argument is either the
-task in the owner's own words, or a pointer to a `.notes/issues/*.todo.md` — sometimes just the file,
+**The owner types this at the *start* of a session, not the end.** The argument is either the
+task in their own words, or a pointer to a `.notes/issues/*.todo.md` — sometimes just the file,
 meaning "the first unfinished item on it". Resolve that before doing anything: read the file, and if
 the target is ambiguous, name the line you are about to implement and say so rather than guessing.
 
-Because you are invoked before the work exists, the whole arc is yours: plan, build, then ship.
+Because you are invoked before the work exists, the whole arc is yours: plan, build, then ship. Take
+it to merged. Come back for the two stops below, for a decision that is theirs to make, or when
+something is actually wrong — not for progress reports.
 
 ## The steps
 
@@ -43,8 +41,7 @@ and a lack of objection is not approval.
    A `DO NOT PROCEED` goes back to step 1 with the finding, not around it.
 3. **Present it so it can be skimmed, then wait.** What becomes true, the files grouped by
    workspace, the reasoning that is not visible in a diff, what you rejected, and what would make it
-   wrong — in that order, scannable. **Once the owner approves, build the task list** and keep it
-   live from there.
+   wrong — in that order, scannable. **Once the owner approves, build the task list.**
 4. **Dispatch `monorepo-implementer` with the approved plan.** It builds exactly that, commits in
    logical steps, and stops rather than improvising if the plan turns out wrong. If the change
    touches a browser surface, **dispatch `browser-verifier` before you report done** — it holds the
@@ -57,17 +54,17 @@ and a lack of objection is not approval.
 6. **Once they are satisfied, open the PR.** Body per the section below.
 7. **Watch the checks, then review once green** — every required check, then `pr-signal-collector`
    for the findings that never reach the checks list, then a fresh reader.
-8. **Merge once everything clears,** and clear the todo entry.
+8. **Merge once everything clears,** then strike the shipped line from `.notes/`.
 
 Steps 1 and 4 are delegated on purpose: a fresh context re-derives from the code, where you would
 re-derive from your own earlier reasoning. Skip a delegation only for a change small enough that the
-handover costs more than the work — a typo, a one-line constant — and say that you skipped it.
+handover costs more than the work — a typo, a one-line constant — and say that you skipped it. When
+you skip it, every rule in the agent's own file binds you instead, commit shape included.
 
-**Commit in logical steps as you go, not in one lump at the end.** Each commit should be a coherent
-unit a reviewer could read on its own — the rename, then the test fixtures, then the doc correction.
-Conventional commits throughout. This is what makes a large diff reviewable and what lets a single
-bad decision be reverted without unpicking the rest. Do not batch unrelated work into one commit to
-save time; do not split one change across commits that each leave the tree broken.
+**A subagent is opaque while it runs.** You get its final report, not its progress, so the task list
+moves at the delegation boundaries and nowhere else: mark the task in progress before dispatching,
+update it when the report lands. Do not write status you cannot see — a task list that reports a
+subagent's internal state is inventing it.
 
 ## Before opening anything
 
@@ -75,13 +72,15 @@ save time; do not split one change across commits that each leave the tree broke
 push to `main` under any circumstances.
 
 Run the narrowest relevant checks for what changed before opening the PR, not after. `pnpm check` is
-the normal gate; `pnpm verify` when the change spans workspaces or touches runtime/build behavior.
-A PR opened red wastes a CI cycle and buries the real signal.
+the normal gate; `pnpm verify` when the change spans workspaces or touches runtime/build behaviour.
+In root `package.json` those two differ by exactly one word — `verify` adds `build` to the turbo run
+— so the question is only ever "could this break a build". A PR opened red wastes a CI cycle and
+buries the real signal.
 
-**If the change touches `apps/web`, `apps/cflop`, `apps/auth`, `apps/admin`,
-`packages/ui` or `packages/chrome`,
-it must be live-tested in a real browser before the PR is opened**, not after CI goes green. Launch
-Chromium if none is running.
+**A change that renders in a browser must be live-tested in one before the PR is opened**, not after
+CI goes green. That means any workspace with a `vite.config.ts` — every `apps/*` but `apps/api` —
+plus `packages/ui` and `packages/chrome`, which have no browser of their own and are only ever seen
+through someone else's. Launch Chromium if none is running.
 
 ## Opening it
 
@@ -120,20 +119,14 @@ End the commit message with the attribution header for the acting agent.
 
 ## Gather what the reviewer cannot see
 
-Some findings never reach a reviewer, because they live in GitHub rather than in the diff. Collect
-them yourself once the checks are green, and put anything real into the PR body — that body is the
-reviewer's whole input, so a finding you leave in a dashboard is a finding nobody reviews.
+Some findings never reach a reviewer because they live in GitHub rather than in the diff, and the PR
+body is the reviewer's whole input — so a finding left in a dashboard is a finding nobody reviews.
+**`pr-signal-collector` does the fetching and triage** once the checks are green: the queries, the
+main-branch comparison that separates an alert your diff introduced from one already there, and the
+bots that comment instead of failing. Put anything real into the body.
 
-**`pr-signal-collector` does the fetching and triage** — the queries, the main-branch comparison that
-separates an alert your diff introduced from one that was already there, and the bots that comment
-instead of failing. It returns a short list; put anything real into the PR body.
-
-Two things to know before reading its output, because they change what you do with it. Nothing
-fetches code-scanning alerts for you as part of any check — `/code-review` does not (verified: the
-string `code-scanning` appears nowhere in the Claude Code binary, while `code-review` appears 57
-times). And this repo runs OSSF Scorecard alongside CodeQL, whose findings are posture
-recommendations about the repository rather than defects in the diff — one must never block a PR
-that did not cause it.
+Nothing else collects these for you. `/code-review` does not — verified: the string `code-scanning`
+appears nowhere in the Claude Code binary.
 
 ## Review before merge — hand off to a fresh reader
 
@@ -149,8 +142,8 @@ matrix both land well after the PR opens, and CodeQL can fail on a *new* alert i
 even when its own workflow succeeds, so "the PR opened without complaint" tells you nothing yet. Wait
 for green, then ping.
 
-So the pre-merge check goes to a reader with no path back to this conversation. Pick the reviewer by
-what the change is, not by what is cheapest:
+So the pre-merge check goes to a reader with no path back to this conversation. Pick by what the
+change is:
 
 1. **CodeRabbit is the default, and you request it yourself.** Ping it once the diff is final *and*
    the required checks are green (see the section below for the exact mechanics and why timing
@@ -161,55 +154,61 @@ what the change is, not by what is cheapest:
    Its cost is *latency*, not the owner's budget: the plan is free but rate-limited, so a wasted slot
    delays the next review instead of billing anything. That is the opposite trade from `ultra` below,
    and it is why CodeRabbit is the default even on a small PR.
-2. **If CodeRabbit is rate-limited, launch the `code-review` workflow yourself.** Do not sit and wait
-   out the window, and do not merge with no review at all.
+2. **If CodeRabbit is rate-limited, run `/code-review` yourself.** The owner has pre-authorized this
+   skill's review step to spend it without asking each time — which is what separates it from `ultra`
+   below. Do not sit out the window with no review at all.
 
    ```text
-   Workflow({ name: "code-review", args: "<lowest level that fits> <pr-number>" })
+   /code-review [low|medium|high|xhigh|max|ultra] [--fix] [--comment] [<target>]
    ```
 
-   The `/code-review <level> <target>` slash command is a wrapper around that call, and the owner has
-   pre-authorized this skill's review step to make it without being asked each time — which is what
-   distinguishes it from `ultra` below. It fans out finders and then verifies every candidate
-   independently, which a lone reviewer subagent does not, and it runs in the background: keep working
-   and triage when the task notification lands. Report what survives with `ReportFindings`, once, most
-   severe first — not as prose.
+   **The level is not a dial on one engine — it picks between two.** `low` and `medium` review inline,
+   here, cheaply. `high`, `xhigh` and `max` route to a background `Workflow` that fans out finders and
+   verifies every candidate independently, and *that* is where the cost is. Verified in the binary:
+   the routing gate requires one of those three levels, an interactive session, workflows enabled, and
+   `Workflow` in the caller's own toolset — fail any one and it silently reviews inline instead.
 
-   **It is not cheap, and the cost is invisible at the call site.** The tool returns a task id in a
-   second while the spend accrues in the background against a budget that reports no remaining
-   balance. Measured: one `high` run reached 688.6k tokens at 5 of its 17 agents, so roughly 2M for a
-   single PR; four launched together took the five-hour window from 20% to 32% in about ten minutes
-   and returned nothing, because they were killed before finishing. What the workflow saves is the
-   handoff, not the cost.
+   So choose by whether the diff needs the fan-out, not by how thorough you want to sound. Measured on
+   `high`: 688.6k tokens by the fifth of seventeen agents, ~2M for one PR, and four launched together
+   took the five-hour window from 20% to 32% in ten minutes while returning nothing, because they were
+   killed before finishing. Upstream calls a run "large" at 25 agents or 1.5M projected tokens; `high`
+   is already there. **One at a time, never as a batch**, and say the five-hour figure out loud before
+   launching rather than deciding quietly. A `PreToolUse` guard refuses the call when the budget is
+   thin — if it fires, that is the answer, not an obstacle to route around. On an already-merged PR
+   the right answer is usually neither: the spend is real and the code has shipped.
 
-   So: **one at a time, at the lowest level that fits, and never as a batch.** Read the five-hour
-   figure before launching and say it out loud rather than deciding quietly. A `PreToolUse` guard
-   refuses the call outright when the budget is thin — if it fires, that is the answer, not an
-   obstacle to route around. On a small diff a plain reviewer subagent is the better trade, and on a
-   PR that is already merged the right answer is usually neither: the spend is real and the code is
-   already shipped.
+   **`<target>` is free text and carries instructions** — `focus on error handling`, `only review
+   src/foo.ts` — as well as a PR number, branch, ref range or path. `--comment` posts findings as
+   inline PR comments; `--fix` applies them to the working tree, which skips the step where you check
+   each one.
 
-   **A subagent cannot run this for you.** `Workflow` is absent from a subagent's toolset and
-   `ToolSearch select:Workflow` answers `No matching deferred tools found` (verified), so there is no
-   arrangement where a spawned reviewer invokes `/code-review` on its own.
+   When it routes to the workflow it runs in the background: keep working, and report what survives
+   with `ReportFindings`, once, most severe first — not as prose.
 
-   For the subagent route, give it the diff and the PR body — not your reasoning, which is the thing
-   that would contaminate it. Say in the merge report which of the two ran, and why.
+   **A subagent cannot run this for you.** `Workflow` is stripped from every subagent's toolset
+   unconditionally — upstream documents it in the same filter as `AskUserQuestion` and `ExitPlanMode`
+   — so no arrangement exists where a spawned reviewer invokes it. Only the main thread keeps it.
+3. **A reviewer subagent** is the cheap option, and the one to prefer on a small diff. Give it the
+   diff and the PR body — not your reasoning, which is the thing that would contaminate it.
 
-   **Dispatch from the agent roster you actually have, not from a remembered one.** The
-   `pr-review-toolkit` plugin is enabled in settings and its specialist reviewers exist under
-   `~/.claude/plugins/marketplaces/`, but only installed plugins register dispatchable agent types —
-   so those six may or may not be in the roster on any given day. Read the list, pick the one or two
-   whose specialism matches the risky part of the diff, and fall back to `general-purpose` with a
-   specific brief if none are there. Breadth is not the point of this step; a second opinion on the
-   part that could be wrong is.
-3. **For a large or security-sensitive change, hand off to the owner for `/code-review ultra`.** It
+   Dispatch from the roster you actually have. `pr-review-toolkit` is `true` in `enabledPlugins` but
+   absent from `installed_plugins.json`, so its six specialist reviewers sit under
+   `~/.claude/plugins/marketplaces/` unregistered and undispatchable — enabled is not installed. Read
+   the roster, and fall back to `general-purpose` with a specific brief. Breadth is not the point
+   here; a second opinion on the part that could be wrong is.
+4. **For a large or security-sensitive change, hand off to the owner for `/code-review ultra`.** It
    is user-triggered and billed and **you cannot launch it**, so this is a handoff, not a task.
 
-   **`ultra` is not the default.** Its cost is not money — it is the owner's rolling five-hour
-   session window and weekly limit, neither of which reports a precise remaining balance. So the cost
-   is real, paid by them, and hard for either of you to see: a fleet of agents spent on an ordinary PR
-   can eat into shipping the next one, for findings CodeRabbit already had. Reserve it for two cases:
+   **Do not try anyway.** An agent that attempts `ultra` does not get an error — the fallback forces
+   the level to `max` *and* turns off workflow routing, so you get a plain inline review that never
+   touched the cloud. It looks like it worked. Report `ultra` as run and you are reporting something
+   that did not happen.
+
+   **`ultra` is not the default, and its cost is money.** It runs on Claude Code's web infrastructure
+   in a remote sandbox and bills usage credits — roughly $5–$25 a review, after three free runs on
+   Pro/Max and none free on Team or Enterprise. That is a different currency from everything above,
+   which spends the rolling five-hour window instead. A fleet of cloud agents on an ordinary PR buys
+   findings CodeRabbit already had. Reserve it for two cases:
 
    - a **large** diff — many files, or a change spanning workspaces, where no single reader holds all
      of it at once
@@ -229,30 +228,34 @@ what the change is, not by what is cheapest:
    ```
    ````
 
-   with the real number substituted in, never the placeholder. The bare `/code-review ultra` reviews
-   the current branch, which is the form to give when there is no PR yet.
+   with the real number substituted in, never the placeholder. Bare `/code-review ultra` reviews the
+   current branch against the default one and needs no GitHub remote — that is the form to give when
+   there is no PR yet, and it takes a plain-words note: `/code-review ultra check my auth changes`.
 
-   **Do not write "look hardest at X" in the chat message.** The command's only argument is a PR
-   number — it cannot carry instructions, so anything you say in chat reaches the reviewer only if
-   the owner retypes it. Put the focus in the PR body instead, under a `## Review focus` heading,
-   because the body *is* the reviewer's input. Write it as claims to check, not as emphasis:
+   **A PR number takes no note alongside it.** Multi-word text is attached as a note only when it is
+   not a branch name or PR reference; combine the two and the command is *rejected*, asking the owner
+   to rerun with just the number or without it. So a PR handoff is the bare line above and nothing
+   else. Put the focus in the PR body instead, under a `## Review focus` heading — the body is the
+   reviewer's input either way, and a note never changes what gets reviewed, only what the findings
+   are related to. Write it as claims to check, not as emphasis:
 
    - "Confirm `<file>` still states X after the trim; nothing mechanical reads it."
    - "Verify the guard fails closed when Y is absent — it was only tested passing."
 
    not "pay attention to `<file>`", which tells a reviewer nothing it was not already going to do.
 
-A fresh session on the branch is a fine substitute for 2 when you have one available: same property,
-one model instead of a fleet.
+**Options 1 to 3 are yours to run unaided; only 4 is a handoff.** Do not ask the owner to open a
+fresh session and read the branch by hand — it buys nothing option 3 does not, same fresh context and
+same model, and it costs them a session.
 
 Whichever runs, its input is the PR body — which is why the section above matters. Triage its
 findings the same way as CodeRabbit's below: verify each against the code before acting.
 
-The residual risk to state rather than paper over: every option here except CodeRabbit is Claude
-reading Claude's work — a subagent, a fresh session, the `code-review` workflow and `ultra` alike all
-share your model priors and therefore your blind spots, however many of them run. Independence of
-*tool* is a different axis from independence of *context*, and CodeRabbit is the only one that
-supplies the first. That is why it stays the default rather than the consolation prize.
+The residual risk, stated rather than papered over: every option but CodeRabbit is Claude reading
+Claude's work. A subagent, `/code-review`, `ultra` — all share your model priors and therefore your
+blind spots, however many agents run. Independence of *tool* is a different axis from independence of
+*context*, and CodeRabbit is the only one that supplies the first. That is why it stays the default
+rather than the consolation prize.
 
 ## Watching the checks
 
@@ -271,7 +274,10 @@ A PR branched before a merge to `main` reports `BEHIND` and cannot merge until u
 update-branch <pr>` fixes it and re-runs every required check, so it is another full CI cycle —
 budget for it rather than treating the first green as the last.
 
-Poll with a real wait, not a tight loop:
+**Do not block the turn waiting.** `gh pr checks <pr> --watch` exits on its own once every check has
+reported, which is exactly the shape `Bash` with `run_in_background: true` wants — one notification
+when CI finishes, and you keep working until it lands. Not `Monitor`: that is for a stream of events
+with no known end, and an unbounded one stays armed long after the checks are done.
 
 ```sh
 gh pr checks <pr> --watch
@@ -287,30 +293,28 @@ re-running.
 CodeRabbit is **advisory and non-blocking**, and it is **not a required check** — it must never gate
 a merge. Its comments are leads to verify against primary sources, never conclusions to act on.
 
-"Non-blocking" never licenses merging with no review at all: if it is late or rate-limited, take the
-subagent fallback above and merge on the required checks rather than waiting the window out. Waiting
-on CodeRabbit specifically is worth it only when a bad merge is expensive to unwind: auth, the API
-contract, `packages/*`.
+"Non-blocking" never licenses merging with no review at all. When it is rate-limited the default is
+to **wait out the cooldown** (below); option 2 or 3 is the fallback for when waiting itself costs
+something, not a way to skip the wait.
 
 ### Ask for the review — it does not run automatically
 
 `.coderabbit.yaml` sets `reviews.auto_review.enabled: false`. Comment **`@coderabbitai full review`**
-once, when the diff is finished and every required check is green — not while you are still pushing,
-and not while CI is still running. A ping at PR-open is the common mistake: the checks have not
-reported yet, so a red one arrives afterwards and the review you just spent covers code you are about
-to change.
+once, when the diff is finished and every required check is green — batch every outstanding fix into
+one push first, and never ping while CI is still running. A ping at PR-open is the common mistake:
+the checks have not reported yet, so a red one arrives afterwards and the review you just spent
+covers code you are about to change.
 
-**The "✅ Action performed / Review finished" ack carries no information at all — not that a review
-ran, and not that one failed.** It lands within seconds of *any* ping, with the same body and the same
-"does not re-review already reviewed commits" note, and CodeRabbit then **edits that same comment** to
-carry the real outcome minutes later — the review, or a rate-limit warning, from an identical opening.
-So a fast ack is not a failure signal: reading it as one is how a real review gets missed, and reading
-it as success is how an unreviewed PR gets merged. **Confirm by state**, using the table under
-"Confirming a review actually ran".
+**The "✅ Action performed / Review finished" ack carries no information — not that a review ran, and
+not that one failed.** It lands within seconds of *any* ping, identical every time, and CodeRabbit
+then **edits that same comment** minutes later into the real outcome: the review, or a rate-limit
+warning. Reading a fast ack as failure is how a real review gets missed; reading it as success is how
+an unreviewed PR gets merged. **Confirm by state**, using the table under "Confirming a review
+actually ran".
 
-**CodeRabbit will not review a merged PR. There is no second chance.** A ping on one gets
-`✅ Action performed` / `Full review finished.` — no rate-limit marker, review count stays at its
-baseline — while the walkthrough comment carries the actual outcome in a collapsed block:
+**CodeRabbit will not review a merged PR — there is no second chance.** A ping on one gets
+`✅ Action performed` / `Full review finished.`, with no rate-limit marker and the count still at
+baseline, while the walkthrough comment carries the real outcome in a collapsed block:
 
 ```text
 Caution
@@ -318,43 +322,31 @@ Review failed
 The pull request is closed.
 ```
 
-"Full review finished" is the text for a review that never started, so the ack is *actively
-misleading* here. A PR merged without a review is unreviewed permanently: only `/code-review` or a
-fresh session on the merge commit is left. That is the real cost of merging past a cooldown, and the
-reason the default below is to wait. Observed on a merged PR; whether closing without merging or
-reopening behaves the same way is untested.
+So "Full review finished" is the text for a review that never started. A PR merged unreviewed is
+unreviewed permanently — only `/code-review` or a fresh session on the merge commit is left — which
+is the real cost of merging past a cooldown, and why the default below is to wait. Observed on a
+merged PR; closing without merging, and reopening, are untested.
 
 **The command form does not decide whether a review happens — the rate limit does.** `review` and
 `full review` both trigger, and both are refused by the limit with `Review limit reached` on a window
 that has not refilled. Do not go hunting for the magic wording when a ping produces nothing; check the
 limit.
 
-What actually governs throughput: **one ping per PR, on a window that has had time to refill,
-confirmed by the review count rising.** Spend the ping when the diff is final and CI is green,
-because a wasted slot is not recoverable for minutes to hours.
+**One CodeRabbit review per PR**, not one per push. Once it has *reviewed*, that PR's budget is
+spent: fix what it found, push, and merge on the required checks **without** asking it to look again.
+A finding too large to fix inside this PR's scope becomes a follow-up PR with its own single review.
+Every run spends a per-developer slot and Pro Plus limits are adaptive, so sustained pinging makes
+them *tighter* — a wasted slot is not recoverable for minutes to hours.
 
-**One CodeRabbit review per PR** — not one per push. Once it has *reviewed*, that PR's CodeRabbit
-budget is normally spent: fix what it found, push the fixes, and merge on the required checks
-**without** asking it to look again. A finding too large to fix inside this PR's scope becomes a
-follow-up PR with its own single review, not a second ping here.
+**A refused ping does not count as the review.** Rate-limited means nothing was read, so re-pinging
+after the cooldown is still the *first* review, not a second one. Only a ping that actually produced
+a review spends the budget.
 
-**A ping that was refused does not count as the review.** Rate-limited means nothing was read, so
-re-pinging after the cooldown is still the *first* review, not a second one — see "Wait out the
-cooldown and re-ping" below. Only a ping that actually produced a review spends the budget.
-
-**Unless the findings were severe.** If the first review surfaced a real defect — silent data loss,
-a security or auth hole, a correctness bug that ships wrong output — and the fix for it is
-substantial rather than a one-liner, then the fix is itself new code that nothing has reviewed, and
-a second ping is the right call. Say in the merge report why you spent the second slot. The bar is
-the severity of what was *found*, not the number of comments: seven nitpicks earn no second review,
-one data-loss bug with a real fix does.
-
-Every run spends a per-developer rate-limit slot, and Pro Plus limits are adaptive — sustained
-pinging makes them *tighter*.
-
-So the ping has to be worth its one shot: **batch every fix into one push before it**, and do not
-ping while anything is still in flight. Getting this wrong does not cost you a slow PR — it costs you
-the review.
+**A second ping is earned only by severity.** If the first review surfaced a real defect — silent
+data loss, a security or auth hole, a correctness bug that ships wrong output — and its fix is
+substantial rather than a one-liner, that fix is new code nothing has reviewed, and the second ping
+is right. Seven nitpicks earn nothing; one data-loss bug with a real fix does. Say in the merge
+report why you spent the slot.
 
 ### Rate limits, when you do hit one
 
@@ -379,8 +371,6 @@ clean" at a glance.
 
    A window that has already lapsed still reads "rate limited" — check the arithmetic before
    assuming you must keep waiting.
-3. The "✅ Review finished" ack lands seconds after **any** ping and proves nothing. A ping inside
-   the window gets the ack and no review.
 
 #### Wait out the cooldown and re-ping — do not merge unreviewed just because you were refused
 
@@ -397,32 +387,44 @@ thing that costs something. Two cases where waiting is clearly right:
 Merge unreviewed when the owner is actively waiting on this PR, or when it blocks other work, or the
 window is long and the diff is trivial. Say which in the merge report.
 
-To wait: compute the deadline with the `updated_at` + countdown arithmetic above, then watch for the
-review rather than sleeping blind — poll the review count and the rate-limit marker on an interval,
-so a refusal on the retry is visible instead of looking like silence:
+To wait: compute the deadline with the `updated_at` + countdown arithmetic above, then **arm a
+`Monitor` and carry on working.** This is the case `Monitor` is for — an outcome that arrives on
+someone else's schedule, with no way to know which of five endings it will be.
 
-**Record the baseline count before the ping, and compare against it** — not against zero. A PR that
-has already been reviewed once starts at `n >= 1`, so a loop testing `n > 0` reports success on its
-first iteration and you merge believing a review ran that never did.
+Two things the loop must get right, and both have burned a run here:
+
+**Record the baseline count before the ping.** Not zero. A PR reviewed once already starts at
+`n >= 1`, so a loop testing `n > 0` succeeds on its first iteration and you merge believing a review
+ran that never did.
+
+**Filter on comments updated *since* the ping, not on the whole comment list.** CodeRabbit edits its
+own ack comment into the outcome, so a rate-limit marker from an earlier round is still sitting in
+the list and matches instantly — the monitor fires "refused again" before anything has happened. The
+`since=` parameter filters by `updated_at`, which is exactly the field the edit moves.
 
 ```sh
-count() { gh api repos/<owner>/<repo>/pulls/<pr>/reviews \
-            --jq '[.[] | select(.user.login=="coderabbitai[bot]")] | length'; }
-base=$(count)            # before the ping
-# ... ping, then poll until the cooldown deadline computed above, not a fixed count:
-while [ "$(date -u +%s)" -lt "$deadline" ]; do
-  [ "$(count)" -gt "$base" ] && { echo "review landed"; break; }
-  bodies=$(gh api repos/<owner>/<repo>/issues/<pr>/comments \
-             --jq '.[] | select(.user.login=="coderabbitai[bot]") | .body')
-  grep -q 'rate limited by coderabbit.ai' <<<"$bodies" && { echo "refused again"; break; }
-  grep -q 'did not have any reviewable changes' <<<"$bodies" && { echo "nothing to review"; break; }
+R=<owner>/<repo>; PR=<pr>
+count() { gh api "repos/$R/pulls/$PR/reviews" \
+            --jq '[.[] | select(.user.login=="coderabbitai[bot]")] | length' 2>/dev/null || echo -1; }
+base=$(count); since=$(date -u +%Y-%m-%dT%H:%M:%SZ)   # both BEFORE the ping
+while true; do
+  n=$(count)
+  [ "$n" -gt "$base" ] 2>/dev/null && { echo "reviewed: $base -> $n"; break; }
+  body=$(gh api "repos/$R/issues/$PR/comments?since=$since" \
+           --jq '.[] | select(.user.login=="coderabbitai[bot]") | .body' 2>/dev/null || true)
+  case $body in
+    *"rate limited by coderabbit.ai"*)       echo "refused: rate limited"; break ;;
+    *"did not have any reviewable changes"*) echo "nothing reviewable — that IS the review"; break ;;
+    *"The pull request is closed"*)          echo "refused: merged, CodeRabbit is done for good"; break ;;
+  esac
   sleep 30
 done
 ```
 
-Stop on a conclusive outcome — the count rising, a fresh refusal, or nothing reviewable — rather than
-on a fixed number of iterations. An iteration cap that expires mid-cooldown looks identical to a
-silent failure, and omitting the third case makes a whitespace-only diff burn the whole window.
+Every terminal outcome in the table below emits a line; only one of them raises the count. A filter
+that greps for success alone is silent through the other four, and silence is indistinguishable from
+still-running — which is how a refusal gets read as a review still in flight. Do not cap the
+iterations either: a cap that expires mid-cooldown looks identical to a silent failure.
 
 Then re-ping **once**, after the deadline has actually passed, and confirm with the three signals
 below. If that ping is refused again, the window was longer than advertised: recompute from the new
@@ -437,19 +439,15 @@ real defect. Waiting is usually the cheap side of this trade.
 
 ### Confirming a review actually ran
 
-Do not count inline comments. Findings can arrive as **"outside diff range" body text with no inline
-comment at all**. Use instead:
+**Do not count inline comments.** Findings can arrive as "outside diff range" body text with no
+inline comment at all, so read the newest review's **body** too. Read instead: the review count
+against the baseline you recorded before pinging (`gh api repos/<owner>/<repo>/pulls/<pr>/reviews`),
+unresolved threads (`reviewThreads` via GraphQL, `isResolved == false`), and the summary comment's
+markers.
 
-- the CodeRabbit **review count** rising above the baseline you recorded before pinging
-  (`gh api repos/<owner>/<repo>/pulls/<pr>/reviews`), and
-- **unresolved review threads** (`reviewThreads` via GraphQL, `isResolved == false`), and
-- the summary comment carrying none of the non-review markers in the table below.
-
-Read the newest review's **body** as well as its inline comments.
-
-**Every outcome a ping can have.** The review count rises for exactly one of them, so a loop keyed on
-the count alone hangs on all the others. Grep the summary comment body for the marker instead — the
-first three are measured here, the rest are read from upstream and marked as such.
+**Every outcome a ping can have.** The count rises for exactly one of them, so a loop keyed on the
+count alone hangs on all the others. The first three are measured here; the rest are read from
+upstream and marked as such.
 
 | Outcome | How you know | Ends the wait? |
 | --- | --- | --- |
@@ -474,15 +472,31 @@ incremental auto-review, which is off.
 so an early zero is indistinguishable from "never ran". Do not report the outcome of a review still in
 flight — say it is still running, or wait.
 
-For each comment:
+**Reply to every item** — the ones you fixed, the ones you refuted, and the ones you are deliberately
+not acting on. A thread with no reply is indistinguishable from a thread nobody read, and the owner
+cannot tell which from the outside.
 
 1. Check the claim against the actual code yourself.
-2. If it is right, fix it and say so in a reply.
-3. If it is wrong, reply with the evidence and move on. Do not apply a change you cannot justify
-   independently just to clear a comment. It concedes to a demonstrated counterexample, so the reply
-   is worth writing properly rather than just dismissing.
+2. If it is right, fix it and say so in the reply.
+3. If it is wrong, reply with the evidence. Do not apply a change you cannot justify independently
+   just to clear a comment. It concedes to a demonstrated counterexample, so the reply is worth
+   writing properly rather than just dismissing.
 4. If it is a matter of taste that contradicts a documented convention in `AGENTS.md`, the
    convention wins — link it in the reply.
+
+**Then push the fixes and watch the threads — do not ping again.** The push earns no new review, but
+CodeRabbit *does* answer replies on individual threads, and that answer is where it either concedes
+or produces a counterexample you have not seen. A reply that raises something new is a finding in its
+own right. The thread you argued and then stopped reading is the one that costs you.
+
+```sh
+gh api "repos/<owner>/<repo>/pulls/<pr>/comments?since=$since" \
+  --jq '.[] | select(.user.login=="coderabbitai[bot]") | "\(.path):\(.line)\t\(.body)"'
+```
+
+That is `pulls/.../comments` — review-thread replies, a different endpoint from the
+`issues/.../comments` the summary comment lives in. Arm it as a `Monitor` the same way if you would
+rather the reply found you.
 
 Do not let an unresolved advisory comment block a merge. Do let a real defect it surfaced block one.
 
@@ -492,21 +506,16 @@ Merge once every required check is green, **a fresh reader has reviewed the bran
 comments are handled. Report what actually happened: which checks ran, who reviewed and how, what
 was raised and how each was resolved, and anything left undone.
 
-The fresh-reader precondition has exactly three documented exceptions, all of them about a reviewer
-being *unavailable* rather than unnecessary: the owner is waiting on this PR, the PR blocks other
-work, or CodeRabbit's cooldown is long and the diff is trivial. Taking one means naming it in the
-report — see "Wait out the cooldown and re-ping" for when waiting is the better trade.
+The fresh-reader precondition has exactly three exceptions, every one of them about a reviewer being
+*unavailable* rather than unnecessary: the owner is actively waiting on this PR, the PR blocks other
+work, or CodeRabbit's cooldown is long and the diff trivial. A rate-limited CodeRabbit on its own is
+not one of them — that is a reason to *wait*, and the arithmetic is under "Wait out the cooldown and
+re-ping". Taking an exception means naming which in the report.
 
-Name the reviewer in the report: CodeRabbit, a subagent because CodeRabbit was rate-limited, or
-`/code-review ultra` because the change was large or security-sensitive. If none of the three
-happened, say so outright rather than letting "checks green" stand in for "reviewed". Also say it if you spent a
-second CodeRabbit review, and why the findings were severe enough to earn it.
-
-Merge on the **required** checks — but a rate-limited CodeRabbit is a reason to *wait*, not a reason
-to merge blind. Hold the green PR through a short cooldown, and through any cooldown at all when the
-owner is asleep or away; re-ping once the window refills. The rule and its arithmetic are in "Wait out
-the cooldown and re-ping" above. Merge unreviewed only when the owner is waiting on this PR, it blocks
-other work, or the window is long and the diff trivial — and say which in the report.
+Name the reviewer too: CodeRabbit, `/code-review` or a subagent because CodeRabbit was rate-limited,
+or `/code-review ultra` because the change was large or security-sensitive. If none happened, say so
+outright rather than letting "checks green" stand in for "reviewed" — and say it if you spent a
+second CodeRabbit review, with why the findings earned it.
 
 **Merging is the point of no return for CodeRabbit.** It refuses a merged PR outright, so the choice
 at the merge button is not "review now or review later", it is "review now or not at all". That is
@@ -516,7 +525,10 @@ what makes the exceptions above narrow.
 That is `gh` failing to check out `main` locally *after* merging; confirm with
 `gh pr view <pr> --json state` rather than assuming the merge failed.
 
-## After the merge: clear the todo entry
+## After the merge: strike the shipped line from `.notes/`
+
+This is the owner's scratch file on disk, not the harness task list — that one is yours and is
+already finished by now.
 
 If the owner started this session by pointing at a `*.todo.md` in `.notes/issues/`, delete the
 line(s) the merged work completed from that file once the PR is merged — not before. Leaving a
