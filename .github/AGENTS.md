@@ -71,6 +71,15 @@ this file holds the mechanics, each of which was learned the hard way.
   landed, and a prose claim that names no file is invisible to it.
 - Each was validated by breaking it on purpose, not by watching it pass. A check that
   cannot be shown to fail is not known to work.
+- **`Verify` shellchecks every tracked `*.sh`, and nothing local does.** `pnpm check` and
+  `pnpm verify` do not run it — measured, they differ by one word and neither word is this one — so
+  an agent can edit a script, watch the normal gate go green, and redden a required check on a lint
+  it never saw. Run `shellcheck` yourself on any script you touch. It is not installed on the
+  owner's machine, and `pnpm dlx shellcheck` downloads whatever ShellCheck is current — 0.11.0 as of
+  2026-07-31, against the runner image's 0.9.0. **There is no local way to match CI exactly**: the
+  npm wrapper's versions are its own (4.1.0), not ShellCheck's, and its documented
+  `SHELLCHECKJS_RELEASE` pin does not take — `v0.9.0` on a clean cache still installed 0.11.0. So a
+  clean local run is a strong hint and CI is what decides.
 - Two workflows serve `lab`. `Prototypes guard` (job `No prototypes on main`) runs on **every**
   pull request to `main` with no `paths:` filter and fails when the diff adds a file under
   `lab/prototypes/` — the `.gitkeep` and `README.md` scaffolding are allow-listed. The filter is
