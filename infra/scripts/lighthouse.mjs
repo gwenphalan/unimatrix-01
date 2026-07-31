@@ -262,9 +262,19 @@ async function main() {
     for (const result of results) {
       if (result.audit.scores.performance >= config.budgets.performance) continue;
 
+      // Announced before it happens, not after. An unannounced 30s stall in CI
+      // is indistinguishable from a hung run, and the whole point of this wait
+      // is that it is doing something — saying so is what makes it legible in a
+      // log read weeks later by someone wondering where the time went.
       const elapsed = Date.now() - result.sampledAt;
       if (elapsed < MIN_RETRY_SEPARATION_MS) {
-        await delay(MIN_RETRY_SEPARATION_MS - elapsed);
+        const waitMs = MIN_RETRY_SEPARATION_MS - elapsed;
+        console.log(
+          `  waiting ${(waitMs / 1000).toFixed(1)}s before re-sampling ${appDir}${result.route} — ` +
+            `only ${(elapsed / 1000).toFixed(1)}s since its first sample, and two adjacent samples ` +
+            `on one runner are not independent`,
+        );
+        await delay(waitMs);
       }
 
       console.log(
