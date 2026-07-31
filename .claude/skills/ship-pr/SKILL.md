@@ -406,9 +406,8 @@ real defect. Waiting is usually the cheap side of this trade.
 
 **Do not count inline comments.** Findings can arrive as "outside diff range" body text with no
 inline comment at all, so read the newest review's **body** too. Read instead: the review count
-against the baseline you recorded before pinging (`gh api repos/<owner>/<repo>/pulls/<pr>/reviews`),
-unresolved threads (`reviewThreads` via GraphQL, `isResolved == false`), and the summary comment's
-markers.
+against the baseline you recorded before pinging (`scripts/review-count.sh`), unresolved threads
+(`reviewThreads` via GraphQL, `isResolved == false`), and the summary comment's markers.
 
 **Every outcome a ping can have.** The count rises for exactly one of them, so a loop keyed on the
 count alone hangs on all the others. The first five are measured here; the rest are read from
