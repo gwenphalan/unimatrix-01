@@ -276,8 +276,11 @@ budget for it rather than treating the first green as the last.
 
 **Do not block the turn waiting.** `gh pr checks <pr> --watch` is one notification after *everything*
 reports, so a `Verify` failure two minutes in stays invisible until the slowest job finishes ten
-minutes later — you sit on a fixable red the whole time. Arm this under `Monitor` instead, which
-notifies per occurrence; `--help` for its outputs and exit codes:
+minutes later — you sit on a fixable red the whole time. **Arm this under `Monitor`, not `Bash` with
+`run_in_background`** — background Bash notifies once, when the script exits, which is the same
+blindness by a different route. `Monitor` is a deferred tool, so its own guidance on which to pick is
+not in context until you fetch it; that is why the choice is stated here rather than left to it.
+`--help` for the script's outputs and exit codes:
 
 ```sh
 .claude/skills/ship-pr/scripts/watch-checks.sh <pr>
