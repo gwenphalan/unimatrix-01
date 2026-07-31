@@ -1,6 +1,6 @@
 ---
 name: ship-pr
-description: Take a task all the way to merged. Use at the start of any session whose end state is a merge — given the task itself, or a pointer to a .notes/issues/*.todo.md. Covers committing as you go, the PR body a fresh reader can review from, getting a real review before merging, required checks, and clearing the todo entry.
+description: Take a task all the way to merged. Use at the start of any session whose end state is a merge — given the task itself, or a pointer to a .notes/issues/*.todo.md. Carries the ordered steps — plan through a subagent, attack the plan, get approval, implement through a subagent, check in, then PR, review and merge — plus the PR body a fresh reader can review from, the review ladder and its costs, and clearing the todo entry.
 ---
 
 # Ship a PR
@@ -16,19 +16,58 @@ task in the owner's own words, or a pointer to a `.notes/issues/*.todo.md` — s
 meaning "the first unfinished item on it". Resolve that before doing anything: read the file, and if
 the target is ambiguous, name the line you are about to implement and say so rather than guessing.
 
-Because you are invoked before the work exists, the whole arc is yours: implement, then ship. Two
-things follow from that.
+Because you are invoked before the work exists, the whole arc is yours: plan, build, then ship.
+
+## The steps
+
+Run them in order. The two stops are real stops — work does not continue past them on an assumption,
+and a lack of objection is not approval.
+
+0. **If this is a problem rather than a change, load `problem-solving` first.** "Make the picker
+   choose the pool" is a change. "Why does the drill list go stale" or "how should we handle X" is a
+   problem, and going straight to a plan produces a confident answer to the wrong question. When
+   unsure, it is a problem.
+1. **Dispatch `monorepo-planner` to investigate and report.** It reads the code rather than
+   remembering it, and it cannot edit. Give it the task in the owner's words plus anything settled
+   verbally — not your own theory of the fix, which is the thing that would contaminate it.
+2. **Attack the plan before believing it.** A plan you only read is a plan you approved, and you
+   framed the task the planner worked from — so auditing it yourself is the same self-review this
+   skill forbids for code.
+
+   **Dispatch `plan-adversary` when the change is more than mechanical**, meaning any of: it spans
+   more than one workspace; it moves runtime, build, auth, data or CI behaviour; it touches more than
+   about five files; or the planner left an open question or an unverified claim. Otherwise check the
+   claims yourself — a one-file constant change does not repay a round trip. Either way, call
+   `advisor` when the *shape* of the change is in doubt rather than its details.
+
+   A `DO NOT PROCEED` goes back to step 1 with the finding, not around it.
+3. **Present it so it can be skimmed, then wait.** What becomes true, the files grouped by
+   workspace, the reasoning that is not visible in a diff, what you rejected, and what would make it
+   wrong — in that order, scannable. **Once the owner approves, build the task list** and keep it
+   live from there.
+4. **Dispatch `monorepo-implementer` with the approved plan.** It builds exactly that, commits in
+   logical steps, and stops rather than improvising if the plan turns out wrong. If the change
+   touches a browser surface, **dispatch `browser-verifier` before you report done** — it holds the
+   Chrome tooling so this context does not have to, which is what makes honouring that rule cheaper
+   than skipping it.
+5. **Check in — in the owner's terms, not the code's.** What was done and why, the decisions the
+   plan left open, what you ran and what it printed, what you could not verify. It must be
+   understandable without opening the diff, because it will be read without opening the diff. Then
+   stop, unless they have said not to.
+6. **Once they are satisfied, open the PR.** Body per the section below.
+7. **Watch the checks, then review once green** — every required check, then `pr-signal-collector`
+   for the findings that never reach the checks list, then a fresh reader.
+8. **Merge once everything clears,** and clear the todo entry.
+
+Steps 1 and 4 are delegated on purpose: a fresh context re-derives from the code, where you would
+re-derive from your own earlier reasoning. Skip a delegation only for a change small enough that the
+handover costs more than the work — a typo, a one-line constant — and say that you skipped it.
 
 **Commit in logical steps as you go, not in one lump at the end.** Each commit should be a coherent
 unit a reviewer could read on its own — the rename, then the test fixtures, then the doc correction.
 Conventional commits throughout. This is what makes a large diff reviewable and what lets a single
 bad decision be reverted without unpicking the rest. Do not batch unrelated work into one commit to
 save time; do not split one change across commits that each leave the tree broken.
-
-**The PR waits for the owner's confirmation.** Finish the work, run the checks, report what you did
-and what you could not verify — then stop. When the owner confirms everything is in order, open the
-PR and take it through review and merge without further checkpoints. "Confirmed" means they said so;
-a lack of objection is not confirmation.
 
 ## Before opening anything
 
@@ -85,25 +124,16 @@ Some findings never reach a reviewer, because they live in GitHub rather than in
 them yourself once the checks are green, and put anything real into the PR body — that body is the
 reviewer's whole input, so a finding you leave in a dashboard is a finding nobody reviews.
 
-**Code-scanning alerts, for the PR's own ref.** These are the ones most easily missed: the `CodeQL`
-check can go red on an alert the diff *introduced* even when the CodeQL workflow itself succeeds, and
-such an alert does not appear in the main-branch alert list. Nothing fetches them for you —
-`/code-review` does not (verified: the string `code-scanning` appears nowhere in the Claude Code
-binary, while `code-review` appears 57 times).
+**`pr-signal-collector` does the fetching and triage** — the queries, the main-branch comparison that
+separates an alert your diff introduced from one that was already there, and the bots that comment
+instead of failing. It returns a short list; put anything real into the PR body.
 
-```sh
-gh api "repos/<owner>/<repo>/code-scanning/alerts?ref=refs/pull/<pr>/merge&state=open" \
-  --jq '.[] | "\(.rule.security_severity_level // .rule.severity)\t\(.tool.name)\t\(.rule.id)\t\(.most_recent_instance.location.path):\(.most_recent_instance.location.start_line)"'
-```
-
-Drop `?ref=` to see what is already open on `main`, which is a different list and worth knowing
-before you attribute an alert to your diff. Read `.tool.name`: this repo runs both CodeQL and OSSF
-Scorecard, and a Scorecard finding is a posture recommendation about the repository, not a defect in
-the diff — do not let one block a PR that did not cause it.
-
-**Advisory bots that comment instead of failing.** Socket reports as a passing check and puts its
-findings in a comment, and the dependency review action is separate again. A green checks list does
-not mean nothing was said.
+Two things to know before reading its output, because they change what you do with it. Nothing
+fetches code-scanning alerts for you as part of any check — `/code-review` does not (verified: the
+string `code-scanning` appears nowhere in the Claude Code binary, while `code-review` appears 57
+times). And this repo runs OSSF Scorecard alongside CodeQL, whose findings are posture
+recommendations about the repository rather than defects in the diff — one must never block a PR
+that did not cause it.
 
 ## Review before merge — hand off to a fresh reader
 
@@ -166,11 +196,13 @@ what the change is, not by what is cheapest:
    For the subagent route, give it the diff and the PR body — not your reasoning, which is the thing
    that would contaminate it. Say in the merge report which of the two ran, and why.
 
-   The `pr-review-toolkit` plugin supplies the specialist reviewers for this — `code-reviewer`,
-   `silent-failure-hunter`, `comment-analyzer`, `type-design-analyzer`, `pr-test-analyzer`,
-   `code-simplifier` — plus a `/review-pr` command that runs them together. Pick the one or two whose
-   specialism matches the diff rather than running all six; the point of this step is a second opinion
-   on the risky part, not breadth.
+   **Dispatch from the agent roster you actually have, not from a remembered one.** The
+   `pr-review-toolkit` plugin is enabled in settings and its specialist reviewers exist under
+   `~/.claude/plugins/marketplaces/`, but only installed plugins register dispatchable agent types —
+   so those six may or may not be in the roster on any given day. Read the list, pick the one or two
+   whose specialism matches the risky part of the diff, and fall back to `general-purpose` with a
+   specific brief if none are there. Breadth is not the point of this step; a second opinion on the
+   part that could be wrong is.
 3. **For a large or security-sensitive change, hand off to the owner for `/code-review ultra`.** It
    is user-triggered and billed and **you cannot launch it**, so this is a handoff, not a task.
 
