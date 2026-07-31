@@ -293,14 +293,18 @@ finishes ten minutes later — you sit on a fixable red the whole time. Emit eac
 instead, and break when nothing is pending:
 
 ```sh
-prev=""
+prev=""; fails=0
 while true; do
-  s=$(gh pr checks <pr> --json name,bucket 2>/dev/null || echo '[]')
-  [ "$s" = "[]" ] && { sleep 30; continue; }
-  cur=$(jq -r '.[] | select(.bucket!="pending") | "\(.bucket | ascii_upcase)  \(.name)"' <<<"$s" | sort)
-  comm -13 <(echo "$prev") <(echo "$cur")
-  prev="$cur"
-  jq -e 'length > 0 and all(.[]; .bucket != "pending")' <<<"$s" >/dev/null 2>&1 && break
+  if s=$(gh pr checks <pr> --json name,bucket 2>&1); then
+    fails=0
+    cur=$(jq -r '.[] | select(.bucket!="pending") | "\(.bucket | ascii_upcase)  \(.name)"' <<<"$s" | sort)
+    comm -13 <(echo "$prev") <(echo "$cur")
+    prev="$cur"
+    jq -e 'length > 0 and all(.[]; .bucket != "pending")' <<<"$s" >/dev/null 2>&1 && break
+  else
+    fails=$((fails + 1))
+    [ "$fails" -ge 3 ] && { echo "API ERROR x$fails: $s"; break; }
+  fi
   sleep 30
 done
 ```
@@ -309,6 +313,11 @@ done
 silent through a failure, and silence is indistinguishable from still-running — which is the failure
 this whole section exists to prevent. `bucket` covers `pass`, `fail` and `skipping` in one line
 because it is printed unconditionally.
+
+**A failed `gh` call is not an empty result.** `|| echo '[]'` reads as defensive and is the opposite:
+an expired token turns into a valid-looking "no checks yet" and the loop then sleeps forever, which
+is the same silence a slow CI run produces. Branch on the exit status, ride out a transient failure
+or two, then print what `gh` actually said and stop.
 
 **Run them in parallel.** The checks watch and the CodeRabbit wait below are separate monitors armed
 at the same time; neither has to finish before the other starts.
@@ -433,28 +442,48 @@ the list and matches instantly — the monitor fires "refused again" before anyt
 `since=` parameter filters by `updated_at`, which is exactly the field the edit moves.
 
 ```sh
-R=<owner>/<repo>; PR=<pr>
+R=<owner>/<repo>; PR=<pr>; fails=0; i=0
 count() { gh api "repos/$R/pulls/$PR/reviews" \
-            --jq '[.[] | select(.user.login=="coderabbitai[bot]")] | length' 2>/dev/null || echo -1; }
-base=$(count); since=$(date -u +%Y-%m-%dT%H:%M:%SZ)   # both BEFORE the ping
+            --jq '[.[] | select(.user.login=="coderabbitai[bot]")] | length'; }
+base=$(count) || { echo "cannot reach GitHub — no baseline, do not wait blind"; exit 1; }
+since=$(date -u +%Y-%m-%dT%H:%M:%SZ)   # baseline and timestamp both BEFORE the ping
 while true; do
-  n=$(count)
-  [ "$n" -gt "$base" ] 2>/dev/null && { echo "reviewed: $base -> $n"; break; }
-  body=$(gh api "repos/$R/issues/$PR/comments?since=$since" \
-           --jq '.[] | select(.user.login=="coderabbitai[bot]") | .body' 2>/dev/null || true)
-  case $body in
-    *"rate limited by coderabbit.ai"*)       echo "refused: rate limited"; break ;;
-    *"did not have any reviewable changes"*) echo "nothing reviewable — that IS the review"; break ;;
-    *"The pull request is closed"*)          echo "refused: merged, CodeRabbit is done for good"; break ;;
-  esac
+  if n=$(count) && body=$(gh api "repos/$R/issues/$PR/comments?since=$since" \
+                            --jq '.[] | select(.user.login=="coderabbitai[bot]") | .body'); then
+    fails=0
+    [ "$n" -gt "$base" ] && { echo "reviewed: $base -> $n"; break; }
+    case $body in
+      *"rate limited by coderabbit.ai"*)       echo "refused: rate limited"; break ;;
+      *"did not have any reviewable changes"*) echo "nothing reviewable — that IS the review"; break ;;
+      *"The pull request is closed"*)          echo "refused: merged, CodeRabbit is done for good"; break ;;
+      *"Review failed"*)                       echo "refused: review failed — read the comment"; break ;;
+      *"review in progress"*)                  : ;;   # the one non-terminal marker
+      *"Review skipped"*|*"Auto reviews are disabled"*)
+                                               echo "refused: skipped — ping did not register"; break ;;
+    esac
+  else
+    fails=$((fails + 1))
+    [ "$fails" -ge 3 ] && { echo "API ERROR x$fails — stopping rather than waiting blind"; break; }
+  fi
+  i=$((i + 1)); [ $((i % 10)) -eq 0 ] && echo "still waiting, count=$n, $((i / 2))m elapsed"
   sleep 30
 done
 ```
 
 Every terminal outcome in the table below emits a line; only one of them raises the count. A filter
 that greps for success alone is silent through the other four, and silence is indistinguishable from
-still-running — which is how a refusal gets read as a review still in flight. Do not cap the
-iterations either: a cap that expires mid-cooldown looks identical to a silent failure.
+still-running — which is how a refusal gets read as a review still in flight. The `case` needs a
+branch for **every** marker in that table, not the three that come to mind — a terminal state you did
+not enumerate leaves the count at baseline and the loop sleeps through it forever.
+
+**Never let a failed `gh` call look like a state.** `|| echo -1` makes an unreachable API return a
+number that compares false against every baseline, so an expired token becomes an eternal wait. Fail
+the baseline call outright — waiting with no baseline is worse than not waiting — and break after a
+few consecutive failures, printing the count so the reason is visible.
+
+**Do not cap the iterations**: a cap that expires mid-cooldown looks identical to a silent failure,
+and a review that is genuinely running will trip it. Heartbeat instead, so silence carries its own
+elapsed time.
 
 Then re-ping **once**, after the deadline has actually passed, and confirm with the three signals
 below. If that ping is refused again, the window was longer than advertised: recompute from the new
