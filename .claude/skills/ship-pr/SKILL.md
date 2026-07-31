@@ -465,9 +465,10 @@ own right. The thread you argued and then stopped reading is the one that costs 
 .claude/skills/ship-pr/scripts/watch-threads.sh <owner/repo> <pr> <since>
 ```
 
-It reads `pulls/.../comments` — review-thread replies, a different endpoint from the
-`issues/.../comments` the summary comment lives in. Arm it as a `Monitor` if you would rather the
-reply found you; `--help` for the rest.
+`<since>` is a UTC timestamp from before you replied, e.g. `2026-07-31T18:04:00Z`. It reads
+`pulls/.../comments` — review-thread replies, a different endpoint from the `issues/.../comments` the
+summary comment lives in. Arm it as a `Monitor` if you would rather the reply found you; `--help` for
+the rest.
 
 Do not let an unresolved advisory comment block a merge. Do let a real defect it surfaced block one.
 
