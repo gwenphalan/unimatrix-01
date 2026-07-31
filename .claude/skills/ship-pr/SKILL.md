@@ -505,7 +505,7 @@ unresolved threads (`reviewThreads` via GraphQL, `isResolved == false`), and the
 markers.
 
 **Every outcome a ping can have.** The count rises for exactly one of them, so a loop keyed on the
-count alone hangs on all the others. The first three are measured here; the rest are read from
+count alone hangs on all the others. The first five are measured here; the rest are read from
 upstream and marked as such.
 
 | Outcome | How you know | Ends the wait? |
@@ -513,10 +513,24 @@ upstream and marked as such.
 | Reviewed, findings | count > baseline | yes — triage them |
 | Rate-limited | `rate limited by coderabbit.ai` | yes — cool down, re-ping |
 | Merged PR | `Review failed` / `The pull request is closed` | yes — CodeRabbit is done, forever |
+| Head moved mid-review | `Review failed` / `The head commit changed during the review from <a> to <b>` | yes — see below |
+| Ping never registered | `Review skipped` / `Auto reviews are disabled` posted *after* your ping | yes — re-ping, nothing was spent |
 | Nothing reviewable | `did not have any reviewable changes` | yes — that *is* the review |
 | Still running | `review in progress by coderabbit.ai` | no — keep waiting |
 | Reviewed clean | count > baseline, no findings *(unobserved — assumed to raise the count like any other review)* | yes |
 | Draft PR | *(unverified: `drafts` defaults false, so drafts are excluded from auto-review; whether an explicit ping overrides that is untested — mark the PR ready before pinging)* | — |
+
+**A ping can be swallowed with no marker at all.** Observed here: `@coderabbitai review` drew no ack
+and no review, while the PR-open `Review skipped` notice sat above it looking like a reply. The
+discriminator is whether a CodeRabbit comment's `updated_at` moves *after* your ping — filter on
+that, not on the comment list. Re-pinging costs nothing when the count never rose, because nothing
+was read.
+
+**Do not push while a review may still be finishing.** The review body can land minutes before
+CodeRabbit is actually done, and a push in that window aborts the rest with
+`Review failed / The head commit changed during the review from <a> to <b>`. Measured here: the
+7 inline findings had all arrived first, so nothing was lost — but that was luck, not design. Confirm
+the findings you have match the body's `Actionable comments posted: N` before pushing anything.
 
 `Review skipped` appears in two of these with opposite meanings, so read what follows it:
 `automatic reviews are disabled` in the checks list is the nothing-happened state, while

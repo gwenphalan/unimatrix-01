@@ -43,7 +43,14 @@ jobs:
           languages: javascript-typescript,actions
           queries: security-and-quality
 
-      # No `category`: one job analyzing two languages uploads one SARIF, and a
-      # hardcoded per-language category would mislabel half of it.
+      # `category` is a matching key, not a description — code scanning pairs a
+      # PR's analysis with the same category on `main` to work out which alerts the
+      # diff introduced. Changing the string breaks that pairing for one cycle:
+      # dropping it here turned the required `CodeQL` check NEUTRAL with
+      # "cannot determine the alerts introduced by this pull request, because 1
+      # configuration present on refs/heads/main was not found". So it stays on the
+      # original value even though the job now analyzes two languages.
       - name: Analyze
         uses: github/codeql-action/analyze@e58424170fb0262c8d7ed60a2e84b9bffe205c67 # codeql-bundle-v2.26.1
+        with:
+          category: /language:javascript-typescript
