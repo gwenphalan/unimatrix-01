@@ -48,12 +48,14 @@ Thumbs.db
 # Claude Code state. Per-developer by default: scheduler state, the agent
 # worktrees under .claude/worktrees/, and settings.local.json. The negations are
 # the repo conventions a clone must not miss — the skills AGENTS.md points at,
-# and settings.json, whose PostToolUse hook surfaces the writing-docs skill on a
-# documentation edit. The lines are not interchangeable: git does not descend
-# into an excluded directory, so the exclusion has to be `.claude/*` for the
-# negations to be reachable at all.
+# the subagents those skills dispatch by name, and settings.json, whose
+# PostToolUse hook surfaces the writing-docs skill on a documentation edit. The
+# lines are not interchangeable: git does not descend into an excluded
+# directory, so the exclusion has to be `.claude/*` for the negations to be
+# reachable at all.
 .claude/*
 !.claude/skills/
+!.claude/agents/
 !.claude/settings.json
 
 # issue workflow artifacts
