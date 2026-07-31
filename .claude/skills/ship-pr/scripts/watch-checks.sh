@@ -20,7 +20,9 @@ indistinguishable from still-running.
 A failed `gh` call is not an empty result. An expired token returning a
 valid-looking empty list would leave the loop sleeping forever, which is the
 same silence a slow CI run produces. Three consecutive failures print what `gh`
-actually said and stop.
+actually said and stop. Status 8 is not one of them: `gh pr checks` exits 8 with
+usable JSON whenever something is still pending, so it is polled on rather than
+counted against the three.
 
 Arguments:
   <pr>   Pull request number, or anything `gh pr checks` accepts
@@ -31,7 +33,9 @@ Environment:
                            place of the `gh` call. An entry is either a path to
                            a JSON file holding what
                            `gh pr checks <pr> --json name,bucket` would print,
-                           or the form ERROR=<message>, standing in for a failed
+                           the form EXIT8=<path>, standing in for that same JSON
+                           returned with the pending status 8, or the form
+                           ERROR=<message>, standing in for a failed
                            call. No entry may contain a colon, which is the
                            separator. The run ends when the list is
                            exhausted. This is how the script is exercised
@@ -94,6 +98,16 @@ while true; do
         payload=${entry#ERROR=}
         rc=1
         ;;
+      EXIT8=*)
+        entry=${entry#EXIT8=}
+        rc=8
+        if [ -r "$entry" ]; then
+          payload=$(cat "$entry")
+        else
+          payload="fixture not readable: $entry"
+          rc=1
+        fi
+        ;;
       *)
         if [ -r "$entry" ]; then
           payload=$(cat "$entry")
@@ -105,6 +119,13 @@ while true; do
     esac
   else
     payload=$(gh pr checks "$pr" --json name,bucket 2>&1) && rc=0 || rc=$?
+  fi
+
+  # 8 is `gh pr checks` for "something is still pending", alongside valid JSON —
+  # the normal state of a PR whose checks have not all reported. Treated as a
+  # failure it trips the three-strike abort on every ordinary run.
+  if [ "$rc" -eq 8 ]; then
+    rc=0
   fi
 
   if [ "$rc" -eq 0 ]; then
