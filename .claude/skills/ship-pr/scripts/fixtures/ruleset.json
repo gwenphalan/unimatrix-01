@@ -1,0 +1,17 @@
+{
+  "id": 1,
+  "name": "main",
+  "rules": [
+    { "type": "deletion" },
+    {
+      "type": "required_status_checks",
+      "parameters": {
+        "required_status_checks": [
+          { "context": "Verify" },
+          { "context": "Images (api)" },
+          { "context": "CodeQL" }
+        ]
+      }
+    }
+  ]
+}

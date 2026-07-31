@@ -59,7 +59,9 @@ and a lack of objection is not approval.
 Steps 1 and 4 are delegated on purpose: a fresh context re-derives from the code, where you would
 re-derive from your own earlier reasoning. Skip a delegation only for a change small enough that the
 handover costs more than the work — a typo, a one-line constant — and say that you skipped it. When
-you skip it, every rule in the agent's own file binds you instead, commit shape included.
+you skip it, every rule in the agent's own file binds you instead, commit shape included. Dispatch
+and keep working: the synchronous form is almost never the right one, because checking the planner's
+claims against the code and reading what it reports on both run alongside it.
 
 **A subagent is opaque while it runs.** You get its final report, not its progress, so a *delegated*
 task's status moves at the delegation boundaries: mark it in progress before dispatching, update it
@@ -67,10 +69,11 @@ when the report lands. Do not write status you cannot see — a task list that r
 internal state is inventing it. This is a limit on delegated tasks only; the work you do yourself
 closes when it is done.
 
-## Before opening anything
+**One dispatch is one task, however many pieces it covers.** Five tasks flipped together report five
+workstreams you cannot see; the pieces you will check afterwards are verification checkpoints and
+stay pending until you have checked them.
 
-`main` accepts changes by pull request only. If the work is sitting on `main`, branch first — do not
-push to `main` under any circumstances.
+## Before opening anything
 
 Run the narrowest relevant checks for what changed before opening the PR, not after. `pnpm check` is
 the normal gate; `pnpm verify` when the change spans workspaces or touches runtime/build behaviour.
@@ -115,18 +118,12 @@ The body must carry three things, in this order:
 3. **What you could not verify.** Plainly. An unmentioned gap reads as a confirmed result. If a fix
    is precautionary rather than demonstrated, say so — do not let it read as a proven fix.
 
-End the commit message with the attribution header for the acting agent.
-
 ## Gather what the reviewer cannot see
 
 Some findings never reach a reviewer because they live in GitHub rather than in the diff, and the PR
 body is the reviewer's whole input — so a finding left in a dashboard is a finding nobody reviews.
-**`pr-signal-collector` does the fetching and triage** once the checks are green: the queries, the
-main-branch comparison that separates an alert your diff introduced from one already there, and the
-bots that comment instead of failing. Put anything real into the body.
-
-Nothing else collects these for you. `/code-review` does not — verified: the string `code-scanning`
-appears nowhere in the Claude Code binary.
+**Dispatch `pr-signal-collector` once the checks are green**, and put anything real into the body.
+Nothing else collects these for you; `/code-review` does not.
 
 ## Review before merge — hand off to a fresh reader
 
@@ -179,14 +176,15 @@ change is:
    session, workflows enabled, and `Workflow` in the caller's own toolset — fail any one and it
    silently reviews inline instead, so a review that comes back instantly did not run.
 
-   So choose the lowest of those three that fits the diff, not the one that sounds thorough. Measured on
-   `high`: 688.6k tokens by the fifth of seventeen agents, ~2M for one PR, and four launched together
-   took the five-hour window from 20% to 32% in ten minutes while returning nothing, because they were
-   killed before finishing. Upstream calls a run "large" at 25 agents or 1.5M projected tokens; `high`
+   So choose the lowest of those three that fits the diff, not the one that sounds thorough. Measured
+   on `high`: 688.6k tokens by the fifth of seventeen agents, ~2M for one PR. Upstream calls a run
+   "large" at 25 agents or 1.5M projected tokens; `high`
    is already there. **One at a time, never as a batch**, and say the five-hour figure out loud before
-   launching rather than deciding quietly. A `PreToolUse` guard refuses the call when the budget is
-   thin — if it fires, that is the answer, not an obstacle to route around. On an already-merged PR
-   the right answer is usually neither: the spend is real and the code has shipped.
+   launching — read it rather than inferring it from the absence of a complaint. The `PreToolUse`
+   budget guard matches the `Workflow` tool only, not `Agent` dispatches, and it fails open when it
+   cannot read the budget; the `PostToolUse` advisor reports the figure periodically, not on every
+   call. If the guard fires, that is the answer and not an obstacle to route around. On an
+   already-merged PR the right answer is usually neither: the spend is real and the code has shipped.
 
    **The target is free text and carries instructions** — `focus on error handling`, `only review
    src/foo.ts` — as well as a PR number, branch, ref range or path. Everything after the level in
@@ -260,20 +258,13 @@ same model, and it costs them a session.
 Whichever runs, its input is the PR body — which is why the section above matters. Triage its
 findings the same way as CodeRabbit's below: verify each against the code before acting.
 
-The residual risk, stated rather than papered over: every option but CodeRabbit is Claude reading
-Claude's work. A subagent, `/code-review`, `ultra` — all share your model priors and therefore your
-blind spots, however many agents run. Independence of *tool* is a different axis from independence of
-*context*, and CodeRabbit is the only one that supplies the first. That is why it stays the default
-rather than the consolation prize.
-
 ## Watching the checks
 
-Every required check on `main` must report before merge is possible. Read the list from the ruleset
-rather than from memory:
+Every required check on `main` must report before merge is possible. Read the list from the rules
+GitHub says apply to the branch rather than from memory:
 
 ```sh
-gh api repos/<owner>/<repo>/rulesets/<id> \
-  --jq '.rules[] | select(.type=="required_status_checks") | .parameters.required_status_checks[].context'
+.claude/skills/ship-pr/scripts/required-checks.sh
 ```
 
 `Images` exists because `Verify` is Vite and tsc only and never touches a Dockerfile — a dependency
@@ -283,59 +274,31 @@ A PR branched before a merge to `main` reports `BEHIND` and cannot merge until u
 update-branch <pr>` fixes it and re-runs every required check, so it is another full CI cycle —
 budget for it rather than treating the first green as the last.
 
-**Do not block the turn waiting — and choose the waiting tool by how many notifications you need,
-not by whether the end is knowable.** One notification wants `Bash` with `run_in_background: true`
-and a command that exits. One *per occurrence* wants `Monitor`, and a known end does not disqualify
-it: the script simply breaks when the last check reports.
-
-Checks want the per-occurrence form. `gh pr checks <pr> --watch` is one notification after
-*everything* reports, so a `Verify` failure two minutes in stays invisible until the slowest job
-finishes ten minutes later — you sit on a fixable red the whole time. Emit each result as it lands
-instead, and break when nothing is pending:
+**Do not block the turn waiting.** `gh pr checks <pr> --watch` is one notification after *everything*
+reports, so a `Verify` failure two minutes in stays invisible until the slowest job finishes ten
+minutes later — you sit on a fixable red the whole time. **Arm this under `Monitor`, not `Bash` with
+`run_in_background`** — background Bash notifies once, when the script exits, which is the same
+blindness by a different route. `Monitor` is a deferred tool, so its own guidance on which to pick is
+not in context until you fetch it; that is why the choice is stated here rather than left to it.
+`--help` for the script's outputs and exit codes:
 
 ```sh
-prev=""; fails=0
-while true; do
-  if s=$(gh pr checks <pr> --json name,bucket 2>&1); then
-    fails=0
-    cur=$(jq -r '.[] | select(.bucket!="pending") | "\(.bucket | ascii_upcase)  \(.name)"' <<<"$s" | sort)
-    comm -13 <(echo "$prev") <(echo "$cur")
-    prev="$cur"
-    jq -e 'length > 0 and all(.[]; .bucket != "pending")' <<<"$s" >/dev/null 2>&1 && break
-  else
-    fails=$((fails + 1))
-    [ "$fails" -ge 3 ] && { echo "API ERROR x$fails: $s"; break; }
-  fi
-  sleep 30
-done
+.claude/skills/ship-pr/scripts/watch-checks.sh <pr>
 ```
-
-**Emit every terminal state, not just the one you want.** A filter that matches only success is
-silent through a failure, and silence is indistinguishable from still-running — which is the failure
-this whole section exists to prevent. `bucket` covers `pass`, `fail` and `skipping` in one line
-because it is printed unconditionally.
-
-**A failed `gh` call is not an empty result.** `|| echo '[]'` reads as defensive and is the opposite:
-an expired token turns into a valid-looking "no checks yet" and the loop then sleeps forever, which
-is the same silence a slow CI run produces. Branch on the exit status, ride out a transient failure
-or two, then print what `gh` actually said and stop.
 
 **Run them in parallel.** The checks watch and the CodeRabbit wait below are separate monitors armed
 at the same time; neither has to finish before the other starts.
 
-**A red check is the signal, not an obstacle.** Never merge around one, never re-run it hoping for a
-different answer, and never disable it. Read the failure, fix the cause, push. If a check fails for
-a reason unrelated to the diff (flake, infrastructure), say so explicitly rather than silently
-re-running.
+If a check fails for a reason unrelated to the diff (flake, infrastructure), say so explicitly rather
+than silently re-running.
 
 ## CodeRabbit comments
 
 CodeRabbit is **advisory and non-blocking**, and it is **not a required check** — it must never gate
 a merge. Its comments are leads to verify against primary sources, never conclusions to act on.
 
-"Non-blocking" never licenses merging with no review at all. When it is rate-limited the default is
-to **wait out the cooldown** (below); option 2 or 3 is the fallback for when waiting itself costs
-something, not a way to skip the wait.
+"Non-blocking" never licenses merging with no review at all — when it is rate-limited, see "Wait out
+the cooldown and re-ping" below.
 
 ### Ask for the review — it does not run automatically
 
@@ -396,17 +359,12 @@ clean" at a glance.
 
 1. Check the summary comment for the marker
    (`gh pr view <pr> --json comments`, grep `rate limited`).
-2. **The "Next review available in: N minutes" countdown is not a live clock.** It is rewritten only
-   when CodeRabbit *runs*, so polling for the marker to vanish can wait forever, and the number is
-   whatever was true at the comment's last edit. Compute the deadline as the comment's
-   **`updated_at` + N**, not `created_at`, and not "now + N":
+2. **The "Next review available in: N minutes" countdown is not a live clock**, so polling for the
+   marker to vanish can wait forever and the deadline is the comment's **`updated_at` + N**, not
+   `created_at` and not "now + N":
 
-   ```
-   gh api repos/<owner>/<repo>/issues/<pr>/comments --jq '
-     [.[] | select(.user.login=="coderabbitai[bot]" and (.body | contains("rate limited by coderabbit.ai")))]
-     | last
-     | (.body | capture("Next review available in:[^0-9]*(?<n>[0-9]+) (?<u>[a-z]+)")) as $c
-     | "updated=\(.updated_at) countdown=\($c.n) \($c.u)"'
+   ```sh
+   .claude/skills/ship-pr/scripts/coderabbit-deadline.sh <owner/repo> <pr>
    ```
 
    A window that has already lapsed still reads "rate limited" — check the arithmetic before
@@ -431,68 +389,19 @@ To wait: compute the deadline with the `updated_at` + countdown arithmetic above
 `Monitor` and carry on working.** This is the case `Monitor` is for — an outcome that arrives on
 someone else's schedule, with no way to know which of five endings it will be.
 
-Two things the loop must get right, and both have burned a run here:
-
-**Record the baseline count before the ping.** Not zero. A PR reviewed once already starts at
-`n >= 1`, so a loop testing `n > 0` succeeds on its first iteration and you merge believing a review
-ran that never did.
-
-**Filter on comments updated *since* the ping, not on the whole comment list.** CodeRabbit edits its
-own ack comment into the outcome, so a rate-limit marker from an earlier round is still sitting in
-the list and matches instantly — the monitor fires "refused again" before anything has happened. The
-`since=` parameter filters by `updated_at`, which is exactly the field the edit moves.
-
 ```sh
-R=<owner>/<repo>; PR=<pr>; fails=0; i=0
-count() { gh api "repos/$R/pulls/$PR/reviews" \
-            --jq '[.[] | select(.user.login=="coderabbitai[bot]")] | length'; }
-base=$(count) || { echo "cannot reach GitHub — no baseline, do not wait blind"; exit 1; }
-since=$(date -u +%Y-%m-%dT%H:%M:%SZ)   # baseline and timestamp both BEFORE the ping
-while true; do
-  if n=$(count) && body=$(gh api "repos/$R/issues/$PR/comments?since=$since" \
-                            --jq '.[] | select(.user.login=="coderabbitai[bot]") | .body'); then
-    fails=0
-    [ "$n" -gt "$base" ] && { echo "reviewed: $base -> $n"; break; }
-    case $body in
-      *"rate limited by coderabbit.ai"*)       echo "refused: rate limited"; break ;;
-      *"did not have any reviewable changes"*) echo "nothing reviewable — that IS the review"; break ;;
-      *"The pull request is closed"*)          echo "refused: merged, CodeRabbit is done for good"; break ;;
-      *"Review failed"*)                       echo "refused: review failed — read the comment"; break ;;
-      *"review in progress"*)                  : ;;   # the one non-terminal marker
-      *"Review skipped"*|*"Auto reviews are disabled"*)
-                                               echo "refused: skipped — ping did not register"; break ;;
-    esac
-  else
-    fails=$((fails + 1))
-    [ "$fails" -ge 3 ] && { echo "API ERROR x$fails — stopping rather than waiting blind"; break; }
-  fi
-  i=$((i + 1)); [ $((i % 10)) -eq 0 ] && echo "still waiting, count=$n, $((i / 2))m elapsed"
-  sleep 30
-done
+.claude/skills/ship-pr/scripts/wait-coderabbit.sh <owner/repo> <pr>
 ```
 
-Every terminal outcome in the table below emits a line; only one of them raises the count. A filter
-that greps for success alone is silent through the other four, and silence is indistinguishable from
-still-running — which is how a refusal gets read as a review still in flight. The `case` needs a
-branch for **every** marker in that table, not the three that come to mind — a terminal state you did
-not enumerate leaves the count at baseline and the loop sleeps through it forever.
-
-**Never let a failed `gh` call look like a state.** `|| echo -1` makes an unreachable API return a
-number that compares false against every baseline, so an expired token becomes an eternal wait. Fail
-the baseline call outright — waiting with no baseline is worse than not waiting — and break after a
-few consecutive failures, printing the count so the reason is visible.
-
-**Do not cap the iterations**: a cap that expires mid-cooldown looks identical to a silent failure,
-and a review that is genuinely running will trip it. Heartbeat instead, so silence carries its own
-elapsed time.
+Start it **before** posting the ping: it records the review-count baseline and the `since=` timestamp
+first, and both have to predate the ping. `--help` carries why, and every terminal outcome it prints.
 
 Then re-ping **once**, after the deadline has actually passed, and confirm with the three signals
 below. If that ping is refused again, the window was longer than advertised: recompute from the new
 comment's `updated_at` and wait again. Two refusals in a row on a lengthening window is the point to
-stop waiting and merge with the gap stated. The refusal itself costs nothing — nothing was read, so no
-slot was consumed — but merging on it is choosing an unreviewed merge, and choosing it permanently:
-CodeRabbit will not look at the PR afterwards (see above), so "follow up later" is only ever
-`/code-review` or a fresh session, never another ping.
+stop *waiting* — it is not itself a reason to merge. That still turns on the exceptions above, and
+where none of them holds it is the owner's call, because merging forfeits the review permanently
+rather than deferring it.
 
 Cooldowns here have run to minutes, not hours, and a five-minute wait has bought a review that found a
 real defect. Waiting is usually the cheap side of this trade.
@@ -501,9 +410,9 @@ real defect. Waiting is usually the cheap side of this trade.
 
 **Do not count inline comments.** Findings can arrive as "outside diff range" body text with no
 inline comment at all, so read the newest review's **body** too. Read instead: the review count
-against the baseline you recorded before pinging (`gh api repos/<owner>/<repo>/pulls/<pr>/reviews`),
-unresolved threads (`reviewThreads` via GraphQL, `isResolved == false`), and the summary comment's
-markers.
+against the baseline you recorded before pinging
+(`.claude/skills/ship-pr/scripts/review-count.sh`), unresolved threads
+(`reviewThreads` via GraphQL, `isResolved == false`), and the summary comment's markers.
 
 **Every outcome a ping can have.** The count rises for exactly one of them, so a loop keyed on the
 count alone hangs on all the others. The first five are measured here; the rest are read from
@@ -529,14 +438,13 @@ was read.
 
 **Do not push while a review may still be finishing.** The review body can land minutes before
 CodeRabbit is actually done, and a push in that window aborts the rest with
-`Review failed / The head commit changed during the review from <a> to <b>`. Measured here: the
-7 inline findings had all arrived first, so nothing was lost — but that was luck, not design. Confirm
-the findings you have match the body's `Actionable comments posted: N` before pushing anything.
+`Review failed / The head commit changed during the review from <a> to <b>`. Confirm the findings you
+have match the body's `Actionable comments posted: N` before pushing anything.
 
-`Review skipped` appears in two of these with opposite meanings, so read what follows it:
-`automatic reviews are disabled` in the checks list is the nothing-happened state, while
-`did not have any reviewable changes` in the summary comment is a finished review of a diff with
-nothing in it — a pure deletion earns that, and its count never moves.
+`Review skipped` carries opposite meanings on its two surfaces. In the **checks list** it is the
+nothing-happened state; in the **summary comment**, followed by `did not have any reviewable
+changes`, it is a finished review of a diff with nothing in it — a pure deletion earns that, and its
+count never moves.
 
 The rest of `.coderabbit.yaml`'s skip triggers cannot fire here: no `path_filters`, `base_branches`
 or `ignored_titles` are configured, and the auto-pause after N reviewed commits applies to
@@ -564,13 +472,13 @@ or produces a counterexample you have not seen. A reply that raises something ne
 own right. The thread you argued and then stopped reading is the one that costs you.
 
 ```sh
-gh api "repos/<owner>/<repo>/pulls/<pr>/comments?since=$since" \
-  --jq '.[] | select(.user.login=="coderabbitai[bot]") | "\(.path):\(.line)\t\(.body)"'
+.claude/skills/ship-pr/scripts/watch-threads.sh <owner/repo> <pr> <since>
 ```
 
-That is `pulls/.../comments` — review-thread replies, a different endpoint from the
-`issues/.../comments` the summary comment lives in. Arm it as a `Monitor` the same way if you would
-rather the reply found you.
+`<since>` is a UTC timestamp from before you replied, e.g. `2026-07-31T18:04:00Z`. It reads
+`pulls/.../comments` — review-thread replies, a different endpoint from the `issues/.../comments` the
+summary comment lives in. Arm it as a `Monitor` if you would rather the reply found you; `--help` for
+the rest.
 
 Do not let an unresolved advisory comment block a merge. Do let a real defect it surfaced block one.
 
@@ -591,9 +499,8 @@ or `/code-review ultra` because the change was large or security-sensitive. If n
 outright rather than letting "checks green" stand in for "reviewed" — and say it if you spent a
 second CodeRabbit review, with why the findings earned it.
 
-**Merging is the point of no return for CodeRabbit.** It refuses a merged PR outright, so the choice
-at the merge button is not "review now or review later", it is "review now or not at all". That is
-what makes the exceptions above narrow.
+**Merging is the point of no return for CodeRabbit** — "review now or not at all", never "review now
+or review later" (see "Ask for the review"). That is what makes the exceptions above narrow.
 
 `gh pr merge` may print `fatal: 'main' is already used by worktree at ...` when run from a worktree.
 That is `gh` failing to check out `main` locally *after* merging; confirm with

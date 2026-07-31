@@ -43,4 +43,5 @@ fi
 
 echo "pnpm-with-pinned-node: bootstrapping node@${node_pin} and pnpm@${pnpm_pin} via npm exec" >&2
 cd "${TMPDIR:-/tmp}"
+# shellcheck disable=SC2016  # `$1`/`$@` belong to the inner `sh -c`, not to this shell.
 exec npm exec --yes --package="node@${node_pin}" --package="pnpm@${pnpm_pin}" -- sh -c 'cd "$1" && shift && exec pnpm "$@"' sh "${repo_root}" "$@"
