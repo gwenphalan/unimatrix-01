@@ -23,7 +23,11 @@
 # So this is a ratchet on the next doc, not an audit of the current ones.
 #
 # Fails closed: zero tracked `*.md` files, or zero tracked files at all, is a
-# failure rather than a vacuous pass.
+# failure rather than a vacuous pass — as does a `grep` that fails for any reason
+# other than finding nothing.
+#
+# Assumes GNU bash 4+ and GNU coreutils, as `check-app-wiring.sh` and
+# `check-agents-md-symlinks.sh` already do. CI runs ubuntu-24.04.
 
 set -euo pipefail
 
@@ -74,8 +78,32 @@ if ((doc_count == 0)); then
 fi
 
 # Working tree, not HEAD: an uncommitted doc edit is exactly what this should
-# catch before it is committed. `grep` exits 1 when no doc names any script,
-# which is a legitimate state, so it must not take the pipeline down.
+# catch before it is committed.
+#
+# `grep` exits 1 for a doc naming no script, which is legitimate, and 2+ when it
+# actually failed. Only the first is swallowed: a blanket `|| true` here would
+# turn a broken scan into `0 script reference(s), all resolved` — a green check
+# over documents nobody read, which is the one wrong answer this must never give.
+# The status is collected through a file rather than a process substitution
+# because a substitution's exit status is invisible to the shell that reads it.
+scan_docs() {
+  local doc status
+  while IFS= read -r -d '' doc; do
+    grep -onHE '[A-Za-z0-9._-]+\.(sh|mjs)' -- "${doc}" && continue
+    status=$?
+    if ((status != 1)); then
+      printf 'grep failed on %s with status %d\n' "${doc}" "${status}" >&2
+      return "${status}"
+    fi
+  done < <(git ls-files -z -- '*.md')
+}
+
+scan_output="$(mktemp)"
+# shellcheck disable=SC2064  # expand now: the path must survive the function's scope
+trap "rm -f '${scan_output}'" EXIT
+
+scan_docs >"${scan_output}"
+
 refs=0
 while IFS= read -r hit; do
   [[ -n "${hit}" ]] || continue
@@ -88,8 +116,7 @@ while IFS= read -r hit; do
   if [[ -z "${tracked_basenames[${name}]:-}" ]]; then
     fail "${location}: names '${name}', which no tracked file in this repo provides"
   fi
-done < <(git ls-files -z -- '*.md' \
-  | xargs -0 -r grep -onHE '[A-Za-z0-9._-]+\.(sh|mjs)' -- || true)
+done <"${scan_output}"
 
 printf '\n'
 
