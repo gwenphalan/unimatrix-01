@@ -260,8 +260,8 @@ findings the same way as CodeRabbit's below: verify each against the code before
 
 ## Watching the checks
 
-Every required check on `main` must report before merge is possible. Read the list from the ruleset
-rather than from memory:
+Every required check on `main` must report before merge is possible. Read the list from the rules
+GitHub says apply to the branch rather than from memory:
 
 ```sh
 .claude/skills/ship-pr/scripts/required-checks.sh
