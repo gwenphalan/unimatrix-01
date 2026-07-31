@@ -28,7 +28,9 @@
 set -euo pipefail
 
 if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
-  sed -n '3,26p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+  # Header block by shape, not by line number: a fixed range silently truncates
+  # or over-runs the moment the comment above is edited.
+  sed -n '2,${/^#/!q; s/^# \{0,1\}//; p;}' "${BASH_SOURCE[0]}"
   exit 0
 fi
 
