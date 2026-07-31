@@ -61,10 +61,11 @@ re-derive from your own earlier reasoning. Skip a delegation only for a change s
 handover costs more than the work — a typo, a one-line constant — and say that you skipped it. When
 you skip it, every rule in the agent's own file binds you instead, commit shape included.
 
-**A subagent is opaque while it runs.** You get its final report, not its progress, so the task list
-moves at the delegation boundaries and nowhere else: mark the task in progress before dispatching,
-update it when the report lands. Do not write status you cannot see — a task list that reports a
-subagent's internal state is inventing it.
+**A subagent is opaque while it runs.** You get its final report, not its progress, so a *delegated*
+task's status moves at the delegation boundaries: mark it in progress before dispatching, update it
+when the report lands. Do not write status you cannot see — a task list that reports a subagent's
+internal state is inventing it. This is a limit on delegated tasks only; the work you do yourself
+closes when it is done.
 
 ## Before opening anything
 
