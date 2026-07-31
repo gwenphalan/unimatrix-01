@@ -282,14 +282,36 @@ A PR branched before a merge to `main` reports `BEHIND` and cannot merge until u
 update-branch <pr>` fixes it and re-runs every required check, so it is another full CI cycle —
 budget for it rather than treating the first green as the last.
 
-**Do not block the turn waiting.** `gh pr checks <pr> --watch` exits on its own once every check has
-reported, which is exactly the shape `Bash` with `run_in_background: true` wants — one notification
-when CI finishes, and you keep working until it lands. Not `Monitor`: that is for a stream of events
-with no known end, and an unbounded one stays armed long after the checks are done.
+**Do not block the turn waiting — and choose the waiting tool by how many notifications you need,
+not by whether the end is knowable.** One notification wants `Bash` with `run_in_background: true`
+and a command that exits. One *per occurrence* wants `Monitor`, and a known end does not disqualify
+it: the script simply breaks when the last check reports.
+
+Checks want the per-occurrence form. `gh pr checks <pr> --watch` is one notification after
+*everything* reports, so a `Verify` failure two minutes in stays invisible until the slowest job
+finishes ten minutes later — you sit on a fixable red the whole time. Emit each result as it lands
+instead, and break when nothing is pending:
 
 ```sh
-gh pr checks <pr> --watch
+prev=""
+while true; do
+  s=$(gh pr checks <pr> --json name,bucket 2>/dev/null || echo '[]')
+  [ "$s" = "[]" ] && { sleep 30; continue; }
+  cur=$(jq -r '.[] | select(.bucket!="pending") | "\(.bucket | ascii_upcase)  \(.name)"' <<<"$s" | sort)
+  comm -13 <(echo "$prev") <(echo "$cur")
+  prev="$cur"
+  jq -e 'length > 0 and all(.[]; .bucket != "pending")' <<<"$s" >/dev/null 2>&1 && break
+  sleep 30
+done
 ```
+
+**Emit every terminal state, not just the one you want.** A filter that matches only success is
+silent through a failure, and silence is indistinguishable from still-running — which is the failure
+this whole section exists to prevent. `bucket` covers `pass`, `fail` and `skipping` in one line
+because it is printed unconditionally.
+
+**Run them in parallel.** The checks watch and the CodeRabbit wait below are separate monitors armed
+at the same time; neither has to finish before the other starts.
 
 **A red check is the signal, not an obstacle.** Never merge around one, never re-run it hoping for a
 different answer, and never disable it. Read the failure, fix the cause, push. If a check fails for
