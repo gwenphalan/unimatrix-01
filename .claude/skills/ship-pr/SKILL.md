@@ -134,8 +134,8 @@ what the change is, not by what is cheapest:
 2. **If CodeRabbit is rate-limited, launch the `code-review` workflow yourself.** Do not sit and wait
    out the window, and do not merge with no review at all.
 
-   ```
-   Workflow({ name: "code-review", args: "high <pr-number>" })
+   ```text
+   Workflow({ name: "code-review", args: "<lowest level that fits> <pr-number>" })
    ```
 
    The `/code-review <level> <target>` slash command is a wrapper around that call, and the owner has
@@ -145,9 +145,19 @@ what the change is, not by what is cheapest:
    and triage when the task notification lands. Report what survives with `ReportFindings`, once, most
    severe first — not as prose.
 
-   It is not free. A workflow spends the owner's rolling five-hour window and weekly limit, the same
-   invisible budget as `ultra`; what it saves is the handoff, not the cost. On a small diff a plain
-   reviewer subagent is the better trade.
+   **It is not cheap, and the cost is invisible at the call site.** The tool returns a task id in a
+   second while the spend accrues in the background against a budget that reports no remaining
+   balance. Measured: one `high` run reached 688.6k tokens at 5 of its 17 agents, so roughly 2M for a
+   single PR; four launched together took the five-hour window from 20% to 32% in about ten minutes
+   and returned nothing, because they were killed before finishing. What the workflow saves is the
+   handoff, not the cost.
+
+   So: **one at a time, at the lowest level that fits, and never as a batch.** Read the five-hour
+   figure before launching and say it out loud rather than deciding quietly. A `PreToolUse` guard
+   refuses the call outright when the budget is thin — if it fires, that is the answer, not an
+   obstacle to route around. On a small diff a plain reviewer subagent is the better trade, and on a
+   PR that is already merged the right answer is usually neither: the spend is real and the code is
+   already shipped.
 
    **A subagent cannot run this for you.** `Workflow` is absent from a subagent's toolset and
    `ToolSearch select:Workflow` answers `No matching deferred tools found` (verified), so there is no

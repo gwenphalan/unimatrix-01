@@ -39,6 +39,14 @@ case "$path" in
 */.notes/* | .notes/*) exit 0 ;;
 esac
 
+# Generated and machine-owned files, ahead of *both* branches: a README under
+# `dist/` is not documentation anyone reviews, and a `*.gen.*` file's comments
+# were not authored by the person editing it. `.json` is deliberately absent —
+# every `tsconfig.json` here carries `//` comments.
+case "$path" in
+*-lock.yaml | *-lock.json | *.lock | *.snap | *.gen.* | *.min.* | */node_modules/* | */dist/*) exit 0 ;;
+esac
+
 session=$(printf '%s' "$payload" | jq -r '.session_id // "unknown"' 2>/dev/null)
 
 remind() {
@@ -64,19 +72,16 @@ no restating what \`ls\` or the code already answers, and label anything you did
 	;;
 esac
 
-# Anything else may still carry a code comment, which the skill also governs.
-# Only generated or machine-owned files are skipped — `.json` is not among them,
-# because every `tsconfig.json` here carries `//` comments.
-case "$path" in
-*-lock.yaml | *-lock.json | *.lock | *.snap | *.gen.* | *.min.* | */node_modules/* | */dist/*) exit 0 ;;
-esac
-
+# Anything that is not documentation may still carry a code comment, which the
+# skill also governs.
+#
 # The added text, not the file: `new_string` for an Edit, `content` for a Write.
 # Line-leading openers only, which is what keeps `https://` inside a string from
-# reading as a comment. `#!` is a shebang; `-- ` needs its space or every CSS
-# custom property and every `--i` would match.
+# reading as a comment. A bare `#` is the spacer line of a shell or YAML comment
+# block and counts; `#!` is a shebang and does not. `-- ` needs its space, or
+# every CSS custom property and every `--i` would match.
 added=$(printf '%s' "$payload" | jq -r '.tool_input.new_string // .tool_input.content // empty' 2>/dev/null)
-printf '%s\n' "$added" | grep -Eq '^[[:space:]]*(//|/\*|\*[ /]|\{/\*|<!--|#[^!]|-- )' || exit 0
+printf '%s\n' "$added" | grep -Eq '^[[:space:]]*(//|/\*|\*[ /]|\{/\*|<!--|#($|[^!])|-- )' || exit 0
 
 remind comments \
 	"You just wrote a code comment, which the \`writing-docs\` skill governs — invoke it with \
