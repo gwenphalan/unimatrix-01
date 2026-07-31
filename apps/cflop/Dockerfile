@@ -13,7 +13,7 @@ COPY . .
 RUN find . -name '*.tsbuildinfo' -delete && pnpm install --frozen-lockfile
 RUN pnpm --filter @unimatrix/cflop build
 
-FROM nginx:1.31-alpine AS runtime
+FROM nginx:1.31-alpine@sha256:4a73073bd557c65b759505da037898b61f1be6cbcc3c2c3aeac22d2a470c1752 AS runtime
 COPY apps/cflop/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /workspace/apps/cflop/dist /usr/share/nginx/html
 EXPOSE 8080
