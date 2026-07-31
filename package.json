@@ -28,10 +28,11 @@
     "check:agents-md": "bash ./infra/scripts/check-agents-md-symlinks.sh",
     "check:watch-paths": "node ./infra/scripts/check-watch-paths.mjs",
     "check:stale-comments": "node ./infra/scripts/check-stale-comments.mjs",
+    "check:doc-script-refs": "bash ./infra/scripts/check-doc-script-refs.sh",
     "check:coverage-drift": "node ./infra/scripts/check-coverage-drift.mjs",
-    "check": "pnpm format:check && pnpm deps:check && pnpm check:app-wiring && pnpm check:agents-md && pnpm check:watch-paths && pnpm check:stale-comments && turbo run lint typecheck test && pnpm check:coverage-drift",
+    "check": "pnpm format:check && pnpm deps:check && pnpm check:app-wiring && pnpm check:agents-md && pnpm check:watch-paths && pnpm check:stale-comments && pnpm check:doc-script-refs && turbo run lint typecheck test && pnpm check:coverage-drift",
     "knip": "knip",
-    "verify": "pnpm format:check && pnpm deps:check && pnpm check:app-wiring && pnpm check:agents-md && pnpm check:watch-paths && pnpm check:stale-comments && turbo run build lint typecheck test && pnpm check:coverage-drift"
+    "verify": "pnpm format:check && pnpm deps:check && pnpm check:app-wiring && pnpm check:agents-md && pnpm check:watch-paths && pnpm check:stale-comments && pnpm check:doc-script-refs && turbo run build lint typecheck test && pnpm check:coverage-drift"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^7.0.0",

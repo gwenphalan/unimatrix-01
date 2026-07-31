@@ -192,7 +192,9 @@ change is:
    launching — read it rather than inferring it from the absence of a complaint. The `PreToolUse`
    budget guard matches the `Workflow` tool only, not `Agent` dispatches, and it fails open when it
    cannot read the budget; the `PostToolUse` advisor reports the figure periodically, not on every
-   call. If the guard fires, that is the answer and not an obstacle to route around. On an
+   call. Both are registered in the owner's `~/.claude/settings.json`, not in this repo — a fresh
+   clone has neither, and nothing here verifies they are installed. If the guard fires, that is the
+   answer and not an obstacle to route around. On an
    already-merged PR the right answer is usually neither: the spend is real and the code has shipped.
 
    **The target is free text and carries instructions** — `focus on error handling`, `only review

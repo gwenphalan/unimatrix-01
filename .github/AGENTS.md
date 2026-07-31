@@ -64,6 +64,11 @@ this file holds the mechanics, each of which was learned the hard way.
   fails when a floor sits more than 5 points under the measurement — `packages/auth` gated at 26
   while measuring 73.84. The 5 points are deliberate: V8 re-attributes functions between Node
   majors, so a floor pinned to the exact figure reddens on the next runtime bump for no real reason.
+  `check-doc-script-refs.sh` (`Doc script references`, placed pre-install with the other bash gates)
+  fails when a tracked `.md` names a `.sh`/`.mjs` file no tracked file provides — a doc naming a
+  script this repo does not ship asserts config no reviewer can see and no clone gets. It is a
+  ratchet on the next doc rather than an audit: it resolved every reference on `main` the day it
+  landed, and a prose claim that names no file is invisible to it.
 - Each was validated by breaking it on purpose, not by watching it pass. A check that
   cannot be shown to fail is not known to work.
 - Two workflows serve `lab`. `Prototypes guard` (job `No prototypes on main`) runs on **every**
