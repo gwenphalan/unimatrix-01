@@ -1,0 +1,14 @@
+[
+  {
+    "user": { "login": "coderabbitai[bot]" },
+    "path": ".claude/skills/ship-pr/scripts/watch-checks.sh",
+    "line": 42,
+    "body": "Conceded — the exit status branch does cover this."
+  },
+  {
+    "user": { "login": "gwenphalan" },
+    "path": ".claude/skills/ship-pr/SKILL.md",
+    "line": 7,
+    "body": "Human reply, must not be printed."
+  }
+]
