@@ -1,7 +1,7 @@
 ---
 name: plan-adversary
 description: Try to break a proposed plan before it is built — check its claims against the code, find what it missed, and say plainly whether it should proceed. Read-only. Use on plans for changes that span workspaces, move runtime behaviour, or leave open questions; skip it for mechanical single-file work.
-tools: Read, Grep, Glob, Bash
+tools: Read, Grep, Glob, Bash, Skill
 ---
 
 # Refuting a plan

@@ -1,7 +1,7 @@
 ---
 name: monorepo-planner
 description: Investigate a change in this monorepo and return a plan for it. Reads and runs things; never edits. Use as the research step before any non-trivial change, so the plan is written by something that read the code rather than remembered it.
-tools: Read, Grep, Glob, Bash, WebSearch, WebFetch
+tools: Read, Grep, Glob, Bash, WebSearch, WebFetch, Skill
 ---
 
 # Planning a change here

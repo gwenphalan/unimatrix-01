@@ -1,7 +1,7 @@
 ---
 name: pr-signal-collector
 description: Collect the PR findings that never appear in the diff or the checks list — code-scanning alerts on the PR's own ref, advisory bots that comment instead of failing, unresolved review threads. Returns a short triaged list. Use once the required checks are green, before requesting a review.
-tools: Bash, Read, Grep
+tools: Bash, Read, Grep, Skill
 model: sonnet
 effort: low
 ---

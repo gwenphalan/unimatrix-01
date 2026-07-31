@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 #
-# SubagentStart hook: hand a subagent the skill text it cannot fetch itself.
+# SubagentStart hook: put the skill text governing a subagent's work in front of it
+# before its first turn, rather than relying on the agent to fetch it.
 #
-# Subagents have no `Skill` tool. Measured, not assumed: a probe dispatched to
-# `monorepo-implementer` reported its toolset as Read, Edit, Write, Bash, advisor
-# *after* `Skill` was added to that agent's frontmatter, so listing the tool does
-# not grant it. Every "invoke the X skill" instruction is therefore unfollowable
-# inside a subagent, and the `PostToolUse` reminders fire at an agent that can do
-# nothing about them.
+# A subagent that lists `Skill` in `tools` can invoke skills; one that does not gets
+# `No such tool available: Skill. Skill exists but is not enabled in this context.`
+# Measured both directions. **Never establish this by asking a subagent what tools it
+# has** — it answers from injected text as readily as from its own function list, and
+# that route has produced the wrong answer here twice. Have it attempt the call.
 #
-# `SubagentStart` is the one event that closes this: it fires per Agent call with
+# `SubagentStart` fires per Agent call with
 # `agent_type` in its payload, and stdout JSON `additionalContext` is delivered to
 # the subagent. So the skill file stays the single source and the agent that needs
 # it gets it inlined at start.
@@ -79,8 +79,8 @@ for skill in $skills; do
               fm == 1 && $0 == "---" { fm = 2; next }
               fm != 1 { print }' "$file")
   [ -n "$text" ] || continue
-  body+="You cannot invoke skills — you have no Skill tool. The \`$skill\` skill governs work you are
-about to do, so its text is inlined here in full. Treat it as binding.
+  body+="The \`$skill\` skill governs work you are about to do, so its text is inlined
+here in full — you do not need to invoke it. Treat it as binding.
 
 $text
 
