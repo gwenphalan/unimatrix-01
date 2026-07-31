@@ -131,10 +131,40 @@ what the change is, not by what is cheapest:
    Its cost is *latency*, not the owner's budget: the plan is free but rate-limited, so a wasted slot
    delays the next review instead of billing anything. That is the opposite trade from `ultra` below,
    and it is why CodeRabbit is the default even on a small PR.
-2. **If CodeRabbit is rate-limited, fall back to a reviewer subagent from this session.** Do not sit
-   and wait out the window, and do not merge with no review at all. Give the subagent the diff and
-   the PR body — not your reasoning, which is the thing that would contaminate it. Say in the merge
-   report that the review came from a subagent and why.
+2. **If CodeRabbit is rate-limited, launch the `code-review` workflow yourself.** Do not sit and wait
+   out the window, and do not merge with no review at all.
+
+   ```text
+   Workflow({ name: "code-review", args: "<lowest level that fits> <pr-number>" })
+   ```
+
+   The `/code-review <level> <target>` slash command is a wrapper around that call, and the owner has
+   pre-authorized this skill's review step to make it without being asked each time — which is what
+   distinguishes it from `ultra` below. It fans out finders and then verifies every candidate
+   independently, which a lone reviewer subagent does not, and it runs in the background: keep working
+   and triage when the task notification lands. Report what survives with `ReportFindings`, once, most
+   severe first — not as prose.
+
+   **It is not cheap, and the cost is invisible at the call site.** The tool returns a task id in a
+   second while the spend accrues in the background against a budget that reports no remaining
+   balance. Measured: one `high` run reached 688.6k tokens at 5 of its 17 agents, so roughly 2M for a
+   single PR; four launched together took the five-hour window from 20% to 32% in about ten minutes
+   and returned nothing, because they were killed before finishing. What the workflow saves is the
+   handoff, not the cost.
+
+   So: **one at a time, at the lowest level that fits, and never as a batch.** Read the five-hour
+   figure before launching and say it out loud rather than deciding quietly. A `PreToolUse` guard
+   refuses the call outright when the budget is thin — if it fires, that is the answer, not an
+   obstacle to route around. On a small diff a plain reviewer subagent is the better trade, and on a
+   PR that is already merged the right answer is usually neither: the spend is real and the code is
+   already shipped.
+
+   **A subagent cannot run this for you.** `Workflow` is absent from a subagent's toolset and
+   `ToolSearch select:Workflow` answers `No matching deferred tools found` (verified), so there is no
+   arrangement where a spawned reviewer invokes `/code-review` on its own.
+
+   For the subagent route, give it the diff and the PR body — not your reasoning, which is the thing
+   that would contaminate it. Say in the merge report which of the two ran, and why.
 
    The `pr-review-toolkit` plugin supplies the specialist reviewers for this — `code-reviewer`,
    `silent-failure-hunter`, `comment-analyzer`, `type-design-analyzer`, `pr-test-analyzer`,
@@ -156,10 +186,8 @@ what the change is, not by what is cheapest:
      limits, CI/CD and ruleset config, or the rendering of user-supplied content
 
    Neither of those is a judgement call you get to skip when unsure — escalate, the cost of asking is
-   one message. `/code-review` also takes cheaper levels (`low` through `max`) if a middle option
-   fits better than either extreme, and `/review` is the local alternative that spends nothing in the
-   cloud. Adding `--fix` makes the cloud review apply its own findings locally — offer it only when
-   the owner wants the fixes taken on trust, since it removes the step where you check each one.
+   one message. Adding `--fix` makes the cloud review apply its own findings locally — offer it only
+   when the owner wants the fixes taken on trust, since it removes the step where you check each one.
 
    **The handoff is one pasteable line and nothing else:**
 
@@ -188,9 +216,11 @@ one model instead of a fleet.
 Whichever runs, its input is the PR body — which is why the section above matters. Triage its
 findings the same way as CodeRabbit's below: verify each against the code before acting.
 
-The residual risk to state rather than paper over: a subagent or a fresh Claude session shares your
-model priors and therefore your blind spots. Independence of *tool* is a different axis from
-independence of *context*, and only CodeRabbit and `/code-review ultra` supply the first.
+The residual risk to state rather than paper over: every option here except CodeRabbit is Claude
+reading Claude's work — a subagent, a fresh session, the `code-review` workflow and `ultra` alike all
+share your model priors and therefore your blind spots, however many of them run. Independence of
+*tool* is a different axis from independence of *context*, and CodeRabbit is the only one that
+supplies the first. That is why it stays the default rather than the consolation prize.
 
 ## Watching the checks
 
