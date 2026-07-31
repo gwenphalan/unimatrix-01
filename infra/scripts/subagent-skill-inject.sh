@@ -18,14 +18,19 @@
 # it lands in that subagent's context every dispatch. A read-only reviewer paying
 # for documentation rules is pure overhead.
 #
-# **Adding a hook event key mid-session does not take effect.** Measured: with this
-# wired and unit-tested, a dispatched subagent reported the injected marker string
-# ABSENT and the script logged no invocation at all, while the `PostToolUse` hooks
-# in the same settings file — present at session start — fired normally. It needs
-# `/hooks` or a restart to register. So the rules this injects are *also* stated
-# inline in `.claude/agents/monorepo-implementer.md`: if the hook is dead, the agent
-# still gets them, and if both land the cost is one duplicated block rather than a
-# silent gap.
+# **Verified working, in a fresh session.** The subagent transcript under
+# `~/.claude/projects/*/subagents/agent-*.jsonl` carries a `hook_success` record
+# named `SubagentStart:monorepo-implementer` followed by a `hook_additional_context`
+# record holding this script's output — the harness parsed it and handed it over.
+# `plan-adversary` dispatched alongside had neither. Read those records rather than
+# asking a subagent what it received: an agent answers "yes, I have documentation
+# rules" from the root `AGENTS.md` whether or not this fired.
+#
+# **A hook event key added mid-session does not register**, which is the trap that
+# made it look broken: wired and unit-tested, it logged no invocation at all in the
+# session that added it, while the `PostToolUse` hooks in the same file kept firing
+# because they predated it. Adding an event needs `/hooks` or a restart. Editing
+# *this script* does not.
 set -uo pipefail
 
 command -v jq >/dev/null 2>&1 || exit 0
@@ -33,7 +38,17 @@ command -v jq >/dev/null 2>&1 || exit 0
 root="${CLAUDE_PROJECT_DIR:-.}"
 payload=$(cat)
 agent=$(printf '%s' "$payload" | jq -r '.agent_type // empty' 2>/dev/null)
-[ -n "$agent" ] || exit 0
+
+# An unmapped agent is the normal case and exits quietly. A payload that arrived
+# but carries no `agent_type` is not — it means the shape changed underneath this,
+# and the injection would then be silently dead for *every* agent while the hook
+# still reported success. Say so on stderr, which surfaces under `--debug` without
+# blocking the dispatch. Never exit non-zero here: this hook must not be able to
+# stop an Agent call.
+if [ -z "$agent" ]; then
+  [ -n "$payload" ] && printf 'subagent-skill-inject: payload has no agent_type; injection is inert\n' >&2
+  exit 0
+fi
 
 # agent_type -> skills to inline. Deliberately narrow.
 #
