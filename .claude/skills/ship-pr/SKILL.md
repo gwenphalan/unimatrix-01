@@ -59,13 +59,19 @@ and a lack of objection is not approval.
 Steps 1 and 4 are delegated on purpose: a fresh context re-derives from the code, where you would
 re-derive from your own earlier reasoning. Skip a delegation only for a change small enough that the
 handover costs more than the work — a typo, a one-line constant — and say that you skipped it. When
-you skip it, every rule in the agent's own file binds you instead, commit shape included.
+you skip it, every rule in the agent's own file binds you instead, commit shape included. Dispatch
+and keep working: the synchronous form is almost never the right one, because checking the planner's
+claims against the code and reading what it reports on both run alongside it.
 
 **A subagent is opaque while it runs.** You get its final report, not its progress, so a *delegated*
 task's status moves at the delegation boundaries: mark it in progress before dispatching, update it
 when the report lands. Do not write status you cannot see — a task list that reports a subagent's
 internal state is inventing it. This is a limit on delegated tasks only; the work you do yourself
 closes when it is done.
+
+**One dispatch is one task, however many pieces it covers.** Five tasks flipped together report five
+workstreams you cannot see; the pieces you will check afterwards are verification checkpoints and
+stay pending until you have checked them.
 
 ## Before opening anything
 
