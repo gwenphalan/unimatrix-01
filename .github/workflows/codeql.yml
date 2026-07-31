@@ -30,15 +30,20 @@ jobs:
         with:
           persist-credentials: false
 
-      # No build step: CodeQL extracts TypeScript and JavaScript directly from
-      # source, so the workspace never has to be installed or compiled here.
+      # No build step: CodeQL extracts all of these directly from source, so the
+      # workspace is never installed or compiled here.
+      #
+      # Both languages share one job deliberately — a matrix renames the job to
+      # `Analyze (<language>)`, and `Analyze` is a required check that would then
+      # never report, blocking every PR. Shell scripts stay uncovered either way:
+      # CodeQL has no shell extractor.
       - name: Initialize CodeQL
         uses: github/codeql-action/init@e58424170fb0262c8d7ed60a2e84b9bffe205c67 # codeql-bundle-v2.26.1
         with:
-          languages: javascript-typescript
+          languages: javascript-typescript,actions
           queries: security-and-quality
 
+      # No `category`: one job analyzing two languages uploads one SARIF, and a
+      # hardcoded per-language category would mislabel half of it.
       - name: Analyze
         uses: github/codeql-action/analyze@e58424170fb0262c8d7ed60a2e84b9bffe205c67 # codeql-bundle-v2.26.1
-        with:
-          category: /language:javascript-typescript
