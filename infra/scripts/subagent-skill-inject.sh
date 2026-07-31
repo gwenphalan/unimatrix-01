@@ -33,7 +33,10 @@
 # *this script* does not.
 set -uo pipefail
 
-command -v jq >/dev/null 2>&1 || exit 0
+if ! command -v jq >/dev/null 2>&1; then
+  printf 'subagent-skill-inject: jq not on PATH; injection is inert\n' >&2
+  exit 0
+fi
 
 root="${CLAUDE_PROJECT_DIR:-.}"
 payload=$(cat)
@@ -65,7 +68,10 @@ esac
 body=""
 for skill in $skills; do
   file="$root/.claude/skills/$skill/SKILL.md"
-  [ -f "$file" ] || continue
+  if [ ! -f "$file" ]; then
+    printf 'subagent-skill-inject: %s missing; %s gets no %s text\n' "$file" "$agent" "$skill" >&2
+    continue
+  fi
   # Strip the YAML frontmatter: it is routing metadata for a tool this reader does
   # not have, and `description` re-states the body.
   text=$(awk 'BEGIN { fm = 0 }
