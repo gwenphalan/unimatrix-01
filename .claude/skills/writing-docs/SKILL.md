@@ -11,6 +11,11 @@ prose that costs attention without changing a decision.
 
 The test for a line is **would deleting it change what someone does?**
 
+This skill governs **how a line is written**. Whether it should exist at all, and which file or layer
+holds it, is `composing-context` — reach for that when editing an `AGENTS.md`, a skill, or a tool
+description. Both fire on those files and they do not overlap: structure and placement there, wording
+here.
+
 ## What this repo is opinionated about
 
 **Current state and live constraints only.** Not what it used to be, not who found the bug, not

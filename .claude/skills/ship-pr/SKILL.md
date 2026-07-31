@@ -1,6 +1,6 @@
 ---
 name: ship-pr
-description: Run a task end to end and ship it — commit in logical steps as you go, and once the owner confirms the work is in order, open a PR with a body a fresh reader can review from, ping CodeRabbit and wait out a rate-limit cooldown rather than merging unreviewed, escalate to the owner for /code-review ultra when the change is large or security-sensitive, watch the required checks, triage findings, merge once genuinely green, and clear the originating .notes/issues todo entry. Invoked at the start of a session with either the task itself or a pointer to a .todo.md.
+description: Take a task all the way to merged. Use at the start of any session whose end state is a merge — given the task itself, or a pointer to a .notes/issues/*.todo.md. Covers committing as you go, the PR body a fresh reader can review from, getting a real review before merging, required checks, and clearing the todo entry.
 ---
 
 # Ship a PR
@@ -240,15 +240,11 @@ to change.
 
 **The "✅ Action performed / Review finished" ack carries no information at all — not that a review
 ran, and not that one failed.** It lands within seconds of *any* ping, with the same body and the same
-"does not re-review already reviewed commits" note, and CodeRabbit then *edits that same comment* when
-the outcome is known. Measured on #157: the ack posted 6 seconds after the ping and the real review
-arrived 4m43s later as an edit to it; on the ping before that, the identical ack was edited into a
-rate-limit warning instead. So a fast ack is not a failure signal — reading it as one is how a real
-review gets missed, and reading it as success is how an unreviewed PR gets merged.
-
-**Confirm by state, never by the ack**, using the three signals in "Confirming a review actually ran"
-below: the review count above the baseline you recorded, unresolved threads, and a summary comment
-carrying neither `rate limited by coderabbit.ai` nor `review in progress by coderabbit.ai`.
+"does not re-review already reviewed commits" note, and CodeRabbit then **edits that same comment** to
+carry the real outcome minutes later — the review, or a rate-limit warning, from an identical opening.
+So a fast ack is not a failure signal: reading it as one is how a real review gets missed, and reading
+it as success is how an unreviewed PR gets merged. **Confirm by state**, using the table under
+"Confirming a review actually ran".
 
 **CodeRabbit will not review a merged PR. There is no second chance.** A ping on one gets
 `✅ Action performed` / `Full review finished.` — no rate-limit marker, review count stays at its
@@ -260,22 +256,16 @@ Review failed
 The pull request is closed.
 ```
 
-The ack is *actively misleading* here: "Full review finished" is the text for a review that never
-started. So a PR merged without a review is unreviewed permanently — CodeRabbit is off the table from
-that moment, and only `/code-review` or a fresh session on the merge commit is left. That is the real
-cost of merging past a cooldown, and the reason the default below is to wait.
+"Full review finished" is the text for a review that never started, so the ack is *actively
+misleading* here. A PR merged without a review is unreviewed permanently: only `/code-review` or a
+fresh session on the merge commit is left. That is the real cost of merging past a cooldown, and the
+reason the default below is to wait. Observed on a merged PR; whether closing without merging or
+reopening behaves the same way is untested.
 
-Observed on a merged PR. Whether a PR closed without merging, or a reopened one, behaves the same way
-is untested — so treat the rule as covering merges, which is the case that arises here.
-
-**The command form is not what decides whether a review happens — the rate limit is.** Both halves of
-that were measured on PR 157. One `@coderabbitai full review` with every check green: 6 seconds later
-CodeRabbit edited its summary comment to `Review limit reached` / "you've reached your PR review limit,
-so we couldn't start this review" / "Next review available in: 4 minutes" — the same command that had
-returned a Major finding on 153. Then a single **bare** `@coderabbitai review` once that window
-refilled: a real review with three findings, 4m43s later. So both forms trigger, and both are blocked
-by the limit; the earlier pattern of `full review` working once and failing twice was five pings across
-three PRs inside ~20 minutes, not the wording.
+**The command form does not decide whether a review happens — the rate limit does.** `review` and
+`full review` both trigger, and both are refused by the limit with `Review limit reached` on a window
+that has not refilled. Do not go hunting for the magic wording when a ping produces nothing; check the
+limit.
 
 What actually governs throughput: **one ping per PR, on a window that has had time to refill,
 confirmed by the review count rising.** Spend the ping when the diff is final and CI is green,
@@ -380,10 +370,8 @@ slot was consumed — but merging on it is choosing an unreviewed merge, and cho
 CodeRabbit will not look at the PR afterwards (see above), so "follow up later" is only ever
 `/code-review` or a fresh session, never another ping.
 
-Measured on PR 157: a `full review` was refused with a 4-minute countdown, and a bare
-`@coderabbitai review` 4m39s later returned a real three-finding review. The wait cost five minutes
-and caught a defect in the branch. Overnight, #154 and #155 were refused and merged unreviewed
-instead — that is the mistake this rule exists to stop.
+Cooldowns here have run to minutes, not hours, and a five-minute wait has bought a review that found a
+real defect. Waiting is usually the cheap side of this trade.
 
 ### Confirming a review actually ran
 
