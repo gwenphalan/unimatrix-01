@@ -83,7 +83,7 @@ jobs:
       - name: Shellcheck
         run: |
           shellcheck --version
-          git ls-files '*.sh' | xargs -r shellcheck
+          git ls-files -z -- '*.sh' | xargs -0 -r shellcheck --
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
