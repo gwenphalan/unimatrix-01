@@ -6,8 +6,8 @@ description: How to work a problem in this repo before proposing a fix — separ
 # Working a problem
 
 The failure this exists to prevent: a plausible answer to the wrong question, delivered fast, with no
-web check and no mention of the three adjacent problems that were visible along the way. The owner
-should not have to ask "did you research this?" or "what else should I be considering?" — if those
+web check and no mention of the adjacent problems that were visible along the way. The owner should
+not have to ask "did you research this?" or "what else should I be considering?" — if those
 questions are still worth asking when you finish, you skipped a stage.
 
 Five stages. Do them in order and say which one you are in.
@@ -40,9 +40,10 @@ range. "We do it this way because we always have" is not a constraint at all.
 
 ## 3. Check the world before inventing
 
-**Web research is a stage, not an option.** Do it before proposing anything, not after being asked. If
-you finish a problem without having looked anything up, say so explicitly and say why it was not
-needed — that sentence is the check on skipping this stage silently.
+**Search the web before proposing anything**, not after being asked. There is exactly one problem
+shape that does not need it — one wholly internal to this repo, where nothing upstream could bear on
+the answer. Skipping is therefore a *claim*, and it has to be written down as one: name the problem
+as internal and say why. Silence is what this rule forbids, not the skip.
 
 What to look for, in order of what it saves:
 
@@ -101,7 +102,11 @@ Propose one when **two or more** of these hold:
 - the work is mechanically repetitive over a known list (one agent per item), so parallelism is the
   whole value
 
-One problem with one obvious place to look is not a workflow, however interesting it is. Two of those
-conditions is the bar because a single one is usually just "this is a bit big", and a workflow spends
-the owner's rolling five-hour window and weekly limit — the same budget as `/code-review ultra`, and
-just as invisible.
+One problem with one obvious place to look is not a workflow, however interesting it is.
+
+Two conditions is the bar because a single one is usually just "this is a bit big", and a fan-out is
+expensive in a currency that reports no balance: it spends the owner's rolling five-hour window and
+weekly limit, neither of which shows a remaining figure at the call site. Upstream classes a run as
+large at 25 agents or 1.5M projected tokens and advises running it on a small slice first; measured
+here, one seventeen-agent review run had reached 688.6k tokens by its fifth agent. Two-of-four is a
+house rule fitted to those numbers, not an upstream recommendation.

@@ -43,8 +43,8 @@ jobs:
       #
       # `docker` used to be excluded here because no CI job built an image, so a
       # base-image bump could arm auto-merge, pass a `Verify` that never touched
-      # the Dockerfile, and land unverified. The `Images` job now builds all four
-      # Dockerfiles and its four matrix checks are required on `main`, so
+      # the Dockerfile, and land unverified. The `Images` job now builds every
+      # `apps/*/Dockerfile` and each of its matrix checks is required on `main`, so
       # auto-merge waits for them and the exclusion has nothing left to do.
       #
       # Keeping it would have been actively misleading, because it never did what
