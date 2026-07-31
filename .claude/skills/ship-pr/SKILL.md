@@ -154,21 +154,32 @@ change is:
    Its cost is *latency*, not the owner's budget: the plan is free but rate-limited, so a wasted slot
    delays the next review instead of billing anything. That is the opposite trade from `ultra` below,
    and it is why CodeRabbit is the default even on a small PR.
-2. **If CodeRabbit is rate-limited, run `/code-review` yourself.** The owner has pre-authorized this
-   skill's review step to spend it without asking each time — which is what separates it from `ultra`
-   below. Do not sit out the window with no review at all.
+2. **If CodeRabbit is rate-limited, run the workflow-backed review yourself.** The owner has
+   pre-authorized this skill's review step to spend it without asking each time — which is what
+   separates it from `ultra` below. Do not sit out the window with no review at all.
+
+   **You do not type the slash command; you invoke the workflow.** `/code-review
+   [low|medium|high|xhigh|max|ultra] [--fix] [--comment] [<target>]` is the *owner's* surface. Yours
+   is the `code-review` skill, and it resolves to exactly one call:
 
    ```text
-   /code-review [low|medium|high|xhigh|max|ultra] [--fix] [--comment] [<target>]
+   Workflow({ name: "code-review", args: "<level> <target>" })
    ```
 
-   **The level is not a dial on one engine — it picks between two.** `low` and `medium` review inline,
-   here, cheaply. `high`, `xhigh` and `max` route to a background `Workflow` that fans out finders and
-   verifies every candidate independently, and *that* is where the cost is. Verified in the binary:
-   the routing gate requires one of those three levels, an interactive session, workflows enabled, and
-   `Workflow` in the caller's own toolset — fail any one and it silently reviews inline instead.
+   **`args` carries the level and the target and nothing else.** Verified in the binary: the command
+   strips `--fix` and `--comment` before building `args`, and honours them by appending instructions
+   to *its own caller* — they never reach the workflow. So there is no `--comment` to pass; posting
+   findings onto the PR is something you do afterwards, by hand.
 
-   So choose by whether the diff needs the fan-out, not by how thorough you want to sound. Measured on
+   **Your floor is `high`.** The level picks between two engines rather than turning one dial. `low`
+   and `medium` return an inline review — this context, this model, your own work — which is the
+   thing the top of this section forbids; they cannot satisfy the fresh-reader requirement however
+   the findings read. Only `high`, `xhigh` and `max` route to the background workflow, and the fresh
+   contexts it spawns are what make it a review at all. The gate also requires an interactive
+   session, workflows enabled, and `Workflow` in the caller's own toolset — fail any one and it
+   silently reviews inline instead, so a review that comes back instantly did not run.
+
+   So choose the lowest of those three that fits the diff, not the one that sounds thorough. Measured on
    `high`: 688.6k tokens by the fifth of seventeen agents, ~2M for one PR, and four launched together
    took the five-hour window from 20% to 32% in ten minutes while returning nothing, because they were
    killed before finishing. Upstream calls a run "large" at 25 agents or 1.5M projected tokens; `high`
@@ -177,13 +188,12 @@ change is:
    thin — if it fires, that is the answer, not an obstacle to route around. On an already-merged PR
    the right answer is usually neither: the spend is real and the code has shipped.
 
-   **`<target>` is free text and carries instructions** — `focus on error handling`, `only review
-   src/foo.ts` — as well as a PR number, branch, ref range or path. `--comment` posts findings as
-   inline PR comments; `--fix` applies them to the working tree, which skips the step where you check
-   each one.
+   **The target is free text and carries instructions** — `focus on error handling`, `only review
+   src/foo.ts` — as well as a PR number, branch, ref range or path. Everything after the level in
+   `args` is passed through, so a scope restriction belongs there rather than in a follow-up message.
 
-   When it routes to the workflow it runs in the background: keep working, and report what survives
-   with `ReportFindings`, once, most severe first — not as prose.
+   It runs in the background: keep working, and report what survives with `ReportFindings`, once,
+   most severe first — not as prose.
 
    **A subagent cannot run this for you.** `Workflow` is stripped from every subagent's toolset
    unconditionally — upstream documents it in the same filter as `AskUserQuestion` and `ExitPlanMode`
