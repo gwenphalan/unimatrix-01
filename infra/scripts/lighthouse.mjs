@@ -20,6 +20,10 @@ import { createServer } from "node:net";
 import os from "node:os";
 import path from "node:path";
 import process from "node:process";
+// Aliased, not imported under its own name: `waitForServer` below polls with the
+// global callback `setTimeout`, and a bare import shadows it module-wide — the
+// promisified one then receives a callback where it wants a delay and throws.
+import { setTimeout as delay } from "node:timers/promises";
 
 import { launch } from "chrome-launcher";
 import lighthouse from "lighthouse";
@@ -60,6 +64,13 @@ const APPS = {
 };
 
 const CATEGORIES = ["performance", "accessibility", "best-practices", "seo"];
+
+// Floor on the gap between a route's two performance samples. The retry pass
+// below normally supplies far more than this by auditing every other route in
+// between; this only has to cover the case that structure cannot — a low route
+// that happens to be the last one, where the next pass would otherwise start
+// immediately. Paid only when a retry actually happens.
+const MIN_RETRY_SEPARATION_MS = 30_000;
 
 /**
  * `chrome-launcher` looks for a system Chrome install, which neither CI nor a
@@ -216,41 +227,73 @@ async function main() {
       };
     };
 
+    // Pass one: every route, once.
+    const results = [];
     for (const route of config.routes) {
-      const audit = await auditRoute(route);
-      let scores = audit.scores;
-      let retry = null;
+      results.push({ route, audit: await auditRoute(route), retry: null, sampledAt: Date.now() });
+    }
 
-      // A low `performance` sample is retried once, and the second sample
-      // decides.
-      //
-      // Performance is the one category with a timing component, and it moves a
-      // few points between runs on byte-identical input: `apps/web/projects` was
-      // measured at 0.88, 0.89, 0.89, 0.89, 0.89 and 0.84 in six consecutive
-      // runs against a 0.85 budget. A one-sample gate turns that into a red
-      // required check on a diff that changed nothing about the page, and the
-      // only way past it is a re-run — which trains everyone to re-run a red
-      // check instead of reading it. That habit is more expensive than the
-      // flake.
-      //
-      // Deliberately performance only. The other three are fixed sets of
-      // pass/fail audits (see the budget note above) — they do not drift, so a
-      // drop is a real failure and a second sample would only delay reporting
-      // it. A real performance regression fails both samples, so the gate still
-      // catches that; the cost is one extra audit, only on a low route.
-      if (scores.performance < config.budgets.performance) {
+    // Pass two: a second sample for any route whose `performance` was low, and
+    // the second sample decides.
+    //
+    // Performance is the one category with a timing component, and it moves a
+    // few points between runs on byte-identical input: `apps/web/projects` was
+    // measured at 0.88, 0.89, 0.89, 0.89, 0.89 and 0.84 in six consecutive
+    // runs against a 0.85 budget. A one-sample gate turns that into a red
+    // required check on a diff that changed nothing about the page, and the
+    // only way past it is a re-run — which trains everyone to re-run a red
+    // check instead of reading it. That habit is more expensive than the flake.
+    //
+    // **The retry is deferred to its own pass rather than taken immediately.**
+    // Two samples seconds apart on one runner are not independent: a runner that
+    // is slow because of CPU contention is still slow a second later, so both
+    // land low and the gate fails on infrastructure. That is what happened to
+    // `/` and `/about` at 0.84 against a 0.85 budget, while three runs of the
+    // same commit on `main` scored 0.88 to 0.91. Auditing every other route
+    // first puts minutes of unrelated work between the samples at no added
+    // wall-clock cost, and `MIN_RETRY_SEPARATION_MS` covers the case the pass
+    // structure cannot — a low route that happens to be the last one.
+    //
+    // Deliberately performance only. The other three are fixed sets of
+    // pass/fail audits (see the budget note above) — they do not drift, so a
+    // drop is a real failure and a second sample would only delay reporting
+    // it. A real performance regression fails both samples, so the gate still
+    // catches that; the cost is one extra audit, only on a low route.
+    for (const result of results) {
+      if (result.audit.scores.performance >= config.budgets.performance) continue;
+
+      // Announced before it happens, not after. An unannounced 30s stall in CI
+      // is indistinguishable from a hung run, and the whole point of this wait
+      // is that it is doing something — saying so is what makes it legible in a
+      // log read weeks later by someone wondering where the time went.
+      const elapsed = Date.now() - result.sampledAt;
+      if (elapsed < MIN_RETRY_SEPARATION_MS) {
+        const waitMs = MIN_RETRY_SEPARATION_MS - elapsed;
         console.log(
-          `  retry ${appDir}${route}: performance ${scores.performance.toFixed(2)} ` +
-            `below budget ${config.budgets.performance.toFixed(2)} — taking a second sample`,
+          `  waiting ${(waitMs / 1000).toFixed(1)}s before re-sampling ${appDir}${result.route} — ` +
+            `only ${(elapsed / 1000).toFixed(1)}s since its first sample, and two adjacent samples ` +
+            `on one runner are not independent`,
         );
-        retry = await auditRoute(route);
-        // Only `performance` is taken from the second sample. Replacing the whole
-        // result would re-read the other three from it as well, so a genuine `seo`
-        // or `accessibility` drop in the first sample could be masked by an audit
-        // that was only ever run because performance was low — which would break
-        // the "they do not drift, so a drop is real" guarantee stated just above.
-        scores = { ...scores, performance: retry.scores.performance };
+        await delay(waitMs);
       }
+
+      console.log(
+        `  retry ${appDir}${result.route}: performance ` +
+          `${result.audit.scores.performance.toFixed(2)} below budget ` +
+          `${config.budgets.performance.toFixed(2)} — taking a second sample`,
+      );
+      result.retry = await auditRoute(result.route);
+    }
+
+    for (const { route, audit, retry } of results) {
+      // Only `performance` is taken from the second sample. Replacing the whole
+      // result would re-read the other three from it as well, so a genuine `seo`
+      // or `accessibility` drop in the first sample could be masked by an audit
+      // that was only ever run because performance was low — which would break
+      // the "they do not drift, so a drop is real" guarantee stated above.
+      const scores = retry
+        ? { ...audit.scores, performance: retry.scores.performance }
+        : audit.scores;
 
       const slug = route === "/" ? "index" : route.replaceAll("/", "-").replace(/^-/u, "");
       // The first sample is the report on disk, because it decides three of the
