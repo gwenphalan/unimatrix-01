@@ -250,6 +250,21 @@ review gets missed, and reading it as success is how an unreviewed PR gets merge
 below: the review count above the baseline you recorded, unresolved threads, and a summary comment
 carrying neither `rate limited by coderabbit.ai` nor `review in progress by coderabbit.ai`.
 
+**CodeRabbit cannot review a merged or closed PR. There is no second chance.** A ping on one gets
+`✅ Action performed` / `Full review finished.` — no rate-limit marker, review count stays at its
+baseline — while the walkthrough comment carries the actual outcome in a collapsed block:
+
+```text
+Caution
+Review failed
+The pull request is closed.
+```
+
+Measured on #154. The ack is *actively misleading* here: "Full review finished" is the text for a
+review that never started. So a PR merged without a review is unreviewed permanently — CodeRabbit is
+off the table from that moment, and only `/code-review` or a fresh session on the merge commit is
+left. That is the real cost of merging past a cooldown, and the reason the default below is to wait.
+
 **The command form is not what decides whether a review happens — the rate limit is.** Both halves of
 that were measured on PR 157. One `@coderabbitai full review` with every check green: 6 seconds later
 CodeRabbit edited its summary comment to `Review limit reached` / "you've reached your PR review limit,
@@ -355,7 +370,9 @@ of iterations. An iteration cap that expires mid-cooldown looks identical to a s
 Then re-ping **once**, after the deadline has actually passed, and confirm with the three signals
 below. If that ping is refused again, the window was longer than advertised: recompute from the new
 comment's `updated_at` and wait again. Two refusals in a row on a lengthening window is the point to
-stop waiting and merge with the gap stated.
+stop waiting and merge with the gap stated — but treat that as spending the review, not deferring it.
+Once the PR is merged CodeRabbit will not look at it (see above), so "follow up later" is only ever
+`/code-review` or a fresh session, never another ping.
 
 Measured on PR 157: a `full review` was refused with a 4-minute countdown, and a bare
 `@coderabbitai review` 4m39s later returned a real three-finding review. The wait cost five minutes
@@ -419,6 +436,10 @@ to merge blind. Hold the green PR through a short cooldown, and through any cool
 owner is asleep or away; re-ping once the window refills. The rule and its arithmetic are in "Wait out
 the cooldown and re-ping" above. Merge unreviewed only when the owner is waiting on this PR, it blocks
 other work, or the window is long and the diff trivial — and say which in the report.
+
+**Merging is the point of no return for CodeRabbit.** It refuses a closed PR outright, so the choice
+at the merge button is not "review now or review later", it is "review now or not at all". That is
+what makes the exceptions above narrow.
 
 `gh pr merge` may print `fatal: 'main' is already used by worktree at ...` when run from a worktree.
 That is `gh` failing to check out `main` locally *after* merging; confirm with
