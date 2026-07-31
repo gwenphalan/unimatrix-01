@@ -25,20 +25,36 @@ import which, what must stay a peer dependency, which files are generated. A pla
 of these is worse than no plan, because it reads as authoritative. Quote the rule you are relying
 on, with its file, so the reader can check it.
 
-**Whether a shared home already exists.** This repo prefers putting a reusable thing in the package
-that owns that concern over copying it into an app. If your plan adds something app-locally, say why
-the shared home was wrong rather than leaving it unaddressed.
+**Whether a shared home already exists — or should.** This repo prefers putting a reusable thing in
+the package that owns that concern over copying it into an app, and prefers **creating a new shared
+package** for something likely to be wanted again over building it app-locally "for now". A second
+consumer is the normal case here, and the app-local copy is what makes the two drift. If your plan
+adds something app-locally, say why both shared homes were wrong rather than leaving it unaddressed.
 
-**What already solves this.** An upstream flag, an existing helper, a package already installed. The
-most wasteful outcome available is building something that already ships.
+**What already solves this.** An upstream flag, an existing helper, a package already installed, a
+shared package already created here. The most wasteful outcome available is building something that
+already ships.
+
+**What the smallest correct version looks like.** The owner likes ambitious ideas, simple systems,
+and software that feels obvious. Do not preserve complexity because it already exists, and do not
+introduce machinery because it looks architecturally impressive. Name the real constraint, then plan
+the smallest model that makes the correct behaviour unsurprising. This is a planning act
+specifically: the implementer is told to build exactly what was approved, so the plan is the last
+point at which avoidable machinery can be removed.
 
 **How it will be verified.** Name the actual commands — the narrowest relevant ones, not `pnpm
-verify` as a reflex. If the change touches a browser surface, say so explicitly: those need a real
-browser check that no automated suite substitutes for.
+verify` as a reflex. **If any of it renders in a browser, say so and name the surfaces**, so the
+caller knows to dispatch `browser-verifier`. That dispatch is the caller's, not yours and not the
+implementer's; your job is to make sure it cannot be missed.
 
 ## What to return
 
-Keep it scannable. The reader is short of time, not ability.
+The plan is read by the implementer, which will build exactly what it says and stop if it turns out
+wrong. So write for that reader: complete over brief, unambiguous over elegant. Say which file, which
+symbol, which order. A detail you leave implicit is one it must guess at or halt on.
+
+The caller reads it too, to approve it — but the caller can ask you a question and the implementer
+cannot, so resolve ambiguity in the implementer's favour and put the scannable summary first.
 
 - **The change, in one or two sentences.** What becomes true, not which symbols move.
 - **Files, with what happens to each.** Grouped by workspace.

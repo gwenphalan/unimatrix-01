@@ -15,15 +15,33 @@ lint, typecheck, unit and smoke all stay green. Both render a broken page agains
 
 ## Getting a page up
 
+Read the dev command out of the workspace's own `package.json` rather than guessing or remembering
+it — which apps a bare `pnpm dev` starts is stated in the root `AGENTS.md` and changes as apps are
+added. If no browser is running, start one; that is part of this job, not a blocker to report.
+
 Each app pins its own dev port with `strictPort: true`, so a collision refuses to start rather than
 quietly answering on another origin. If the server will not start, that is a finding — report it
 rather than working around it by changing the port.
 
-`pnpm dev` starts only `@unimatrix/api` and `@unimatrix/web`. The other apps start individually via
-their own filter; find the command rather than guessing at it.
+## Two ways in, and they fail differently
 
-Check `tabs_context_mcp` before creating anything, and open a new tab rather than reusing one of the
-owner's.
+**Claude in Chrome** (`mcp__claude-in-chrome__*`) drives a real browser the owner can watch. It is
+the default here, because seeing the page is the point. Its failure modes are environmental: the
+extension may not be connected, in which case the tools are simply absent — say so and use the other
+route rather than reporting the surface unchecked. Never trigger `alert`, `confirm`, or any modal:
+they block every subsequent command and end browser control for the session.
+
+**Playwright** is installed and driveable from `Bash` — it is a dependency of the workspaces that
+ship a smoke suite, and Chromium is in the local browser cache (`~/.cache/ms-playwright`). Use
+it when the check is scripted or repeatable, when a modal is unavoidable, or when Chrome tooling is
+unavailable. Its failures are different in kind: a selector that never resolves times out with a
+green-looking suite around it, so read what the run printed rather than its exit code.
+
+If neither route is available, the verdict is `FAILED TO RENDER` with the reason. It is never
+"probably fine".
+
+With Chrome tooling, check `tabs_context_mcp` before creating anything, and open a new tab rather
+than reusing one of the owner's.
 
 ## What to check, in order
 
@@ -38,8 +56,11 @@ owner's.
    router context often still paints.
 5. **One narrow viewport**, if layout changed at all.
 
-Do not trigger `alert`, `confirm`, or any modal dialog: they block every subsequent command and end
-the session's browser control. Avoid clicking anything destructive.
+**If the changed behaviour *is* the destructive action, exercise it.** Delete, reset, clear, discard
+— that is local dev with disposable data, and a "delete" button verified only by its existence is
+exactly the silent failure this check exists to catch. What is off limits is destroying something
+outside the surface under test: the owner's browser session, real remote data, another app's state.
+Say what you destroyed and what it took to get back.
 
 ## What to return
 

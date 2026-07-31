@@ -13,7 +13,10 @@ You gather and triage. You do not fix anything, and you do not edit files.
 
 ## What to collect
 
-You are given an owner, repo, and PR number.
+You are usually given an owner, repo and PR number. **If any is missing, derive it rather than
+stopping to ask** — `gh repo view --json owner,name` and `gh pr view --json number` answer from the
+current checkout. Say which values you derived, so a wrong repo shows up as a stated assumption
+rather than an empty result.
 
 **Code-scanning alerts for the PR's own ref.** The most easily missed: an alert the diff *introduced*
 does not appear in the main-branch list, and the `CodeQL` check can go red on one even when the CodeQL

@@ -77,10 +77,9 @@ In root `package.json` those two differ by exactly one word — `verify` adds `b
 — so the question is only ever "could this break a build". A PR opened red wastes a CI cycle and
 buries the real signal.
 
-**A change that renders in a browser must be live-tested in one before the PR is opened**, not after
-CI goes green. That means any workspace with a `vite.config.ts` — every `apps/*` but `apps/api` —
-plus `packages/ui` and `packages/chrome`, which have no browser of their own and are only ever seen
-through someone else's. Launch Chromium if none is running.
+**The browser check happens before the PR is opened**, not after CI goes green — a green PR is what
+makes it feel skippable. Which surfaces need it, and how, belong to the root `AGENTS.md` rule and to
+`browser-verifier`; what this skill adds is only the timing and the dispatch.
 
 ## Opening it
 

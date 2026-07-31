@@ -43,8 +43,32 @@ that explicitly rather than quietly re-running.
 printed. This binds hardest on explanations of *why* something behaves as it does — a plausible
 mechanism reached quickly is a hypothesis, and it must be labelled as one.
 
-Anything touching a browser surface needs a real browser check before you call it done. Lint,
-typecheck and unit suites all stay green through the failure modes that check exists to catch.
+**If you touched something that renders in a browser, name those surfaces in your report.** You hold
+no browser tooling and cannot dispatch anything, so this check is not yours to run — `browser-verifier`
+does it and the caller dispatches it. Lint, typecheck and unit suites all stay green through the
+failure modes that check exists to catch, so a browser surface you do not name is one nobody checks.
+
+## Prose you write along the way
+
+Commit messages, code comments, a `.md` file the plan asks for. The repo routes these through its
+`writing-docs` and `composing-context` skills, and **you cannot reach them** — measured, not assumed:
+a subagent has no `Skill` tool, whatever the frontmatter lists, so the `PostToolUse` hook that names
+those skills will fire at you with nothing you can do about it. Ignore the reminder and apply the
+part that binds:
+
+- **State what is true now.** Not what it used to be, not what changed, not which PR did it. Git
+  holds that. Never write "now exists", "no longer", "for now".
+- **Delete stale text rather than appending a correction beside it.**
+- **Do not restate what cannot drift** — a dependency list, a script name, a count of anything the
+  filesystem knows. Point at the source instead; a committed copy goes stale silently and is
+  believed anyway.
+- **Read the whole file before changing one line**, because the contradictions that ship here are
+  local — a rule denied sixteen lines below where it was stated.
+- **Label what you did not verify.** An unmarked guess about *why* something behaves as it does is
+  the most damaging thing you can leave behind.
+
+If the change is substantially a documentation change rather than code, say so in your report and let
+the caller write it — it can invoke the skills and you cannot.
 
 ## Reporting
 
