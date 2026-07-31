@@ -201,11 +201,10 @@ change is:
 3. **A reviewer subagent** is the cheap option, and the one to prefer on a small diff. Give it the
    diff and the PR body — not your reasoning, which is the thing that would contaminate it.
 
-   Dispatch from the roster you actually have. `pr-review-toolkit` is `true` in `enabledPlugins` but
-   absent from `installed_plugins.json`, so its six specialist reviewers sit under
-   `~/.claude/plugins/marketplaces/` unregistered and undispatchable — enabled is not installed. Read
-   the roster, and fall back to `general-purpose` with a specific brief. Breadth is not the point
-   here; a second opinion on the part that could be wrong is.
+   Dispatch from the roster you actually have, not from a name you remember: a plugin's agents
+   register at session start, so one installed mid-session is absent here and present next session.
+   Where no specialist fits, `general-purpose` with a specific brief does the job. Breadth is not the
+   point; a second opinion on the part that could be wrong is.
 4. **For a large or security-sensitive change, hand off to the owner for `/code-review ultra`.** It
    is user-triggered and billed and **you cannot launch it**, so this is a handoff, not a task.
 
