@@ -360,15 +360,17 @@ base=$(count)            # before the ping
 # ... ping, then poll until the cooldown deadline computed above, not a fixed count:
 while [ "$(date -u +%s)" -lt "$deadline" ]; do
   [ "$(count)" -gt "$base" ] && { echo "review landed"; break; }
-  gh api repos/<owner>/<repo>/issues/<pr>/comments \
-    --jq '.[] | select(.user.login=="coderabbitai[bot]") | .body' \
-    | grep -q 'rate limited by coderabbit.ai' && { echo "refused again"; break; }
+  bodies=$(gh api repos/<owner>/<repo>/issues/<pr>/comments \
+             --jq '.[] | select(.user.login=="coderabbitai[bot]") | .body')
+  grep -q 'rate limited by coderabbit.ai' <<<"$bodies" && { echo "refused again"; break; }
+  grep -q 'did not have any reviewable changes' <<<"$bodies" && { echo "nothing to review"; break; }
   sleep 30
 done
 ```
 
-Stop on a conclusive outcome — the count rising, or a fresh refusal — rather than on a fixed number
-of iterations. An iteration cap that expires mid-cooldown looks identical to a silent failure.
+Stop on a conclusive outcome — the count rising, a fresh refusal, or nothing reviewable — rather than
+on a fixed number of iterations. An iteration cap that expires mid-cooldown looks identical to a
+silent failure, and omitting the third case makes a whitespace-only diff burn the whole window.
 
 Then re-ping **once**, after the deadline has actually passed, and confirm with the three signals
 below. If that ping is refused again, the window was longer than advertised: recompute from the new
@@ -391,21 +393,36 @@ comment at all**. Use instead:
 - the CodeRabbit **review count** rising above the baseline you recorded before pinging
   (`gh api repos/<owner>/<repo>/pulls/<pr>/reviews`), and
 - **unresolved review threads** (`reviewThreads` via GraphQL, `isResolved == false`), and
-- the summary comment showing neither `rate limited by coderabbit.ai` nor
-  `review in progress by coderabbit.ai`.
+- the summary comment carrying none of the non-review markers in the table below.
 
 Read the newest review's **body** as well as its inline comments.
 
-**Poll until one of exactly two things is certain: the review completed, or it was rate-limited.**
-Nothing else ends the wait. A zero read once is not an answer — the review count sits at the baseline
-for as long as the review takes, so an early zero is indistinguishable from "never ran" and reporting
-it as the latter is simply wrong. The `Review finished` acknowledgement is not the signal either; it
-lands seconds after any ping, including one that reviewed nothing.
+**Every outcome a ping can have.** The review count rises for exactly one of them, so a loop keyed on
+the count alone hangs on all the others. Grep the summary comment body for the marker instead — the
+first three are measured here, the rest are read from upstream and marked as such.
 
-Two states in particular look like completion and are not: an "✅ Action performed / Review finished"
-comment on a repository with auto-review disabled, and a `pass` check whose summary says
-`Review rate limited`. Distinguish them with the three signals above, not the checks list. And do not
-report the outcome of a review still in flight — say it is still running, or wait.
+| Outcome | How you know | Ends the wait? |
+| --- | --- | --- |
+| Reviewed, findings | count > baseline | yes — triage them |
+| Rate-limited | `rate limited by coderabbit.ai` | yes — cool down, re-ping |
+| Merged PR | `Review failed` / `The pull request is closed` | yes — CodeRabbit is done, forever |
+| Nothing reviewable | `did not have any reviewable changes` | yes — that *is* the review |
+| Still running | `review in progress by coderabbit.ai` | no — keep waiting |
+| Reviewed clean | count > baseline, no findings *(unobserved — assumed to raise the count like any other review)* | yes |
+| Draft PR | *(unverified: `drafts` defaults false, so drafts are excluded from auto-review; whether an explicit ping overrides that is untested — mark the PR ready before pinging)* | — |
+
+`Review skipped` appears in two of these with opposite meanings, so read what follows it:
+`automatic reviews are disabled` in the checks list is the nothing-happened state, while
+`did not have any reviewable changes` in the summary comment is a finished review of a diff with
+nothing in it — a pure deletion earns that, and its count never moves.
+
+The rest of `.coderabbit.yaml`'s skip triggers cannot fire here: no `path_filters`, `base_branches`
+or `ignored_titles` are configured, and the auto-pause after N reviewed commits applies to
+incremental auto-review, which is off.
+
+**A zero read once is not an answer.** The count sits at the baseline for as long as the review takes,
+so an early zero is indistinguishable from "never ran". Do not report the outcome of a review still in
+flight — say it is still running, or wait.
 
 For each comment:
 
