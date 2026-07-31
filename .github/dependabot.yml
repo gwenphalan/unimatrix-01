@@ -164,8 +164,11 @@ updates:
       # The same `nginx` pin repeats across every app with an nginx runtime
       # stage (`grep -l '^FROM nginx' apps/*/Dockerfile`); without grouping,
       # one bump arrives as a near-identical PR per app. It is pinned
-      # `tag@sha256:` and Dependabot updates both halves, so the digest does not
-      # freeze the image — it stops the tag being repointed under a build.
+      # `tag@sha256:`, which fixes two different timescales. Within a commit the
+      # digest decides exactly which image builds, so a tag repointed upstream
+      # cannot change what rebuilding that commit produces. Across commits
+      # Dependabot updates tag and digest together, so the pin still tracks
+      # upstream instead of freezing on this image.
       docker-minor-patch:
         patterns:
           - "*"
