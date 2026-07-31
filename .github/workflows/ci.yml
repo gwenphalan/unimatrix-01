@@ -66,6 +66,25 @@ jobs:
       - name: Stale comments
         run: node ./infra/scripts/check-stale-comments.mjs
 
+      # The repo's shell reaches no other static analysis: CodeQL has no shell
+      # extractor, `.claude/` is in no pnpm workspace so turbo never sees it, and
+      # prettier has no bash parser. A step in `Verify` rather than a job of its
+      # own, for the same reason as the gates above — `Verify` is already
+      # required on `main`, so a new job would need arming as a required check
+      # before it gated anything.
+      #
+      # `git ls-files` rather than a committed list of paths, so a script added
+      # later is covered without anyone remembering this file. It finds only
+      # `*.sh`; an extension-less script with a shebang is not checked.
+      #
+      # Uses the runner image's shellcheck rather than an action. GitHub's
+      # ubuntu-24.04 image ships 0.9.0 and this repo already leans on that image
+      # having Docker preinstalled in the `Images` job below.
+      - name: Shellcheck
+        run: |
+          shellcheck --version
+          git ls-files '*.sh' | xargs -r shellcheck
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
