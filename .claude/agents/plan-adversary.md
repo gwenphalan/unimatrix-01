@@ -53,10 +53,13 @@ For each finding: **what the plan claims**, **what the code shows** with the `fi
 it, and **what it breaks** — the concrete failure, not "this could be a problem". A finding without
 a file reference is a suspicion; label it as one or drop it.
 
-End with one line, exactly one of:
+Then say what you could not check, plainly. A gap you do not mention reads as a clean bill of health.
+
+**The last line is the verdict**, exactly one of:
 
 - `PROCEED` — you tried and could not break it
 - `PROCEED WITH CHANGES` — the findings are real but bounded, and the listed fixes cover them
 - `DO NOT PROCEED` — the plan rests on something false, or would violate a stated boundary
 
-Then say what you could not check, plainly. A gap you do not mention reads as a clean bill of health.
+Nothing follows it. The caller reads the final line to decide whether to build, so a gap report
+after the verdict is a gap report that changes nothing.

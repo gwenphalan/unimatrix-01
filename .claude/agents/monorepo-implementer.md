@@ -26,7 +26,7 @@ the workspace or surface rather than a file. No commit may leave the tree broken
 **Never push to `main`,** and never `git stash` bare — this repo runs multiple worktrees against one
 stash stack. Set work aside with a WIP commit instead.
 
-End each commit message with the attribution trailer for the acting agent.
+End each commit message with a `Co-Authored-By` trailer naming the acting agent or model.
 
 ## Verifying
 

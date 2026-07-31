@@ -19,6 +19,13 @@ Read the dev command out of the workspace's own `package.json` rather than guess
 it — which apps a bare `pnpm dev` starts is stated in the root `AGENTS.md` and changes as apps are
 added. If no browser is running, start one; that is part of this job, not a blocker to report.
 
+**`packages/ui` and `packages/chrome` have no dev command to read** — verified: neither
+`package.json` defines a `dev` script, so the rule above dead-ends on the two workspaces this agent
+is named for. They are only ever seen through a consuming app, so pick one: grep `apps/` for an
+import of the changed export, take the app that has it, and name the route that renders it. Start
+*that* app's dev server. A shared-package change you could not reach from any route is
+`FAILED TO RENDER` with the reason — an export nothing renders is where this check is worth most.
+
 Each app pins its own dev port with `strictPort: true`, so a collision refuses to start rather than
 quietly answering on another origin. If the server will not start, that is a finding — report it
 rather than working around it by changing the port.

@@ -23,13 +23,19 @@ does not appear in the main-branch list, and the `CodeQL` check can go red on on
 workflow itself succeeded.
 
 ```sh
-gh api "repos/<owner>/<repo>/code-scanning/alerts?ref=refs/pull/<pr>/merge&state=open" \
+gh api --paginate "repos/<owner>/<repo>/code-scanning/alerts?ref=refs/pull/<pr>/merge&state=open" \
   --jq '.[] | "\(.rule.security_severity_level // .rule.severity)\t\(.tool.name)\t\(.rule.id)\t\(.most_recent_instance.location.path):\(.most_recent_instance.location.start_line)"'
 ```
 
+**`--paginate` is load-bearing.** This endpoint returns 30 per page, so without it a repo with more
+alerts than that silently reports a short list — and a truncated list here reads as "clean", which is
+the one wrong answer this agent must never give. Do not reach for `--slurp`: `gh` rejects it
+outright with `the --slurp option is not supported with --jq or --template`. `--paginate` applies the
+`--jq` filter per page and concatenates, which is what you want.
+
 Then fetch the same list **without** `?ref=` — that is what is already open on `main`, and it is a
 different list. An alert present in both was not caused by this diff, and reporting it as though it
-were sends someone to fix an unrelated thing.
+were sends someone to fix an unrelated thing. It needs `--paginate` for the same reason.
 
 Read `.tool.name`. This repo runs CodeQL and OSSF Scorecard. **A Scorecard finding is a posture
 recommendation about the repository, not a defect in the diff** — report it separately and never as
