@@ -71,6 +71,12 @@ this file holds the mechanics, each of which was learned the hard way.
   landed, and a prose claim that names no file is invisible to it.
 - Each was validated by breaking it on purpose, not by watching it pass. A check that
   cannot be shown to fail is not known to work.
+- **`Verify` shellchecks every tracked `*.sh`, and nothing local does.** `pnpm check` and
+  `pnpm verify` do not run it — measured, they differ by one word and neither word is this one — so
+  an agent can edit a script, watch the normal gate go green, and redden a required check on a lint
+  it never saw. Run `shellcheck` yourself on any script you touch. It is not installed on the
+  owner's machine; `pnpm dlx shellcheck` fetches 0.11.0 while the runner image supplies 0.9.0, so
+  clean locally is a strong hint and not a proof.
 - Two workflows serve `lab`. `Prototypes guard` (job `No prototypes on main`) runs on **every**
   pull request to `main` with no `paths:` filter and fails when the diff adds a file under
   `lab/prototypes/` — the `.gitkeep` and `README.md` scaffolding are allow-listed. The filter is
