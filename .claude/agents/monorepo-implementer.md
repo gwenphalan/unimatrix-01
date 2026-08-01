@@ -61,8 +61,7 @@ it as written.
 and carry on. Reporting first is the load-bearing half: a failed preload breaks silently, and an
 agent that quietly self-invokes leaves nothing pointing at the breakage. Check for the skill's own
 heading, `# Writing docs in this repo`, and not for a vague sense that you know the prose rules — the
-root `CLAUDE.md` paraphrases them at length, so that sense is present either way and has produced the
-wrong answer here twice.
+root `CLAUDE.md` paraphrases them at length, so that sense is present either way.
 
 `composing-context` is deliberately *not* preloaded. It governs agent-facing context — an `AGENTS.md`,
 a skill, anything an agent loads. If the plan has you editing one of those, say so and hand that edit
