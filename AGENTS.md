@@ -104,7 +104,7 @@ The packages below sit deliberately below `latest`. Each has a reason that is no
 
 ## CI And Automation
 - `main` accepts changes by pull request only. `Verify`, the five `Images (*)` matrix checks, `Review dependency changes`, `Analyze`, and `CodeQL` are required status checks; merges are squash-only with required linear history; work on a branch and open a PR
-- **Never add self-hosted Actions runners** — this repo is public, so fork PRs would execute untrusted code on the owner's hardware
+- **Never add self-hosted Actions runners on the owner's hardware** — this repo is public, so fork PRs would execute untrusted code on the home lab. A third-party managed runner is not that, and every workflow uses one: `blacksmith-4vcpu-ubuntu-2404`. `check-runner-labels.mjs` allowlists it by name and fails any other label
 - Pin third-party actions to a commit SHA with the version in a trailing comment
 - Adding a Dockerfile means adding it to CI's `Images` matrix **and** to the required checks, or it is unverified
 - **CodeRabbit reviews nothing unless asked** (`.coderabbit.yaml` sets `reviews.auto_review.enabled: false`), and a passing check does not mean it ran — a rate-limited run reports `pass`. It also **refuses a merged PR outright**, so merging unreviewed forfeits the review permanently rather than deferring it. Those three are the ones that cost you silently; the mechanics — how to confirm a real review, when to spend the single ping, the cooldown arithmetic, and what the ack does and does not prove — are in the `ship-pr` skill
