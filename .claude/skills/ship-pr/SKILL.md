@@ -425,20 +425,25 @@ against the baseline you recorded before pinging
 (`.claude/skills/ship-pr/scripts/review-count.sh`), unresolved threads
 (`reviewThreads` via GraphQL, `isResolved == false`), and the summary comment's markers.
 
+**The count only moves when there were findings.** A review that comes back clean leaves it exactly
+where it was, so `count == baseline` is ambiguous between "still running", "never ran" and "ran and
+found nothing" — and only the summary comment tells them apart. Never treat a flat count as evidence
+either way.
+
 **Every outcome a ping can have.** The count rises for exactly one of them, so a loop keyed on the
-count alone hangs on all the others. The first five are measured here; the rest are read from
-upstream and marked as such.
+count alone hangs on all the others. Everything but the last row is measured here; that one is read
+from upstream and marked as such.
 
 | Outcome | How you know | Ends the wait? |
 | --- | --- | --- |
 | Reviewed, findings | count > baseline | yes — triage them |
+| Reviewed clean | `No actionable comments were generated in the recent review` — **count stays at baseline** | yes |
 | Rate-limited | `rate limited by coderabbit.ai` | yes — cool down, re-ping |
 | Merged PR | `Review failed` / `The pull request is closed` | yes — CodeRabbit is done, forever |
 | Head moved mid-review | `Review failed` / `The head commit changed during the review from <a> to <b>` | yes — see below |
 | Ping never registered | `Review skipped` / `Auto reviews are disabled` posted *after* your ping | yes — re-ping, nothing was spent |
 | Nothing reviewable | `did not have any reviewable changes` | yes — that *is* the review |
 | Still running | `review in progress by coderabbit.ai` | no — keep waiting |
-| Reviewed clean | count > baseline, no findings *(unobserved — assumed to raise the count like any other review)* | yes |
 | Draft PR | *(unverified: `drafts` defaults false, so drafts are excluded from auto-review; whether an explicit ping overrides that is untested — mark the PR ready before pinging)* | — |
 
 **A ping can be swallowed with no marker at all.** Observed here: `@coderabbitai review` drew no ack
@@ -461,9 +466,11 @@ The rest of `.coderabbit.yaml`'s skip triggers cannot fire here: no `path_filter
 or `ignored_titles` are configured, and the auto-pause after N reviewed commits applies to
 incremental auto-review, which is off.
 
-**A zero read once is not an answer.** The count sits at the baseline for as long as the review takes,
-so an early zero is indistinguishable from "never ran". Do not report the outcome of a review still in
-flight — say it is still running, or wait.
+**A zero read once is not an answer — and a zero read forever is not one either.** The count sits at
+the baseline for as long as the review takes, so an early zero is indistinguishable from "never ran".
+But a clean review never moves it, so waiting for it to rise can outlast the review by the whole
+timeout. Both readings are settled the same way: by the summary comment, not the count. Do not report
+the outcome of a review still in flight — say it is still running, or wait.
 
 **Reply to every item** — the ones you fixed, the ones you refuted, and the ones you are deliberately
 not acting on. A thread with no reply is indistinguishable from a thread nobody read, and the owner
