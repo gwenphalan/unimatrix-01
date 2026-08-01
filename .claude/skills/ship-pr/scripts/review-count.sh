@@ -53,6 +53,12 @@ pr=$2
 if [ -n "${SHIP_PR_REVIEWS_FIXTURE:-}" ]; then
   jq '[.[] | select(.user.login == "coderabbitai[bot]")] | length' "$SHIP_PR_REVIEWS_FIXTURE"
 else
-  gh api "repos/$repo/pulls/$pr/reviews" \
-    --jq '[.[] | select(.user.login=="coderabbitai[bot]")] | length'
+  # `--jq` runs per page, so an aggregating filter behind `--paginate` prints one
+  # integer per page and the caller's `[ "$n" -gt "$base" ]` dies on a multi-line
+  # operand. Stream the objects out and slurp them back into one array, the same
+  # shape coderabbit-deadline.sh uses. Held in a variable rather than piped, so a
+  # failed `gh` exits with its own status instead of feeding jq an empty stream
+  # and printing a confident 0.
+  raw=$(gh api "repos/$repo/pulls/$pr/reviews" --paginate --jq '.[]')
+  jq -s '[.[] | select(.user.login=="coderabbitai[bot]")] | length' <<<"$raw"
 fi

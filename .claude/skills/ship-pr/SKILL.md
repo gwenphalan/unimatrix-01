@@ -146,14 +146,15 @@ reviewer pointed at a branch that then goes red reviews code you are about to ch
 either wastes the review or costs a second one. This is not a formality: CodeQL and the `Images`
 matrix both land well after the PR opens, and CodeQL can fail on a *new* alert introduced by the diff
 even when its own workflow succeeds, so "the PR opened without complaint" tells you nothing yet. Wait
-for green, then ping.
+for green, then arm the waiter.
 
 So the pre-merge check goes to a reader with no path back to this conversation. Pick by what the
 change is:
 
-1. **CodeRabbit is the default, and you request it yourself.** Ping it once the diff is final *and*
-   the required checks are green (see the section below for the exact mechanics and why timing
-   matters). It is the only reviewer that is a *different tool* rather than a different context, so it
+1. **CodeRabbit is the default, and you request it yourself** — by arming `wait-coderabbit.sh`, which
+   posts the ping, once the diff is final *and* the required checks are green (see the section below
+   for the exact mechanics and why timing matters). It is the only reviewer that is a *different tool*
+   rather than a different context, so it
    does not share your model's blind spots — that is what makes it the first choice rather than the
    consolation prize.
 
@@ -297,8 +298,9 @@ not in context until you fetch it; that is why the choice is stated here rather 
 .claude/skills/ship-pr/scripts/watch-checks.sh <pr>
 ```
 
-**Run them in parallel.** The checks watch and the CodeRabbit wait below are separate monitors armed
-at the same time; neither has to finish before the other starts.
+**Arm the checks watch first and the CodeRabbit wait after it goes green.** The waiter posts the ping
+itself, and a ping fired while CI is still running spends a slot on code a red check is about to
+change.
 
 If a check fails for a reason unrelated to the diff (flake, infrastructure), say so explicitly rather
 than silently re-running.
@@ -313,18 +315,24 @@ the cooldown and re-ping" below.
 
 ### Ask for the review — it does not run automatically
 
-`.coderabbit.yaml` sets `reviews.auto_review.enabled: false`. Comment **`@coderabbitai full review`**
-once, when the diff is finished and every required check is green — batch every outstanding fix into
-one push first, and never ping while CI is still running. A ping at PR-open is the common mistake:
-the checks have not reported yet, so a red one arrives afterwards and the review you just spent
-covers code you are about to change.
+`.coderabbit.yaml` sets `reviews.auto_review.enabled: false`, so a review happens only when asked
+for. **Ask by arming `wait-coderabbit.sh` — it posts `@coderabbitai full review` itself.** Do not
+type the ping as well; the section below covers what a second ping costs.
+
+Arm it once, when the diff is finished and every required check is green — batch every outstanding
+fix into one push first. Arming at PR-open is the common mistake: the checks have not reported yet,
+so a red one arrives afterwards and the review you just spent covers code you are about to change.
 
 **The "✅ Action performed / Review finished" ack carries no information — not that a review ran, and
-not that one failed.** It lands within seconds of *any* ping, identical every time, and CodeRabbit
-then **edits that same comment** minutes later into the real outcome: the review, or a rate-limit
-warning. Reading a fast ack as failure is how a real review gets missed; reading it as success is how
-an unreviewed PR gets merged. **Confirm by state**, using the table under "Confirming a review
-actually ran".
+not that one failed.** It lands within seconds of *any* ping, identical every time, and it is **not**
+edited afterwards: measured on PR #185, the ack body was byte-identical before and after the review,
+and the outcome landed in a separate summary comment. So watching the ack for a change waits forever.
+Reading a fast ack as failure is how a real review gets missed; reading it as success is how an
+unreviewed PR gets merged. **Confirm by state**, using the tables under "Confirming a review actually
+ran".
+
+The one thing the ack does carry is a receipt: `<!-- CodeRabbit review command invocation: <uuid> -->`
+in its body, one per ping. Two acks with different uuids are two pings.
 
 **CodeRabbit will not review a merged PR — there is no second chance.** A ping on one gets
 `✅ Action performed` / `Full review finished.`, with no rate-limit marker and the count still at
@@ -349,8 +357,10 @@ limit.
 **One CodeRabbit review per PR**, not one per push. Once it has *reviewed*, that PR's budget is
 spent: fix what it found, push, and merge on the required checks **without** asking it to look again.
 A finding too large to fix inside this PR's scope becomes a follow-up PR with its own single review.
-Every run spends a per-developer slot and Pro Plus limits are adaptive, so sustained pinging makes
-them *tighter* — a wasted slot is not recoverable for minutes to hours.
+Every run spends a per-developer slot, and a wasted slot is not recoverable for minutes to hours.
+(*Unverified*: that this installation is on Pro Plus, and that its limits are adaptive so sustained
+pinging makes them tighter. `@coderabbitai configuration` on an open PR reports the plan; nobody has
+run it here.)
 
 **A refused ping does not count as the review.** Rate-limited means nothing was read, so re-pinging
 after the cooldown is still the *first* review, not a second one. Only a ping that actually produced
@@ -372,6 +382,9 @@ same PR, before and after a manual ping:
 | --- | --- |
 | `Review skipped: automatic reviews are disabled` | nothing ran — `.coderabbit.yaml` sets `auto_review.enabled: false`, so this is every PR's resting state |
 | `Review completed` | a review ran |
+
+This is the same commit status tabled in full under "Confirming a review actually ran" below, seen
+through the checks list instead of the API.
 
 So a green `CodeRabbit` row read at a glance is the thing most likely to wave an unreviewed merge
 through, and reading it *early* is how you conclude the check is meaningless — it is not, it is just
@@ -418,24 +431,23 @@ arrives on someone else's schedule, with no way to know which of five endings it
 .claude/skills/ship-pr/scripts/wait-coderabbit.sh <owner/repo> <pr>
 ```
 
-**Do not also re-ping by hand.** The script does the cooldown arithmetic itself and posts exactly one
-re-ping — whether the refusal arrives while it is running or was already there when you armed it. A
-manual ping alongside it is a second ping against an adaptive limit, and it moves the marker the
-script is sleeping on, so the automatic one then fires early into a live window and burns the retry
-cap on a refusal. Arm it and leave it alone.
+**Arm it and do not ping — it pings for you.** It takes the review-count baseline and pins the head
+sha first, then posts `@coderabbitai full review` and records GitHub's own timestamp for it. That
+timestamp is the whole discriminator afterwards, which is why the ping has to be the script's: a
+manual one alongside it is a second slot spent, and it moves the marker the script does its cooldown
+arithmetic on, so the automatic re-ping then fires early into a live window and burns the retry cap
+on a refusal.
 
-Start it **before** posting the *first* ping: it records the review-count baseline and the `since=`
-timestamp first, and both have to predate that ping. `--help` carries why, and every outcome it
-prints.
+A cooldown that is already live when you arm it is ridden out *before* the first ping, so the ping is
+spent on the far side of it. That first ping does not consume the retry: the cap counts refusals
+absorbed, not pings posted. If its one automatic re-ping is refused too, it stops and says so — the
+window was longer than advertised. Two refusals in a row on a lengthening window is the point to stop
+*waiting*; it is not itself a reason to merge. That still turns on the exceptions above, and where
+none of them holds it is the owner's call, because merging forfeits the review permanently rather
+than deferring it.
 
-If its one re-ping is refused too, it stops and says so — the window was longer than advertised. Two
-refusals in a row on a lengthening window is the point to stop *waiting*; it is not itself a reason
-to merge. That still turns on the exceptions above, and where none of them holds it is the owner's
-call, because merging forfeits the review permanently rather than deferring it.
-
-Three cases it reports and does **not** act on, where the ping is yours to make: a marker whose
-deadline has already lapsed, one whose countdown it cannot read, and any run with
-`SHIP_PR_AUTO_REPING=0`. Each prints a line saying so.
+The one case where the ping is yours: `SHIP_PR_AUTO_REPING=0` on a PR whose cooldown is live at arm
+time. It says so and exits without posting anything. `--help` carries every outcome it prints.
 
 Cooldowns here have run to minutes, not hours, and a five-minute wait has bought a review that found a
 real defect. Waiting is usually the cheap side of this trade.
@@ -444,7 +456,7 @@ real defect. Waiting is usually the cheap side of this trade.
 
 **Do not count inline comments.** Findings can arrive as "outside diff range" body text with no
 inline comment at all, so read the newest review's **body** too. Read instead: the review count
-against the baseline you recorded before pinging
+against the baseline taken before the ping
 (`.claude/skills/ship-pr/scripts/review-count.sh`), unresolved threads
 (`reviewThreads` via GraphQL, `isResolved == false`), and the summary comment's markers.
 
@@ -464,23 +476,48 @@ from upstream and marked as such.
 | Rate-limited | `rate limited by coderabbit.ai` | yes — cool down, re-ping |
 | Merged PR | `Review failed` / `The pull request is closed` | yes — CodeRabbit is done, forever |
 | Head moved mid-review | `Review failed` / `The head commit changed during the review from <a> to <b>` | yes — see below |
-| Ping never registered | `Review skipped` / `Auto reviews are disabled` posted *after* your ping | yes — re-ping, nothing was spent |
+| Ping never registered | the commit status below reads `Review skipped: ...` with an `updated_at` **later than** the ping | yes — re-ping, nothing was spent |
 | Nothing reviewable | `did not have any reviewable changes` | yes — that *is* the review |
 | Still running | `review in progress by coderabbit.ai` | no — keep waiting |
 | Draft PR | *(unverified: `drafts` defaults false, so drafts are excluded from auto-review; whether an explicit ping overrides that is untested — mark the PR ready before pinging)* | — |
 
-**The waiter can merge for you on the clean row, and only that row.** `SHIP_PR_AUTO_MERGE=1` arms
-GitHub's native auto-merge when the review comes back clean; GitHub then squashes once every required
-check passes, so nothing here re-verifies green or races a branch that goes `BEHIND`. It is off by
-default because this waiter is armed on every PR, and a default-on merge would land work nobody chose
-to land. No other row qualifies: a refusal read nothing, a review with findings is not clean, and
-`did not have any reviewable changes` is an unreviewed merge in a clean one's clothes.
+**The best signal in this section is a commit status, and it is not in the checks list you read from
+`required-checks.sh`.** CodeRabbit posts one on the head sha through the legacy status API, context
+`CodeRabbit`. Read it combined, which returns the latest per context:
+
+```sh
+gh api "repos/<owner>/<repo>/commits/<head-sha>/status" \
+  --jq '.statuses[] | select(.context=="CodeRabbit") | "\(.updated_at) \(.description)"'
+```
+
+| Description | What it means |
+| --- | --- |
+| `Review queued` | accepted, nothing started |
+| `Review in progress` | running |
+| `Review skipped: automatic reviews are disabled`, `updated_at` **before** your ping | this repo's resting state, on every PR from the moment it opens |
+| `Review skipped: ...`, `updated_at` **after** your ping | the ping was swallowed |
+| `Review completed` | it stopped — read the summary comment for what it found |
+
+Three traps. **`state` is useless**: measured `success` for both the skip and the completion, so
+never branch on it — the `updated_at` is the whole discriminator. **Statuses are per head sha**, so
+pin the sha you pinged on; a push landing after the review leaves the new head carrying only the
+resting skip. And the vocabulary is **undocumented** — four descriptions across two PRs, absent from
+the yaml reference, the commands guide and the plans page — so treat an absent context as "fall back
+to the summary comment", not as an answer.
+
+**The waiter can merge for you on the clean row, and only that row.** It arms GitHub's native
+auto-merge by default when the review comes back clean, pinned with `--match-head-commit` to the sha
+that was reviewed; GitHub then squashes once every required check passes, so nothing here re-verifies
+green or races a branch that goes `BEHIND`, and a push landing after the review cancels the arm
+instead of merging code nothing read. It declines to arm on a draft PR, on any unresolved review
+thread, and on a PR state it could not read. `SHIP_PR_AUTO_MERGE=0` turns it off. No other row
+qualifies: a refusal read nothing, a review with findings is not clean, and `did not have any
+reviewable changes` is an unreviewed merge in a clean one's clothes.
 
 **A ping can be swallowed with no marker at all.** Observed here: `@coderabbitai review` drew no ack
 and no review, while the PR-open `Review skipped` notice sat above it looking like a reply. The
-discriminator is whether a CodeRabbit comment's `updated_at` moves *after* your ping — filter on
-that, not on the comment list. Re-pinging costs nothing when the count never rose, because nothing
-was read.
+discriminator is time, not position — whether the status or a CodeRabbit comment was written *after*
+your ping. Re-pinging costs nothing when the count never rose, because nothing was read.
 
 **Do not push while a review may still be finishing.** The review body can land minutes before
 CodeRabbit is actually done, and a push in that window aborts the rest with
@@ -492,9 +529,12 @@ nothing-happened state; in the **summary comment**, followed by `did not have an
 changes`, it is a finished review of a diff with nothing in it — a pure deletion earns that, and its
 count never moves.
 
-The rest of `.coderabbit.yaml`'s skip triggers cannot fire here: no `path_filters`, `base_branches`
-or `ignored_titles` are configured, and the auto-pause after N reviewed commits applies to
-incremental auto-review, which is off.
+`did not have any reviewable changes` is therefore **reachable on a normal PR**, not only on a pure
+deletion: `.coderabbit.yaml` sets `reviews.path_filters` excluding generated paths, so a PR touching
+only those has nothing left for CodeRabbit to read. Read that outcome as a real answer, not a fault.
+The other skip triggers still cannot fire here — no `base_branches` or `ignored_titles` are
+configured, and the auto-pause after N reviewed commits applies to incremental auto-review, which is
+off.
 
 **A zero read once is not an answer — and a zero read forever is not one either.** The count sits at
 the baseline for as long as the review takes, so an early zero is indistinguishable from "never ran".
