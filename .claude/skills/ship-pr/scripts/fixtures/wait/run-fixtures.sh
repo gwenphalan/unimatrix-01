@@ -25,7 +25,7 @@
 # nothing about which arm was taken. Wall-clock times in the output are
 # normalised, since a cooldown line renders the reader's own clock.
 #
-# Usage: run.sh [name ...]   — no arguments runs every case.
+# Usage: run-fixtures.sh [name ...]   — no arguments runs every case.
 
 set -uo pipefail
 

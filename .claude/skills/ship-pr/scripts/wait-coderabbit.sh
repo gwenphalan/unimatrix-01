@@ -144,7 +144,7 @@ Environment:
                         the first entry, so an ERROR there exercises the
                         no-baseline exit. The run ends when the list is
                         exhausted. This is how the script is exercised without a
-                        live PR, and `fixtures/wait/run.sh` is that suite with
+                        live PR, and `fixtures/wait/run-fixtures.sh` is that suite with
                         each case's ping placed where the case needs it.
   SHIP_PR_PING_AT       ISO-8601 UTC timestamp standing in for the ping a
                         fixture run does not post. Offline only. Defaults to the
