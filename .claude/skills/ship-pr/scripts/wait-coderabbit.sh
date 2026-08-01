@@ -358,13 +358,6 @@ adopt_ping_at() {
   since=$(date -u -d "@$((ping_epoch - 1))" +%Y-%m-%dT%H:%M:%SZ)
 }
 
-# The CodeRabbit commit status on the pinned head, as
-# "<updated_at><TAB><description>". Takes the fixture directory offline and reads
-# the combined status endpoint live; that endpoint returns the latest status per
-# context, so there is at most one line either way.
-#
-# Empty output is a real state rather than an error: the context is undocumented,
-# so a vocabulary change has to degrade to comment matching rather than hang.
 # Fills `bodies` with CodeRabbit's comment bodies from `comments`, newest first,
 # and only those updated after the ping. Returns 1 when `comments` is not a JSON
 # array, so a bad read reaches the three-strikes exit.
@@ -386,6 +379,13 @@ read_bodies() {
   done
 }
 
+# The CodeRabbit commit status on the pinned head, as
+# "<updated_at><TAB><description>". Takes the fixture directory offline and reads
+# the combined status endpoint live; that endpoint returns the latest status per
+# context, so there is at most one line either way.
+#
+# Empty output is a real state rather than an error: the context is undocumented,
+# so a vocabulary change has to degrade to comment matching rather than hang.
 coderabbit_status() {
   local raw
   if [ -n "${1:-}" ]; then
