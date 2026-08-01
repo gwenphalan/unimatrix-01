@@ -81,6 +81,11 @@ jobs:
       - name: Compose env
         run: node ./infra/scripts/check-compose-env.mjs
 
+      # Same placement rationale. This repo is public, so a runner on the
+      # owner's hardware would execute fork-PR code on the home lab.
+      - name: Runner labels
+        run: node ./infra/scripts/check-runner-labels.mjs
+
       # The repo's shell reaches no other static analysis: CodeQL has no shell
       # extractor, `.claude/` is in no pnpm workspace so turbo never sees it, and
       # prettier has no bash parser. A step in `Verify` rather than a job of its
