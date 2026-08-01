@@ -70,6 +70,22 @@ test("Drill flow: drill and case picker", async ({ page }) => {
   expectNoPageErrors(pageErrors);
 });
 
+test("the algorithm set carries from Learn to Drill", async ({ page }) => {
+  const main = page.locator("main");
+
+  await gotoRoute(page, "/learn");
+  await main
+    .getByRole("radiogroup", { name: "Algorithm set" })
+    .getByRole("radio", { name: "PLL" })
+    .click();
+
+  await gotoRoute(page, "/drill");
+
+  await expect(
+    main.getByRole("radiogroup", { name: "Algorithm set" }).getByRole("radio", { name: "PLL" }),
+  ).toBeChecked();
+});
+
 /**
  * axe covers only one pointer branch per run, and the two coverages are disjoint: Playwright's
  * desktop context is `pointer: fine`, and Lighthouse audits in mobile emulation. Without these the

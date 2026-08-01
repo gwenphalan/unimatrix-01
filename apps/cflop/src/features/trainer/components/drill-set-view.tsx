@@ -6,7 +6,7 @@ import { getAlgorithmSet } from "@/features/algorithms/algorithm-sets";
 import { AlgorithmSetToggle } from "@/features/algorithms/components/algorithm-set-toggle";
 import { PreviewModeToggle } from "@/features/algorithms/components/preview-mode-toggle";
 import { resolvePreviewMode } from "@/features/algorithms/preview-mode";
-import type { AlgorithmSetId } from "@/features/algorithms/types";
+import { useAlgorithmSet } from "@/features/algorithms/use-algorithm-set";
 import { usePreviewMode } from "@/features/algorithms/use-preview-mode";
 import { DrillChooseCasesView } from "@/features/trainer/components/drill-choose-cases-view";
 import { TrainerPanel } from "@/features/trainer/components/trainer-panel";
@@ -14,7 +14,7 @@ import { TrainerPanel } from "@/features/trainer/components/trainer-panel";
 type ViewMode = "drill" | "cases";
 
 export function DrillSetView() {
-  const [setId, setSetId] = useState<AlgorithmSetId>("oll");
+  const { setId, setSetId } = useAlgorithmSet();
   const [mode, setMode] = useState<ViewMode>("drill");
   const { previewMode, setPreviewMode } = usePreviewMode("drill");
   // The stored preference is kept as-is so "two-sided" survives a trip through OLL, but
