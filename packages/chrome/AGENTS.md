@@ -18,8 +18,8 @@
 Source-only, like `@unimatrix/e2e-helpers`. Consumers resolve `src/*.ts` through a Vite alias plus a tsconfig `paths` entry, so this package's tsconfig extends `base.json` rather than `library.json`: `composite` forbids the cross-package `paths` mapping onto `packages/ui/src`, and the emit would be dead weight nothing reads.
 
 ## 5. Working Agreements
-Three wiring requirements in every consuming app. `infra/scripts/check-app-wiring.sh` fails closed on the first two (in `pnpm check`/`pnpm verify` and CI's `Verify`); the third has no mechanical check, and a miss passes lint, typecheck, unit and smoke suites while the layout is visibly broken.
+Two wiring requirements in every consuming app, plus one in this package. `infra/scripts/check-app-wiring.sh` fails closed on the two app-side ones, in `pnpm check`/`pnpm verify` and CI's `Verify` step `App wiring` — but it walks `apps/*` only, so it is not the safety net for every consumer: `lab` carries both requirements and neither is checked there.
 
 - `@source "../../../packages/chrome/src/**/*.{ts,tsx}"` in the app's stylesheet. Tailwind v4 source detection does not reach a sibling package; without it the shell's utilities are never emitted. Check the relative depth actually resolves — a wrong number of `../` is still a valid `@source` line and emits nothing.
 - `@tanstack/react-router` in the app's Vite `dedupe`. Two resolved copies means the shell's `useRouterState` reads a router context the app's `RouterProvider` never wrote to.
-- `@tanstack/react-router` stays a **peer** dependency here, for the same reason.
+- `@tanstack/react-router` stays a **peer** dependency here, so the consuming app supplies the one copy. Nothing checks this: `.syncpackrc.json` exempts peer ranges from the one-version rule, and no script reads `peerDependencies`.
