@@ -114,11 +114,16 @@ Environment:
                         0 to report the refusal and exit as before. Only
                         *acting* is gated; a live marker is reported either way.
   SHIP_PR_AUTO_MERGE    1 to arm GitHub's auto-merge when the review comes back
-                        clean. Default 0. Only a genuine clean review qualifies:
-                        a refusal read nothing, a review with findings is not
-                        clean, and an unreviewable diff is an unreviewed merge
-                        wearing a clean one's clothes. GitHub still waits for
-                        every required check, so this arms rather than merges.
+                        clean (default), 0 to leave the merge to you. Only a
+                        genuine clean review qualifies: a refusal read nothing, a
+                        review with findings is not clean, and an unreviewable
+                        diff is an unreviewed merge wearing a clean one's
+                        clothes. A draft PR and any unresolved review thread each
+                        decline to arm, and so does a PR state that could not be
+                        read. GitHub still waits for every required check, so
+                        this arms rather than merges — and the arm is pinned to
+                        the reviewed head sha, so a push landing after the review
+                        cancels it rather than merging code nothing read.
   SHIP_PR_MAX_COOLDOWN  Longest cooldown to wait out, in seconds. Default 1800.
                         Beyond it the script exits and leaves the call to you.
                         Raise it for an overnight run, where wall-clock is free
@@ -159,7 +164,10 @@ Environment:
 Output, one line, whichever applies:
   reviewed: <base> -> <n>                     the count rose; triage the findings
   reviewed clean, count unchanged at <n>      it ran and found nothing
-  auto-merge armed — GitHub squashes once the required checks pass
+  auto-merge armed on <sha> — GitHub squashes once the required checks pass
+  auto-merge not armed — PR is a draft
+  auto-merge not armed — <n> unresolved threads
+  auto-merge not armed — the PR state could not be read
   auto-merge could NOT be armed — merge by hand
   offline: auto-merge not armed
   review in progress                          said once, then carried by the heartbeat
@@ -268,7 +276,7 @@ status_line=""
 fails=0
 i=0
 auto_reping=${SHIP_PR_AUTO_REPING:-1}
-auto_merge=${SHIP_PR_AUTO_MERGE:-0}
+auto_merge=${SHIP_PR_AUTO_MERGE:-1}
 max_cooldown=${SHIP_PR_MAX_COOLDOWN:-1800}
 # The cap counts refusals ABSORBED, not pings posted. A first ping that had to
 # wait out a pre-existing cooldown is still the first ping — routing it through
@@ -370,27 +378,75 @@ coderabbit_status() {
          | "\(.updated_at)\t\(.description)"' <<<"$raw"
 }
 
+# Unresolved review threads on the PR, as a bare integer. Nothing on failure.
+#
+# A clean summary is not the same as a clear PR: findings can arrive as body text
+# with no inline comment, and a thread left open is a finding nobody answered.
+unresolved_threads() {
+  # shellcheck disable=SC2016  # GraphQL variables, not shell: $owner/$name/$pr
+  # are bound by the -F flags above.
+  gh api graphql -F owner="${repo%%/*}" -F name="${repo##*/}" -F pr="$pr" --jq \
+    '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false)] | length' \
+    -f query='query($owner: String!, $name: String!, $pr: Int!) {
+      repository(owner: $owner, name: $name) {
+        pullRequest(number: $pr) {
+          reviewThreads(first: 100) { nodes { isResolved } }
+        }
+      }
+    }' 2>/dev/null
+}
+
 # Hands the merge to GitHub rather than performing it here. `--auto` waits for
 # every *required* status check on its own, so this never has to re-verify green
 # or race a branch that goes BEHIND mid-wait — the same contract
 # .github/workflows/dependabot-auto-merge.yml relies on.
 #
-# Off unless asked for. This waiter is armed on every PR, so a default-on merge
-# would land work nobody chose to land. Reached only from the clean-review arm:
-# a refusal read nothing and a review with findings is not clean, so neither is
-# a merge signal.
+# Reached only from the clean-review arm: a refusal read nothing, a review with
+# findings is not clean, and an unreviewable diff is an unreviewed merge in a
+# clean one's clothes.
+#
+# `--match-head-commit` is the guard the default carries its weight on. GitHub's
+# auto-merge survives subsequent pushes, which is the entire hazard — pinning the
+# arm to the sha CodeRabbit actually reviewed makes a later push cancel it
+# instead of merging unreviewed code. The sha is printed so that cancellation is
+# not silent.
+#
+# No `--delete-branch`: the repo already sets delete_branch_on_merge, and the
+# flag additionally tries to delete the LOCAL branch, which fails from a
+# worktree.
+#
+# Every path here says which one it took. One generic failure line covered five
+# different situations, and "merge by hand" is not what a reader needs to know
+# when the answer is that the PR is still a draft.
 arm_auto_merge() {
   [ "$auto_merge" -eq 1 ] || return 0
   if [ "$offline" -eq 1 ]; then
     echo "offline: auto-merge not armed"
     return 0
   fi
-  if gh pr merge "$pr" --repo "$repo" --auto --squash --delete-branch >/dev/null 2>&1; then
-    echo "auto-merge armed — GitHub squashes once the required checks pass"
+  local draft threads
+  draft=$(gh pr view "$pr" --repo "$repo" --json isDraft --jq '.isDraft' 2>/dev/null) || draft=""
+  threads=$(unresolved_threads) || threads=""
+  # Fails closed. A state that could not be read is not a state that permits an
+  # unattended merge.
+  if [ -z "$draft" ] || [ -z "$threads" ]; then
+    echo "auto-merge not armed — the PR state could not be read"
+    return 0
+  fi
+  if [ "$draft" = "true" ]; then
+    echo "auto-merge not armed — PR is a draft"
+    return 0
+  fi
+  if [ "$threads" -ne 0 ]; then
+    echo "auto-merge not armed — $threads unresolved threads"
+    return 0
+  fi
+  if gh pr merge "$pr" --repo "$repo" --auto --squash --match-head-commit "$head_sha" >/dev/null 2>&1; then
+    echo "auto-merge armed on $head_sha — GitHub squashes once the required checks pass"
   else
     # Never silent, and never phrased as though it merged. Arming fails for
-    # reasons worth seeing: auto-merge disabled on the repo, a branch GitHub
-    # will not fast-forward, missing permission.
+    # reasons worth seeing: auto-merge disabled on the repo, a branch GitHub will
+    # not fast-forward, missing permission.
     echo "auto-merge could NOT be armed — merge by hand"
   fi
 }
