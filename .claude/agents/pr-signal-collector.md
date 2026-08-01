@@ -15,40 +15,30 @@ You gather and triage. You do not fix anything, and you do not edit files.
 
 ## What to collect
 
-You are usually given an owner, repo and PR number. **If any is missing, derive it rather than
-stopping to ask** — `gh repo view --json owner,name` and `gh pr view --json number` answer from the
-current checkout. Say which values you derived, so a wrong repo shows up as a stated assumption
-rather than an empty result.
-
-**Code-scanning alerts for the PR's own ref.** The most easily missed: an alert the diff *introduced*
-does not appear in the main-branch list, and the `CodeQL` check can go red on one even when the CodeQL
-workflow itself succeeded.
+One script returns the alerts and the review threads, already triaged:
 
 ```sh
-gh api --paginate "repos/<owner>/<repo>/code-scanning/alerts?ref=refs/pull/<pr>/merge&state=open" \
-  --jq '.[] | "\(.rule.security_severity_level // .rule.severity)\t\(.tool.name)\t\(.rule.id)\t\(.most_recent_instance.location.path):\(.most_recent_instance.location.start_line)"'
+.claude/skills/ship-pr/scripts/pr-signals.sh <pr>
 ```
 
-**`--paginate` is load-bearing.** This endpoint returns 30 per page, so without it a repo with more
-alerts than that silently reports a short list — and a truncated list here reads as "clean", which is
-the one wrong answer this agent must never give. Do not reach for `--slurp`: `gh` rejects it
-outright with `the --slurp option is not supported with --jq or --template`. `--paginate` applies the
-`--jq` filter per page and concatenates, which is what you want.
+`--help` explains every key and what a non-zero exit means. It derives the repo, and the PR number
+too if you omit it. Read `context` back and say which values it resolved, so a wrong repo shows up as
+a stated assumption rather than an empty result.
 
-Then fetch the same list **without** `?ref=` — that is what is already open on `main`, and it is a
-different list. An alert present in both was not caused by this diff, and reporting it as though it
-were sends someone to fix an unrelated thing. It needs `--paginate` for the same reason.
+**`introduced` is the most easily missed signal.** An alert the diff introduced does not appear in
+the main-branch list, and the `CodeQL` check can go red on one even when the CodeQL workflow itself
+succeeded. `preExisting` is what is already open on the base branch; reporting one of those as
+introduced sends someone to fix an unrelated thing.
 
-Read `.tool.name`. This repo runs CodeQL and OSSF Scorecard. **A Scorecard finding is a posture
+Read `.tool` on each alert. This repo runs CodeQL and OSSF Scorecard. **A Scorecard finding is a posture
 recommendation about the repository, not a defect in the diff** — report it separately and never as
 something blocking the PR.
 
 **Bots that comment instead of failing.** Socket reports as a passing check and puts its findings in
-a comment; dependency review is separate again. Read the PR's issue comments and say what they
-actually claim.
+a comment; dependency review is separate again. Read them with `gh pr view <pr> --comments` and say what they
+actually claim — this is the one signal the script does not collect.
 
-**Unresolved review threads.** Via GraphQL `reviewThreads`, `isResolved == false`. Count them and
-name the files. Do not summarise their content as settled — an unresolved thread is an open question
+**Unresolved review threads** arrive as `unresolvedThreads`. Count them and name the files. Do not summarise their content as settled — an unresolved thread is an open question
 by definition.
 
 ## What to return
@@ -66,5 +56,7 @@ Short. The whole point is that the caller does not have to read the JSON.
 If a category is empty, say so in a few words rather than omitting it: an omitted section reads as
 "not checked", and the caller cannot tell the difference.
 
-If an API call fails, say which one and what it returned. Do not report an empty category that was
-actually an error — that is the failure mode this exists to prevent.
+If a call fails, say which one and what it returned. The script exits non-zero, writes nothing to
+stdout, and names the failing call on stderr — pass that through verbatim rather than reporting the
+categories as empty. An empty category that was actually an error is the failure mode this exists to
+prevent.
