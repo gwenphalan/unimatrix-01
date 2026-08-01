@@ -73,11 +73,16 @@ esac
 # ---------------------------------------------------------------------------
 
 # A unit counts only if it matches a family regex *and* survives the narrative
-# veto. `pass` is dropped from the reverse alternative alone, so "195 unit tests
-# pass" still matches (noun then verb) while "for a Dockerfile build ... pass
-# `null`" does not (verb then noun, imperative).
+# veto. The forward and reverse alternatives differ on purpose: `pass` is
+# forward-only, so "195 unit tests pass" matches (noun then verb) while "for a
+# Dockerfile build ... pass `null`" does not (verb then noun, imperative).
+#
+# `pass_rev` opens on `\b` and deliberately does not close on one. Without the
+# leading boundary the tail of "bypassing the exception test" reads as a passing
+# test; with a trailing one, `clean` stops matching "cleanly" and takes real
+# claims like "All 27 tasks pass cleanly — lint, typecheck, and tests" with it.
 pass_fwd='(pass|passes|passed|passing|green|clean|succeed|succeeds|succeeded|no errors|zero errors)'
-pass_rev='(passes|passed|passing|green|clean|succeeds|succeeded)'
+pass_rev='\b(passes|passed|passing|green|clean|succeeds|succeeded)'
 narrative='\b(if|would|were|was|had been|stays?|stayed|left|despite|even though|still|should|could|might|but|yet|never|didn.t|does not|doesn.t|failed to|missed)\b'
 
 claim_regex() {
@@ -120,10 +125,16 @@ evidence_regex() {
 # regex already forbids crossing a `.` via `[^.]{0,40}`, so a coarser unit only
 # widens the narrative veto — "195 tests pass. I would have run lint too" would
 # lose a true claim to a `would` in the following sentence.
+#
+# A unit ending in `?` is dropped whole: it is asking, not claiming. The veto is
+# per-sentence, so "Tests pass. Merge it?" keeps its claim, while a single
+# sentence that both reports and asks — "Tests pass — want me to merge?" — loses
+# one. That form is absent from the transcript corpus this was measured against.
 units=$(printf '%s\n' "$message" |
 	awk '/^[[:space:]]*```/ { fence = !fence; next } !fence' |
 	sed 's/\([.!?]\)[[:space:]]/\1\n/g' |
-	grep -viE "$narrative")
+	grep -viE "$narrative" |
+	grep -vE '[?][[:space:]]*$')
 
 claim_list=""
 for family in build gate lint test typecheck; do
