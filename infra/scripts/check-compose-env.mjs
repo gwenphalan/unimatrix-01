@@ -287,9 +287,14 @@ for (const app of pairedApps) {
 
     // No Dockerfile default, so compose is the only source of a value. An empty
     // compose default inlines an empty string at build time and fails in the
-    // browser, not in CI.
-    const emptyDefault = /^\$\{[A-Za-z_][A-Za-z0-9_]*:-\s*\}$/u.test(declared.value);
-    if (emptyDefault || declared.value.length === 0) {
+    // browser, not in CI. `${VAR:-""}` is that same hole spelled differently, so
+    // the default is unquoted before it is measured.
+    const withDefault = /^\$\{[A-Za-z_][A-Za-z0-9_]*:-(.*)\}$/su.exec(declared.value);
+    const isBareReference = /^\$\{[A-Za-z_][A-Za-z0-9_]*\}$/u.test(declared.value);
+    const resolved =
+      withDefault !== null ? stripQuotes(withDefault[1]) : isBareReference ? name : declared.value;
+
+    if (resolved.length === 0) {
       fail(
         `${composeRelPath}:${declared.line} — ${name} resolves to an empty value and ` +
           `${dockerRelPath} gives the ARG no default. Vite inlines the empty string ` +
