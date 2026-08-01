@@ -73,7 +73,9 @@ Fixture runs never post. The re-ping is live-only, and offline runs continue as
 though it landed so the one-retry cap stays exercisable.
 
 Environment:
-  SHIP_PR_POLL_SECONDS  Seconds between polls. Default 30.
+  SHIP_PR_POLL_SECONDS  Seconds between polls. Default 30. Set it to 0 for a
+                        fixture run, which has nothing to wait for and would
+                        otherwise take 30s per entry.
   SHIP_PR_AUTO_REPING   1 to ride out a rate limit and re-ping once (default),
                         0 to report the refusal and exit as before. Only
                         *acting* is gated; a live marker is reported either way.
@@ -124,6 +126,7 @@ Output, one line, whichever applies:
   offline: re-ping suppressed, continuing as if posted
   refused: rate limited                       cool down, recompute, re-ping
   refused: rate limited, cooldown <n>m exceeds threshold
+  refused: rate limited, countdown unreadable — the ping is yours
   refused: rate limited again after one re-ping
   refused: merged, CodeRabbit is done for good
   refused: head commit changed mid-review
@@ -307,10 +310,23 @@ ride_out_cooldown() {
     echo "refused: rate limited"
     return 1
   fi
-  if ! remaining=$(cooldown_remaining); then
-    echo "refused: rate limited"
-    return 1
-  fi
+  # rc=2 is "the marker is there, only the arithmetic is missing", and collapsing
+  # it into rc=1 here reported a plain refusal for a PR whose cooldown simply
+  # could not be read — the startup check keeps the two apart, and `--help`
+  # promises both.
+  local rc
+  remaining=$(cooldown_remaining) && rc=0 || rc=$?
+  case $rc in
+    0) : ;;
+    2)
+      echo "refused: rate limited, countdown unreadable — the ping is yours"
+      return 1
+      ;;
+    *)
+      echo "refused: rate limited"
+      return 1
+      ;;
+  esac
   [ "$remaining" -lt 0 ] && remaining=0
   if [ "$remaining" -gt "$max_cooldown" ]; then
     echo "refused: rate limited, cooldown $((remaining / 60))m exceeds threshold"
@@ -394,6 +410,8 @@ case $startup_rc in
   2) echo "rate-limit marker at arm time, countdown unreadable — polling only" ;;
 esac
 
+started=$(date +%s)
+
 while true; do
   ok=1
   err=""
@@ -411,9 +429,16 @@ while true; do
         err=${entry#ERROR=}
         ;;
       *)
-        n=$(count "$entry/reviews.json")
-        comments=$(cat "$entry/comments.json")
-        body=$(jq -r '.[] | select(.user.login == "coderabbitai[bot]") | .body' <<<"$comments")
+        # Guarded for the same reason the live branch is: a fixture that will not
+        # parse has to land in `ok=0` and reach the three-strikes exit, not kill
+        # the script under `set -e` with jq's stderr and no outcome line.
+        if n=$(count "$entry/reviews.json") && comments=$(cat "$entry/comments.json") &&
+          body=$(jq -r '.[] | select(.user.login == "coderabbitai[bot]") | .body' <<<"$comments"); then
+          :
+        else
+          ok=0
+          err="fixture $entry would not parse"
+        fi
         ;;
     esac
   else
@@ -421,7 +446,14 @@ while true; do
     # readings are taken from it: CodeRabbit's own text, and whether a ping is in
     # the window at all. A parse failure has to land in `ok=0` alongside a failed
     # call, or the three-strikes exit never sees it.
-    if n=$(count) && comments=$(gh api "repos/$repo/issues/$pr/comments?since=$since") &&
+    #
+    # Paginated, because a page is 30 comments oldest-first: on a chatty PR the
+    # outcome comment falls off page 1 and this waits forever on a review that
+    # already finished. `--jq` runs per page, so the objects are streamed out and
+    # slurped back into one array rather than filtered per page — the same shape
+    # coderabbit-deadline.sh uses, and for the same reason.
+    if n=$(count) && raw=$(gh api "repos/$repo/issues/$pr/comments?since=$since" --paginate --jq '.[]') &&
+      comments=$(jq -s '.' <<<"$raw") &&
       body=$(jq -r '.[] | select(.user.login == "coderabbitai[bot]") | .body' <<<"$comments"); then
       :
     else
@@ -516,10 +548,15 @@ while true; do
     # The two cases this used to disambiguate are covered now. A dead script is
     # reported when the stream ends, and running-versus-nothing is a state change
     # printed once above.
+    # Wall clock, not polls × interval. `ride_out_cooldown` sleeps for up to
+    # SHIP_PR_MAX_COOLDOWN inside a single iteration, so the arithmetic version
+    # under-reported by the whole cooldown — the one stretch where a reader most
+    # wants to know how long this has been going.
+    elapsed=$((($(date +%s) - started) / 60))
     if [ "$in_progress" -eq 1 ]; then
-      echo "still waiting, review running, count=$n, $(((i * poll) / 60))m elapsed" >&2
+      echo "still waiting, review running, count=$n, ${elapsed}m elapsed" >&2
     else
-      echo "still waiting, nothing from CodeRabbit yet, count=$n, $(((i * poll) / 60))m elapsed" >&2
+      echo "still waiting, nothing from CodeRabbit yet, count=$n, ${elapsed}m elapsed" >&2
     fi
   fi
 
