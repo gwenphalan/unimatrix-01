@@ -248,11 +248,20 @@ no_baseline() {
 # push landing after the review leaves the new head carrying only this repo's
 # resting skip notice — re-reading the head each poll would read that and call it
 # a swallowed ping. Pinning it means a moved head shows up as a moved head.
+#
+# An empty sha is the same failure as an unreachable one, and louder about it
+# than the exit code is: `--jq` prints nothing and exits 0 when the field is
+# missing, which would leave the status URL as `commits//status` and hand
+# `--match-head-commit` an empty value — the pin this whole design rests on,
+# silently absent.
 if [ "$offline" -eq 1 ]; then
   head_sha=${SHIP_PR_HEAD_SHA:-fixture-head-sha}
-elif ! head_sha=$(gh api "repos/$repo/pulls/$pr" --jq '.head.sha'); then
-  echo "cannot reach GitHub — no head sha, do not wait blind" >&2
-  exit 1
+else
+  head_sha=$(gh api "repos/$repo/pulls/$pr" --jq '.head.sha') || head_sha=""
+  if [ -z "$head_sha" ]; then
+    echo "cannot reach GitHub — no head sha, do not wait blind" >&2
+    exit 1
+  fi
 fi
 
 # Ahead of the baseline call, not after it: a comment landing during that round
