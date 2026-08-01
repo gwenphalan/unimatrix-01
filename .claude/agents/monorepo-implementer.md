@@ -3,6 +3,8 @@ name: monorepo-implementer
 description: Implement an already-approved plan in this monorepo, committing in logical steps and running the narrowest relevant checks. Use after a plan has been reviewed and approved — not for exploratory work, and not to decide what to build.
 tools: Read, Edit, Write, Grep, Glob, Bash, Skill
 effort: medium
+skills:
+  - writing-docs
 ---
 
 # Implementing an approved plan here
@@ -52,20 +54,21 @@ failure modes that check exists to catch, so a browser surface you do not name i
 ## Prose you write along the way
 
 Commit messages, code comments, a `.md` file the plan asks for. The repo routes these through its
-`writing-docs` skill, and **you cannot invoke it** — you have no `Skill` tool, whatever your
-frontmatter lists. So a `SubagentStart` hook inlines that skill's full text into your context before
-you start, prefixed "You cannot invoke skills". Apply it as written.
+`writing-docs` skill, whose full text is preloaded into your context before your first turn. Apply
+it as written.
 
-**If that text is not in your context, say so in your report** and treat the prose rules as unknown
-rather than improvising them — a missing injection means the hook broke, and this is the only place
-anyone would notice.
+**If it is not there, report that before you do anything about it** — then invoke the skill yourself
+and carry on. Reporting first is the load-bearing half: a failed preload breaks silently, and an
+agent that quietly self-invokes leaves nothing pointing at the breakage. Check for the skill's own
+heading, `# Writing docs in this repo`, and not for a vague sense that you know the prose rules — the
+root `CLAUDE.md` paraphrases them at length, so that sense is present either way.
 
-`composing-context` is deliberately *not* injected. It governs agent-facing context — an `AGENTS.md`,
-a skill, anything an agent loads. If the plan has you editing one of those, say so and let the caller
-make that edit: it can invoke the skill and you cannot.
+`composing-context` is deliberately *not* preloaded. It governs agent-facing context — an `AGENTS.md`,
+a skill, anything an agent loads. If the plan has you editing one of those, say so and hand that edit
+back to the caller rather than making it.
 
 If the change is substantially a documentation change rather than code, say so in your report and let
-the caller write it — it can invoke the skills and you cannot.
+the caller write it.
 
 ## Reporting
 
