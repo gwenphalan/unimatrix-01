@@ -144,13 +144,16 @@ Environment:
                         the first entry, so an ERROR there exercises the
                         no-baseline exit. The run ends when the list is
                         exhausted. This is how the script is exercised without a
-                        live PR.
+                        live PR, and `fixtures/wait/run.sh` is that suite with
+                        each case's ping placed where the case needs it.
   SHIP_PR_PING_AT       ISO-8601 UTC timestamp standing in for the ping a
                         fixture run does not post. Offline only. Defaults to the
                         epoch, which puts the ping before every fixture
-                        timestamp; set it between two of them to place a status
-                        or a comment on the resting side of the ping, which is
-                        the only way the resting skip is testable offline.
+                        timestamp — and so switches the discriminator off for
+                        the whole run, since everything then reads as newer than
+                        the ping. Set it between two of them to place a status
+                        or a comment on the resting side, which is the only way
+                        the resting skip is testable offline.
   SHIP_PR_HEAD_SHA      Head sha for a fixture run, which has no PR to read one
                         from. Offline only. Defaults to `fixture-head-sha`.
   SHIP_PR_COMMENTS_FIXTURE
