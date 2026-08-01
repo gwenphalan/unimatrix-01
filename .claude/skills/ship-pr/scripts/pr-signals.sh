@@ -120,8 +120,12 @@ if [ -z "$repo" ]; then
   [ "$status" -eq 0 ] || fail "$status" "gh repo view --json owner,name"
 fi
 
-if ! [[ $pr =~ ^[0-9]+$ ]]; then
-  echo "pr-signals.sh: <pr> must be a number, got '$pr'" >&2
+# Canonical decimal only. A leading zero survives into `prRef` as
+# `refs/pull/0176/merge` — a ref that does not exist, whose alerts query returns
+# `[]` with exit 0 and reads as a clean PR. jq normalises `--argjson pr 0176` to
+# 176, so `context.pr` looks right while the ref it queried was wrong.
+if ! [[ $pr =~ ^[1-9][0-9]*$ ]]; then
+  echo "pr-signals.sh: <pr> must be a positive decimal number, got '$pr'" >&2
   usage >&2
   exit 1
 fi
