@@ -103,9 +103,18 @@ export function LearnPanel({ initialCaseId, previewMode, setId }: LearnPanelProp
         <p className="text-[0.65rem] font-medium tracking-[0.25em] text-muted-foreground/70 uppercase">
           Setup
         </p>
-        {setupMoves ? (
-          <p className="alg-move-string break-words text-muted-foreground">{setupMoves}</p>
-        ) : null}
+        {/*
+          A move string wraps to two lines for some cases and one for others at phone widths, and
+          the panel grew and shrank between cases, shifting the cube and the buttons. Two lines of
+          `.alg-move-string` leading is 3.5rem; reserving it on the wrapper rather than the string
+          keeps the reservation when a case has no setup at all. Coarse pointers only - the
+          strings fit on one line at desktop widths, where this would be a permanent gap.
+        */}
+        <div className="pointer-coarse:min-h-14">
+          {setupMoves ? (
+            <p className="alg-move-string break-words text-muted-foreground">{setupMoves}</p>
+          ) : null}
+        </div>
       </div>
 
       <CaseDiagramView
@@ -121,7 +130,7 @@ export function LearnPanel({ initialCaseId, previewMode, setId }: LearnPanelProp
           <p className="text-[0.65rem] font-medium tracking-[0.25em] text-muted-foreground/70 uppercase">
             Solution
           </p>
-          <p className="alg-move-string break-words">{primaryAlgorithm}</p>
+          <p className="alg-move-string break-words pointer-coarse:min-h-14">{primaryAlgorithm}</p>
         </div>
 
         {alternateAlgorithms.length > 0 ? (

@@ -44,7 +44,11 @@ export function TrainerPanel({
             size={180}
           />
 
-          {setupMoves ? <p className="alg-move-string break-words">{setupMoves}</p> : null}
+          {/* Two lines' worth of leading, so a case whose setup wraps does not move the cube and
+              the Next button. See the same reservation in `learn-panel.tsx`. */}
+          <div className="pointer-coarse:min-h-14">
+            {setupMoves ? <p className="alg-move-string break-words">{setupMoves}</p> : null}
+          </div>
 
           <PanelActionBar
             actions={[
