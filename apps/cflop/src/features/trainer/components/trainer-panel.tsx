@@ -1,8 +1,9 @@
 import { useEffect } from "react";
 
-import { Card, Kbd } from "@unimatrix/ui/public";
+import { Card } from "@unimatrix/ui/public";
 
 import { CaseDiagramView } from "@/features/algorithms/components/case-diagram-view";
+import { PanelActionBar } from "@/features/algorithms/components/panel-action-bar";
 import type { DiagramPreviewMode } from "@/features/algorithms/preview-mode";
 import type { AlgorithmCase, AlgorithmSetId } from "@/features/algorithms/types";
 import { useAlgorithmTrainer } from "@/features/trainer/use-algorithm-trainer";
@@ -45,10 +46,17 @@ export function TrainerPanel({
 
           {setupMoves ? <p className="alg-move-string break-words">{setupMoves}</p> : null}
 
-          <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Kbd>Space</Kbd>
-            Next case
-          </span>
+          <PanelActionBar
+            actions={[
+              {
+                keyLabel: "Space",
+                kind: "act",
+                label: "Next case",
+                onActivate: next,
+                shortLabel: "Next",
+              },
+            ]}
+          />
         </>
       ) : (
         <p className="text-sm text-muted-foreground">

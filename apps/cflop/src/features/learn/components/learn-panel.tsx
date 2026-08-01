@@ -1,8 +1,12 @@
 import { useEffect, useState } from "react";
 import { RiArrowLeftLine, RiArrowRightLine } from "@remixicon/react";
-import { Card, Kbd } from "@unimatrix/ui/public";
+import { Card } from "@unimatrix/ui/public";
 
 import { CaseDiagramView } from "@/features/algorithms/components/case-diagram-view";
+import {
+  PanelActionBar,
+  type PanelAction,
+} from "@/features/algorithms/components/panel-action-bar";
 import type { DiagramPreviewMode } from "@/features/algorithms/preview-mode";
 import type { AlgorithmSetId } from "@/features/algorithms/types";
 import { useLearnSession } from "@/features/learn/use-learn-session";
@@ -31,6 +35,10 @@ export function LearnPanel({ initialCaseId, previewMode, setId }: LearnPanelProp
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
       if (event.repeat) return;
+      // With a keyboard attached to a coarse-pointer device, Space on a focused Back button would
+      // run toggleLearned() and - because preventDefault() here also suppresses the focused
+      // button's own activation - swallow Back entirely. Let the button handle its own keys.
+      if ((event.target as HTMLElement | null)?.closest("[data-panel-action]")) return;
 
       if (event.code === "ArrowLeft") {
         event.preventDefault();
@@ -59,6 +67,34 @@ export function LearnPanel({ initialCaseId, previewMode, setId }: LearnPanelProp
   }
 
   const [primaryAlgorithm, ...alternateAlgorithms] = currentCase.algorithms;
+
+  // Back and Next are offered only when they would actually do something. A case opened from the
+  // grid after being marked learned sits outside the teaching walk, so it has nowhere to go back
+  // or next to - and advertising two dead controls is worse than advertising none.
+  const actions: PanelAction[] = [];
+  if (canGoBack) {
+    actions.push({
+      icon: RiArrowLeftLine,
+      kind: "navigate",
+      label: "Back",
+      onActivate: back,
+    });
+  }
+  actions.push({
+    keyLabel: "Space",
+    kind: "act",
+    label: learned ? "Unmark learned" : "Mark learned",
+    onActivate: toggleLearned,
+    shortLabel: learned ? "Unlearn" : "Learned",
+  });
+  if (canGoNext) {
+    actions.push({
+      icon: RiArrowRightLine,
+      kind: "navigate",
+      label: "Next",
+      onActivate: next,
+    });
+  }
 
   return (
     <Card className="site-panel site-panel-strong flex flex-col items-center gap-6 px-6 py-10 text-center">
@@ -114,33 +150,7 @@ export function LearnPanel({ initialCaseId, previewMode, setId }: LearnPanelProp
         ) : null}
       </div>
 
-      {/*
-        Hints are shown only for keys that would actually do something. A case opened from the
-        grid after being marked learned sits outside the teaching walk, so it has nowhere to go
-        back or next to - and advertising two dead keys is worse than advertising none.
-      */}
-      <div className="flex flex-wrap items-center justify-center gap-4 text-xs text-muted-foreground">
-        {canGoBack ? (
-          <span className="inline-flex items-center gap-1.5">
-            <Kbd>
-              <RiArrowLeftLine aria-hidden="true" className="size-3" />
-            </Kbd>
-            Back
-          </span>
-        ) : null}
-        <span className="inline-flex items-center gap-1.5">
-          <Kbd>Space</Kbd>
-          {learned ? "Unmark learned" : "Mark learned"}
-        </span>
-        {canGoNext ? (
-          <span className="inline-flex items-center gap-1.5">
-            <Kbd>
-              <RiArrowRightLine aria-hidden="true" className="size-3" />
-            </Kbd>
-            Next
-          </span>
-        ) : null}
-      </div>
+      <PanelActionBar actions={actions} />
     </Card>
   );
 }

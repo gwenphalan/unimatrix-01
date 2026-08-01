@@ -70,6 +70,40 @@ test("Drill flow: drill and case picker", async ({ page }) => {
   expectNoPageErrors(pageErrors);
 });
 
+/**
+ * axe covers only one pointer branch per run, and the two coverages are disjoint: Playwright's
+ * desktop context is `pointer: fine`, and Lighthouse audits in mobile emulation. Without these the
+ * coarse-pointer buttons are scanned by nothing.
+ */
+test.describe("coarse pointer", () => {
+  test.use({ hasTouch: true });
+
+  test("Drill offers an on-screen Next", async ({ page }) => {
+    const pageErrors = collectPageErrors(page);
+    const main = page.locator("main");
+
+    await gotoRoute(page, "/drill");
+
+    await expect(main.getByRole("button", { name: "Next", exact: true })).toBeVisible();
+
+    await scanAccessibility(page, "/drill (coarse pointer)");
+    expectNoPageErrors(pageErrors);
+  });
+
+  test("Learn offers on-screen navigation and a learned control", async ({ page }) => {
+    const pageErrors = collectPageErrors(page);
+    const main = page.locator("main");
+
+    await gotoRoute(page, "/learn");
+
+    await expect(main.getByRole("button", { name: "Learned", exact: true })).toBeVisible();
+    await expect(main.getByRole("button", { name: "Next", exact: true })).toBeVisible();
+
+    await scanAccessibility(page, "/learn (coarse pointer)");
+    expectNoPageErrors(pageErrors);
+  });
+});
+
 test("Learn flow: guided session and case picker", async ({ page }) => {
   const pageErrors = collectPageErrors(page);
   const main = page.locator("main");
