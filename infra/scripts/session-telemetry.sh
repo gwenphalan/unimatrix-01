@@ -15,6 +15,13 @@
 # across worktrees and must not be a file a branch can revert.
 set -uo pipefail
 
+# `${HOME}` unset would abort under `set -u` before any of the exit-0 handling
+# below is reachable, which is the one way this script can break session
+# teardown. There is no sensible fallback path for a log nobody would find, so
+# an unset HOME exits quietly — the only silent path here, and unreachable in
+# any environment that can locate a transcript.
+[ -n "${HOME:-}" ] || exit 0
+
 log="${HOME}/.claude/unimatrix-session-log.jsonl"
 mkdir -p "${HOME}/.claude" 2>/dev/null || :
 
@@ -111,8 +118,22 @@ agent_dispatches=0
 browser_verifier=0
 edited=()
 
-# Process substitution, not a pipe. A pipe puts the loop in a subshell and every
-# counter below is silently discarded, producing a line full of zeros.
+# The pass is staged through a file rather than read straight from process
+# substitution, because a substitution's exit status is unavailable: a `jq` that
+# died on a malformed transcript would feed the loop nothing, every counter
+# would stay 0, and the line would report those zeros as measurements. Wrong
+# data in a log read as evidence is worse than no line at all, so a failed pass
+# is declared instead. Output is only the matched tuples, not the transcript, so
+# this stays small even for the 50 MB case.
+#
+# Still not a pipe into the loop: that puts it in a subshell and discards every
+# counter silently.
+jq_out=$(mktemp 2>/dev/null) || degraded mktemp-failed
+jq -r "$jq_program" "$transcript" >"$jq_out" 2>/dev/null || {
+	rm -f "$jq_out"
+	degraded transcript-parse-failed
+}
+
 while IFS=$'\t' read -r kind value; do
 	case "$kind" in
 	compaction) compactions=$((compactions + 1)) ;;
@@ -123,7 +144,8 @@ while IFS=$'\t' read -r kind value; do
 		;;
 	file) [ -n "$value" ] && edited+=("$value") ;;
 	esac
-done < <(jq -r "$jq_program" "$transcript" 2>/dev/null)
+done <"$jq_out"
+rm -f "$jq_out"
 
 # Skill *body-loads*, which is a different number from `Skill` tool calls: a
 # body can arrive by hook injection with no tool call at all, so counting calls
