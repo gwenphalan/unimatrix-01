@@ -375,8 +375,16 @@ report why you spent the slot.
 ### Rate limits, when you do hit one
 
 **A passing CodeRabbit check does not mean the PR was reviewed — the bucket never tells you.** It is
-`pass` either way, and the signal lives in the check's *description*: the same commit status tabled
-under "Confirming a review actually ran" below, seen through the checks list instead of the API.
+`pass` either way. The signal lives in the check's *description*, and only there. Measured on the
+same PR, before and after a manual ping:
+
+| Description | What actually happened |
+| --- | --- |
+| `Review skipped: automatic reviews are disabled` | nothing ran — `.coderabbit.yaml` sets `auto_review.enabled: false`, so this is every PR's resting state |
+| `Review completed` | a review ran |
+
+This is the same commit status tabled in full under "Confirming a review actually ran" below, seen
+through the checks list instead of the API.
 
 So a green `CodeRabbit` row read at a glance is the thing most likely to wave an unreviewed merge
 through, and reading it *early* is how you conclude the check is meaningless — it is not, it is just
