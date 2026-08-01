@@ -364,9 +364,24 @@ report why you spent the slot.
 
 ### Rate limits, when you do hit one
 
-**A passing CodeRabbit check does not mean the PR was reviewed.** A rate-limited run reports `pass`
-with the literal text `Review rate limited` in the checks list — indistinguishable from "reviewed
-clean" at a glance.
+**A passing CodeRabbit check does not mean the PR was reviewed — the bucket never tells you.** It is
+`pass` either way. The signal lives in the check's *description*, and only there. Measured on the
+same PR, before and after a manual ping:
+
+| Description | What actually happened |
+| --- | --- |
+| `Review skipped: automatic reviews are disabled` | nothing ran — `.coderabbit.yaml` sets `auto_review.enabled: false`, so this is every PR's resting state |
+| `Review completed` | a review ran |
+
+So a green `CodeRabbit` row read at a glance is the thing most likely to wave an unreviewed merge
+through, and reading it *early* is how you conclude the check is meaningless — it is not, it is just
+stale until a review finishes. `watch-checks.sh` prints the description for this reason. Every other
+check here has an empty one, so the annotation appears only where it carries information.
+
+Confirm a review from the review itself regardless; the description says one ran, not what it found.
+
+(A rate-limited run is documented upstream as reporting `pass` with the text `Review rate limited`.
+That exact string has not been observed here — treat it as read, not measured.)
 
 1. Check the summary comment for the marker
    (`gh pr view <pr> --json comments`, grep `rate limited`).
@@ -453,6 +468,13 @@ from upstream and marked as such.
 | Nothing reviewable | `did not have any reviewable changes` | yes — that *is* the review |
 | Still running | `review in progress by coderabbit.ai` | no — keep waiting |
 | Draft PR | *(unverified: `drafts` defaults false, so drafts are excluded from auto-review; whether an explicit ping overrides that is untested — mark the PR ready before pinging)* | — |
+
+**The waiter can merge for you on the clean row, and only that row.** `SHIP_PR_AUTO_MERGE=1` arms
+GitHub's native auto-merge when the review comes back clean; GitHub then squashes once every required
+check passes, so nothing here re-verifies green or races a branch that goes `BEHIND`. It is off by
+default because this waiter is armed on every PR, and a default-on merge would land work nobody chose
+to land. No other row qualifies: a refusal read nothing, a review with findings is not clean, and
+`did not have any reviewable changes` is an unreviewed merge in a clean one's clothes.
 
 **A ping can be swallowed with no marker at all.** Observed here: `@coderabbitai review` drew no ack
 and no review, while the PR-open `Review skipped` notice sat above it looking like a reply. The

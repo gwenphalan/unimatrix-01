@@ -68,7 +68,14 @@ though it landed so the one-retry cap stays exercisable.
 Environment:
   SHIP_PR_POLL_SECONDS  Seconds between polls. Default 30.
   SHIP_PR_AUTO_REPING   1 to ride out a rate limit and re-ping once (default),
-                        0 to report the refusal and exit as before.
+                        0 to report the refusal and exit as before. Only
+                        *acting* is gated; a live marker is reported either way.
+  SHIP_PR_AUTO_MERGE    1 to arm GitHub's auto-merge when the review comes back
+                        clean. Default 0. Only a genuine clean review qualifies:
+                        a refusal read nothing, a review with findings is not
+                        clean, and an unreviewable diff is an unreviewed merge
+                        wearing a clean one's clothes. GitHub still waits for
+                        every required check, so this arms rather than merges.
   SHIP_PR_MAX_COOLDOWN  Longest cooldown to wait out, in seconds. Default 1800.
                         Beyond it the script exits and leaves the call to you.
                         Raise it for an overnight run, where wall-clock is free
@@ -97,21 +104,27 @@ Environment:
 Output, one line, whichever applies:
   reviewed: <base> -> <n>                     the count rose; triage the findings
   reviewed clean, count unchanged at <n>      it ran and found nothing
+  auto-merge armed — GitHub squashes once the required checks pass
+  auto-merge could NOT be armed — merge by hand
+  offline: auto-merge not armed
+  review in progress                          said once, then carried by the heartbeat
   live rate-limit marker at arm time, <n>m left
   stale rate-limit marker at arm time, deadline lapsed — polling only
   rate-limit marker at arm time, countdown unreadable — polling only
-  cooling down <n>s, re-pinging at <iso>      riding out a rate limit, then one ping
-  re-pinged after cooldown                    the ping is posted; the wait goes on
+  auto-reping disabled — polling only, the ping is yours
+  cooling down <n>m, re-pinging at <time>     riding out a rate limit, then one ping
+  re-pinged at <time>                         the ping is posted; the wait goes on
   offline: re-ping suppressed, continuing as if posted
   refused: rate limited                       cool down, recompute, re-ping
-  refused: rate limited, cooldown <n>s exceeds threshold
+  refused: rate limited, cooldown <n>m exceeds threshold
   refused: rate limited again after one re-ping
   refused: merged, CodeRabbit is done for good
   refused: head commit changed mid-review
   refused: review failed — read the comment
   refused: skipped — ping did not register    re-ping, nothing was spent
   nothing reviewable — that IS the review
-  still waiting, count=<n>, <m>m elapsed      heartbeat, every 10th poll
+  still waiting, review running, count=<n>, <m>m elapsed        heartbeat
+  still waiting, nothing from CodeRabbit yet, count=<n>, <m>m elapsed
   API ERROR xN (count=<n>) — <message>        three consecutive failures
 
 Exit codes:
@@ -177,14 +190,44 @@ body=""
 fails=0
 i=0
 auto_reping=${SHIP_PR_AUTO_REPING:-1}
+auto_merge=${SHIP_PR_AUTO_MERGE:-0}
 max_cooldown=${SHIP_PR_MAX_COOLDOWN:-1800}
 repinged=0
+# Sticky. CodeRabbit edits its in-progress comment into the outcome, so the text
+# is gone from a later poll while the review is still legitimately running —
+# recomputing this each round would report "nothing yet" mid-review.
+in_progress=0
 
 # Epoch seconds rendered in the reader's own timezone. Every comparison here is
 # epoch arithmetic and every API filter is UTC; this is display only, and a
 # deadline printed in UTC is one the reader has to convert before it means
 # anything.
 local_time() { date -d "@$1" '+%-I:%M:%S %p %Z'; }
+
+# Hands the merge to GitHub rather than performing it here. `--auto` waits for
+# every *required* status check on its own, so this never has to re-verify green
+# or race a branch that goes BEHIND mid-wait — the same contract
+# .github/workflows/dependabot-auto-merge.yml relies on.
+#
+# Off unless asked for. This waiter is armed on every PR, so a default-on merge
+# would land work nobody chose to land. Reached only from the clean-review arm:
+# a refusal read nothing and a review with findings is not clean, so neither is
+# a merge signal.
+arm_auto_merge() {
+  [ "$auto_merge" -eq 1 ] || return 0
+  if [ "$offline" -eq 1 ]; then
+    echo "offline: auto-merge not armed"
+    return 0
+  fi
+  if gh pr merge "$pr" --repo "$repo" --auto --squash --delete-branch >/dev/null 2>&1; then
+    echo "auto-merge armed — GitHub squashes once the required checks pass"
+  else
+    # Never silent, and never phrased as though it merged. Arming fails for
+    # reasons worth seeing: auto-merge disabled on the repo, a branch GitHub
+    # will not fast-forward, missing permission.
+    echo "auto-merge could NOT be armed — merge by hand"
+  fi
+}
 
 # Seconds remaining on the cooldown, from the marker comment's own updated_at
 # plus its countdown. Prints a bare integer, or nothing when the deadline
@@ -292,31 +335,37 @@ ride_out_cooldown() {
 #
 # A fixture run with no comments fixture falls out here without acting, because
 # `cooldown_remaining` refuses to read one.
-if [ "$auto_reping" -eq 1 ]; then
-  startup_remaining=$(cooldown_remaining) && startup_rc=0 || startup_rc=$?
-  case $startup_rc in
-    0)
-      if [ "$startup_remaining" -gt 0 ]; then
-        echo "live rate-limit marker at arm time, $((startup_remaining / 60))m left"
+startup_remaining=$(cooldown_remaining) && startup_rc=0 || startup_rc=$?
+case $startup_rc in
+  0)
+    if [ "$startup_remaining" -gt 0 ]; then
+      echo "live rate-limit marker at arm time, $((startup_remaining / 60))m left"
+      # Detection is not gated on auto_reping — only acting is. Gating the whole
+      # block would make SHIP_PR_AUTO_REPING=0 silent about a live rate limit,
+      # which is the same no-op this block exists to remove and would leave the
+      # operator with nothing to act on.
+      if [ "$auto_reping" -eq 1 ]; then
         ride_out_cooldown || exit 0
       else
-        # Only a positive remainder acts. CodeRabbit never deletes the marker,
-        # so a lapsed one is ambiguous — a dead marker from a review that
-        # already finished looks identical to a window that wants a ping, and
-        # pinging the first spends a slot against an adaptive limit for nothing.
-        # Under-pinging is the recoverable direction.
-        #
-        # Say so rather than falling through quietly. The defect this block
-        # fixes is a silent no-op, and a second one would hide inside it.
-        echo "stale rate-limit marker at arm time, deadline lapsed — polling only"
+        echo "auto-reping disabled — polling only, the ping is yours"
       fi
-      ;;
-    # Marker present, arithmetic unavailable. Same reasoning as the lapsed case:
-    # the PR is rate limited, so silence here would be the very no-op this block
-    # exists to remove.
-    2) echo "rate-limit marker at arm time, countdown unreadable — polling only" ;;
-  esac
-fi
+    else
+      # Only a positive remainder acts. CodeRabbit never deletes the marker, so
+      # a lapsed one is ambiguous — a dead marker from a review that already
+      # finished looks identical to a window that wants a ping, and pinging the
+      # first spends a slot against an adaptive limit for nothing. Under-pinging
+      # is the recoverable direction.
+      #
+      # Say so rather than falling through quietly. The defect this block fixes
+      # is a silent no-op, and a second one would hide inside it.
+      echo "stale rate-limit marker at arm time, deadline lapsed — polling only"
+    fi
+    ;;
+  # Marker present, arithmetic unavailable. Same reasoning as the lapsed case:
+  # the PR is rate limited, so silence here would be the very no-op this block
+  # exists to remove.
+  2) echo "rate-limit marker at arm time, countdown unreadable — polling only" ;;
+esac
 
 while true; do
   ok=1
@@ -361,6 +410,7 @@ while true; do
       # progress text left in the window cannot hold the wait open past the end.
       *"No actionable comments were generated"*)
         echo "reviewed clean, count unchanged at $n"
+        arm_auto_merge
         exit 0
         ;;
       *"rate limited by coderabbit.ai"*)
@@ -384,7 +434,15 @@ while true; do
         echo "refused: review failed — read the comment"
         exit 0
         ;;
-      *"review in progress"*) : ;;
+      *"review in progress"*)
+        # Said once, then carried by the heartbeat. Without it, a running review
+        # and a ping that never registered produce identical output for as long
+        # as the review takes.
+        if [ "$in_progress" -eq 0 ]; then
+          in_progress=1
+          echo "review in progress"
+        fi
+        ;;
       *"Review skipped"* | *"Auto reviews are disabled"*)
         echo "refused: skipped — ping did not register"
         exit 0
@@ -400,7 +458,11 @@ while true; do
 
   i=$((i + 1))
   if [ $((i % 10)) -eq 0 ]; then
-    echo "still waiting, count=$n, $(((i * poll) / 60))m elapsed"
+    if [ "$in_progress" -eq 1 ]; then
+      echo "still waiting, review running, count=$n, $(((i * poll) / 60))m elapsed"
+    else
+      echo "still waiting, nothing from CodeRabbit yet, count=$n, $(((i * poll) / 60))m elapsed"
+    fi
   fi
 
   sleep "$poll"

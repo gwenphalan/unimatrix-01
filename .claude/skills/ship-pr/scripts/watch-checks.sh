@@ -17,6 +17,14 @@ Every terminal bucket is printed — PASS, FAIL and SKIPPING alike. A filter tha
 matched only success would be silent through a failure, and silence is
 indistinguishable from still-running.
 
+A check's description is appended when it has one, because a green bucket does
+not always mean the check did its job. `CodeRabbit` is `pass` either way, and
+only its description separates "Review skipped: automatic reviews are disabled"
+— this repo's resting state, since auto-review is off — from "Review completed".
+Read as a bucket alone it is the line that waves an unreviewed merge through.
+Every other check here has an empty description, so this annotates only the ones
+carrying information.
+
 A failed `gh` call is not an empty result. An expired token returning a
 valid-looking empty list would leave the loop sleeping forever, which is the
 same silence a slow CI run produces. Three consecutive failures print what `gh`
@@ -32,7 +40,8 @@ Environment:
   SHIP_PR_CHECKS_FIXTURES  Colon-separated entries consumed one per iteration in
                            place of the `gh` call. An entry is either a path to
                            a JSON file holding what
-                           `gh pr checks <pr> --json name,bucket` would print,
+                           `gh pr checks <pr> --json name,bucket,description`
+                           would print,
                            the form EXIT8=<path>, standing in for that same JSON
                            returned with the pending status 8, or the form
                            ERROR=<message>, standing in for a failed
@@ -43,7 +52,8 @@ Environment:
                            pending -> terminal transition is exercised.
 
 Output:
-  <BUCKET>  <check-name>   once, the first time that result appears
+  <BUCKET>  <check-name>              once, the first time that result appears
+  <BUCKET>  <check-name>  — <desc>    same, for a check that carries one
   API ERROR xN: <stderr>   three consecutive `gh` failures
   FIXTURES EXHAUSTED       offline runs only
 
@@ -118,7 +128,7 @@ while true; do
         ;;
     esac
   else
-    payload=$(gh pr checks "$pr" --json name,bucket 2>&1) && rc=0 || rc=$?
+    payload=$(gh pr checks "$pr" --json name,bucket,description 2>&1) && rc=0 || rc=$?
   fi
 
   # 8 is `gh pr checks` for "something is still pending", alongside valid JSON —
@@ -130,7 +140,17 @@ while true; do
 
   if [ "$rc" -eq 0 ]; then
     fails=0
-    cur=$(jq -r '.[] | select(.bucket != "pending") | "\(.bucket | ascii_upcase)  \(.name)"' <<<"$payload" | sort)
+    # The description is appended because a green bucket does not always mean the
+    # check did its job. `CodeRabbit` is pass either way; only the description
+    # separates "Review skipped: automatic reviews are disabled" from "Review
+    # completed". Every other check here has an empty description, so printing it
+    # costs no noise and annotates only the checks saying something.
+    cur=$(jq -r '
+      .[]
+      | select(.bucket != "pending")
+      | "\(.bucket | ascii_upcase)  \(.name)"
+        + (if (.description // "") == "" then "" else "  — \(.description)" end)
+    ' <<<"$payload" | sort)
     comm -13 <(printf '%s\n' "$prev") <(printf '%s\n' "$cur")
     prev=$cur
     if jq -e 'length > 0 and all(.[]; .bucket != "pending")' <<<"$payload" >/dev/null 2>&1; then
