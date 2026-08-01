@@ -772,7 +772,11 @@ while true; do
     # the PR", which is true of a marker from a round that finished hours ago —
     # correctness then rests on the order of the arms below rather than on the
     # order of events.
-    for body in "${bodies[@]}"; do
+    # Same `${x+...}` guard as `read_bodies` uses, and needed for the same
+    # reason: `set -u` treats an empty array's expansion as unset on Bash before
+    # 4.4, and a poll that turns up no comments in the window is the ordinary
+    # case rather than an edge — every quiet fixture reaches here with none.
+    for body in ${bodies+"${bodies[@]}"}; do
       case $body in
         # Ahead of "review in progress" within a single body: a clean review
         # never moves the count, so this is the only signal that it finished, and
