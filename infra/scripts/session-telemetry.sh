@@ -135,9 +135,15 @@ done < <(jq -r "$jq_program" "$transcript" 2>/dev/null)
 # invoked inside a subagent never appears here; it lives in
 # `<session-dir>/subagents/agent-*.jsonl`. Main-thread-only is deliberate.
 #
-# The character class must exclude the backslash as well as the space, or the
-# match runs on into the JSON-escaped body sharing the line.
-skills_loaded=$(grep -o 'Base directory for this skill: [^ \"]*' "$transcript" 2>/dev/null |
+# The marker is anchored to the two positions a real body-load occupies: the
+# start of a JSON string, or an escaped newline inside one. Unanchored, prose
+# that merely quotes the marker counts as a load — measured, a transcript
+# discussing a skill path inside backticks contributed a phantom `effort-probe`.
+#
+# The value class must exclude a literal backslash. `[^ \"]` does not, despite
+# looking like it should: names ran on as `problem-solving\n\n#`, which then
+# failed to dedupe against the clean `problem-solving` and inflated the count.
+skills_loaded=$(grep -o '\(["]\|\\n\)Base directory for this skill: [^ "\\]*' "$transcript" 2>/dev/null |
 	sed 's|.*/||' | sort -u | jq -Rsc 'split("\n") | map(select(length > 0))' 2>/dev/null)
 [ -n "$skills_loaded" ] || skills_loaded='[]'
 
