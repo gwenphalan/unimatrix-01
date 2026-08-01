@@ -38,9 +38,10 @@ empirically, not assumed.
 
 **Plain Node resolves the `exports` map too, from any workspace that declares
 the dependency.** Measured from `apps/web`: `node -e "import('@unimatrix/app-config')"`
-returns every export. Type stripping is not engaged — pnpm links the package as
-a symlink and Node resolves realpaths, so the file it strips is
-`packages/app-config/src/index.ts`, outside `node_modules`. From a directory
+returns every export. The `node_modules` type-stripping restriction is not
+engaged — Node still strips the TypeScript, but pnpm links the package as a
+symlink and Node resolves realpaths, so the file it strips is
+`packages/app-config/src/index.ts`, which is outside `node_modules`. From a directory
 with no dependency edge (`apps/api`, the repo root) it fails
 `ERR_MODULE_NOT_FOUND`, because there is no symlink to follow. That is a
 missing dependency, not a stripping refusal. So:
