@@ -98,14 +98,6 @@ export function LearnPanel({ initialCaseId, previewMode, setId }: LearnPanelProp
 
   return (
     <Card className="site-panel site-panel-strong flex flex-col items-center gap-6 px-6 py-10 text-center">
-      <CaseDiagramView
-        cube={cube}
-        label={currentCase.displayName}
-        mode={previewMode}
-        setId={setId}
-        size={180}
-      />
-
       <div className="space-y-1.5">
         <p className="text-[0.65rem] font-medium tracking-[0.25em] text-muted-foreground/70 uppercase">
           Setup
@@ -115,7 +107,15 @@ export function LearnPanel({ initialCaseId, previewMode, setId }: LearnPanelProp
         ) : null}
       </div>
 
-      <div className="w-full max-w-xl space-y-3 border-t border-border/60 pt-5">
+      <CaseDiagramView
+        cube={cube}
+        label={currentCase.displayName}
+        mode={previewMode}
+        setId={setId}
+        size={180}
+      />
+
+      <div className="w-full max-w-xl space-y-3">
         <div className="space-y-1.5">
           <p className="text-[0.65rem] font-medium tracking-[0.25em] text-primary/85 uppercase">
             Solution
