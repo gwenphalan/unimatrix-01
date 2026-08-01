@@ -5,7 +5,8 @@ import { Button, cn, Kbd } from "@unimatrix/ui/public";
 /**
  * A navigate action is an arrow key, an act action is Space. The split is a union rather than
  * optional fields so the rendering rule is a type-level fact: a navigate button is icon-only and
- * has no short word to show, an act button is a word and has no icon.
+ * carries its label as an `aria-label`, an act button shows that same label as its word and has no
+ * icon. Either way one label serves both the key hint and the button, so the two never drift apart.
  */
 export type PanelAction =
   | {
@@ -23,7 +24,7 @@ export type PanelAction =
       label: string;
       onActivate: () => void;
     }
-  | { keyLabel: string; kind: "act"; label: string; onActivate: () => void; shortLabel: string };
+  | { keyLabel: string; kind: "act"; label: string; onActivate: () => void };
 
 export interface PanelActionBarProps {
   actions: PanelAction[];
@@ -88,7 +89,7 @@ function renderAct(action: Extract<PanelAction, { kind: "act" }>) {
         size="lg"
         variant="outline"
       >
-        {action.shortLabel}
+        {action.label}
       </Button>
     </Fragment>
   );

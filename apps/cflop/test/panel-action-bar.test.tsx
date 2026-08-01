@@ -24,25 +24,18 @@ describe("PanelActionBar", () => {
     expect(onActivate).toHaveBeenCalledTimes(1);
   });
 
-  it("renders an act action as a short word beside its full key hint", () => {
+  it("renders an act action as the same word in its key hint and its button", () => {
     const onActivate = vi.fn();
 
     render(
       <PanelActionBar
-        actions={[
-          {
-            keyLabel: "Space",
-            kind: "act",
-            label: "Mark learned",
-            onActivate,
-            shortLabel: "Learned",
-          },
-        ]}
+        actions={[{ keyLabel: "Space", kind: "act", label: "Learned", onActivate }]}
       />,
     );
 
-    // The full label stays in the hint - the button's visible word is its accessible name.
-    expect(screen.getByText("Mark learned")).toBeInTheDocument();
+    // One label serves both branches. The hint is the span holding the key glyph, and the button's
+    // visible word is that same label, which is also its accessible name.
+    expect(screen.getByText("Space").closest("span")).toHaveTextContent("Learned");
 
     fireEvent.click(screen.getByRole("button", { name: "Learned" }));
 
@@ -54,13 +47,7 @@ describe("PanelActionBar", () => {
       <PanelActionBar
         actions={[
           { icon: RiArrowRightLine, kind: "navigate", label: "Next", onActivate: () => {} },
-          {
-            keyLabel: "Space",
-            kind: "act",
-            label: "Next case",
-            onActivate: () => {},
-            shortLabel: "Next",
-          },
+          { keyLabel: "Space", kind: "act", label: "Learned", onActivate: () => {} },
         ]}
       />,
     );
@@ -81,13 +68,7 @@ describe("PanelActionBar", () => {
             label: "Back",
             onActivate: () => {},
           },
-          {
-            keyLabel: "Space",
-            kind: "act",
-            label: "Mark learned",
-            onActivate: () => {},
-            shortLabel: "Learned",
-          },
+          { keyLabel: "Space", kind: "act", label: "Learned", onActivate: () => {} },
           {
             available: true,
             icon: RiArrowRightLine,

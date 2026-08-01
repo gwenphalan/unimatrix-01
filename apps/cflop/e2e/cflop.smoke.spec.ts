@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 
 import {
   collectPageErrors,
@@ -26,6 +26,18 @@ async function scanAccessibility(page: Page, routeLabel: string) {
   await expectNoAccessibilityViolations(page, routeLabel, KNOWN_BEST_PRACTICE_VIOLATIONS);
 }
 
+/**
+ * A panel action's key hint and its coarse-pointer button carry the same word, so `getByText`
+ * resolves both and strict mode refuses the locator. The hint is the span holding the key glyph and
+ * the button is the only thing with a button role, which is what lets each half be named on its
+ * own — and asserting the button *hidden* is what makes this a check of the pointer branch rather
+ * than of the string.
+ */
+async function expectFinePointerAction(main: Locator, label: string) {
+  await expect(main.locator("span:has(kbd)").filter({ hasText: label })).toBeVisible();
+  await expect(main.getByRole("button", { name: label, exact: true })).toBeHidden();
+}
+
 test("homepage load", async ({ page }) => {
   const pageErrors = collectPageErrors(page);
   const main = page.locator("main");
@@ -47,7 +59,7 @@ test("Drill flow: drill and case picker", async ({ page }) => {
   await gotoRoute(page, "/drill");
 
   await expect(main.getByRole("heading", { name: "Drilling" })).toBeVisible();
-  await expect(main.getByText("Next case")).toBeVisible();
+  await expectFinePointerAction(main, "Next");
 
   const previewModes = main.getByRole("radiogroup", { name: "Preview mode" });
 
@@ -127,7 +139,7 @@ test("Learn flow: guided session and case picker", async ({ page }) => {
   await gotoRoute(page, "/learn");
 
   await expect(main.getByRole("heading", { name: "Learning" })).toBeVisible();
-  await expect(main.getByText("Mark learned")).toBeVisible();
+  await expectFinePointerAction(main, "Learned");
 
   await main
     .getByRole("radiogroup", { name: "Algorithm set" })

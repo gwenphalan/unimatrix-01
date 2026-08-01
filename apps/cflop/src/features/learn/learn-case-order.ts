@@ -5,7 +5,7 @@ import type { CaseProgress } from "@/lib/progress-storage";
  * Deterministic (not random) teaching order: walk groups in curriculum order, within a
  * group teach the most common case first (descending probabilityWeight), skipping
  * anything already marked learned. This is the list Next/Back browse through, and the
- * one "Mark learned" removes the current case from.
+ * list marking a case learned removes it from.
  */
 export function orderedLearnCases(
   groupedCases: CaseGroup[],

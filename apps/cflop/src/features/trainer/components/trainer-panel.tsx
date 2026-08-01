@@ -55,9 +55,8 @@ export function TrainerPanel({
               {
                 keyLabel: "Space",
                 kind: "act",
-                label: "Next case",
+                label: "Next",
                 onActivate: next,
-                shortLabel: "Next",
               },
             ]}
           />

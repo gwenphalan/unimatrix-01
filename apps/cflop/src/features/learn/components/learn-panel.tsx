@@ -84,9 +84,8 @@ export function LearnPanel({ initialCaseId, previewMode, setId }: LearnPanelProp
     {
       keyLabel: "Space",
       kind: "act",
-      label: learned ? "Unmark learned" : "Mark learned",
+      label: learned ? "Unlearn" : "Learned",
       onActivate: toggleLearned,
-      shortLabel: learned ? "Unlearn" : "Learned",
     },
     {
       available: canGoNext,
