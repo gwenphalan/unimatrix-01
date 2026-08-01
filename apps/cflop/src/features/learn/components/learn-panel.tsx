@@ -136,11 +136,12 @@ export function LearnPanel({ initialCaseId, previewMode, setId }: LearnPanelProp
         {/*
           A case with a single algorithm has no disclosure to show, and dropping the row outright
           moved the cube and the buttons by its height plus the gap above it every time the walk
-          landed on one. The row is reserved instead: `min-h-4` is the `text-xs` button's own line
-          box, so a case with alternates and a case without occupy the same space. Not gated on
+          landed on one. The row is reserved instead. `min-h-5` rather than the `text-xs` button's
+          nominal 1rem line-height: the button is inline in a block container, so half-leading
+          renders its line box at 20px, and reserving 16px left a 2px shift behind. Not gated on
           pointer type - unlike the move strings, this shifts at every width.
         */}
-        <div className="min-h-4">
+        <div className="min-h-5">
           {alternateAlgorithms.length > 0 ? (
             <>
               <button
