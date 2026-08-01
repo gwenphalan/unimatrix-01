@@ -402,18 +402,35 @@ coderabbit_status() {
 #
 # A clean summary is not the same as a clear PR: findings can arrive as body text
 # with no inline comment, and a thread left open is a finding nobody answered.
+#
+# Paginated, and that is the whole point of the guard rather than a nicety: one
+# page of 100 threads reports the unresolved ones it can see, so a PR carrying
+# more than that would arm an unattended merge over findings sitting on page 2.
+# `--jq` runs per page, so the counts come back one per line and are summed here.
+# A line that is not a bare integer aborts the sum and prints nothing, which the
+# caller reads as a count it could not establish — the guard fails closed in
+# every direction it can fail.
 unresolved_threads() {
+  local pages
   # shellcheck disable=SC2016  # GraphQL variables, not shell: $owner/$name/$pr
-  # are bound by the -F flags above.
-  gh api graphql -F owner="${repo%%/*}" -F name="${repo##*/}" -F pr="$pr" --jq \
+  # are bound by the -F flags above, and $endCursor by --paginate.
+  pages=$(gh api graphql --paginate -F owner="${repo%%/*}" -F name="${repo##*/}" -F pr="$pr" --jq \
     '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false)] | length' \
-    -f query='query($owner: String!, $name: String!, $pr: Int!) {
+    -f query='query($owner: String!, $name: String!, $pr: Int!, $endCursor: String) {
       repository(owner: $owner, name: $name) {
         pullRequest(number: $pr) {
-          reviewThreads(first: 100) { nodes { isResolved } }
+          reviewThreads(first: 100, after: $endCursor) {
+            nodes { isResolved }
+            pageInfo { hasNextPage endCursor }
+          }
         }
       }
-    }' 2>/dev/null
+    }' 2>/dev/null) || return 1
+  # `bad` rather than a bare `exit 1`: awk runs END even on exit, so exiting
+  # there alone still printed a total — a zero, which is precisely the answer
+  # that arms the merge.
+  awk '{ if ($0 !~ /^[0-9]+$/) { bad = 1 ; exit 1 } ; total += $0 }
+       END { if (bad || NR == 0) exit 1 ; print total + 0 }' <<<"$pages"
 }
 
 # Hands the merge to GitHub rather than performing it here. `--auto` waits for
