@@ -133,31 +133,40 @@ export function LearnPanel({ initialCaseId, previewMode, setId }: LearnPanelProp
           <p className="alg-move-string break-words pointer-coarse:min-h-14">{primaryAlgorithm}</p>
         </div>
 
-        {alternateAlgorithms.length > 0 ? (
-          <div>
-            <button
-              className="cursor-pointer text-xs text-muted-foreground underline decoration-primary/35 underline-offset-4 transition-colors hover:text-foreground"
-              onClick={() => {
-                setShowAlternates((previous) => !previous);
-              }}
-              type="button"
-            >
-              {showAlternates
-                ? "Hide alternates"
-                : `Show ${alternateAlgorithms.length} alternate${alternateAlgorithms.length === 1 ? "" : "s"}`}
-            </button>
+        {/*
+          A case with a single algorithm has no disclosure to show, and dropping the row outright
+          moved the cube and the buttons by its height plus the gap above it every time the walk
+          landed on one. The row is reserved instead: `min-h-4` is the `text-xs` button's own line
+          box, so a case with alternates and a case without occupy the same space. Not gated on
+          pointer type - unlike the move strings, this shifts at every width.
+        */}
+        <div className="min-h-4">
+          {alternateAlgorithms.length > 0 ? (
+            <>
+              <button
+                className="cursor-pointer text-xs text-muted-foreground underline decoration-primary/35 underline-offset-4 transition-colors hover:text-foreground"
+                onClick={() => {
+                  setShowAlternates((previous) => !previous);
+                }}
+                type="button"
+              >
+                {showAlternates
+                  ? "Hide alternates"
+                  : `Show ${alternateAlgorithms.length} alternate${alternateAlgorithms.length === 1 ? "" : "s"}`}
+              </button>
 
-            {showAlternates ? (
-              <ul className="mt-2 space-y-1.5 border-t border-border/60 pt-2">
-                {alternateAlgorithms.map((algorithm, index) => (
-                  <li className="alg-move-string break-words" key={`${currentCase.id}:${index}`}>
-                    {algorithm}
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-          </div>
-        ) : null}
+              {showAlternates ? (
+                <ul className="mt-2 space-y-1.5 border-t border-border/60 pt-2">
+                  {alternateAlgorithms.map((algorithm, index) => (
+                    <li className="alg-move-string break-words" key={`${currentCase.id}:${index}`}>
+                      {algorithm}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </>
+          ) : null}
+        </div>
       </div>
 
       <PanelActionBar actions={actions} />
