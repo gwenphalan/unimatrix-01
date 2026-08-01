@@ -13,6 +13,9 @@
 #
 # The log is machine-global rather than in-repo on purpose — it accumulates
 # across worktrees and must not be a file a branch can revert.
+#
+# It carries two record shapes: `turn-telemetry.sh` appends `"event":"turn"`
+# lines to the same file, so a line with no `event` key is a session-end line.
 set -uo pipefail
 
 # `${HOME}` unset would abort under `set -u` before any of the exit-0 handling
