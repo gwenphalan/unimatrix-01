@@ -17,15 +17,25 @@
 //     carries its own `runs-on:` in a file this check can never read. Zero
 //     job-level `uses:` exist today. A *local* reusable workflow is covered,
 //     because it is a file in the directory globbed below.
-import { readdirSync, readFileSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const workflowsDir = join(repoRoot, ".github", "workflows");
 
-/** GitHub-hosted runner image label prefixes. */
-const HOSTED_PREFIXES = ["ubuntu-", "windows-", "macos-"];
+/**
+ * GitHub-hosted runner image labels: an OS name, then `latest` or a version
+ * number, then any suffix (`-arm`, `-large`, `-xlarge`).
+ *
+ * The trailing segment must start with `latest` or a digit. A bare prefix match
+ * would accept `ubuntu-` and `ubuntu-private`, and a self-hosted runner is
+ * targeted by whatever label it was registered with — so a custom label shaped
+ * like a hosted one would pass the gate this file exists to close. Matching the
+ * shape rather than an exact list keeps a future hosted image (`ubuntu-26.04`)
+ * from reddening CI for no reason.
+ */
+const HOSTED_LABEL = /^(?:ubuntu|windows|macos)-(?:latest|\d)[\w.-]*$/u;
 
 /**
  * Third-party managed runners, allowed by exact label.
@@ -36,8 +46,7 @@ const HOSTED_PREFIXES = ["ubuntu-", "windows-", "macos-"];
  */
 const MANAGED_LABELS = ["blacksmith-4vcpu-ubuntu-2404"];
 
-const isAllowed = (label) =>
-  HOSTED_PREFIXES.some((prefix) => label.startsWith(prefix)) || MANAGED_LABELS.includes(label);
+const isAllowed = (label) => HOSTED_LABEL.test(label) || MANAGED_LABELS.includes(label);
 
 let failures = 0;
 const fail = (msg) => {
@@ -61,8 +70,13 @@ const reject = (location, value) =>
       `infra/scripts/check-runner-labels.mjs.`,
   );
 
+// Files only, resolved through symlinks. A directory named `x.yml` would
+// otherwise reach `readFileSync` and throw EISDIR — a crash rather than a
+// reported failure. `statSync` rather than the `Dirent` predicate because
+// `readdirSync` reports the entry itself: a symlinked workflow has
+// `isFile() === false` and would be skipped, which GitHub would still run.
 const workflowFiles = readdirSync(workflowsDir)
-  .filter((name) => name.endsWith(".yml") || name.endsWith(".yaml"))
+  .filter((name) => /\.ya?ml$/u.test(name) && statSync(join(workflowsDir, name)).isFile())
   .sort();
 
 // Zero files overall is the error, not zero of either extension — everything is

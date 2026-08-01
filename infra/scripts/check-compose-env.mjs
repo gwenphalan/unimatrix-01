@@ -197,8 +197,10 @@ function dockerfileEnv(relPath, text) {
 
 /** Resolves a compose value's `${VAR}` / `${VAR:-default}` form for the probe. */
 function resolveComposeValue(value) {
+  // The default is unquoted, matching the `build.args` path below: `${VAR:-""}`
+  // is an empty value spelled with quotes, not a two-character one.
   const withDefault = /^\$\{([A-Za-z_][A-Za-z0-9_]*):-(.*)\}$/su.exec(value);
-  if (withDefault !== null) return withDefault[2];
+  if (withDefault !== null) return stripQuotes(withDefault[2]);
 
   const bare = /^\$\{([A-Za-z_][A-Za-z0-9_]*)\}$/u.exec(value);
   if (bare !== null) return PLACEHOLDERS[bare[1]] ?? DEFAULT_PLACEHOLDER;
