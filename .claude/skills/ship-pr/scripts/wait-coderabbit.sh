@@ -53,7 +53,17 @@ adaptive limit:
     marker, still inside the old window, matches instantly and reports a
     refusal that already expired.
 
-Fixture runs never post. The re-ping is live-only.
+A refusal that predates the run is caught as well. `since` hides it from the
+poll loop — which is the ordinary case, since a waiter is usually armed after a
+refusal has been seen — so the comments are also read unfiltered once at
+startup, and acted on when the marker's deadline is still in the future.
+Staleness is arithmetic there, not position, which is what makes reading past
+the window safe. A lapsed marker is reported and left alone: CodeRabbit never
+deletes one, so a dead marker from a finished review is indistinguishable from a
+window that wants a ping.
+
+Fixture runs never post. The re-ping is live-only, and offline runs continue as
+though it landed so the one-retry cap stays exercisable.
 
 Environment:
   SHIP_PR_POLL_SECONDS  Seconds between polls. Default 30.
@@ -76,12 +86,22 @@ Environment:
                         no-baseline exit. The run ends when the list is
                         exhausted. This is how the script is exercised without a
                         live PR.
+  SHIP_PR_COMMENTS_FIXTURE
+                        Read by coderabbit-deadline.sh, which this script runs
+                        as a child, so exporting it drives the cooldown
+                        arithmetic and the startup detection from a file. Set it
+                        alongside SHIP_PR_FIXTURES; without it a fixture run
+                        skips the startup check rather than reaching the
+                        network.
 
 Output, one line, whichever applies:
   reviewed: <base> -> <n>                     the count rose; triage the findings
   reviewed clean, count unchanged at <n>      it ran and found nothing
+  live rate-limit marker at arm time, <n>m left
+  stale rate-limit marker at arm time, deadline lapsed — polling; ...
   cooling down <n>s, re-pinging at <iso>      riding out a rate limit, then one ping
   re-pinged after cooldown                    the ping is posted; the wait goes on
+  offline: re-ping suppressed, continuing as if posted
   refused: rate limited                       cool down, recompute, re-ping
   refused: rate limited, cooldown <n>s exceeds threshold
   refused: rate limited again after one re-ping
@@ -171,6 +191,13 @@ local_time() { date -d "@$1" '+%-I:%M:%S %p %Z'; }
 # because zero would ping immediately into a live limit.
 cooldown_remaining() {
   local line updated count unit secs deadline
+  # A fixture run carrying no comments fixture has nothing to read from. Without
+  # this it would reach the network — the offline short-circuit that used to sit
+  # in the caller was also what kept fixture runs hermetic, and moving the
+  # detection ahead of it takes that away.
+  if [ "$offline" -eq 1 ] && [ -z "${SHIP_PR_COMMENTS_FIXTURE:-}" ]; then
+    return 1
+  fi
   line=$("$here/coderabbit-deadline.sh" "$repo" "$pr" 2>/dev/null) || return 1
   case $line in
     updated=*countdown=[0-9]*) : ;;
@@ -190,6 +217,94 @@ cooldown_remaining() {
   deadline=$(date -u -d "$updated" +%s 2>/dev/null) || return 1
   echo $((deadline + count * secs - $(date -u +%s)))
 }
+
+# The rate-limit path, reached from two places: the startup check below and the
+# poll loop's own arm. Called plainly and never in a subshell, so its writes to
+# `since` and `repinged` are the caller's.
+#
+# Prints an outcome line on every branch. Returns 0 when a re-ping was posted
+# and waiting should continue, 1 when the outcome is terminal.
+ride_out_cooldown() {
+  local remaining
+  if [ "$repinged" -eq 1 ]; then
+    echo "refused: rate limited again after one re-ping"
+    return 1
+  fi
+  if [ "$auto_reping" -ne 1 ]; then
+    echo "refused: rate limited"
+    return 1
+  fi
+  if ! remaining=$(cooldown_remaining); then
+    echo "refused: rate limited"
+    return 1
+  fi
+  [ "$remaining" -lt 0 ] && remaining=0
+  if [ "$remaining" -gt "$max_cooldown" ]; then
+    echo "refused: rate limited, cooldown $((remaining / 60))m exceeds threshold"
+    return 1
+  fi
+  # +15s of slack: the countdown is whatever was true when the comment was last
+  # edited, so pinging exactly on the boundary earns a second refusal and burns
+  # the one retry.
+  remaining=$((remaining + 15))
+  echo "cooling down $((remaining / 60))m, re-pinging at $(local_time $(($(date -u +%s) + remaining)))"
+  # Offline is the fixture harness, and it has to reach the arithmetic above —
+  # that is the point of routing both entry points through one function. What it
+  # must not do is sleep out a real countdown or post to a real PR, so it skips
+  # both and continues as though the ping landed. That keeps the one-retry cap
+  # testable: the next fixture entry exercises `repinged` on the way back in.
+  if [ "$offline" -eq 1 ]; then
+    repinged=1
+    body=""
+    echo "offline: re-ping suppressed, continuing as if posted"
+    return 0
+  fi
+  sleep "$remaining"
+  # Before the ping, never after: the marker that just refused us is still
+  # inside the old window and would match on the very next poll. This one stays
+  # UTC — it is an API filter, not something anyone reads.
+  since=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+  if ! gh pr comment "$pr" --repo "$repo" --body "@coderabbitai full review" >/dev/null 2>&1; then
+    echo "refused: rate limited, and the re-ping could not be posted"
+    return 1
+  fi
+  repinged=1
+  body=""
+  echo "re-pinged at $(local_time "$(date -u +%s)")"
+  return 0
+}
+
+# A refusal that predates this run is invisible to the loop below: `since` is
+# captured at arm time, so a marker older than it never enters the window and
+# the script heartbeats on a PR that is plainly rate limited. Arming the waiter
+# *after* seeing a refusal is the ordinary sequence, so that was the common case
+# rather than the edge one.
+#
+# Dropping the `since` filter is not the fix — it is the thing `since` exists to
+# prevent. The discriminator is arithmetic instead: a marker whose deadline is
+# still in the future is live wherever it sits, because that is a property of
+# the comment's own body rather than of when this run started.
+#
+# A fixture run with no comments fixture falls out here without acting, because
+# `cooldown_remaining` refuses to read one.
+if [ "$auto_reping" -eq 1 ]; then
+  if startup_remaining=$(cooldown_remaining); then
+    if [ "$startup_remaining" -gt 0 ]; then
+      echo "live rate-limit marker at arm time, $((startup_remaining / 60))m left"
+      ride_out_cooldown || exit 0
+    else
+      # Only a positive remainder acts. CodeRabbit never deletes the marker, so
+      # a lapsed one is ambiguous — a dead marker from a review that already
+      # finished looks identical to a window that wants a ping, and pinging the
+      # first spends a slot against an adaptive limit for nothing. Under-pinging
+      # is the recoverable direction.
+      #
+      # Say so rather than falling through quietly. The defect this block fixes
+      # is a silent no-op, and a second silent no-op would hide inside it.
+      echo "stale rate-limit marker at arm time, deadline lapsed — polling; ping again yourself if nothing lands"
+    fi
+  fi
+fi
 
 while true; do
   ok=1
@@ -239,40 +354,7 @@ while true; do
       *"rate limited by coderabbit.ai"*)
         # A refusal read nothing, so the re-ping is still the *first* review.
         # Only this outcome is worth riding out; the rest are final.
-        if [ "$repinged" -eq 1 ]; then
-          echo "refused: rate limited again after one re-ping"
-          exit 0
-        fi
-        if [ "$offline" -eq 1 ] || [ "$auto_reping" -ne 1 ]; then
-          echo "refused: rate limited"
-          exit 0
-        fi
-        if ! remaining=$(cooldown_remaining); then
-          echo "refused: rate limited"
-          exit 0
-        fi
-        [ "$remaining" -lt 0 ] && remaining=0
-        if [ "$remaining" -gt "$max_cooldown" ]; then
-          echo "refused: rate limited, cooldown $((remaining / 60))m exceeds threshold"
-          exit 0
-        fi
-        # +15s of slack: the countdown is whatever was true when the comment was
-        # last edited, so pinging exactly on the boundary earns a second refusal
-        # and burns the one retry.
-        remaining=$((remaining + 15))
-        echo "cooling down $((remaining / 60))m, re-pinging at $(local_time $(($(date -u +%s) + remaining)))"
-        sleep "$remaining"
-        # Before the ping, never after: the marker that just refused us is still
-        # inside the old window and would match on the very next poll. This one
-        # stays UTC — it is an API filter, not something anyone reads.
-        since=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-        if ! gh pr comment "$pr" --repo "$repo" --body "@coderabbitai full review" >/dev/null 2>&1; then
-          echo "refused: rate limited, and the re-ping could not be posted"
-          exit 0
-        fi
-        repinged=1
-        body=""
-        echo "re-pinged at $(local_time "$(date -u +%s)")"
+        ride_out_cooldown || exit 0
         ;;
       *"did not have any reviewable changes"*)
         echo "nothing reviewable — that IS the review"
