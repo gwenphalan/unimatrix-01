@@ -34,13 +34,23 @@ This package has one consumer surface the other source-only packages do not:
 before any vite alias exists. That works because vite bundles the config file
 with esbuild, which resolves the pnpm workspace symlink to the real path
 outside `node_modules` and bundles the TypeScript directly — verified
-empirically, not assumed. What does **not** work is plain Node resolution of
-the `exports` map: Node's type stripping refuses files under `node_modules`
-(`ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING`), the same class of failure as
-the documented Playwright/e2e-helpers one. So:
+empirically, not assumed.
+
+**Plain Node resolves the `exports` map too, from any workspace that declares
+the dependency.** Measured from `apps/web`: `node -e "import('@unimatrix/app-config')"`
+returns every export. The `node_modules` type-stripping restriction is not
+engaged — Node still strips the TypeScript, but pnpm links the package as a
+symlink and Node resolves realpaths, so the file it strips is
+`packages/app-config/src/index.ts`, which is outside `node_modules`. From a directory
+with no dependency edge (`apps/api`, the repo root) it fails
+`ERR_MODULE_NOT_FOUND`, because there is no symlink to follow. That is a
+missing dependency, not a stripping refusal. So:
 
 - Do not import this package from anything executed by plain `node` (scripts
-  in `infra/scripts`, API code). It is for Vite apps and their configs only.
+  in `infra/scripts`, API code). Not because resolution fails — it would work
+  once the dependency existed — but because it drags `zod` in, and the
+  `infra/scripts` guards deliberately run before `pnpm install` with no
+  `node_modules` at all. It is for Vite apps and their configs only.
 - Do not "fix" the missing build script. A `dist` would be dead weight for
   every current consumer and would silently become load-bearing for exactly
   the consumers that must not exist.
