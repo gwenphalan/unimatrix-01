@@ -396,23 +396,31 @@ thing that costs something. Two cases where waiting is clearly right:
 Merge unreviewed when the owner is actively waiting on this PR, or when it blocks other work, or the
 window is long and the diff is trivial. Say which in the merge report.
 
-To wait: compute the deadline with the `updated_at` + countdown arithmetic above, then **arm a
-`Monitor` and carry on working.** This is the case `Monitor` is for — an outcome that arrives on
-someone else's schedule, with no way to know which of five endings it will be.
+To wait: **arm a `Monitor` and carry on working.** This is the case `Monitor` is for — an outcome that
+arrives on someone else's schedule, with no way to know which of five endings it will be.
 
 ```sh
 .claude/skills/ship-pr/scripts/wait-coderabbit.sh <owner/repo> <pr>
 ```
 
-Start it **before** posting the ping: it records the review-count baseline and the `since=` timestamp
-first, and both have to predate the ping. `--help` carries why, and every terminal outcome it prints.
+**Do not also re-ping by hand.** The script does the cooldown arithmetic itself and posts exactly one
+re-ping — whether the refusal arrives while it is running or was already there when you armed it. A
+manual ping alongside it is a second ping against an adaptive limit, and it moves the marker the
+script is sleeping on, so the automatic one then fires early into a live window and burns the retry
+cap on a refusal. Arm it and leave it alone.
 
-Then re-ping **once**, after the deadline has actually passed, and confirm with the three signals
-below. If that ping is refused again, the window was longer than advertised: recompute from the new
-comment's `updated_at` and wait again. Two refusals in a row on a lengthening window is the point to
-stop *waiting* — it is not itself a reason to merge. That still turns on the exceptions above, and
-where none of them holds it is the owner's call, because merging forfeits the review permanently
-rather than deferring it.
+Start it **before** posting the *first* ping: it records the review-count baseline and the `since=`
+timestamp first, and both have to predate that ping. `--help` carries why, and every outcome it
+prints.
+
+If its one re-ping is refused too, it stops and says so — the window was longer than advertised. Two
+refusals in a row on a lengthening window is the point to stop *waiting*; it is not itself a reason
+to merge. That still turns on the exceptions above, and where none of them holds it is the owner's
+call, because merging forfeits the review permanently rather than deferring it.
+
+Three cases it reports and does **not** act on, where the ping is yours to make: a marker whose
+deadline has already lapsed, one whose countdown it cannot read, and any run with
+`SHIP_PR_AUTO_REPING=0`. Each prints a line saying so.
 
 Cooldowns here have run to minutes, not hours, and a five-minute wait has bought a review that found a
 real defect. Waiting is usually the cheap side of this trade.

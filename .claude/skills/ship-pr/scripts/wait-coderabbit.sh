@@ -98,7 +98,8 @@ Output, one line, whichever applies:
   reviewed: <base> -> <n>                     the count rose; triage the findings
   reviewed clean, count unchanged at <n>      it ran and found nothing
   live rate-limit marker at arm time, <n>m left
-  stale rate-limit marker at arm time, deadline lapsed — polling; ...
+  stale rate-limit marker at arm time, deadline lapsed — polling only
+  rate-limit marker at arm time, countdown unreadable — polling only
   cooling down <n>s, re-pinging at <iso>      riding out a rate limit, then one ping
   re-pinged after cooldown                    the ping is posted; the wait goes on
   offline: re-ping suppressed, continuing as if posted
@@ -201,6 +202,10 @@ cooldown_remaining() {
   line=$("$here/coderabbit-deadline.sh" "$repo" "$pr" 2>/dev/null) || return 1
   case $line in
     updated=*countdown=[0-9]*) : ;;
+    # Marker present, countdown missing or unreadable. Distinct from "no marker"
+    # on purpose: the PR *is* rate limited and only the arithmetic is missing,
+    # which the caller reports rather than passing over in silence.
+    updated=*) return 2 ;;
     *) return 1 ;;
   esac
   updated=${line#updated=}
@@ -212,9 +217,9 @@ cooldown_remaining() {
     second*) secs=1 ;;
     minute*) secs=60 ;;
     hour*) secs=3600 ;;
-    *) return 1 ;;
+    *) return 2 ;;
   esac
-  deadline=$(date -u -d "$updated" +%s 2>/dev/null) || return 1
+  deadline=$(date -u -d "$updated" +%s 2>/dev/null) || return 2
   echo $((deadline + count * secs - $(date -u +%s)))
 }
 
@@ -288,22 +293,29 @@ ride_out_cooldown() {
 # A fixture run with no comments fixture falls out here without acting, because
 # `cooldown_remaining` refuses to read one.
 if [ "$auto_reping" -eq 1 ]; then
-  if startup_remaining=$(cooldown_remaining); then
-    if [ "$startup_remaining" -gt 0 ]; then
-      echo "live rate-limit marker at arm time, $((startup_remaining / 60))m left"
-      ride_out_cooldown || exit 0
-    else
-      # Only a positive remainder acts. CodeRabbit never deletes the marker, so
-      # a lapsed one is ambiguous — a dead marker from a review that already
-      # finished looks identical to a window that wants a ping, and pinging the
-      # first spends a slot against an adaptive limit for nothing. Under-pinging
-      # is the recoverable direction.
-      #
-      # Say so rather than falling through quietly. The defect this block fixes
-      # is a silent no-op, and a second silent no-op would hide inside it.
-      echo "stale rate-limit marker at arm time, deadline lapsed — polling; ping again yourself if nothing lands"
-    fi
-  fi
+  startup_remaining=$(cooldown_remaining) && startup_rc=0 || startup_rc=$?
+  case $startup_rc in
+    0)
+      if [ "$startup_remaining" -gt 0 ]; then
+        echo "live rate-limit marker at arm time, $((startup_remaining / 60))m left"
+        ride_out_cooldown || exit 0
+      else
+        # Only a positive remainder acts. CodeRabbit never deletes the marker,
+        # so a lapsed one is ambiguous — a dead marker from a review that
+        # already finished looks identical to a window that wants a ping, and
+        # pinging the first spends a slot against an adaptive limit for nothing.
+        # Under-pinging is the recoverable direction.
+        #
+        # Say so rather than falling through quietly. The defect this block
+        # fixes is a silent no-op, and a second one would hide inside it.
+        echo "stale rate-limit marker at arm time, deadline lapsed — polling only"
+      fi
+      ;;
+    # Marker present, arithmetic unavailable. Same reasoning as the lapsed case:
+    # the PR is rate limited, so silence here would be the very no-op this block
+    # exists to remove.
+    2) echo "rate-limit marker at arm time, countdown unreadable — polling only" ;;
+  esac
 fi
 
 while true; do
