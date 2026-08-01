@@ -176,6 +176,7 @@ Output, one line, whichever applies:
   rate-limit marker at arm time, countdown unreadable — pinging anyway
   auto-reping disabled — the ping is yours, nothing was posted
   cannot post the ping — nothing to wait for
+  ping timestamp is unreadable — nothing to compare against
   cooling down <n>m, re-pinging at <time>     riding out a rate limit, then one ping
   re-pinged at <time>                         the ping is posted; the wait goes on
   offline: re-ping suppressed, continuing as if posted
@@ -201,7 +202,8 @@ Also on stderr, said once where they apply:
 
 Exit codes:
   0  a terminal outcome was reached, or the fixture list ran out
-  1  bad usage, the baseline or head-sha call failed, or the ping would not post
+  1  bad usage, the baseline or head-sha call failed, or the ping would not
+     post or came back with a timestamp nothing can compare against
   2  three consecutive failures after the baseline
 EOF
 }
@@ -301,7 +303,9 @@ refusals_absorbed=0
 in_progress=0
 ping_posted=0
 ping_at=""
-ping_epoch=0
+# No `ping_epoch` seed. `adopt_ping_at` sets it or the script exits, and a
+# placeholder here would be a third answer to "when was the ping" that only a
+# path failing to adopt could ever read.
 if [ "$offline" -eq 1 ]; then
   # A fixture run posts nothing, so the ping's timestamp is supplied instead. The
   # epoch default puts the ping before every fixture timestamp, which is the
@@ -336,15 +340,22 @@ post_ping() {
 # once. The `since=` window backs off a second: the API filter is inclusive and
 # whole-second, and a comment sharing the ping's second must not be filtered out
 # before the per-comment comparison gets to judge it.
+#
+# An unreadable timestamp is terminal, and that is not tidiness. Every later
+# discrimination is "did this land after the ping": the status branch compares
+# epochs, the comment branch filters on the string. Carrying an "unknown" epoch
+# gives those two independent answers to the same question — a zero epoch reads
+# every real status as newer than the ping, so this repo's resting `Review
+# skipped` notice comes back as a swallowed ping, which is the bug this script
+# was rewritten to remove. There is no such state now: either the ping has a
+# timestamp everything agrees on, or the run stops.
 adopt_ping_at() {
-  ping_posted=1
-  if ping_epoch=$(date -u -d "$ping_at" +%s 2>/dev/null); then
-    since=$(date -u -d "@$((ping_epoch - 1))" +%Y-%m-%dT%H:%M:%SZ)
-  else
-    echo "ping timestamp $ping_at is unreadable — comparisons fall back to the comment list" >&2
-    ping_epoch=0
-    since=${SHIP_PR_SINCE:-$since}
+  if ! ping_epoch=$(date -u -d "$ping_at" +%s 2>/dev/null); then
+    echo "ping timestamp is unreadable — nothing to compare against"
+    exit 1
   fi
+  ping_posted=1
+  since=$(date -u -d "@$((ping_epoch - 1))" +%Y-%m-%dT%H:%M:%SZ)
 }
 
 # The CodeRabbit commit status on the pinned head, as
