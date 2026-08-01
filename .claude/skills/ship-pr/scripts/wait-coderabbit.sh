@@ -20,9 +20,15 @@ timestamp first, and both have to predate the ping:
     earlier round is still in the unfiltered list and matches instantly — the
     wait would report "refused again" before anything had happened.
 
-Every terminal outcome prints a line; only one of them raises the count. There
-is no iteration cap: a cap that expired mid-cooldown would look identical to a
-silent failure, and a review that is genuinely running would trip it. It
+Every terminal outcome prints a line; only one of them raises the count. A
+review that finds nothing is the trap — it completes without moving the count,
+so a loop watching only the count runs to its timeout on the commonest happy
+path. That outcome is recognised from the summary comment instead, and it is
+matched ahead of the in-progress marker: a body carrying both means the review
+finished while stale progress text is still in the window.
+
+There is no iteration cap: a cap that expired mid-cooldown would look identical
+to a silent failure, and a review that is genuinely running would trip it. It
 heartbeats instead, so silence carries its own elapsed time.
 
 Arguments:
@@ -47,6 +53,7 @@ Environment:
 
 Output, one line, whichever applies:
   reviewed: <base> -> <n>                     the count rose; triage the findings
+  reviewed clean, count unchanged at <n>      it ran and found nothing
   refused: rate limited                       cool down, recompute, re-ping
   refused: merged, CodeRabbit is done for good
   refused: head commit changed mid-review
@@ -157,6 +164,13 @@ while true; do
       exit 0
     fi
     case $body in
+      # Ahead of "review in progress": a clean review never moves the count, so
+      # this is the only signal that it finished. Matching it first means stale
+      # progress text left in the window cannot hold the wait open past the end.
+      *"No actionable comments were generated"*)
+        echo "reviewed clean, count unchanged at $n"
+        exit 0
+        ;;
       *"rate limited by coderabbit.ai"*)
         echo "refused: rate limited"
         exit 0
