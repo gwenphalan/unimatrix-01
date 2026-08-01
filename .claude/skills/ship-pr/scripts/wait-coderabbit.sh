@@ -177,9 +177,10 @@ Output, one line, whichever applies:
   auto-reping disabled — the ping is yours, nothing was posted
   cannot post the ping — nothing to wait for
   ping timestamp is unreadable — nothing to compare against
-  cooling down <n>m, re-pinging at <time>     riding out a rate limit, then one ping
-  re-pinged at <time>                         the ping is posted; the wait goes on
-  offline: re-ping suppressed, continuing as if posted
+  cooling down <n>m, [re-]pinging at <time>   riding out a rate limit, then one ping
+  pinged at <time> / re-pinged at <time>      the ping is posted; the wait goes on
+  offline: [re-]ping suppressed, continuing as if posted
+  refused: rate limited, and the [re-]ping could not be posted
   refused: rate limited                       cool down, recompute, re-ping
   refused: rate limited, cooldown <n>m exceeds threshold
   refused: rate limited, countdown unreadable — the ping is yours
@@ -529,10 +530,23 @@ cooldown_remaining() {
 # poll loop's own arm. Called plainly and never in a subshell, so its writes to
 # `since` and `refusals_absorbed` are the caller's.
 #
-# Prints an outcome line on every branch. Returns 0 when a re-ping was posted
-# and waiting should continue, 1 when the outcome is terminal.
+# Prints an outcome line on every branch. Returns 0 when a ping was posted and
+# waiting should continue, 1 when the outcome is terminal.
+#
+# Which ping it is comes from `ping_posted`, read before anything moves it. From
+# the startup check nothing has been posted yet, so this is the FIRST ping and
+# saying "re-pinged" would contradict the retry ledger a line above it: a first
+# ping that had to wait out a pre-existing cooldown does not consume the one
+# retry, and the wording is the only place a reader can see that.
 ride_out_cooldown() {
-  local remaining
+  local remaining again verb
+  if [ "$ping_posted" -eq 1 ]; then
+    again="re-"
+    verb="re-pinged"
+  else
+    again=""
+    verb="pinged"
+  fi
   if [ "$refusals_absorbed" -gt 1 ]; then
     echo "refused: rate limited again after one re-ping"
     return 1
@@ -567,7 +581,7 @@ ride_out_cooldown() {
   # edited, so pinging exactly on the boundary earns a second refusal and burns
   # the one retry.
   remaining=$((remaining + 15))
-  echo "cooling down $((remaining / 60))m, re-pinging at $(local_time $(($(date -u +%s) + remaining)))"
+  echo "cooling down $((remaining / 60))m, ${again}pinging at $(local_time $(($(date -u +%s) + remaining)))"
   # Offline is the fixture harness, and it has to reach the arithmetic above —
   # that is the point of routing both entry points through one function. What it
   # must not do is sleep out a real countdown or post to a real PR, so it skips
@@ -578,14 +592,14 @@ ride_out_cooldown() {
     # timestamp nothing posted — but the run still has to count as pinged, or the
     # startup path would fall through and "post" a second one.
     adopt_ping_at
-    echo "offline: re-ping suppressed, continuing as if posted"
+    echo "offline: ${again}ping suppressed, continuing as if posted"
     return 0
   fi
   sleep "$remaining"
   local created
   created=$(post_ping) || created=""
   if [ -z "$created" ]; then
-    echo "refused: rate limited, and the re-ping could not be posted"
+    echo "refused: rate limited, and the ${again}ping could not be posted"
     return 1
   fi
   # Adopting the new ping's timestamp also advances `since`, which is what keeps
@@ -593,7 +607,7 @@ ride_out_cooldown() {
   # matching on the very next poll.
   ping_at=$created
   adopt_ping_at
-  echo "re-pinged at $(local_time "$(date -u +%s)")"
+  echo "$verb at $(local_time "$(date -u +%s)")"
   return 0
 }
 
