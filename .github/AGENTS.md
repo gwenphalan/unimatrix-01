@@ -53,7 +53,7 @@ this file holds the mechanics, each of which was learned the hard way.
   notices. It fails closed on a missing symlink, a regular file in its place, a wrong target, and a
   `CLAUDE.md` whose `AGENTS.md` was renamed away.
 - The remaining guards, each aimed at one kind of drift.
-  `check-watch-paths.mjs` (`Watch paths`) is the only one with a production consequence: it derives
+  `check-watch-paths.mjs` (`Watch paths`) has a production consequence: it derives
   each app's real inputs from the `@unimatrix/*` specifiers under its `src/` and fails if one is
   missing from the fenced watch-path list in its README, because Dokploy rebuilds only on those
   paths — `packages/chrome/**` was absent from three apps, so the shared site chrome could change
@@ -64,6 +64,21 @@ this file holds the mechanics, each of which was learned the hard way.
   fails when a floor sits more than 5 points under the measurement — `packages/auth` gated at 26
   while measuring 73.84. The 5 points are deliberate: V8 re-attributes functions between Node
   majors, so a floor pinned to the exact figure reddens on the next runtime bump for no real reason.
+  `check-compose-env.mjs` (`Compose env`, pre-install, plain Node) is the only thing that reads the
+  compose files at all: `Images (*)` builds each Dockerfile directly and never opens one, so a
+  compose file that stops passing env into a perfectly good image is green everywhere until the
+  deployed container restart-loops — the API once shipped with no `CLERK_*` under `environment:` and
+  every required check passed. It pairs each `apps/*/Dockerfile` with its
+  `infra/docker/<app>-compose.yaml`, asserts the declared `build.dockerfile` and `build.context`,
+  requires a non-empty value to reach every `ARG VITE_*` that has no Dockerfile default, and feeds
+  the effective API env — Dockerfile `ENV` overlaid by the compose block — to the real
+  `loadApiRuntimeConfig`, so it cannot drift from the parser it is checking against. That import
+  goes through Node type stripping, which needs `apps/api/src/config.ts` to stay
+  erasable-syntax-only. `check-runner-labels.mjs` (`Runner labels`) allowlists every `runs-on:`
+  value rather than grepping for `self-hosted`, because a runner is targeted by label and
+  `runs-on: my-homelab` reaches one without the string ever appearing; it enforces naming only and
+  cannot see what hardware a label routes to, and a *remote* reusable workflow carries a `runs-on:`
+  in a file it can never read.
   `check-doc-script-refs.sh` (`Doc script references`, placed pre-install with the other bash gates)
   fails when a tracked `.md` names a `.sh`/`.mjs` file no tracked file provides — a doc naming a
   script this repo does not ship asserts config no reviewer can see and no clone gets. It is a

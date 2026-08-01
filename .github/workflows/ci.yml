@@ -72,6 +72,20 @@ jobs:
       - name: Doc script references
         run: bash ./infra/scripts/check-doc-script-refs.sh
 
+      # Same placement rationale — plain Node, no `node_modules` (it imports
+      # `apps/api/src/config.ts` through type stripping). The compose files are
+      # the only deploy artifact nothing else in this workflow reads: `Images`
+      # builds each Dockerfile directly, so a compose file that fails to pass
+      # env into a working image is green everywhere until production
+      # restart-loops.
+      - name: Compose env
+        run: node ./infra/scripts/check-compose-env.mjs
+
+      # Same placement rationale. This repo is public, so a runner on the
+      # owner's hardware would execute fork-PR code on the home lab.
+      - name: Runner labels
+        run: node ./infra/scripts/check-runner-labels.mjs
+
       # The repo's shell reaches no other static analysis: CodeQL has no shell
       # extractor, `.claude/` is in no pnpm workspace so turbo never sees it, and
       # prettier has no bash parser. A step in `Verify` rather than a job of its
