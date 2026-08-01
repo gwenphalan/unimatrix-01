@@ -270,7 +270,14 @@ i=0
 auto_reping=${SHIP_PR_AUTO_REPING:-1}
 auto_merge=${SHIP_PR_AUTO_MERGE:-0}
 max_cooldown=${SHIP_PR_MAX_COOLDOWN:-1800}
-repinged=0
+# The cap counts refusals ABSORBED, not pings posted. A first ping that had to
+# wait out a pre-existing cooldown is still the first ping — routing it through
+# `ride_out_cooldown` and letting that function claim the retry would hand a PR
+# already rate limited at arm time one ping and zero retries, silently weaker
+# than the "exactly one automatic re-ping" this promises. So the increment lives
+# at the poll loop's call site, where a refusal actually arrived, and the startup
+# ride-out leaves the ledger at zero.
+refusals_absorbed=0
 # Sticky. CodeRabbit edits its in-progress comment into the outcome, so the text
 # is gone from a later poll while the review is still legitimately running —
 # recomputing this each round would report "nothing yet" mid-review.
@@ -427,13 +434,13 @@ cooldown_remaining() {
 
 # The rate-limit path, reached from two places: the startup check below and the
 # poll loop's own arm. Called plainly and never in a subshell, so its writes to
-# `since` and `repinged` are the caller's.
+# `since` and `refusals_absorbed` are the caller's.
 #
 # Prints an outcome line on every branch. Returns 0 when a re-ping was posted
 # and waiting should continue, 1 when the outcome is terminal.
 ride_out_cooldown() {
   local remaining
-  if [ "$repinged" -eq 1 ]; then
+  if [ "$refusals_absorbed" -gt 1 ]; then
     echo "refused: rate limited again after one re-ping"
     return 1
   fi
@@ -472,9 +479,8 @@ ride_out_cooldown() {
   # that is the point of routing both entry points through one function. What it
   # must not do is sleep out a real countdown or post to a real PR, so it skips
   # both and continues as though the ping landed. That keeps the one-retry cap
-  # testable: the next fixture entry exercises `repinged` on the way back in.
+  # testable: the next fixture entry absorbs a second refusal on the way back in.
   if [ "$offline" -eq 1 ]; then
-    repinged=1
     # `ping_at` stays where the fixture put it — a suppressed ping cannot move a
     # timestamp nothing posted — but the run still has to count as pinged, or the
     # startup path would fall through and "post" a second one.
@@ -494,7 +500,6 @@ ride_out_cooldown() {
   # matching on the very next poll.
   ping_at=$created
   adopt_ping_at
-  repinged=1
   echo "re-pinged at $(local_time "$(date -u +%s)")"
   return 0
 }
@@ -688,6 +693,10 @@ while true; do
         *"rate limited by coderabbit.ai"*)
           # A refusal read nothing, so the re-ping is still the *first* review.
           # Only this outcome is worth riding out; the rest are final.
+          #
+          # Counted here rather than inside the function, which also serves the
+          # startup path — where nothing has been refused yet.
+          refusals_absorbed=$((refusals_absorbed + 1))
           ride_out_cooldown || exit 0
           break
           ;;
