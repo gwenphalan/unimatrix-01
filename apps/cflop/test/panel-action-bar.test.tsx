@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { RiArrowRightLine } from "@remixicon/react";
+import { RiArrowLeftLine, RiArrowRightLine } from "@remixicon/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { PanelActionBar } from "@/features/algorithms/components/panel-action-bar";
@@ -68,5 +68,44 @@ describe("PanelActionBar", () => {
     expect(screen.getAllByRole("button")).toHaveLength(2);
     expect(document.querySelectorAll("[data-panel-action]")).toHaveLength(2);
     expect(document.querySelectorAll(".pointer-coarse\\:hidden")).toHaveLength(2);
+  });
+
+  it("keeps an unavailable navigate action in the layout but out of the accessibility tree", () => {
+    render(
+      <PanelActionBar
+        actions={[
+          {
+            available: false,
+            icon: RiArrowLeftLine,
+            kind: "navigate",
+            label: "Back",
+            onActivate: () => {},
+          },
+          {
+            keyLabel: "Space",
+            kind: "act",
+            label: "Mark learned",
+            onActivate: () => {},
+            shortLabel: "Learned",
+          },
+          {
+            available: true,
+            icon: RiArrowRightLine,
+            kind: "navigate",
+            label: "Next",
+            onActivate: () => {},
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: "Back" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Next" })).toBeInTheDocument();
+    // The key hint is text rather than a role, so its own exclusion has to be asserted directly.
+    expect(screen.getByText("Back").closest("span")).toHaveAttribute("aria-hidden", "true");
+
+    // Reserved, not removed: the elements are still there holding the act control in place.
+    expect(document.querySelectorAll("[data-panel-action]")).toHaveLength(3);
+    expect(document.querySelectorAll(".invisible")).toHaveLength(2);
   });
 });

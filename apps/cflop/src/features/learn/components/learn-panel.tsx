@@ -68,33 +68,34 @@ export function LearnPanel({ initialCaseId, previewMode, setId }: LearnPanelProp
 
   const [primaryAlgorithm, ...alternateAlgorithms] = currentCase.algorithms;
 
-  // Back and Next are offered only when they would actually do something. A case opened from the
-  // grid after being marked learned sits outside the teaching walk, so it has nowhere to go back
-  // or next to - and advertising two dead controls is worse than advertising none.
-  const actions: PanelAction[] = [];
-  if (canGoBack) {
-    actions.push({
+  // Back and Next are reachable only when they would actually do something - a case opened from
+  // the grid after being marked learned sits outside the teaching walk, so it has nowhere to go
+  // back or next to, and advertising two dead controls is worse than advertising none. Both slots
+  // stay in the layout regardless so the learned control does not jump sideways the moment an
+  // arrow appears; the unavailable one is reserved space rather than a control.
+  const actions: PanelAction[] = [
+    {
+      available: canGoBack,
       icon: RiArrowLeftLine,
       kind: "navigate",
       label: "Back",
       onActivate: back,
-    });
-  }
-  actions.push({
-    keyLabel: "Space",
-    kind: "act",
-    label: learned ? "Unmark learned" : "Mark learned",
-    onActivate: toggleLearned,
-    shortLabel: learned ? "Unlearn" : "Learned",
-  });
-  if (canGoNext) {
-    actions.push({
+    },
+    {
+      keyLabel: "Space",
+      kind: "act",
+      label: learned ? "Unmark learned" : "Mark learned",
+      onActivate: toggleLearned,
+      shortLabel: learned ? "Unlearn" : "Learned",
+    },
+    {
+      available: canGoNext,
       icon: RiArrowRightLine,
       kind: "navigate",
       label: "Next",
       onActivate: next,
-    });
-  }
+    },
+  ];
 
   return (
     <Card className="site-panel site-panel-strong flex flex-col items-center gap-6 px-6 py-10 text-center">
