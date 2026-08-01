@@ -5,7 +5,7 @@ import { Button } from "@unimatrix/ui/public";
 import { AlgorithmSetToggle } from "@/features/algorithms/components/algorithm-set-toggle";
 import { PreviewModeToggle } from "@/features/algorithms/components/preview-mode-toggle";
 import { resolvePreviewMode } from "@/features/algorithms/preview-mode";
-import type { AlgorithmSetId } from "@/features/algorithms/types";
+import { useAlgorithmSet } from "@/features/algorithms/use-algorithm-set";
 import { usePreviewMode } from "@/features/algorithms/use-preview-mode";
 import { LearnCasesGrid } from "@/features/learn/components/learn-cases-grid";
 import { LearnPanel } from "@/features/learn/components/learn-panel";
@@ -13,7 +13,7 @@ import { LearnPanel } from "@/features/learn/components/learn-panel";
 type ViewMode = "session" | "cases";
 
 export function LearnSetView() {
-  const [setId, setSetId] = useState<AlgorithmSetId>("oll");
+  const { setId, setSetId } = useAlgorithmSet();
   const [mode, setMode] = useState<ViewMode>("session");
   // Which case the session should open on. Picking one in the grid is the only way back to a
   // learned case's algorithm, since the teaching walk skips anything already marked known.

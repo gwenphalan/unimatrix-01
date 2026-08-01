@@ -1,8 +1,12 @@
 import { useEffect, useState } from "react";
 import { RiArrowLeftLine, RiArrowRightLine } from "@remixicon/react";
-import { Card, Kbd } from "@unimatrix/ui/public";
+import { Card } from "@unimatrix/ui/public";
 
 import { CaseDiagramView } from "@/features/algorithms/components/case-diagram-view";
+import {
+  PanelActionBar,
+  type PanelAction,
+} from "@/features/algorithms/components/panel-action-bar";
 import type { DiagramPreviewMode } from "@/features/algorithms/preview-mode";
 import type { AlgorithmSetId } from "@/features/algorithms/types";
 import { useLearnSession } from "@/features/learn/use-learn-session";
@@ -31,6 +35,10 @@ export function LearnPanel({ initialCaseId, previewMode, setId }: LearnPanelProp
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
       if (event.repeat) return;
+      // With a keyboard attached to a coarse-pointer device, Space on a focused Back button would
+      // run toggleLearned() and - because preventDefault() here also suppresses the focused
+      // button's own activation - swallow Back entirely. Let the button handle its own keys.
+      if ((event.target as HTMLElement | null)?.closest("[data-panel-action]")) return;
 
       if (event.code === "ArrowLeft") {
         event.preventDefault();
@@ -60,8 +68,54 @@ export function LearnPanel({ initialCaseId, previewMode, setId }: LearnPanelProp
 
   const [primaryAlgorithm, ...alternateAlgorithms] = currentCase.algorithms;
 
+  // Back and Next are reachable only when they would actually do something - a case opened from
+  // the grid after being marked learned sits outside the teaching walk, so it has nowhere to go
+  // back or next to, and advertising two dead controls is worse than advertising none. Both slots
+  // stay in the layout regardless so the learned control does not jump sideways the moment an
+  // arrow appears; the unavailable one is reserved space rather than a control.
+  const actions: PanelAction[] = [
+    {
+      available: canGoBack,
+      icon: RiArrowLeftLine,
+      kind: "navigate",
+      label: "Back",
+      onActivate: back,
+    },
+    {
+      keyLabel: "Space",
+      kind: "act",
+      label: learned ? "Unlearn" : "Learned",
+      onActivate: toggleLearned,
+    },
+    {
+      available: canGoNext,
+      icon: RiArrowRightLine,
+      kind: "navigate",
+      label: "Next",
+      onActivate: next,
+    },
+  ];
+
   return (
     <Card className="site-panel site-panel-strong flex flex-col items-center gap-6 px-6 py-10 text-center">
+      <div className="space-y-1.5">
+        <p className="text-[0.65rem] font-medium tracking-[0.25em] text-muted-foreground/70 uppercase">
+          Setup
+        </p>
+        {/*
+          A move string wraps to two lines for some cases and one for others at phone widths, and
+          the panel grew and shrank between cases, shifting the cube and the buttons. Two lines of
+          `.alg-move-string` leading is 3.5rem; reserving it on the wrapper rather than the string
+          keeps the reservation when a case has no setup at all. Coarse pointers only - the
+          strings fit on one line at desktop widths, where this would be a permanent gap.
+        */}
+        <div className="pointer-coarse:min-h-14">
+          {setupMoves ? (
+            <p className="alg-move-string break-words text-muted-foreground">{setupMoves}</p>
+          ) : null}
+        </div>
+      </div>
+
       <CaseDiagramView
         cube={cube}
         label={currentCase.displayName}
@@ -70,77 +124,52 @@ export function LearnPanel({ initialCaseId, previewMode, setId }: LearnPanelProp
         size={180}
       />
 
-      <div className="space-y-1.5">
-        <p className="text-[0.65rem] font-medium tracking-[0.25em] text-muted-foreground/70 uppercase">
-          Setup
-        </p>
-        {setupMoves ? (
-          <p className="alg-move-string break-words text-muted-foreground">{setupMoves}</p>
-        ) : null}
-      </div>
-
-      <div className="w-full max-w-xl space-y-3 border-t border-border/60 pt-5">
+      <div className="w-full max-w-xl space-y-3">
         <div className="space-y-1.5">
-          <p className="text-[0.65rem] font-medium tracking-[0.25em] text-primary/85 uppercase">
+          <p className="text-[0.65rem] font-medium tracking-[0.25em] text-muted-foreground/70 uppercase">
             Solution
           </p>
-          <p className="alg-move-string break-words">{primaryAlgorithm}</p>
+          <p className="alg-move-string break-words pointer-coarse:min-h-14">{primaryAlgorithm}</p>
         </div>
 
-        {alternateAlgorithms.length > 0 ? (
-          <div>
-            <button
-              className="cursor-pointer text-xs text-muted-foreground underline decoration-primary/35 underline-offset-4 transition-colors hover:text-foreground"
-              onClick={() => {
-                setShowAlternates((previous) => !previous);
-              }}
-              type="button"
-            >
-              {showAlternates
-                ? "Hide alternates"
-                : `Show ${alternateAlgorithms.length} alternate${alternateAlgorithms.length === 1 ? "" : "s"}`}
-            </button>
+        {/*
+          A case with a single algorithm has no disclosure to show, and dropping the row outright
+          moved the cube and the buttons by its height plus the gap above it every time the walk
+          landed on one. The row is reserved instead. `min-h-5` rather than the `text-xs` button's
+          nominal 1rem line-height: the button is inline in a block container, so half-leading
+          renders its line box at 20px, and reserving 16px left a 2px shift behind. Not gated on
+          pointer type - unlike the move strings, this shifts at every width.
+        */}
+        <div className="min-h-5">
+          {alternateAlgorithms.length > 0 ? (
+            <>
+              <button
+                className="cursor-pointer text-xs text-muted-foreground underline decoration-primary/35 underline-offset-4 transition-colors hover:text-foreground"
+                onClick={() => {
+                  setShowAlternates((previous) => !previous);
+                }}
+                type="button"
+              >
+                {showAlternates
+                  ? "Hide alternates"
+                  : `Show ${alternateAlgorithms.length} alternate${alternateAlgorithms.length === 1 ? "" : "s"}`}
+              </button>
 
-            {showAlternates ? (
-              <ul className="mt-2 space-y-1.5 border-t border-border/60 pt-2">
-                {alternateAlgorithms.map((algorithm, index) => (
-                  <li className="alg-move-string break-words" key={`${currentCase.id}:${index}`}>
-                    {algorithm}
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-          </div>
-        ) : null}
+              {showAlternates ? (
+                <ul className="mt-2 space-y-1.5 border-t border-border/60 pt-2">
+                  {alternateAlgorithms.map((algorithm, index) => (
+                    <li className="alg-move-string break-words" key={`${currentCase.id}:${index}`}>
+                      {algorithm}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </>
+          ) : null}
+        </div>
       </div>
 
-      {/*
-        Hints are shown only for keys that would actually do something. A case opened from the
-        grid after being marked learned sits outside the teaching walk, so it has nowhere to go
-        back or next to - and advertising two dead keys is worse than advertising none.
-      */}
-      <div className="flex flex-wrap items-center justify-center gap-4 text-xs text-muted-foreground">
-        {canGoBack ? (
-          <span className="inline-flex items-center gap-1.5">
-            <Kbd>
-              <RiArrowLeftLine aria-hidden="true" className="size-3" />
-            </Kbd>
-            Back
-          </span>
-        ) : null}
-        <span className="inline-flex items-center gap-1.5">
-          <Kbd>Space</Kbd>
-          {learned ? "Unmark learned" : "Mark learned"}
-        </span>
-        {canGoNext ? (
-          <span className="inline-flex items-center gap-1.5">
-            <Kbd>
-              <RiArrowRightLine aria-hidden="true" className="size-3" />
-            </Kbd>
-            Next
-          </span>
-        ) : null}
-      </div>
+      <PanelActionBar actions={actions} />
     </Card>
   );
 }

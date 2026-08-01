@@ -1,4 +1,6 @@
-export type AlgorithmSetId = "oll" | "pll";
+export const ALGORITHM_SET_IDS = ["oll", "pll"] as const;
+
+export type AlgorithmSetId = (typeof ALGORITHM_SET_IDS)[number];
 
 export interface AlgorithmCase {
   id: string;

@@ -1,10 +1,10 @@
 /**
  * The one place this app decides what its `localStorage` keys look like.
  *
- * Three separate key families live behind it (`progress:<setId>`,
- * `pool:<setId>`, `preview-mode:<scope>`). Routing all three through here is
+ * Separate key families live behind it (`progress:<setId>`, `pool:<setId>`,
+ * `preview-mode:<scope>`, `algorithm-set`). Routing them all through here is
  * what keeps the legacy-prefix fallback below a single implementation rather
- * than three that can drift.
+ * than one copy per family.
  */
 
 /** Namespace for every key this app owns. */

@@ -1,8 +1,9 @@
 import { useEffect } from "react";
 
-import { Card, Kbd } from "@unimatrix/ui/public";
+import { Card } from "@unimatrix/ui/public";
 
 import { CaseDiagramView } from "@/features/algorithms/components/case-diagram-view";
+import { PanelActionBar } from "@/features/algorithms/components/panel-action-bar";
 import type { DiagramPreviewMode } from "@/features/algorithms/preview-mode";
 import type { AlgorithmCase, AlgorithmSetId } from "@/features/algorithms/types";
 import { useAlgorithmTrainer } from "@/features/trainer/use-algorithm-trainer";
@@ -43,12 +44,22 @@ export function TrainerPanel({
             size={180}
           />
 
-          {setupMoves ? <p className="alg-move-string break-words">{setupMoves}</p> : null}
+          {/* Two lines' worth of leading, so a case whose setup wraps does not move the cube and
+              the Next button. See the same reservation in `learn-panel.tsx`. */}
+          <div className="pointer-coarse:min-h-14">
+            {setupMoves ? <p className="alg-move-string break-words">{setupMoves}</p> : null}
+          </div>
 
-          <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Kbd>Space</Kbd>
-            Next case
-          </span>
+          <PanelActionBar
+            actions={[
+              {
+                keyLabel: "Space",
+                kind: "act",
+                label: "Next",
+                onActivate: next,
+              },
+            ]}
+          />
         </>
       ) : (
         <p className="text-sm text-muted-foreground">

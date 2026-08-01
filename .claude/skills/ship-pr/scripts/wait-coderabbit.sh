@@ -27,6 +27,12 @@ path. That outcome is recognised from the summary comment instead, and it is
 matched ahead of the in-progress marker: a body carrying both means the review
 finished while stale progress text is still in the window.
 
+The skipped notice is terminal only once a ping has been seen. With
+`auto_review.enabled: false` every PR carries that notice from the moment it
+opens, inside the `since` window of a waiter armed before the first ping, so
+reading it as a swallowed ping reports a refusal of something nobody sent. A
+ping is any comment in the window addressed to CodeRabbit by anyone else.
+
 There is no iteration cap: a cap that expired mid-cooldown would look identical
 to a silent failure, and a review that is genuinely running would trip it. It
 heartbeats on stderr instead, so silence carries its own elapsed time without
@@ -122,6 +128,7 @@ Output, one line, whichever applies:
   refused: merged, CodeRabbit is done for good
   refused: head commit changed mid-review
   refused: review failed — read the comment
+  auto-review-disabled notice, no ping yet — polling only
   refused: skipped — ping did not register    re-ping, nothing was spent
   nothing reviewable — that IS the review
 
@@ -201,6 +208,20 @@ repinged=0
 # is gone from a later poll while the review is still legitimately running —
 # recomputing this each round would report "nothing yet" mid-review.
 in_progress=0
+# Sticky for a second reason as well as that one: `ride_out_cooldown` advances
+# `since`, so a ping seen once leaves the window on the very next poll.
+#
+# The skipped notice cannot tell a swallowed ping from the resting state of a
+# repo with `auto_review.enabled: false` — every PR gets it at open, and this
+# waiter is armed before the first ping, so the notice lands inside `since` and
+# used to report a refusal of a ping that never existed. A ping is any comment
+# in the window addressed to CodeRabbit by anyone but CodeRabbit; its own
+# comments quote `@coderabbitai` in their help text, which is why the author is
+# filtered rather than the text alone.
+pinged=0
+# Said once, like `review in progress`, and for the same reason: the notice sits
+# in the window for the whole wait.
+skip_notice=0
 
 # Epoch seconds rendered in the reader's own timezone. Every comparison here is
 # epoch arithmetic and every API filter is UTC; this is display only, and a
@@ -307,6 +328,7 @@ ride_out_cooldown() {
   # testable: the next fixture entry exercises `repinged` on the way back in.
   if [ "$offline" -eq 1 ]; then
     repinged=1
+    pinged=1
     body=""
     echo "offline: re-ping suppressed, continuing as if posted"
     return 0
@@ -321,6 +343,7 @@ ride_out_cooldown() {
     return 1
   fi
   repinged=1
+  pinged=1
   body=""
   echo "re-pinged at $(local_time "$(date -u +%s)")"
   return 0
@@ -389,21 +412,31 @@ while true; do
         ;;
       *)
         n=$(count "$entry/reviews.json")
-        body=$(jq -r '.[] | select(.user.login == "coderabbitai[bot]") | .body' "$entry/comments.json")
+        comments=$(cat "$entry/comments.json")
+        body=$(jq -r '.[] | select(.user.login == "coderabbitai[bot]") | .body' <<<"$comments")
         ;;
     esac
   else
-    if n=$(count) && body=$(gh api "repos/$repo/issues/$pr/comments?since=$since" \
-      --jq '.[] | select(.user.login=="coderabbitai[bot]") | .body'); then
+    # The whole comment list, parsed here rather than by `gh --jq`, because two
+    # readings are taken from it: CodeRabbit's own text, and whether a ping is in
+    # the window at all. A parse failure has to land in `ok=0` alongside a failed
+    # call, or the three-strikes exit never sees it.
+    if n=$(count) && comments=$(gh api "repos/$repo/issues/$pr/comments?since=$since") &&
+      body=$(jq -r '.[] | select(.user.login == "coderabbitai[bot]") | .body' <<<"$comments"); then
       :
     else
       ok=0
-      err="gh call failed"
+      err="gh call failed or its comment list would not parse"
     fi
   fi
 
   if [ "$ok" -eq 1 ]; then
     fails=0
+    if [ "$pinged" -eq 0 ] && jq -e --arg bot "coderabbitai[bot]" \
+      'any(.[]; .user.login != $bot and (.body // "" | test("@coderabbitai")))' \
+      >/dev/null <<<"$comments"; then
+      pinged=1
+    fi
     if [ "$n" -gt "$base" ]; then
       echo "reviewed: $base -> $n"
       exit 0
@@ -448,8 +481,17 @@ while true; do
         fi
         ;;
       *"Review skipped"* | *"Auto reviews are disabled"*)
-        echo "refused: skipped — ping did not register"
-        exit 0
+        # Terminal only after a ping. Before one the same notice is just this
+        # repo's resting state, and exiting on it reports a refusal of something
+        # nobody sent.
+        if [ "$pinged" -eq 1 ]; then
+          echo "refused: skipped — ping did not register"
+          exit 0
+        fi
+        if [ "$skip_notice" -eq 0 ]; then
+          skip_notice=1
+          echo "auto-review-disabled notice, no ping yet — polling only"
+        fi
         ;;
     esac
   else
