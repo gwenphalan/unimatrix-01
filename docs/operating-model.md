@@ -14,7 +14,7 @@ The operating model is current-first:
   and CI, so the two cannot diverge.
 
 The root `AGENTS.md` carries the rest and is the authority where they overlap:
-which workspaces exist and which are reserved, what each package may depend on,
+how to tell a reserved path from a live one, what each package may depend on,
 the toolchain pins, and the branch, commit, and PR rules. The workspace roster
 itself is the filesystem — `pnpm-workspace.yaml` and `ls`, not a list committed
 beside it.

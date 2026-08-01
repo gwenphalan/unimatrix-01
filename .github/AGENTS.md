@@ -41,11 +41,11 @@ this file holds the mechanics, each of which was learned the hard way.
 - `infra/scripts/check-app-wiring.sh` (run by `pnpm check`/`pnpm verify` and by the `App wiring`
   step in `Verify`, placed before `pnpm install` because it needs no `node_modules`) is the
   mechanical guard on three things nothing else sees: the `packages/chrome` `@source` line in each
-  Vite app's stylesheet, `@tanstack/react-router` in its vite `dedupe`, and every
-  `apps/*/Dockerfile` appearing in the `Images` matrix. It is also the app template — a new app
-  satisfies it or the check goes red. Adding it to `pnpm check` alone is not a pre-merge gate: the
-  only other thing that runs it is the scheduled `maintenance.yml` pass against already-merged
-  `main`.
+  `apps/*` stylesheet, `@tanstack/react-router` in its vite `dedupe`, and every
+  `apps/*/Dockerfile` appearing in the `Images` matrix. It walks `apps/*` only, so `lab` carries the
+  first two requirements unchecked. It is also the app template, but only for an app it can
+  classify: a new Vite or Dockerized app satisfies it or the check goes red, while an `apps/*`
+  directory with neither `vite.config.ts` nor `Dockerfile` is skipped and passes.
 - `infra/scripts/check-agents-md-symlinks.sh` (same placement and rationale, as the `AGENTS.md
   symlinks` step) asserts every `AGENTS.md` has a sibling `CLAUDE.md` symlink pointing at it.
   Claude Code reads `CLAUDE.md`, not `AGENTS.md`, and discovers nested ones on demand when a file in

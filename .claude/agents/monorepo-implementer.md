@@ -74,7 +74,7 @@ Your final message is the handover. It carries:
 - what you built, in the owner's terms rather than a list of symbols
 - the decisions you made that the plan left open, and why
 - every command you ran and what it actually returned
-- what you could not verify, plainly — an unmentioned gap reads as a confirmed result
+- what you could not verify, plainly
 - anything you deliberately left out of scope
 
 No preamble, no offer to continue.

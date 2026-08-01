@@ -124,8 +124,8 @@ The body must carry three things, in this order:
    decision has a non-obvious reason (an ordering that prevents a silent no-op, a hook owned by one
    component because two copies would desync), that reason belongs in the body; it is exactly what
    a reviewer cannot reconstruct and will otherwise flag as arbitrary.
-3. **What you could not verify.** Plainly. An unmentioned gap reads as a confirmed result. If a fix
-   is precautionary rather than demonstrated, say so — do not let it read as a proven fix.
+3. **What you could not verify.** Plainly. If a fix is precautionary rather than demonstrated, say
+   so — do not let it read as a proven fix.
 
 ## Gather what the reviewer cannot see
 

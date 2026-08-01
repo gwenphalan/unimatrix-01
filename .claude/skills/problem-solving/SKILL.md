@@ -77,14 +77,14 @@ Keep this cheap and wide. Options are for discarding — the expensive mistake i
 
 ## 5. Converge
 
-One recommendation, with the alternatives visible and a reason each was not chosen. Not a survey: the
-owner is short of time, not ability, so give the trade-offs at full depth and then say what you would
-do.
+One recommendation, with the alternatives visible and a reason each was not chosen. Not a survey:
+what is scarce is the owner's hands-on time, not the ability to follow the reasoning — so give the
+trade-offs at full depth and then say what you would do.
 
 Every recommendation carries:
 
 - **What would change your mind.** The observation that would make this the wrong call.
-- **What you could not verify.** Plainly. An unmentioned gap reads as a confirmed result.
+- **What you could not verify.** Plainly.
 - **Whose call it is.** Dependency, tooling and architectural choices are the owner's — present
   options with a recommendation, do not decide them. Everything else, decide and report.
 
