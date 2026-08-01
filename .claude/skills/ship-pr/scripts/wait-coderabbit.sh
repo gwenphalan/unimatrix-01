@@ -35,8 +35,34 @@ Arguments:
   <owner/repo>  e.g. gwenphalan/unimatrix-01
   <pr>          Pull request number
 
+A rate-limit refusal is not a review — nothing was read — so this rides the
+cooldown out and re-pings, once, rather than handing back three manual steps
+whose arithmetic is the part that goes wrong. The deadline is the marker
+comment's updated_at plus its countdown, never "now plus the countdown".
+
+Four guards, because a ping is a spent slot and sustained pinging tightens an
+adaptive limit:
+
+  - Exactly one automatic re-ping. A second refusal means the window is longer
+    than advertised, and that is the owner's call, not a loop's.
+  - Only a rate-limit refusal. A merged PR, a changed head or a skipped ping
+    still exit immediately; re-pinging those buys nothing.
+  - A cooldown longer than the threshold exits with the figure instead of
+    sleeping on it, so a long window stays a decision rather than a stall.
+  - `since` advances to just before the ping. Skip that and the previous
+    marker, still inside the old window, matches instantly and reports a
+    refusal that already expired.
+
+Fixture runs never post. The re-ping is live-only.
+
 Environment:
   SHIP_PR_POLL_SECONDS  Seconds between polls. Default 30.
+  SHIP_PR_AUTO_REPING   1 to ride out a rate limit and re-ping once (default),
+                        0 to report the refusal and exit as before.
+  SHIP_PR_MAX_COOLDOWN  Longest cooldown to wait out, in seconds. Default 1800.
+                        Beyond it the script exits and leaves the call to you.
+                        Raise it for an overnight run, where wall-clock is free
+                        and nobody is waiting.
   SHIP_PR_SINCE         ISO-8601 UTC timestamp to filter comments from.
                         Defaults to now, captured before the baseline returns.
   SHIP_PR_FIXTURES      Colon-separated entries consumed one per iteration in
@@ -54,7 +80,11 @@ Environment:
 Output, one line, whichever applies:
   reviewed: <base> -> <n>                     the count rose; triage the findings
   reviewed clean, count unchanged at <n>      it ran and found nothing
+  cooling down <n>s, re-pinging at <iso>      riding out a rate limit, then one ping
+  re-pinged after cooldown                    the ping is posted; the wait goes on
   refused: rate limited                       cool down, recompute, re-ping
+  refused: rate limited, cooldown <n>s exceeds threshold
+  refused: rate limited again after one re-ping
   refused: merged, CodeRabbit is done for good
   refused: head commit changed mid-review
   refused: review failed — read the comment
@@ -125,6 +155,41 @@ n=$base
 body=""
 fails=0
 i=0
+auto_reping=${SHIP_PR_AUTO_REPING:-1}
+max_cooldown=${SHIP_PR_MAX_COOLDOWN:-1800}
+repinged=0
+
+# Epoch seconds rendered in the reader's own timezone. Every comparison here is
+# epoch arithmetic and every API filter is UTC; this is display only, and a
+# deadline printed in UTC is one the reader has to convert before it means
+# anything.
+local_time() { date -d "@$1" '+%-I:%M:%S %p %Z'; }
+
+# Seconds remaining on the cooldown, from the marker comment's own updated_at
+# plus its countdown. Prints a bare integer, or nothing when the deadline
+# cannot be established — an unparseable countdown must not be read as zero,
+# because zero would ping immediately into a live limit.
+cooldown_remaining() {
+  local line updated count unit secs deadline
+  line=$("$here/coderabbit-deadline.sh" "$repo" "$pr" 2>/dev/null) || return 1
+  case $line in
+    updated=*countdown=[0-9]*) : ;;
+    *) return 1 ;;
+  esac
+  updated=${line#updated=}
+  updated=${updated%% *}
+  count=${line##*countdown=}
+  unit=${count#* }
+  count=${count%% *}
+  case $unit in
+    second*) secs=1 ;;
+    minute*) secs=60 ;;
+    hour*) secs=3600 ;;
+    *) return 1 ;;
+  esac
+  deadline=$(date -u -d "$updated" +%s 2>/dev/null) || return 1
+  echo $((deadline + count * secs - $(date -u +%s)))
+}
 
 while true; do
   ok=1
@@ -172,8 +237,42 @@ while true; do
         exit 0
         ;;
       *"rate limited by coderabbit.ai"*)
-        echo "refused: rate limited"
-        exit 0
+        # A refusal read nothing, so the re-ping is still the *first* review.
+        # Only this outcome is worth riding out; the rest are final.
+        if [ "$repinged" -eq 1 ]; then
+          echo "refused: rate limited again after one re-ping"
+          exit 0
+        fi
+        if [ "$offline" -eq 1 ] || [ "$auto_reping" -ne 1 ]; then
+          echo "refused: rate limited"
+          exit 0
+        fi
+        if ! remaining=$(cooldown_remaining); then
+          echo "refused: rate limited"
+          exit 0
+        fi
+        [ "$remaining" -lt 0 ] && remaining=0
+        if [ "$remaining" -gt "$max_cooldown" ]; then
+          echo "refused: rate limited, cooldown $((remaining / 60))m exceeds threshold"
+          exit 0
+        fi
+        # +15s of slack: the countdown is whatever was true when the comment was
+        # last edited, so pinging exactly on the boundary earns a second refusal
+        # and burns the one retry.
+        remaining=$((remaining + 15))
+        echo "cooling down $((remaining / 60))m, re-pinging at $(local_time $(($(date -u +%s) + remaining)))"
+        sleep "$remaining"
+        # Before the ping, never after: the marker that just refused us is still
+        # inside the old window and would match on the very next poll. This one
+        # stays UTC — it is an API filter, not something anyone reads.
+        since=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+        if ! gh pr comment "$pr" --repo "$repo" --body "@coderabbitai full review" >/dev/null 2>&1; then
+          echo "refused: rate limited, and the re-ping could not be posted"
+          exit 0
+        fi
+        repinged=1
+        body=""
+        echo "re-pinged at $(local_time "$(date -u +%s)")"
         ;;
       *"did not have any reviewable changes"*)
         echo "nothing reviewable — that IS the review"
