@@ -29,7 +29,8 @@ finished while stale progress text is still in the window.
 
 There is no iteration cap: a cap that expired mid-cooldown would look identical
 to a silent failure, and a review that is genuinely running would trip it. It
-heartbeats instead, so silence carries its own elapsed time.
+heartbeats on stderr instead, so silence carries its own elapsed time without
+costing the caller a notification per interval.
 
 Arguments:
   <owner/repo>  e.g. gwenphalan/unimatrix-01
@@ -123,7 +124,10 @@ Output, one line, whichever applies:
   refused: review failed — read the comment
   refused: skipped — ping did not register    re-ping, nothing was spent
   nothing reviewable — that IS the review
-  still waiting, review running, count=<n>, <m>m elapsed        heartbeat
+
+On stderr, every 10th poll, so it reaches a terminal and the monitor's output
+file without waking a caller that only reads stdout:
+  still waiting, review running, count=<n>, <m>m elapsed
   still waiting, nothing from CodeRabbit yet, count=<n>, <m>m elapsed
   API ERROR xN (count=<n>) — <message>        three consecutive failures
 
@@ -458,10 +462,22 @@ while true; do
 
   i=$((i + 1))
   if [ $((i % 10)) -eq 0 ]; then
+    # stderr, not stdout, and deliberately. Under `Monitor` only stdout is the
+    # event stream, so a heartbeat on stdout wakes the caller every 5 minutes to
+    # be told nothing changed — and a line nobody can act on is the one thing
+    # that guidance says not to emit. On stderr it still reaches the terminal for
+    # a human, and still lands in the monitor's output file, so a review stuck
+    # in progress is diagnosable after the fact. Measured, not assumed: a stderr
+    # line produced no notification and appeared in the output file as
+    # `[stderr] ...`.
+    #
+    # The two cases this used to disambiguate are covered now. A dead script is
+    # reported when the stream ends, and running-versus-nothing is a state change
+    # printed once above.
     if [ "$in_progress" -eq 1 ]; then
-      echo "still waiting, review running, count=$n, $(((i * poll) / 60))m elapsed"
+      echo "still waiting, review running, count=$n, $(((i * poll) / 60))m elapsed" >&2
     else
-      echo "still waiting, nothing from CodeRabbit yet, count=$n, $(((i * poll) / 60))m elapsed"
+      echo "still waiting, nothing from CodeRabbit yet, count=$n, $(((i * poll) / 60))m elapsed" >&2
     fi
   fi
 

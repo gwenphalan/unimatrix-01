@@ -25,6 +25,12 @@ Read as a bucket alone it is the line that waves an unreviewed merge through.
 Every other check here has an empty description, so this annotates only the ones
 carrying information.
 
+Expect that line to read "skipped" here, and do not wait for it to change. This
+script stops when no check is pending, which is normally before any review has
+been asked for — the point of the checks watch is to tell you the diff is green
+enough to ping. The review outcome belongs to wait-coderabbit.sh, and blocking
+here until a description moved would hang on every PR that is never pinged.
+
 A failed `gh` call is not an empty result. An expired token returning a
 valid-looking empty list would leave the loop sleeping forever, which is the
 same silence a slow CI run produces. Three consecutive failures print what `gh`
