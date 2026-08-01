@@ -124,7 +124,12 @@ export function LearnPanel({ initialCaseId, previewMode, setId }: LearnPanelProp
         size={180}
       />
 
-      <div className="w-full max-w-xl space-y-3">
+      {/*
+        No width cap, matching the setup block above. A 36rem cap here used to fit every algorithm,
+        but the move strings are 1.2rem now and PLL Na's solution crosses it - so the solution wrapped
+        while the setup, an equally long string with no cap, did not.
+      */}
+      <div className="w-full space-y-3">
         <div className="space-y-1.5">
           <p className="text-[0.65rem] font-medium tracking-[0.25em] text-muted-foreground/70 uppercase">
             Solution
