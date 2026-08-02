@@ -7,7 +7,7 @@ export interface AlgorithmCase {
   displayName: string;
   group: string;
   algorithms: string[];
-  /** Read only by `orderedLearnCases`, as a sort key; Drill draws uniformly. */
+  /** Read only by `orderedLearnCases`, as a sort key; Drill's bag ignores it. */
   caseFrequency: number;
 }
 
