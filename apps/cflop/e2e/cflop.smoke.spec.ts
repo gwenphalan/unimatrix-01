@@ -49,6 +49,18 @@ test("homepage load", async ({ page }) => {
   await expect(main.getByRole("link", { name: "Drill" })).toBeVisible();
 
   await scanAccessibility(page, "/");
+
+  // The prerendered head is a build artifact of the served file; React owns the
+  // head once it mounts, so leaving any of it behind means two of every meta
+  // and link.
+  await expect(page.locator("[data-prerendered-head]")).toHaveCount(0);
+
+  // The one real-browser check that React's `<title>` wins over the static one
+  // the served file keeps. A stale tab title after a client navigation is the
+  // symptom if it stops.
+  await main.getByRole("link", { name: "Learn" }).click();
+  await expect(page).toHaveTitle("CFLOP - Learn");
+
   expectNoPageErrors(pageErrors);
 });
 
