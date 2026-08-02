@@ -50,9 +50,15 @@ test("homepage load", async ({ page }) => {
 
   await scanAccessibility(page, "/");
 
-  // The prerendered head is a build artifact of the served file; React owns the
-  // head once it mounts, so leaving any of it behind means two of every meta
-  // and link.
+  // Assert the tags were served before asserting they are gone. `count === 0`
+  // on its own passes against any server that never emitted them — a dev server
+  // reached through `reuseExistingServer`, or a build whose prerender step
+  // silently did nothing. The pair is what makes the removal the thing measured.
+  const servedHtml = await (await page.request.get("/")).text();
+  expect(servedHtml).toContain("data-prerendered-head");
+
+  // React owns the head once it mounts, so leaving any of it behind means two
+  // of every meta and link.
   await expect(page.locator("[data-prerendered-head]")).toHaveCount(0);
 
   // The one real-browser check that React's `<title>` wins over the static one

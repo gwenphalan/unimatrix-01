@@ -87,6 +87,15 @@ for _ in $(seq 1 60); do
   sleep 0.5
 done
 
+# Without this, a container that never answers fails at the first `check_url`
+# instead, where `set -e` aborts inside a command substitution and prints
+# nothing at all — the log would show a passing run that simply stopped.
+if ! curl -sf -o /dev/null "${BASE_URL}/"; then
+  printf 'check-cflop-serving: no answer on %s within 30s\n' "${BASE_URL}" >&2
+  docker logs "${CONTAINER}" >&2 || true
+  exit 1
+fi
+
 # The config the rest of this script probes, checked directly: a syntax error
 # would otherwise surface as every row failing at once.
 if docker exec "${CONTAINER}" nginx -t >/dev/null 2>&1; then
@@ -95,8 +104,9 @@ else
   fail "nginx -t"
 fi
 
-# The image's own HEALTHCHECK command. Dropping `index index.html` is what would
-# break it, and an unhealthy container is a deploy that never comes up.
+# The image's own HEALTHCHECK command. `location = / { try_files /index.html
+# =404; }` is what answers it, and an unhealthy container is a deploy that never
+# comes up.
 if docker exec "${CONTAINER}" wget -q -O /dev/null http://127.0.0.1:8080/; then
   pass "HEALTHCHECK request succeeds"
 else
