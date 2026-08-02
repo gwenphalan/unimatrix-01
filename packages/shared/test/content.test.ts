@@ -22,11 +22,10 @@ describe("urlSchema scheme restriction", () => {
     expect(parseWithLiveUrl("http://localhost:5173")).toBe(true);
   });
 
-  it("accepts the URLs the seed content actually carries", () => {
-    // Both values in `content/projects/cflop.md`. A seed that stops
-    // parsing would be a worse outcome than the inconsistency this fixes.
+  it("accepts the URL the seed content actually carries", () => {
+    // `liveUrl` in `content/projects/cflop.md`. A seed that stops parsing would
+    // be a worse outcome than the inconsistency this fixes.
     expect(parseWithLiveUrl("https://cflop.unimatrix-01.dev")).toBe(true);
-    expect(parseWithLiveUrl("https://jperm.net/algs")).toBe(true);
   });
 
   it("rejects javascript: URLs", () => {

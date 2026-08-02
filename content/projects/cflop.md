@@ -11,4 +11,4 @@ CFLOP is a browser-based drill tool for the last-layer stage of the CFOP speedcu
 
 The app has two modes, chosen up front: Learn walks new OLL or PLL cases one at a time in a fixed teaching order, so you can mark each as known as you pick it up. Drill draws flashcards uniformly at random from whichever cases you've enabled, for fast keyboard-driven recall practice. Both modes track per-case progress in the browser, so learning and training pool selections persist between sessions without an account.
 
-Algorithm data is sourced directly from [J Perm's algorithm trainer](https://jperm.net/algs), and the app is built on the same TanStack Router, Tailwind, and shadcn UI stack as the rest of this site.
+The app is built on the same TanStack Router, Tailwind, and shadcn UI stack as the rest of this site.
