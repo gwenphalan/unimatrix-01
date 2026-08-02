@@ -47,8 +47,9 @@ future invites a second implementation instead of reuse.
 doc holds. If the file does not say it was measured, and you cannot make it true by running
 something, that is a finding.
 
-**Contradiction, within a file before across files.** The contradictions this repo actually shipped
-were mostly local — one file denying sixteen lines later what it asserted. Read each file whole.
+**Contradiction, within a file before across files.** A local contradiction — one file denying
+sixteen lines later what it asserted — is both the easiest to miss and the cheapest to fix. Read each
+file whole.
 
 **Overlap across files.** Two files stating the same rule is not reinforcement; it is a
 reconciliation cost paid on every session and two places to go stale. Name both, and say which

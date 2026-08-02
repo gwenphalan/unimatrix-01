@@ -11,7 +11,7 @@ a merge. Its comments are leads to verify against primary sources, never conclus
 the cooldown and re-ping" below. The four cases that do license one are listed there, along with the
 flag that carries them out.
 
-### Ask for the review — it does not run automatically
+## Ask for the review — it does not run automatically
 
 `.coderabbit.yaml` sets `reviews.auto_review.enabled: false`, so a review happens only when asked
 for. **Ask by arming `watch-pr.sh` — it posts `@coderabbitai full review` itself.** Do not type the
@@ -70,7 +70,7 @@ substantial rather than a one-liner, that fix is new code nothing has reviewed, 
 is right. Seven nitpicks earn nothing; one data-loss bug with a real fix does. Say in the merge
 report why you spent the slot.
 
-### Rate limits, when you do hit one
+## Rate limits, when you do hit one
 
 **A passing CodeRabbit check does not mean the PR was reviewed — the bucket never tells you.** It is
 `pass` either way. The signal lives in the check's *description*, and only there. Measured on the
@@ -109,7 +109,7 @@ That exact string has not been observed here — treat it as read, not measured.
    A window that has already lapsed still reads "rate limited" — check the arithmetic before
    assuming you must keep waiting.
 
-#### Wait out the cooldown and re-ping — do not merge unreviewed just because you were refused
+### Wait out the cooldown and re-ping — do not merge unreviewed just because you were refused
 
 A refusal is not a review. **Default to waiting**, and merge unreviewed only when waiting is the
 thing that costs something. Two cases where waiting is clearly right:
@@ -167,7 +167,7 @@ time. It says so and exits without posting anything. `--help` carries every outc
 Cooldowns here have run to minutes, not hours, and a five-minute wait has bought a review that found a
 real defect. Waiting is usually the cheap side of this trade.
 
-### Confirming a review actually ran
+## Confirming a review actually ran
 
 **Do not count inline comments.** Findings can arrive as "outside diff range" body text with no
 inline comment at all, so read the newest review's **body** too. Read instead: the review count

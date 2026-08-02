@@ -181,10 +181,21 @@ Nothing else collects these for you; `/code-review` does not.
 .claude/skills/ship-pr/scripts/pr-signals.sh <pr>
 ```
 
-`introduced` and `unresolvedThreads` both empty is the clean PR, and it needs nothing further — say
-so in the body and move on. **Dispatch `pr-signal-collector` only when one of them is not empty**,
-because triaging an introduced alert against a pre-existing one is judgement the JSON does not carry.
-A dispatch to be told the categories are empty is a dispatch that read a file you already read.
+The script does not collect bot comments — a bot that reports as a passing check and puts its
+findings in a comment is invisible to it. That is a second one-line read, not a reason to dispatch:
+
+```sh
+gh pr view <pr> --comments
+```
+
+Everything from `coderabbitai[bot]` there belongs to `watch-pr.sh` and is not this step's business.
+
+All three empty — `introduced`, `unresolvedThreads`, and any bot comment that is not CodeRabbit's —
+is the clean PR, and it needs nothing further: say so in the body and move on. **Dispatch
+`pr-signal-collector` only when one of them is not**, because triaging an introduced alert against a
+pre-existing one, or deciding what a bot's comment actually claims, is judgement neither read
+carries. A dispatch to be told the categories are empty is a dispatch that read a file you already
+read.
 
 ## Review before merge — hand off to a fresh reader
 
