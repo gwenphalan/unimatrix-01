@@ -176,6 +176,13 @@ check checks-timeout 0 "$(f quiet)" "$three" SHIP_PR_CHECKS_TIMEOUT=0 \
 checks timed out after 0m — never reported: Verify, Images (api), CodeQL
 EOF
 
+# A non-numeric cap is rejected at startup. Left to the comparison it evaluates
+# false on every poll, so the run is unbounded — the one failure mode the cap
+# exists to remove.
+check checks-timeout-non-numeric 1 "$(f quiet)" "$three" SHIP_PR_CHECKS_TIMEOUT=soon \
+  SHIP_PR_CHECKS_FIXTURES="$(cf checks-all-pending.json)" <<'EOF'
+EOF
+
 # An empty required list is a failure, not a vacuously green gate.
 check no-required-contexts 1 "$(f quiet)" \
   SHIP_PR_BRANCH_RULES_FIXTURE="$here/branch-rules-empty.json" <<'EOF'

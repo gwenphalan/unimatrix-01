@@ -357,10 +357,10 @@ Also on stderr, said once where they apply:
 
 Exit codes:
   0  a terminal outcome in either phase was reached, or a fixture list ran out
-  1  bad usage, a partial fixture set, an empty or unreadable required-context
-     list, an unreadable base branch or head sha, a failed baseline, or a ping
-     that would not post or came back with a timestamp nothing can compare
-     against
+  1  bad usage, a partial fixture set, a non-numeric SHIP_PR_CHECKS_TIMEOUT, an
+     empty or unreadable required-context list, an unreadable base branch or head
+     sha, a failed baseline, or a ping that would not post or came back with a
+     timestamp nothing can compare against
   2  three consecutive API failures. The two phases count separately: different
      calls, different failure modes.
 EOF
@@ -394,6 +394,15 @@ for v in "${SHIP_PR_FIXTURES:-}" "${SHIP_PR_CHECKS_FIXTURES:-}" "${SHIP_PR_BRANC
 done
 if [ "$set_fixtures" -ne 0 ] && [ "$set_fixtures" -ne 3 ]; then
   echo "SHIP_PR_FIXTURES, SHIP_PR_CHECKS_FIXTURES and SHIP_PR_BRANCH_RULES_FIXTURE are set together or not at all" >&2
+  exit 1
+fi
+
+# Rejected here rather than at the comparison. `[ "$elapsed" -ge "$timeout" ]`
+# with a non-numeric operand prints `integer expression expected` and evaluates
+# false, so the cap never fires: the run is unbounded and says why on every
+# single poll.
+if ! [[ $checks_timeout =~ ^[0-9]+$ ]]; then
+  echo "SHIP_PR_CHECKS_TIMEOUT must be a whole number of seconds, got: $checks_timeout" >&2
   exit 1
 fi
 
