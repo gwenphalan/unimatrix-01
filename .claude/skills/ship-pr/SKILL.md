@@ -54,7 +54,11 @@ and a lack of objection is not approval.
 6. **Once they are satisfied, open the PR.** Body per the section below.
 7. **Arm `watch-pr.sh`** — it waits for every required check, pings CodeRabbit once they are green,
    and arms auto-merge on a clean review. Dispatch `pr-signal-collector` alongside it for the
-   findings that never reach the checks list, then hand the PR to a fresh reader.
+   findings that never reach the checks list. **Wait for the watcher to report before handing the
+   PR to a fresh reader** — it runs under `Monitor`, so it is still working while you read this
+   line, and a reader dispatched now gets a branch whose checks have not reported. If that fresh
+   reader *is* the pre-merge review, run with `SHIP_PR_AUTO_MERGE=0`, or the PR can merge out from
+   under it.
 8. **Merge once everything clears,** then strike the shipped line from `.notes/`.
 
 Steps 1 and 4 are delegated on purpose: a fresh context re-derives from the code, where you would
@@ -524,8 +528,10 @@ to the summary comment", not as an answer.
 **The waiter can merge for you on the clean row, and only that row.** It arms GitHub's native
 auto-merge by default when the review comes back clean, pinned with `--match-head-commit` to the sha
 that was reviewed; GitHub then squashes once every required check passes, so nothing here re-verifies
-green or races a branch that goes `BEHIND`, and a push landing after the review cancels the arm
-instead of merging code nothing read. It declines to arm on a draft PR, on any unresolved review
+green or races a branch that goes `BEHIND`. A push landing between the review and the arm makes the
+arm fail outright — measured, see below — but a push landing *after* a successful arm is a case
+nothing here has established, so do not read this as a standing guarantee. It declines to arm on a
+draft PR, on any unresolved review
 thread, and on a PR state it could not read. `SHIP_PR_AUTO_MERGE=0` turns it off. No other row
 qualifies: a refusal read nothing, a review with findings is not clean, and `did not have any
 reviewable changes` is an unreviewed merge in a clean one's clothes.
