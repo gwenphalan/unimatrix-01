@@ -327,7 +327,8 @@ CodeRabbit is **advisory and non-blocking**, and it is **not a required check** 
 a merge. Its comments are leads to verify against primary sources, never conclusions to act on.
 
 "Non-blocking" never licenses merging with no review at all — when it is rate-limited, see "Wait out
-the cooldown and re-ping" below.
+the cooldown and re-ping" below. The four cases that do license one are listed there, along with the
+flag that carries them out.
 
 ### Ask for the review — it does not run automatically
 
@@ -439,8 +440,21 @@ thing that costs something. Two cases where waiting is clearly right:
   merges into a review the owner will read in the morning anyway, so trading time for a real review
   is pure gain.
 
-Merge unreviewed when the owner is actively waiting on this PR, or when it blocks other work, or the
-window is long and the diff is trivial. Say which in the merge report.
+Merge unreviewed when the owner is actively waiting on this PR, when it blocks other work, when the
+window is long and the diff is trivial, or when the owner asks for an unreviewed merge outright. Say
+which in the merge report.
+
+**Carry that out with `watch-pr.sh --no-review`, never with a merge you assemble yourself.** It waits
+for the required checks and then arms auto-merge with no ping and no review wait — and it still ends
+on a `BEHIND` or `DIRTY` branch, still declines on a draft PR, on unresolved review threads and on a
+PR state it could not read, and still pins the arm to the head sha it saw. A hand-rolled `gh pr
+merge` skips every one of those, which is the actual risk of leaving this path unsupported: the
+review gets skipped either way, and the improvised version drops the guards as well.
+
+So the flag is not a fifth case, and it excuses nothing. It is how the four above are done, and it
+prints `auto-merge armed UNREVIEWED on <sha>` rather than the clean-review line, because an
+unreviewed merge is unreviewed permanently. `SHIP_PR_AUTO_MERGE=0` outranks it, for when you want the
+wait skipped but the merge left to a person.
 
 To wait: **arm a `Monitor` and carry on working.** This is the case `Monitor` is for — an outcome that
 arrives on someone else's schedule, with no way to know which of five endings it will be.
@@ -624,11 +638,14 @@ Merge once every required check is green, **a fresh reader has reviewed the bran
 comments are handled. Report what actually happened: which checks ran, who reviewed and how, what
 was raised and how each was resolved, and anything left undone.
 
-The fresh-reader precondition has exactly three exceptions, every one of them about a reviewer being
+The fresh-reader precondition has exactly four exceptions. Three are about a reviewer being
 *unavailable* rather than unnecessary: the owner is actively waiting on this PR, the PR blocks other
-work, or CodeRabbit's cooldown is long and the diff trivial. A rate-limited CodeRabbit on its own is
-not one of them — that is a reason to *wait*, and the arithmetic is under "Wait out the cooldown and
-re-ping". Taking an exception means naming which in the report.
+work, or CodeRabbit's cooldown is long and the diff trivial. The fourth is the owner asking for an
+unreviewed merge outright — theirs to ask for, and the reason `watch-pr.sh --no-review` exists rather
+than a merge command an agent invents on the spot. A rate-limited CodeRabbit on its own is not one of
+them — that is a reason to *wait*, and the arithmetic is under "Wait out the cooldown and re-ping".
+Taking an exception means naming which in the report, and running it through `--no-review`, which
+keeps the merge preconditions the review path applies.
 
 Name the reviewer too: CodeRabbit, `/code-review` or a subagent because CodeRabbit was rate-limited,
 or `/code-review ultra` because the change was large or security-sensitive. If none happened, say so
