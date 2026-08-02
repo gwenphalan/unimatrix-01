@@ -664,6 +664,102 @@ while true; do
 done
 
 ########################################################################
+# Arming the merge
+########################################################################
+
+auto_merge=${SHIP_PR_AUTO_MERGE:-1}
+
+# Unresolved review threads on the PR, as a bare integer. Nothing on failure.
+#
+# A clean summary is not the same as a clear PR: findings can arrive as body text
+# with no inline comment, and a thread left open is a finding nobody answered.
+#
+# Paginated, and that is the whole point of the guard rather than a nicety: one
+# page of 100 threads reports the unresolved ones it can see, so a PR carrying
+# more than that would arm an unattended merge over findings sitting on page 2.
+# `--jq` runs per page, so the counts come back one per line and are summed here.
+# A line that is not a bare integer aborts the sum and prints nothing, which the
+# caller reads as a count it could not establish — the guard fails closed in
+# every direction it can fail.
+unresolved_threads() {
+  local pages
+  # shellcheck disable=SC2016  # GraphQL variables, not shell: $owner/$name/$pr
+  # are bound by the -F flags above, and $endCursor by --paginate.
+  pages=$(gh api graphql --paginate -F owner="${repo%%/*}" -F name="${repo##*/}" -F pr="$pr" --jq \
+    '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false)] | length' \
+    -f query='query($owner: String!, $name: String!, $pr: Int!, $endCursor: String) {
+      repository(owner: $owner, name: $name) {
+        pullRequest(number: $pr) {
+          reviewThreads(first: 100, after: $endCursor) {
+            nodes { isResolved }
+            pageInfo { hasNextPage endCursor }
+          }
+        }
+      }
+    }' 2>/dev/null) || return 1
+  # `bad` rather than a bare `exit 1`: awk runs END even on exit, so exiting
+  # there alone still printed a total — a zero, which is precisely the answer
+  # that arms the merge.
+  awk '{ if ($0 !~ /^[0-9]+$/) { bad = 1 ; exit 1 } ; total += $0 }
+       END { if (bad || NR == 0) exit 1 ; print total + 0 }' <<<"$pages"
+}
+
+# Hands the merge to GitHub rather than performing it here. `--auto` waits for
+# every *required* status check on its own, so this never has to re-verify green
+# or race a branch that goes BEHIND mid-wait — the same contract
+# .github/workflows/dependabot-auto-merge.yml relies on.
+#
+# Reached only from the clean-review arm: a refusal read nothing, a review with
+# findings is not clean, and an unreviewable diff is an unreviewed merge in a
+# clean one's clothes.
+#
+# `--match-head-commit` is the guard the default carries its weight on. GitHub's
+# auto-merge survives subsequent pushes, which is the entire hazard — pinning the
+# arm to the sha CodeRabbit actually reviewed makes a later push cancel it
+# instead of merging unreviewed code. The sha is printed so that cancellation is
+# not silent.
+#
+# No `--delete-branch`: the repo already sets delete_branch_on_merge, and the
+# flag additionally tries to delete the LOCAL branch, which fails from a
+# worktree.
+#
+# Every path here says which one it took. One generic failure line covered five
+# different situations, and "merge by hand" is not what a reader needs to know
+# when the answer is that the PR is still a draft.
+arm_auto_merge() {
+  [ "$auto_merge" -eq 1 ] || return 0
+  if [ "$offline" -eq 1 ]; then
+    echo "offline: auto-merge not armed"
+    return 0
+  fi
+  local draft threads
+  draft=$(gh pr view "$pr" --repo "$repo" --json isDraft --jq '.isDraft' 2>/dev/null) || draft=""
+  threads=$(unresolved_threads) || threads=""
+  # Fails closed. A state that could not be read is not a state that permits an
+  # unattended merge.
+  if [ -z "$draft" ] || [ -z "$threads" ]; then
+    echo "auto-merge not armed — the PR state could not be read"
+    return 0
+  fi
+  if [ "$draft" = "true" ]; then
+    echo "auto-merge not armed — PR is a draft"
+    return 0
+  fi
+  if [ "$threads" -ne 0 ]; then
+    echo "auto-merge not armed — $threads unresolved threads"
+    return 0
+  fi
+  if gh pr merge "$pr" --repo "$repo" --auto --squash --match-head-commit "$head_sha" >/dev/null 2>&1; then
+    echo "auto-merge armed on $head_sha — GitHub squashes once the required checks pass"
+  else
+    # Never silent, and never phrased as though it merged. Arming fails for
+    # reasons worth seeing: auto-merge disabled on the repo, a branch GitHub will
+    # not fast-forward, missing permission.
+    echo "auto-merge could NOT be armed — merge by hand"
+  fi
+}
+
+########################################################################
 # The transition — pin the head, then phase 2
 ########################################################################
 
@@ -745,7 +841,6 @@ status_line=""
 fails=0
 i=0
 auto_reping=${SHIP_PR_AUTO_REPING:-1}
-auto_merge=${SHIP_PR_AUTO_MERGE:-1}
 max_cooldown=${SHIP_PR_MAX_COOLDOWN:-1800}
 # The cap counts refusals ABSORBED, not pings posted. A first ping that had to
 # wait out a pre-existing cooldown is still the first ping — routing it through
@@ -854,96 +949,6 @@ coderabbit_status() {
   fi
   jq -r '.statuses[]? | select(.context == "CodeRabbit")
          | "\(.updated_at)\t\(.description)"' <<<"$raw"
-}
-
-# Unresolved review threads on the PR, as a bare integer. Nothing on failure.
-#
-# A clean summary is not the same as a clear PR: findings can arrive as body text
-# with no inline comment, and a thread left open is a finding nobody answered.
-#
-# Paginated, and that is the whole point of the guard rather than a nicety: one
-# page of 100 threads reports the unresolved ones it can see, so a PR carrying
-# more than that would arm an unattended merge over findings sitting on page 2.
-# `--jq` runs per page, so the counts come back one per line and are summed here.
-# A line that is not a bare integer aborts the sum and prints nothing, which the
-# caller reads as a count it could not establish — the guard fails closed in
-# every direction it can fail.
-unresolved_threads() {
-  local pages
-  # shellcheck disable=SC2016  # GraphQL variables, not shell: $owner/$name/$pr
-  # are bound by the -F flags above, and $endCursor by --paginate.
-  pages=$(gh api graphql --paginate -F owner="${repo%%/*}" -F name="${repo##*/}" -F pr="$pr" --jq \
-    '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false)] | length' \
-    -f query='query($owner: String!, $name: String!, $pr: Int!, $endCursor: String) {
-      repository(owner: $owner, name: $name) {
-        pullRequest(number: $pr) {
-          reviewThreads(first: 100, after: $endCursor) {
-            nodes { isResolved }
-            pageInfo { hasNextPage endCursor }
-          }
-        }
-      }
-    }' 2>/dev/null) || return 1
-  # `bad` rather than a bare `exit 1`: awk runs END even on exit, so exiting
-  # there alone still printed a total — a zero, which is precisely the answer
-  # that arms the merge.
-  awk '{ if ($0 !~ /^[0-9]+$/) { bad = 1 ; exit 1 } ; total += $0 }
-       END { if (bad || NR == 0) exit 1 ; print total + 0 }' <<<"$pages"
-}
-
-# Hands the merge to GitHub rather than performing it here. `--auto` waits for
-# every *required* status check on its own, so this never has to re-verify green
-# or race a branch that goes BEHIND mid-wait — the same contract
-# .github/workflows/dependabot-auto-merge.yml relies on.
-#
-# Reached only from the clean-review arm: a refusal read nothing, a review with
-# findings is not clean, and an unreviewable diff is an unreviewed merge in a
-# clean one's clothes.
-#
-# `--match-head-commit` is the guard the default carries its weight on. GitHub's
-# auto-merge survives subsequent pushes, which is the entire hazard — pinning the
-# arm to the sha CodeRabbit actually reviewed makes a later push cancel it
-# instead of merging unreviewed code. The sha is printed so that cancellation is
-# not silent.
-#
-# No `--delete-branch`: the repo already sets delete_branch_on_merge, and the
-# flag additionally tries to delete the LOCAL branch, which fails from a
-# worktree.
-#
-# Every path here says which one it took. One generic failure line covered five
-# different situations, and "merge by hand" is not what a reader needs to know
-# when the answer is that the PR is still a draft.
-arm_auto_merge() {
-  [ "$auto_merge" -eq 1 ] || return 0
-  if [ "$offline" -eq 1 ]; then
-    echo "offline: auto-merge not armed"
-    return 0
-  fi
-  local draft threads
-  draft=$(gh pr view "$pr" --repo "$repo" --json isDraft --jq '.isDraft' 2>/dev/null) || draft=""
-  threads=$(unresolved_threads) || threads=""
-  # Fails closed. A state that could not be read is not a state that permits an
-  # unattended merge.
-  if [ -z "$draft" ] || [ -z "$threads" ]; then
-    echo "auto-merge not armed — the PR state could not be read"
-    return 0
-  fi
-  if [ "$draft" = "true" ]; then
-    echo "auto-merge not armed — PR is a draft"
-    return 0
-  fi
-  if [ "$threads" -ne 0 ]; then
-    echo "auto-merge not armed — $threads unresolved threads"
-    return 0
-  fi
-  if gh pr merge "$pr" --repo "$repo" --auto --squash --match-head-commit "$head_sha" >/dev/null 2>&1; then
-    echo "auto-merge armed on $head_sha — GitHub squashes once the required checks pass"
-  else
-    # Never silent, and never phrased as though it merged. Arming fails for
-    # reasons worth seeing: auto-merge disabled on the repo, a branch GitHub will
-    # not fast-forward, missing permission.
-    echo "auto-merge could NOT be armed — merge by hand"
-  fi
 }
 
 # Seconds remaining on the cooldown, from the marker comment's own updated_at
