@@ -15,6 +15,16 @@
             "timeout": 10
           }
         ]
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PROJECT_DIR:-.}/infra/scripts/agent-tool-calls.sh\"",
+            "timeout": 10
+          }
+        ]
       }
     ],
     "Stop": [
