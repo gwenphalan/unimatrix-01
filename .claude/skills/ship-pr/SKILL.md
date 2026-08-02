@@ -76,11 +76,9 @@ and a lack of objection is not approval.
 8. **Merge once everything clears,** then strike the shipped line from `.notes/`.
 
 Steps 1 and 4 are delegated on purpose: a fresh context re-derives from the code, where you would
-re-derive from your own earlier reasoning. Skip a delegation only for a change small enough that the
-handover costs more than the work — a typo, a one-line constant — and say that you skipped it. When
-you skip it, every rule in the agent's own file binds you instead, commit shape included. Dispatch
-and keep working: the synchronous form is almost never the right one, because checking the planner's
-claims against the code and reading what it reports on both run alongside it.
+re-derive from your own earlier reasoning. Skip them only on the fast lane below. Dispatch and keep
+working: the synchronous form is almost never the right one, because checking the planner's claims
+against the code and reading what it reports on both run alongside it.
 
 **A subagent is opaque while it runs.** You get its final report, not its progress, so a *delegated*
 task's status moves at the delegation boundaries: mark it in progress before dispatching, update it
@@ -91,6 +89,31 @@ closes when it is done.
 **One dispatch is one task, however many pieces it covers.** Five tasks flipped together report five
 workstreams you cannot see; the pieces you will check afterwards are verification checkpoints and
 stay pending until you have checked them.
+
+### The fast lane, for a change too small to pay for the flow
+
+Step 2's thresholds decide whether a plan needs an adversary. These are tighter, and decide whether
+the flow runs at all. On a one-line fix, the three dispatches and the signal pass above cost more
+than the work. Take the fast lane when **all four** hold, and say in the check-in that you took it:
+
+- one workspace
+- about two files or fewer
+- no runtime, build, auth, data or CI behaviour change
+- no browser surface
+
+Then: plan inline, in a few lines, under every rule in `monorepo-planner`'s own file — read the code
+rather than remember it, label what you did not verify — and present it: **stop 1 stays**, it is
+only shorter. Implement inline, under every rule in `monorepo-implementer`'s own file, commit shape
+included. Run the narrowest relevant checks. Open the PR with the full body standard. Run
+`pr-signals.sh` inline. Arm `watch-pr.sh`. CodeRabbit reviews it. Merge.
+
+**What the fast lane never skips: both stops, the PR body standard, every required check green, and
+a fresh reader.** Those are the contract — only the ceremony scales, which is why this is a section
+here rather than a skill of its own.
+
+Fail any of the four and you are on the ordinary flow. A change that moves runtime behaviour in one
+file is not small: what makes a dispatch worth its cost is what the change can break, not how many
+lines it touches.
 
 **To move an agent off its default tier, name an effort skill in the dispatch prompt.** Each agent's
 `effort:` frontmatter is fixed for every dispatch — the `Agent` tool takes a `model` parameter but no
