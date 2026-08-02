@@ -14,8 +14,8 @@ Why not a `lab.unimatrix-01.dev` subdomain, since that was the obvious alternati
 
 ## 3. Folder Structure
 
-- `src/app`: `router.tsx` (hand-written, code-based routing — no `@tanstack/router-plugin`, no `routeTree.gen.ts`) and `lab-shell.tsx` (`ToolShell` from `@unimatrix/chrome/tool`, wired with the mock account control).
-- `src/routes`: `prototype-index.tsx` (the list) and `prototype-host.tsx` (renders one prototype).
+- `src/app`: `router.tsx` (hand-written, code-based routing — no `@tanstack/router-plugin`, no `routeTree.gen.ts`) and `lab-shell.tsx` (`ToolShell` from `@unimatrix/chrome/tool`, wired with the mock account control). The shell wraps the **index only** — a prototype gets the bare viewport.
+- `src/routes`: `prototype-index.tsx` (the list) and `prototype-host.tsx` (renders one prototype and nothing else).
 - `src/lib/prototype-registry.ts`: `import.meta.glob` discovery of `lab/prototypes/**/*.tsx`.
 - `src/mocks`: the only data surface a prototype may use. See below.
 - `prototypes/`: **empty on `main`.** See `prototypes/README.md`.
@@ -42,7 +42,7 @@ Keep `LabUserStore` in step with `packages/user-data/src/types.ts` by hand. If t
 - **`prototypes/` is excluded from lint, typecheck and prettier**, and included in the stylesheet's `@source` globs. A half-finished sketch must not be a failing check; a prototype with no Tailwind output would be useless.
 - **`@unimatrix/ui` and `@unimatrix/shared` resolve to package *source*** through `vite.config.ts` aliases and `tsconfig.json` paths, unlike the apps, which consume `dist`. Both are built with `tsc` and publish `./dist` via their `exports` map, so without the alias, editing a shared component shows nothing here until a rebuild — which defeats the entire purpose.
 - **`@tanstack/react-router` is in `dedupe`** alongside `react`/`react-dom`. `@unimatrix/chrome` declares it as a peer; two resolved copies means the shell's `useRouterState` reads a router context `RouterProvider` never wrote to.
-- **The stylesheet carries `@source` lines for `ui`, `chrome` and `prototypes`.** Tailwind v4 source detection does not reach a sibling workspace. Nothing but a browser catches its absence — lint, types and every automated check stay green while the layout collapses.
+- **The stylesheet turns Tailwind's automatic source detection off (`source(none)`) and lists every scanned path itself.** Unlike the apps, this is not a convenience: `lab/prototypes/` is gitignored, Tailwind skips gitignored paths, and while automatic detection is on its workspace-wide source makes that filter apply to every other `@source` too — so no directive of any shape reaches a prototype. The reasoning, the measurement and the per-depth prototype lines are in `src/styles.css`; read the comments there before editing any line of it. Nothing but a browser catches a mistake — lint, types and every automated check stay green while prototypes render half-styled.
 - **Banned imports** (enforced by `no-restricted-imports` in `eslint.config.mjs`, and **only under `lab/src/`** — `lab/prototypes/` is excluded from lint, so nothing stops a prototype importing them; containment is the absence of a deploy artifact, not this rule): `@unimatrix/api-client`, `@unimatrix/user-data`, `@unimatrix/auth/react`, `@unimatrix/auth/server`, `@clerk/*`. The bare `@unimatrix/auth` entry is allowed and used — it is the permission scheme, and nothing else.
 
 ## 6. Known costs, accepted rather than solved
