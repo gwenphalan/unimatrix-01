@@ -48,12 +48,26 @@ wanted=("$@")
 failures=0
 ran=0
 
-# name, expected exit code, SHIP_PR_FIXTURES, then any extra NAME=VALUE env.
-# Expected stdout on stdin.
+# name, expected exit code, SHIP_PR_FIXTURES, then any extra NAME=VALUE env —
+# and, after a literal `--`, arguments for the script itself. Expected stdout on
+# stdin.
+#
+# The split exists because `--no-review` is a flag rather than a setting, so a
+# case that exercises it cannot be expressed as another env assignment.
 check() {
   local name=$1 want_rc=$2 fixtures=$3
   shift 3
-  local expected actual rc
+  local expected actual rc arg
+  local envs=() flags=() past=0
+  for arg in ${1+"$@"}; do
+    if [ "$past" -eq 0 ] && [ "$arg" = "--" ]; then
+      past=1
+    elif [ "$past" -eq 1 ]; then
+      flags+=("$arg")
+    else
+      envs+=("$arg")
+    fi
+  done
   expected=$(cat)
   if [ "${#wanted[@]}" -gt 0 ]; then
     local found=0 entry
@@ -69,7 +83,8 @@ check() {
     env SHIP_PR_POLL_SECONDS=0 SHIP_PR_PING_AT="$ping" \
       SHIP_PR_BRANCH_RULES_FIXTURE="$here/branch-rules-one.json" \
       SHIP_PR_CHECKS_FIXTURES="$here/checks-green-one.json" \
-      SHIP_PR_FIXTURES="${fixtures//,/:}" "$@" "$script" fixture/repo 1 2>/dev/null
+      SHIP_PR_FIXTURES="${fixtures//,/:}" ${envs+"${envs[@]}"} \
+      "$script" ${flags+"${flags[@]}"} fixture/repo 1 2>/dev/null
   )
   rc=$?
   # Normalised after the run, not piped through: a pipeline's exit code is the
@@ -192,6 +207,36 @@ EOF
 # The three fixture variables are one switch. Two of them set is a usage error,
 # not a run that reaches the network for the third.
 check partial-fixtures 1 "$(f quiet)" SHIP_PR_BRANCH_RULES_FIXTURE= <<'EOF'
+EOF
+
+# --- --no-review: phase 1, then straight to the arm -------------------------
+
+# The `quiet` fixture is a full phase-2 list, and its entries are what makes this
+# case say anything: consumed, they end the run with `FIXTURES EXHAUSTED`. That
+# line's absence is the proof phase 2 never ran — the ping itself is announced on
+# stderr offline, so a stray one would not show up here.
+check no-review-arms 0 "$(f quiet)" -- --no-review <<'EOF'
+PASS  Verify
+checks green on fixture-head-sha
+offline: auto-merge not armed
+EOF
+
+# The off switch outranks the flag, and says so rather than leaving the run's
+# only output as `checks green` — which reads as a script that died.
+check no-review-auto-merge-off 0 "$(f quiet)" SHIP_PR_AUTO_MERGE=0 -- --no-review <<'EOF'
+PASS  Verify
+checks green on fixture-head-sha
+no review requested, and auto-merge is off — nothing armed
+EOF
+
+# Skipping the review does not skip the gate. Byte-for-byte the `checks-red`
+# case above, flag and all — the flag is read after phase 1 is already over.
+check no-review-checks-red 0 "$(f quiet)" "$three" \
+  SHIP_PR_CHECKS_FIXTURES="$(cf checks-terminal.json)" -- --no-review <<'EOF'
+FAIL  Images (api)
+PASS  Verify
+SKIPPING  CodeQL
+checks red: Images (api) — not pinging
 EOF
 
 # --- Phase 2: the review wait ----------------------------------------------
