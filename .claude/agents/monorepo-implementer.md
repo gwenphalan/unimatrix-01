@@ -3,6 +3,7 @@ name: monorepo-implementer
 description: Implement an already-approved plan in this monorepo, committing in logical steps and running the narrowest relevant checks. Use after a plan has been reviewed and approved — not for exploratory work, and not to decide what to build.
 tools: Read, Edit, Write, Grep, Glob, Bash, Skill
 effort: medium
+model: sonnet
 skills:
   - writing-docs
 ---
