@@ -67,6 +67,26 @@ export function extractLastLayer(cube: FaceletCube): LastLayerView {
   };
 }
 
+/**
+ * Whether everything below the last layer is solved: the whole D face, plus rows 1-2 (row 0
+ * belongs to the last layer) of R, F, L and B. Lives here rather than beside its caller
+ * because it reads raw facelet indices, which are deliberately not public API.
+ */
+export function isBottomTwoLayersSolved(cube: FaceletCube): boolean {
+  const solved = createSolvedCube();
+
+  for (const face of ["D", "R", "F", "L", "B"] as const) {
+    for (let row = face === "D" ? 0 : 1; row < 3; row += 1) {
+      for (let col = 0; col < 3; col += 1) {
+        const index = faceletIndex(face, row, col);
+        if (cube[index] !== solved[index]) return false;
+      }
+    }
+  }
+
+  return true;
+}
+
 /** Internal to the cube feature - see the indexing scheme documented on `FaceletCube`. */
 export function faceletIndex(face: FaceLetter, row: number, col: number): number {
   return FACE_ORDER.indexOf(face) * 9 + row * 3 + col;

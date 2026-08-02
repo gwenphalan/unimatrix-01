@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { OLL_ALGORITHMS } from "@/features/algorithms/oll-algorithms.data";
 import { PLL_ALGORITHMS } from "@/features/algorithms/pll-algorithms.data";
-import { applyMoves, normalizeOrientation } from "@/features/cube/engine";
+import { applyMoves, netRotationFor, normalizeOrientation } from "@/features/cube/engine";
 import { createSolvedCube, extractLastLayer } from "@/features/cube/model";
 import type { FaceletCube } from "@/features/cube/model";
 import { invertMoves, parseAlgorithm } from "@/features/cube/notation";
@@ -155,9 +155,6 @@ describe("OLL Dot group ground truth", () => {
 });
 
 describe("alternate algorithms consistency", () => {
-  // Earlier version of this test required every alternate to bring the primary's setup
-  // state back to the literal solved array (up to reorientation + a single AUF turn) and
-  // skipped 34 (case, alternate) pairs that didn't. That premise was wrong, not the engine:
   // OLL algorithms only fix *orientation* - they make no promise about permutation. Two
   // independently-published OLL algorithms for the same case can legitimately leave the
   // last layer in different (but each internally consistent) permutation states, differing
@@ -179,9 +176,11 @@ describe("alternate algorithms consistency", () => {
     const primary = algorithmCase.algorithms[0];
     if (!primary) return;
 
-    const setupState = normalizeOrientation(
-      applyMoves(createSolvedCube(), invertMoves(parseAlgorithm(primary))),
-    );
+    const primaryMoves = parseAlgorithm(primary);
+    const setupState = applyMoves(createSolvedCube(), [
+      ...netRotationFor(primaryMoves),
+      ...invertMoves(primaryMoves),
+    ]);
 
     algorithmCase.algorithms.forEach((algorithm, index) => {
       if (index === 0) return;
@@ -205,41 +204,24 @@ describe("alternate algorithms consistency", () => {
 
   // PLL algorithms fix permutation completely, so - unlike OLL above - every alternate
   // *should* reach exactly solved (up to reorientation + a single leading/trailing AUF turn
-  // for algorithms written from a different recognition angle). The pairs below still don't,
-  // even with that search. All are alternates for mirror-paired or otherwise atypical cases
-  // (Aa/Ab are mirror images of each other; E and Ja are the sparsest-documented PLL cases) -
-  // consistent with these specific alternates being sourced as adapted/mirrored algorithms
-  // rather than independently verified for this exact case, not an engine defect (the same
-  // engine solves every PLL primary, and most PLL alternates, exactly). Reported here rather
-  // than silently dropped; doesn't affect rendering, which only ever reads the primary.
-  const KNOWN_NON_AUF_ALTERNATES = new Set([
-    "pll-aa:1",
-    "pll-aa:2",
-    "pll-aa:3",
-    "pll-ab:1",
-    "pll-ab:2",
-    "pll-ab:3",
-    "pll-e:1",
-    "pll-ja:1",
-    "pll-ja:2",
-  ]);
-
+  // for algorithms written from a different recognition angle).
   for (const algorithmCase of pllCases) {
     const primary = algorithmCase.algorithms[0];
     if (!primary) continue;
 
-    const setupState = normalizeOrientation(
-      applyMoves(createSolvedCube(), invertMoves(parseAlgorithm(primary))),
-    );
+    const primaryMoves = parseAlgorithm(primary);
+    const setupState = applyMoves(createSolvedCube(), [
+      ...netRotationFor(primaryMoves),
+      ...invertMoves(primaryMoves),
+    ]);
     const solved = createSolvedCube();
 
     algorithmCase.algorithms.forEach((algorithm, index) => {
       if (index === 0) return;
 
       const testName = `${algorithmCase.id} alternate[${index}] solves the primary's setup state (up to reorientation + a leading/trailing AUF turn)`;
-      const runner = KNOWN_NON_AUF_ALTERNATES.has(`${algorithmCase.id}:${index}`) ? it.skip : it;
 
-      runner(testName, () => {
+      it(testName, () => {
         const solvesUpToAuf = AUF_OPTIONS.some((preAuf) => {
           const preApplied = preAuf ? applyMoves(setupState, parseAlgorithm(preAuf)) : setupState;
           const normalized = normalizeOrientation(

@@ -23,7 +23,10 @@ export function useAlgorithmTrainer(
     pickNextCase(cases, pool, undefined),
   );
 
-  const setup = useMemo(() => (currentCase ? getCaseSetup(currentCase) : undefined), [currentCase]);
+  const setup = useMemo(
+    () => (currentCase ? getCaseSetup(currentCase, setId) : undefined),
+    [currentCase, setId],
+  );
 
   const next = useCallback(() => {
     setCurrentCase((previous) => pickNextCase(cases, pool, previous?.id));

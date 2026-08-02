@@ -1,8 +1,8 @@
-import type { AlgorithmCase } from "@/features/algorithms/types";
-import { applyMoves, netRotationFor } from "@/features/cube/engine";
+import type { AlgorithmCase, AlgorithmSetId } from "@/features/algorithms/types";
 import { createSolvedCube } from "@/features/cube/model";
 import type { FaceletCube } from "@/features/cube/model";
-import { invertMoves, movesToString, parseAlgorithm } from "@/features/cube/notation";
+import { movesToString } from "@/features/cube/notation";
+import { chooseSetupAlgorithm } from "@/features/trainer/setup-algorithm";
 
 export interface CaseSetup {
   cube: FaceletCube;
@@ -10,29 +10,19 @@ export interface CaseSetup {
 }
 
 /**
- * Derives what a case actually looks like from its primary algorithm alone (no separate
- * per-case facelet data to keep in sync). Some algorithms (mostly PLL - Aa, Ab, E, Ja, ...)
- * carry a net whole-cube rotation. That rotation must be applied to the solved cube
- * *before* inverting the algorithm, not corrected after the fact: the rotation doesn't
- * commute with the algorithm's other moves, so undoing it post-hoc on the already-inverted
- * state gives a different (wrong) permutation than pre-rotating and then inverting. Only
- * pre-rotating makes the two rotations cancel exactly. See `netRotationFor`'s doc comment.
+ * What a case looks like plus the scramble that reaches it, derived from the case's own
+ * algorithms so there is no separate per-case facelet data to keep in sync.
+ *
+ * `setupMoves` is outer face turns only - no rotations, no wide turns, no `M`/`S`/`E` - so it
+ * is a scramble a learner can type into any timer or cube app. Which algorithm gets inverted
+ * is `chooseSetupAlgorithm`'s decision, not necessarily the one the panel displays.
  */
-export function getCaseSetup(algorithmCase: AlgorithmCase): CaseSetup {
-  const primary = algorithmCase.algorithms[0];
+export function getCaseSetup(algorithmCase: AlgorithmCase, setId: AlgorithmSetId): CaseSetup {
+  const choice = chooseSetupAlgorithm(algorithmCase, setId);
 
-  if (!primary) {
+  if (!choice) {
     return { cube: createSolvedCube(), setupMoves: "" };
   }
 
-  const primaryMoves = parseAlgorithm(primary);
-  const netRotation = netRotationFor(primaryMoves);
-  const setupMoveList = [...netRotation, ...invertMoves(primaryMoves)];
-
-  return {
-    cube: applyMoves(createSolvedCube(), setupMoveList),
-    // Includes the net-rotation prefix (when there is one) so the displayed text actually
-    // reproduces the rendered diagram - dropping it would show text that doesn't match.
-    setupMoves: movesToString(setupMoveList),
-  };
+  return { cube: choice.cube, setupMoves: movesToString(choice.moves) };
 }

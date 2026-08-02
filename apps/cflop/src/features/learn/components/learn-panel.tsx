@@ -103,13 +103,16 @@ export function LearnPanel({ initialCaseId, previewMode, setId }: LearnPanelProp
           Setup
         </p>
         {/*
-          A move string wraps to two lines for some cases and one for others at phone widths, and
+          A move string wraps to two lines for some cases and one for others at narrow widths, and
           the panel grew and shrank between cases, shifting the cube and the buttons. Two lines of
           `.alg-move-string` leading is 3.5rem; reserving it on the wrapper rather than the string
-          keeps the reservation when a case has no setup at all. Coarse pointers only - the
-          strings fit on one line at desktop widths, where this would be a permanent gap.
+          keeps the reservation when a case has no setup at all. Gated on width, not pointer type:
+          wrapping is a width effect, so a narrowed desktop window shifts exactly like a phone.
+          `max-md` because the widest measured wrap onset across the set is 745px - `max-sm` would
+          leave 640-745px wrapping with no reservation. Above the breakpoint nothing wraps, so the
+          reservation would only be a permanent gap there.
         */}
-        <div className="pointer-coarse:min-h-14">
+        <div className="max-md:min-h-14">
           {setupMoves ? (
             <p className="alg-move-string break-words text-muted-foreground">{setupMoves}</p>
           ) : null}
@@ -134,7 +137,7 @@ export function LearnPanel({ initialCaseId, previewMode, setId }: LearnPanelProp
           <p className="text-[0.65rem] font-medium tracking-[0.25em] text-muted-foreground/70 uppercase">
             Solution
           </p>
-          <p className="alg-move-string break-words pointer-coarse:min-h-14">{primaryAlgorithm}</p>
+          <p className="alg-move-string max-md:min-h-14 break-words">{primaryAlgorithm}</p>
         </div>
 
         {/*

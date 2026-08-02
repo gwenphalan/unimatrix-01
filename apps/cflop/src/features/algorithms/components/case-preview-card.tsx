@@ -31,7 +31,7 @@ export function CasePreviewCard({
   setId: AlgorithmSetId;
 }) {
   const diagram = useMemo(
-    () => deriveDiagramForSet(setId, getCaseSetup(algorithmCase).cube),
+    () => deriveDiagramForSet(setId, getCaseSetup(algorithmCase, setId).cube),
     [algorithmCase, setId],
   );
 
