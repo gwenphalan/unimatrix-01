@@ -68,8 +68,7 @@ and a lack of objection is not approval.
    stop, unless they have said not to.
 6. **Once they are satisfied, open the PR.** Body per the section below.
 7. **Arm `watch-pr.sh`** — it waits for every required check, pings CodeRabbit once they are green,
-   and arms auto-merge on a clean review. Dispatch `pr-signal-collector` alongside it for the
-   findings that never reach the checks list. **Wait for the watcher to report before handing the
+   and arms auto-merge on a clean review. **Wait for the watcher to report before handing the
    PR to a fresh reader** — it runs under `Monitor`, so it is still working while you read this
    line, and a reader dispatched now gets a branch whose checks have not reported. If that fresh
    reader *is* the pre-merge review, run with `SHIP_PR_AUTO_MERGE=0`, or the PR can merge out from
@@ -151,8 +150,18 @@ The body must carry three things, in this order:
 
 Some findings never reach a reviewer because they live in GitHub rather than in the diff, and the PR
 body is the reviewer's whole input — so a finding left in a dashboard is a finding nobody reviews.
-**Dispatch `pr-signal-collector` once the checks are green**, and put anything real into the body.
 Nothing else collects these for you; `/code-review` does not.
+
+**Run the script yourself once the checks are green** and read the JSON:
+
+```sh
+.claude/skills/ship-pr/scripts/pr-signals.sh <pr>
+```
+
+`introduced` and `unresolvedThreads` both empty is the clean PR, and it needs nothing further — say
+so in the body and move on. **Dispatch `pr-signal-collector` only when one of them is not empty**,
+because triaging an introduced alert against a pre-existing one is judgement the JSON does not carry.
+A dispatch to be told the categories are empty is a dispatch that read a file you already read.
 
 ## Review before merge — hand off to a fresh reader
 
