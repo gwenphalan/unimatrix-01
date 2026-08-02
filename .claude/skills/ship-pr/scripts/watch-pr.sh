@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-watch-pr.sh <owner/repo> <pr>
+watch-pr.sh [--no-review] <owner/repo> <pr>
 
 Watches a pull request from "CI is still running" to "auto-merge is armed", in
 two sequential phases and one process. Arm it under `Monitor` and carry on
@@ -12,6 +12,18 @@ working.
   Phase 1  every required status check reports, and every one is green
   Phase 2  CodeRabbit is pinged, the review is waited out, and a clean one
            arms GitHub's auto-merge
+
+`--no-review` runs phase 1 and then arms, with no phase 2 at all — no ping and
+no wait. It skips the review and nothing else: BEHIND, DIRTY and a draft are
+still terminal in the transition, and the arm still declines on a draft, on
+unresolved review threads and on a PR state it could not read. A red required
+check and a phase-1 timeout end the run exactly as they do without it, since
+both are terminal before the flag is ever consulted. SHIP_PR_AUTO_MERGE=0 still
+wins: with both set, nothing is armed and the run says so.
+
+The arm it produces prints a different line, and that is deliberate. CodeRabbit
+refuses a merged PR outright, so an unreviewed merge is unreviewed permanently
+rather than pending — an outcome worth reading as loudly as it deserves.
 
 The ordering is the reason these are one script rather than two. A ping fired
 while CI is still running spends a slot on code a red check is about to change,
@@ -114,7 +126,8 @@ an adaptive limit costs a slot, and it moves the marker this script does its
 cooldown arithmetic on. There is no switch that hands the ping back: two code
 paths meant every later comparison had to guess whether a ping existed, and
 guessing wrong is what made this repo's resting `Review skipped` notice read as
-a swallowed one.
+a swallowed one. `--no-review` is not that switch either — it removes the
+review, and the wait with it, rather than leaving one for somebody to ask for.
 
 The order is the design, and it runs before the ping:
 
@@ -170,6 +183,8 @@ costing the caller a notification per interval.
 Arguments:
   <owner/repo>  e.g. gwenphalan/unimatrix-01
   <pr>          Pull request number
+  --no-review   Skip phase 2 entirely and arm on green. Above for what it does
+                not skip.
 
 A rate-limit refusal is not a review — nothing was read — so this rides the
 cooldown out and re-pings, once, rather than handing back three manual steps
@@ -309,7 +324,13 @@ Output from phase 1, in order:
   PR is a draft — mark it ready and re-arm
   checks green on <sha>                       the phase boundary; the slot is about to be spent
 
-Then, from phase 2, one line, whichever applies:
+Under --no-review the run ends there, on one of these two or on any of the
+`auto-merge` lines below — the arm is the same code and declines for the same
+reasons:
+  auto-merge armed UNREVIEWED on <sha> — nothing has read this diff
+  no review requested, and auto-merge is off — nothing armed
+
+Otherwise, from phase 2, one line, whichever applies:
   reviewed: <base> -> <n>                     the count rose; triage the findings
   reviewed clean, count unchanged at <n>      it ran and found nothing
   auto-merge armed on <sha> — GitHub squashes once the required checks pass
@@ -368,21 +389,36 @@ Exit codes:
 EOF
 }
 
-case "${1:-}" in
-  -h | --help)
-    usage
-    exit 0
-    ;;
-esac
+no_review=0
+args=()
+while [ "$#" -gt 0 ]; do
+  case $1 in
+    -h | --help)
+      usage
+      exit 0
+      ;;
+    --no-review) no_review=1 ;;
+    # A misspelt flag must not become a positional. `--no-reviews <repo>` would
+    # otherwise read as repo=--no-reviews, pr=<repo>, and the run would die
+    # somewhere further down saying something else entirely.
+    -*)
+      echo "unknown option: $1" >&2
+      usage >&2
+      exit 1
+      ;;
+    *) args+=("$1") ;;
+  esac
+  shift
+done
 
-if [ "$#" -ne 2 ]; then
+if [ "${#args[@]}" -ne 2 ]; then
   usage >&2
   exit 1
 fi
 
 here=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-repo=$1
-pr=$2
+repo=${args[0]}
+pr=${args[1]}
 poll=${SHIP_PR_POLL_SECONDS:-30}
 checks_timeout=${SHIP_PR_CHECKS_TIMEOUT:-2700}
 
@@ -709,9 +745,11 @@ unresolved_threads() {
 # or race a branch that goes BEHIND mid-wait — the same contract
 # .github/workflows/dependabot-auto-merge.yml relies on.
 #
-# Reached only from the clean-review arm: a refusal read nothing, a review with
-# findings is not clean, and an unreviewable diff is an unreviewed merge in a
-# clean one's clothes.
+# Two callers. From phase 2 it is the clean-review arm and only that one: a
+# refusal read nothing, a review with findings is not clean, and an unreviewable
+# diff is an unreviewed merge in a clean one's clothes. From `--no-review` there
+# was no review at all, which is why the armed line below says so — a reader
+# scanning the output must not have to remember which flags the run carried.
 #
 # `--match-head-commit` is the guard the default carries its weight on. GitHub's
 # auto-merge survives subsequent pushes, which is the entire hazard — pinning the
@@ -750,7 +788,11 @@ arm_auto_merge() {
     return 0
   fi
   if gh pr merge "$pr" --repo "$repo" --auto --squash --match-head-commit "$head_sha" >/dev/null 2>&1; then
-    echo "auto-merge armed on $head_sha — GitHub squashes once the required checks pass"
+    if [ "$no_review" -eq 1 ]; then
+      echo "auto-merge armed UNREVIEWED on $head_sha — nothing has read this diff"
+    else
+      echo "auto-merge armed on $head_sha — GitHub squashes once the required checks pass"
+    fi
   else
     # Never silent, and never phrased as though it merged. Arming fails for
     # reasons worth seeing: auto-merge disabled on the repo, a branch GitHub will
@@ -819,6 +861,27 @@ else
 fi
 
 echo "checks green on $head_sha"
+
+# `--no-review` ends the run here. Phase 2 is the review — the ping, the wait,
+# the comment matching — and there is nothing else in it to keep.
+#
+# What it must not skip is the merge preconditions, and it does not: BEHIND,
+# DIRTY and a draft are terminal in the transition above, before this line, and
+# `arm_auto_merge` still declines on a draft, on unresolved threads and on a PR
+# state it could not read. A red required check and a phase-1 timeout are
+# terminal further up still, so this flag never sees them.
+#
+# SHIP_PR_AUTO_MERGE=0 wins, and says so. Silence here would be the flag quietly
+# overriding the off switch, and the run's only other output is "checks green" —
+# indistinguishable from a script that died.
+if [ "$no_review" -eq 1 ]; then
+  if [ "$auto_merge" -ne 1 ]; then
+    echo "no review requested, and auto-merge is off — nothing armed"
+    exit 0
+  fi
+  arm_auto_merge
+  exit 0
+fi
 
 # Ahead of the baseline call, not after it: a comment landing during that round
 # trip is invisible to a `since=` taken once it returns. It is superseded by the
