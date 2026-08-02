@@ -63,7 +63,20 @@ check() {
     if [ "$past" -eq 0 ] && [ "$arg" = "--" ]; then
       past=1
     elif [ "$past" -eq 1 ]; then
-      flags+=("$arg")
+      # An env assignment written on the wrong side of the `--` reaches the
+      # script as a third positional, and its usage error is exit 1 with empty
+      # stdout — which is exactly what `checks-timeout-non-numeric` and
+      # `partial-fixtures` legitimately expect. Left alone, a miswritten case
+      # could pass by matching the wrong failure. So it fails as itself.
+      case $arg in
+        -*) flags+=("$arg") ;;
+        *)
+          printf '  FAIL  %s (arguments after the separator go to the script and must be flags, got: %s)\n' \
+            "$name" "$arg"
+          failures=$((failures + 1))
+          return 0
+          ;;
+      esac
     else
       envs+=("$arg")
     fi
@@ -229,8 +242,9 @@ checks green on fixture-head-sha
 no review requested, and auto-merge is off — nothing armed
 EOF
 
-# Skipping the review does not skip the gate. Byte-for-byte the `checks-red`
-# case above, flag and all — the flag is read after phase 1 is already over.
+# Skipping the review does not skip the gate: the flag is read long after phase
+# 1 is over. The expectation is the `checks-red` case's, typed out again rather
+# than derived from it — so the two are equal by two copies, not by construction.
 check no-review-checks-red 0 "$(f quiet)" "$three" \
   SHIP_PR_CHECKS_FIXTURES="$(cf checks-terminal.json)" -- --no-review <<'EOF'
 FAIL  Images (api)
