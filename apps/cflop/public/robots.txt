@@ -1,8 +1,11 @@
-# Without this file nginx's SPA fallback (`try_files $uri $uri/ /index.html`)
-# answers /robots.txt with the app's index.html, so crawlers receive HTML where
-# they expect a robots file. A real file makes `$uri` match before the fallback.
+# Nothing is disallowed, deliberately. /learn and /drill are kept out of search
+# by a `noindex` in their own head, and a Disallow would defeat that: a URL a
+# crawler may not fetch is a URL whose `noindex` is never read, so it stays
+# indexable on inbound links alone.
 #
-# No Sitemap: line — this site does not publish a sitemap, and pointing at one
-# that does not exist is worse than omitting the directive.
+# The sitemap is written by the prerender driver from the same route heads, and
+# lists only the routes carrying `index,follow`.
 User-agent: *
 Allow: /
+
+Sitemap: https://cflop.unimatrix-01.dev/sitemap.xml
