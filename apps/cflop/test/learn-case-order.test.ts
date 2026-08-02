@@ -4,8 +4,8 @@ import type { AlgorithmCase } from "@/features/algorithms/types";
 import { orderedLearnCases } from "@/features/learn/learn-case-order";
 import type { CaseProgress } from "@/lib/progress-storage";
 
-function makeCase(id: string, group: string, probabilityWeight = 1): AlgorithmCase {
-  return { algorithms: ["R U R' U'"], displayName: id, group, id, probabilityWeight };
+function makeCase(id: string, group: string, caseFrequency = 1): AlgorithmCase {
+  return { algorithms: ["R U R' U'"], displayName: id, group, id, caseFrequency };
 }
 
 describe("orderedLearnCases", () => {
@@ -18,7 +18,7 @@ describe("orderedLearnCases", () => {
     expect(orderedLearnCases(groupedCases, {}).map((c) => c.id)).toEqual(["a", "b"]);
   });
 
-  it("orders cases within a group by descending probabilityWeight", () => {
+  it("orders cases within a group by descending caseFrequency", () => {
     const groupedCases = [
       {
         cases: [makeCase("low", "Group A", 1), makeCase("high", "Group A", 5)],

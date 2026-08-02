@@ -12,7 +12,7 @@ import { getCaseSetup } from "@/features/trainer/case-setup";
 import { chooseSetupAlgorithm } from "@/features/trainer/setup-algorithm";
 
 function makeCase(id: string, algorithm: string): AlgorithmCase {
-  return { algorithms: [algorithm], displayName: id, group: "Test", id, probabilityWeight: 1 };
+  return { algorithms: [algorithm], displayName: id, group: "Test", id, caseFrequency: 1 };
 }
 
 // All of D, plus rows 1-2 (not row 0, which belongs to the last layer) of R/F/L/B.

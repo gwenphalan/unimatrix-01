@@ -4,8 +4,8 @@ import type { AlgorithmCase } from "@/features/algorithms/types";
 import { pickNextCase } from "@/features/trainer/pick-next-case";
 import type { CasePool } from "@/lib/pool-storage";
 
-function makeCase(id: string, probabilityWeight = 1): AlgorithmCase {
-  return { algorithms: ["R U R' U'"], displayName: id, group: "Test", id, probabilityWeight };
+function makeCase(id: string, caseFrequency = 1): AlgorithmCase {
+  return { algorithms: ["R U R' U'"], displayName: id, group: "Test", id, caseFrequency };
 }
 
 describe("pickNextCase", () => {
@@ -52,7 +52,7 @@ describe("pickNextCase", () => {
     expect(pickNextCase([], {}, undefined)).toBeUndefined();
   });
 
-  it("picks uniformly rather than by probabilityWeight", () => {
+  it("picks uniformly rather than by caseFrequency", () => {
     const cases = [makeCase("a"), makeCase("b"), makeCase("c"), makeCase("d", 4)];
 
     vi.spyOn(Math, "random").mockReturnValue(0.5);
