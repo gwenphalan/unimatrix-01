@@ -172,7 +172,11 @@ describe("advanceDrillQueue", () => {
   });
 
   it("ignores caseFrequency, which belongs to Learn", () => {
-    const ids = ["a", "b", "c", "d"];
+    // Built from cases with wildly different figures and routed through `enabledCaseIds`, so
+    // the whole case-to-id path a weighting bug could hide in is exercised - passing plain ids
+    // straight to `deal` would make this a second copy of the exactly-once test above.
+    const cases = [makeCase("a", 1), makeCase("b", 50), makeCase("c", 1), makeCase("d", 200)];
+    const ids = enabledCaseIds(cases, {});
     const dealt = deal(ids, 40, seededRandom(31));
 
     // A weighted draw would over-represent whichever case carried the larger figure; a bag
