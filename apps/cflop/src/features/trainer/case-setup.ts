@@ -3,6 +3,7 @@ import { applyMoves, netRotationFor } from "@/features/cube/engine";
 import { createSolvedCube } from "@/features/cube/model";
 import type { FaceletCube } from "@/features/cube/model";
 import { invertMoves, movesToString, parseAlgorithm } from "@/features/cube/notation";
+import { rewriteAsOuterMoves, simplifyMoves } from "@/features/cube/outer-moves";
 
 export interface CaseSetup {
   cube: FaceletCube;
@@ -11,12 +12,19 @@ export interface CaseSetup {
 
 /**
  * Derives what a case actually looks like from its primary algorithm alone (no separate
- * per-case facelet data to keep in sync). Some algorithms (mostly PLL - Aa, Ab, E, Ja, ...)
- * carry a net whole-cube rotation. That rotation must be applied to the solved cube
- * *before* inverting the algorithm, not corrected after the fact: the rotation doesn't
- * commute with the algorithm's other moves, so undoing it post-hoc on the already-inverted
- * state gives a different (wrong) permutation than pre-rotating and then inverting. Only
- * pre-rotating makes the two rotations cancel exactly. See `netRotationFor`'s doc comment.
+ * per-case facelet data to keep in sync).
+ *
+ * `setupMoves` is outer face turns only, so it is a scramble a learner can type into any
+ * timer or cube app. Getting there needs both steps below and neither is optional:
+ *
+ * - The `netRotationFor` prefix. Some algorithms (mostly PLL - Aa, Ab, E, Ja, ...) carry a net
+ *   whole-cube rotation, and that rotation must be applied to the solved cube *before*
+ *   inverting the algorithm rather than corrected afterwards: it does not commute with the
+ *   algorithm's other moves, so undoing it post-hoc on the already-inverted state gives a
+ *   different (wrong) permutation. See `netRotationFor`'s doc comment.
+ * - `rewriteAsOuterMoves`. It refuses a sequence whose net rotation is not the identity, which
+ *   the prefix is exactly what guarantees - the inverse of a rotation-carrying algorithm on
+ *   its own has no outer-turn-only form at all.
  */
 export function getCaseSetup(algorithmCase: AlgorithmCase): CaseSetup {
   const primary = algorithmCase.algorithms[0];
@@ -26,13 +34,12 @@ export function getCaseSetup(algorithmCase: AlgorithmCase): CaseSetup {
   }
 
   const primaryMoves = parseAlgorithm(primary);
-  const netRotation = netRotationFor(primaryMoves);
-  const setupMoveList = [...netRotation, ...invertMoves(primaryMoves)];
+  const setupMoveList = simplifyMoves(
+    rewriteAsOuterMoves([...netRotationFor(primaryMoves), ...invertMoves(primaryMoves)]),
+  );
 
   return {
     cube: applyMoves(createSolvedCube(), setupMoveList),
-    // Includes the net-rotation prefix (when there is one) so the displayed text actually
-    // reproduces the rendered diagram - dropping it would show text that doesn't match.
     setupMoves: movesToString(setupMoveList),
   };
 }
