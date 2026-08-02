@@ -9,6 +9,7 @@ import type { FaceletCube } from "@/features/cube/model";
 import { invertMoves, parseAlgorithm } from "@/features/cube/notation";
 import { isOuterFace } from "@/features/cube/outer-moves";
 import { getCaseSetup } from "@/features/trainer/case-setup";
+import { chooseSetupAlgorithm } from "@/features/trainer/setup-algorithm";
 
 function makeCase(id: string, algorithm: string): AlgorithmCase {
   return { algorithms: [algorithm], displayName: id, group: "Test", id, probabilityWeight: 1 };
@@ -46,20 +47,20 @@ describe("getCaseSetup - PLL cases carrying a net whole-cube rotation", () => {
   it.each(rotationCarryingCases)(
     "%s: last layer is fully oriented and the bottom two layers are untouched",
     (name, algorithm) => {
-      const setup = getCaseSetup(makeCase(name, algorithm));
+      const setup = getCaseSetup(makeCase(name, algorithm), "pll");
       expect(extractLastLayer(setup.cube).top.every((f) => f === "U")).toBe(true);
       expect(bottomTwoLayersDiffCount(setup.cube)).toBe(0);
     },
   );
 
   it("a rotation-free case (Ua) is unaffected by the pre-rotation logic", () => {
-    const setup = getCaseSetup(makeCase("Ua", "M2 U' M U2 M' U' M2"));
+    const setup = getCaseSetup(makeCase("Ua", "M2 U' M U2 M' U' M2"), "pll");
     expect(extractLastLayer(setup.cube).top.every((f) => f === "U")).toBe(true);
     expect(bottomTwoLayersDiffCount(setup.cube)).toBe(0);
   });
 
   it("setupMoves reproduces the exact rendered cube when applied to a solved cube", () => {
-    const setup = getCaseSetup(makeCase("Aa", "x L2 D2 L' U' L D2 L' U L'"));
+    const setup = getCaseSetup(makeCase("Aa", "x L2 D2 L' U' L D2 L' U L'"), "pll");
     expect(applyMoves(createSolvedCube(), parseAlgorithm(setup.setupMoves))).toEqual(setup.cube);
   });
 });
@@ -71,8 +72,9 @@ describe("getCaseSetup - whole-dataset invariants", () => {
     // The one assertion that would catch the outer-turn rewrite silently changing a state:
     // the right-hand side is built by a construction the rewrite plays no part in.
     const failing = everyCase
-      .filter(({ algorithmCase }) => {
-        const algorithm = algorithmCase.algorithms[0];
+      .filter(({ algorithmCase, setId }) => {
+        const choice = chooseSetupAlgorithm(algorithmCase, setId);
+        const algorithm = choice && algorithmCase.algorithms[choice.algorithmIndex];
         if (!algorithm) return false;
 
         const moves = parseAlgorithm(algorithm);
@@ -81,7 +83,7 @@ describe("getCaseSetup - whole-dataset invariants", () => {
           ...invertMoves(moves),
         ]);
 
-        return JSON.stringify(getCaseSetup(algorithmCase).cube) !== JSON.stringify(expected);
+        return JSON.stringify(getCaseSetup(algorithmCase, setId).cube) !== JSON.stringify(expected);
       })
       .map(({ algorithmCase }) => algorithmCase.id);
 
@@ -90,7 +92,10 @@ describe("getCaseSetup - whole-dataset invariants", () => {
 
   it("leaves the bottom two layers solved", () => {
     const failing = everyCase
-      .filter(({ algorithmCase }) => !isBottomTwoLayersSolved(getCaseSetup(algorithmCase).cube))
+      .filter(
+        ({ algorithmCase, setId }) =>
+          !isBottomTwoLayersSolved(getCaseSetup(algorithmCase, setId).cube),
+      )
       .map(({ algorithmCase }) => algorithmCase.id);
 
     expect(failing).toEqual([]);
@@ -108,7 +113,7 @@ describe("getCaseSetup - whole-dataset invariants", () => {
         if (!primary) return false;
 
         const solvedState = normalizeOrientation(
-          applyMoves(getCaseSetup(algorithmCase).cube, parseAlgorithm(primary)),
+          applyMoves(getCaseSetup(algorithmCase, setId).cube, parseAlgorithm(primary)),
         );
 
         return setId === "oll"
@@ -123,8 +128,8 @@ describe("getCaseSetup - whole-dataset invariants", () => {
   it("emits outer face turns only", () => {
     const failing = everyCase
       .filter(
-        ({ algorithmCase }) =>
-          !parseAlgorithm(getCaseSetup(algorithmCase).setupMoves).every((move) =>
+        ({ algorithmCase, setId }) =>
+          !parseAlgorithm(getCaseSetup(algorithmCase, setId).setupMoves).every((move) =>
             isOuterFace(move.face),
           ),
       )
@@ -137,8 +142,8 @@ describe("getCaseSetup - whole-dataset invariants", () => {
     // Both sides come from the same move list, so this checks the notation round trip rather
     // than the cube state - the state assertion is the first test in this block.
     const failing = everyCase
-      .filter(({ algorithmCase }) => {
-        const setup = getCaseSetup(algorithmCase);
+      .filter(({ algorithmCase, setId }) => {
+        const setup = getCaseSetup(algorithmCase, setId);
         const replayed = applyMoves(createSolvedCube(), parseAlgorithm(setup.setupMoves));
 
         return JSON.stringify(replayed) !== JSON.stringify(setup.cube);

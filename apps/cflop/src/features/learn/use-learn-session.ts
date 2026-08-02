@@ -72,7 +72,10 @@ export function useLearnSession(setId: AlgorithmSetId, initialCaseId?: string): 
   const currentCase = pinnedCase ?? orderedCases[clampedCursor];
   const learned = currentCase ? progress[currentCase.id] === "known" : false;
 
-  const setup = useMemo(() => (currentCase ? getCaseSetup(currentCase) : undefined), [currentCase]);
+  const setup = useMemo(
+    () => (currentCase ? getCaseSetup(currentCase, setId) : undefined),
+    [currentCase, setId],
+  );
 
   const next = useCallback(() => {
     if (pinnedCase) return;
