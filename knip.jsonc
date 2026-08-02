@@ -56,15 +56,22 @@
       "ignore": ["src/routes/routeTree.gen.ts"],
       "ignoreDependencies": ["tailwindcss", "tw-animate-css"],
     },
-    // Plus the prerender driver, which `vite build --ssr` runs from the build
-    // script rather than through a plugin knip can read.
+    // Plus the prerender driver and the algorithm generator, which `vite build
+    // --ssr` runs from a package script rather than through a plugin knip can
+    // read.
     "apps/cflop": {
-      "entry": ["test/**/*.test.{ts,tsx}", "e2e/**/*.spec.ts", "prerender/entry.tsx"],
+      "entry": [
+        "test/**/*.test.{ts,tsx}",
+        "e2e/**/*.spec.ts",
+        "prerender/entry.tsx",
+        "scripts/generate-algorithm-data.ts",
+      ],
       "project": [
         "src/**/*.{ts,tsx}",
         "test/**/*.{ts,tsx}",
         "e2e/**/*.ts",
         "prerender/**/*.{ts,tsx}",
+        "scripts/**/*.ts",
       ],
       "ignore": ["src/routes/routeTree.gen.ts"],
       "ignoreDependencies": ["tailwindcss", "tw-animate-css"],

@@ -34,14 +34,15 @@ const everyCase: { setId: AlgorithmSetId; algorithmCase: AlgorithmCase }[] =
   );
 
 describe("getCaseSetup - PLL cases carrying a net whole-cube rotation", () => {
-  // Aa/Ja/E all lead with a bare x/x' rotation before their solving moves - a case where
-  // undoing the rotation *after* inverting the algorithm (rather than pre-rotating before
-  // inverting) previously produced a state with a corner cycled between the last layer and
-  // the bottom two layers, which is impossible for a genuine PLL algorithm.
+  // Aa/Ab/Z each carry a net whole-cube rotation their solving moves never undo - a case
+  // where undoing the rotation *after* inverting the algorithm (rather than pre-rotating
+  // before inverting) previously produced a state with a corner cycled between the last layer
+  // and the bottom two layers, which is impossible for a genuine PLL algorithm. The strings
+  // are the shipped primaries for those cases; `netRotationFor` is what makes them work.
   const rotationCarryingCases = [
-    ["Aa", "x L2 D2 L' U' L D2 L' U L'"],
-    ["Ja", "x R2 F R F' R U2 r' U r U2"],
-    ["E", "x' L' U L D' L' U' L D L' U' L D' L' U L D"],
+    ["Aa", "y x (R' U R') D2 (R U' R') D2 R2 x'"],
+    ["Ab", "y2 x R2 D2 (R U R') D2 (R U' R) x'"],
+    ["Z", "y U2 M' U' (M2 U') (M2 U') M' U2 M2"],
   ] as const;
 
   it.each(rotationCarryingCases)(
@@ -54,13 +55,13 @@ describe("getCaseSetup - PLL cases carrying a net whole-cube rotation", () => {
   );
 
   it("a rotation-free case (Ua) is unaffected by the pre-rotation logic", () => {
-    const setup = getCaseSetup(makeCase("Ua", "M2 U' M U2 M' U' M2"), "pll");
+    const setup = getCaseSetup(makeCase("Ua", "U2 (R U R' U R') U' R2 U' (R' U R' U R)"), "pll");
     expect(extractLastLayer(setup.cube).top.every((f) => f === "U")).toBe(true);
     expect(bottomTwoLayersDiffCount(setup.cube)).toBe(0);
   });
 
   it("setupMoves reproduces the exact rendered cube when applied to a solved cube", () => {
-    const setup = getCaseSetup(makeCase("Aa", "x L2 D2 L' U' L D2 L' U L'"), "pll");
+    const setup = getCaseSetup(makeCase("Aa", "y x (R' U R') D2 (R U' R') D2 R2 x'"), "pll");
     expect(applyMoves(createSolvedCube(), parseAlgorithm(setup.setupMoves))).toEqual(setup.cube);
   });
 });
@@ -102,9 +103,9 @@ describe("getCaseSetup - whole-dataset invariants", () => {
   });
 
   it("is solved by the algorithm the panel displays", () => {
-    // `normalizeOrientation` on the PLL branch is load-bearing, not tidying: the five
-    // rotation-carrying cases (pll-aa, pll-ab, pll-e, pll-ja, pll-v) finish in a rotated
-    // frame and fail a bare comparison against the solved array.
+    // `normalizeOrientation` on the PLL branch is load-bearing, not tidying: the four
+    // rotation-carrying cases (pll-z, pll-ub, pll-aa, pll-ab) finish in a rotated frame and
+    // fail a bare comparison against the solved array.
     const solved = JSON.stringify(createSolvedCube());
 
     const failing = everyCase
