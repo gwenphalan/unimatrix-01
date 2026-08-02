@@ -5,12 +5,10 @@ the `code-review` workflow or handing off `ultra`.
 
 ## Pick by what the change is
 
-change is:
-
 1. **CodeRabbit is the default, and you request it yourself** — by arming `watch-pr.sh`, which waits
    for the required checks to go green and then posts the ping. Arm it once the diff is final; the
-   waiting for green is the script's job, not yours (see the section below for the exact mechanics
-   and why the timing matters). It is the only reviewer that is a *different tool*
+   waiting for green is the script's job, not yours (the exact mechanics are in `coderabbit.md`
+   beside this file). It is the only reviewer that is a *different tool*
    rather than a different context, so it
    does not share your model's blind spots — that is what makes it the first choice rather than the
    consolation prize.
@@ -37,7 +35,7 @@ change is:
 
    **Your floor is `high`.** The level picks between two engines rather than turning one dial. `low`
    and `medium` return an inline review — this context, this model, your own work — which is the
-   thing the top of this section forbids; they cannot satisfy the fresh-reader requirement however
+   self-review `ship-pr` forbids; they cannot satisfy the fresh-reader requirement however
    the findings read. Only `high`, `xhigh` and `max` route to the background workflow, and the fresh
    contexts it spawns are what make it a review at all. The gate also requires an interactive
    session, workflows enabled, and `Workflow` in the caller's own toolset — fail any one and it
@@ -123,7 +121,4 @@ change is:
 **Options 1 to 3 are yours to run unaided; only 4 is a handoff.** Do not ask the owner to open a
 fresh session and read the branch by hand — it buys nothing option 3 does not, same fresh context and
 same model, and it costs them a session.
-
-Whichever runs, its input is the PR body — which is why the section above matters. Triage its
-findings the same way as CodeRabbit's below: verify each against the code before acting.
 

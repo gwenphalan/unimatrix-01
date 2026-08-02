@@ -286,7 +286,7 @@ The fresh-reader precondition has exactly four exceptions. Three are about a rev
 work, or CodeRabbit's cooldown is long and the diff trivial. The fourth is the owner asking for an
 unreviewed merge outright — theirs to ask for, and the reason `watch-pr.sh --no-review` exists rather
 than a merge command an agent invents on the spot. A rate-limited CodeRabbit on its own is not one of
-them — that is a reason to *wait*, and the arithmetic is under "Wait out the cooldown and re-ping".
+them — that is a reason to *wait*, and the arithmetic is in `reference/coderabbit.md`.
 Taking an exception means naming which in the report, and running it through `--no-review`, which
 keeps the merge preconditions the review path applies.
 
@@ -296,7 +296,7 @@ outright rather than letting "checks green" stand in for "reviewed" — and say 
 second CodeRabbit review, with why the findings earned it.
 
 **Merging is the point of no return for CodeRabbit** — "review now or not at all", never "review now
-or review later" (see "Ask for the review"). That is what makes the exceptions above narrow.
+or review later" (`reference/coderabbit.md`). That is what makes the exceptions above narrow.
 
 `gh pr merge` may print `fatal: 'main' is already used by worktree at ...` when run from a worktree.
 That is `gh` failing to check out `main` locally *after* merging; confirm with
