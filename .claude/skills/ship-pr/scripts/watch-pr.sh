@@ -208,9 +208,9 @@ offline runs continue as though each landed so the one-retry cap stays
 exercisable.
 
 Environment:
-  SHIP_PR_POLL_SECONDS  Seconds between polls. Default 30. Set it to 0 for a
-                        fixture run, which has nothing to wait for and would
-                        otherwise take 30s per entry.
+  SHIP_PR_POLL_SECONDS  Seconds between polls, in both phases. Default 30. Set
+                        it to 0 for a fixture run, which has nothing to wait for
+                        and would otherwise take 30s per entry.
   SHIP_PR_AUTO_REPING   1 to ride out a rate limit and re-ping once (default),
                         0 to report the refusal and exit as before. Only
                         *acting* is gated; a live marker is reported either way.
