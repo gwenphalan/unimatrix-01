@@ -190,8 +190,14 @@ gh pr view <pr> --comments
 
 Everything from `coderabbitai[bot]` there belongs to `watch-pr.sh` and is not this step's business.
 
-All three empty — `introduced`, `unresolvedThreads`, and any bot comment that is not CodeRabbit's —
-is the clean PR, and it needs nothing further: say so in the body and move on. **Dispatch
+**Read the exit status before the arrays.** `pr-signals.sh` exits non-zero when it cannot resolve
+the PR, and a run that failed prints no findings for exactly the same reason a clean one does. Treat
+a non-zero exit, or a JSON object missing any of its keys, as *unknown* and fix it — never as clean.
+
+On a zero exit, all three empty — `introduced`, `unresolvedThreads`, and any bot comment that is not
+CodeRabbit's — means **no new actionable findings**, which is not the same as no findings:
+`preExisting` alerts can still be there and are worth a sentence in the body. Then move on.
+**Dispatch
 `pr-signal-collector` only when one of them is not**, because triaging an introduced alert against a
 pre-existing one, or deciding what a bot's comment actually claims, is judgement neither read
 carries. A dispatch to be told the categories are empty is a dispatch that read a file you already

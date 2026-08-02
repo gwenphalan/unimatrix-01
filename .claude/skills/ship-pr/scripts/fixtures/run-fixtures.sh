@@ -339,5 +339,20 @@ else
   printf '  FAIL  phase-1-ledger-on-stderr (the rows are not printed on either stream)\n'
 fi
 
+# `SKIPPING` takes the same stderr arm as `PASS` but a different `case` branch,
+# so asserting only `PASS` above would let a misrouted or dropped `SKIPPING` row
+# through the whole suite.
+skipping=$(env SHIP_PR_POLL_SECONDS=0 SHIP_PR_PING_AT="$ping" \
+  SHIP_PR_BRANCH_RULES_FIXTURE="$here/branch-rules-one.json" \
+  SHIP_PR_CHECKS_FIXTURES="$here/checks-skipping.json" \
+  SHIP_PR_FIXTURES="$(f quiet)" "$script" fixture/repo 1 2>&1)
+ran=$((ran + 1))
+if grep -q '^SKIPPING  Verify$' <<<"$skipping"; then
+  printf '  ok    skipping-row-on-stderr\n'
+else
+  failures=$((failures + 1))
+  printf '  FAIL  skipping-row-on-stderr (the SKIPPING row is not printed on either stream)\n'
+fi
+
 printf '\n%s case(s), %s failure(s)\n' "$ran" "$failures"
 [ "$failures" -eq 0 ]
