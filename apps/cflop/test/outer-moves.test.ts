@@ -35,7 +35,7 @@ describe("rewriteAsOuterMoves - the conjugation table", () => {
     ["z", "B", "B"],
   ];
 
-  it.each(conjugations)("%s %s %s' turns the %s face", (rotation, face, equivalent) => {
+  it.each(conjugations)("$0 $1 $0' turns the $2 face", (rotation, face, equivalent) => {
     expect(stateOf(`${rotation} ${face} ${rotation}'`)).toEqual(stateOf(equivalent));
   });
 });

@@ -58,6 +58,9 @@ describe("chooseSetupAlgorithm", () => {
   it("prefers a valid alternate over reversing the algorithm on screen", () => {
     const choice = chooseSetupAlgorithm(pllCase("pll-ua"), "pll");
 
+    // Anchored like the pll-ja case above: the data is regenerated from jperm rather than
+    // hand-edited, so without this a dataset change reports a bare index mismatch.
+    expect(pllCase("pll-ua").algorithms.length).toBeGreaterThan(1);
     expect(choice?.algorithmIndex).not.toBe(0);
   });
 });
