@@ -1,7 +1,7 @@
-# Nothing is disallowed, deliberately. /learn and /drill are kept out of search
-# by a `noindex` in their own head, and a Disallow would defeat that: a URL a
-# crawler may not fetch is a URL whose `noindex` is never read, so it stays
-# indexable on inbound links alone.
+# Nothing is disallowed, deliberately. A route is kept out of search by a
+# `noindex` in its own head, and a Disallow would defeat that: a URL a crawler
+# may not fetch is a URL whose `noindex` is never read, so it stays indexable on
+# inbound links alone.
 #
 # The sitemap is written by the prerender driver from the same route heads, and
 # lists only the routes carrying `index,follow`.

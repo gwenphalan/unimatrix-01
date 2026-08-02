@@ -6,7 +6,8 @@ type AppShellProps = {
 };
 
 // The chrome itself lives in `@unimatrix/chrome/tool` — this app supplies only
-// what is specific to it: the source link and the algorithm-data attribution.
+// what is specific to it: the source link and `homeHref`. The algorithm data's
+// licence notices live in `vendor/NOTICE.md`, not on screen.
 // No `accountControl` is passed, because CFLOP is a public, sign-in-free
 // tool; the shell renders no title bar at all in that case, which is why this
 // migration changes nothing on screen.
@@ -21,9 +22,7 @@ export function AppShell({ children }: AppShellProps) {
         <>
           <ToolFooterLink href="https://github.com/unimatrixcore/unimatrix-01/tree/main/apps/cflop">
             GitHub source
-          </ToolFooterLink>{" "}
-          · Algorithm data from{" "}
-          <ToolFooterLink href="https://jperm.net/algs">jperm.net/algs</ToolFooterLink>
+          </ToolFooterLink>
         </>
       }
       homeHref="https://unimatrix-01.dev/"

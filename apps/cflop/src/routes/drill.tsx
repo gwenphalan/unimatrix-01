@@ -8,6 +8,6 @@ export const Route = createFileRoute("/drill")({
       path: "/drill",
       title: "CFLOP - Drill",
       description: "Drill 3x3 OLL and PLL algorithms with a keyboard-driven flashcard session.",
-      indexable: false,
+      indexable: true,
     }),
 });
