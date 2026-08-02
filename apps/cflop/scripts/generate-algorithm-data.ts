@@ -272,8 +272,22 @@ function readCubedex(): { oll: Map<number, string>; pll: Map<string, string> } {
     CubedexSubset[]
   >;
 
+  // Named failures rather than a bare `TypeError` from indexing into a shape that moved. The
+  // file is committed, so this only fires on a vendor refresh — which is exactly when a
+  // readable message is worth having.
+  const subsetsOf = (key: string): CubedexSubset[] => {
+    const subsets = file[key];
+    if (!Array.isArray(subsets)) fail(`cubedex file has no ${key} array`);
+    for (const subset of subsets) {
+      if (!Array.isArray(subset?.algorithms)) {
+        fail(`cubedex ${key} subset "${subset?.subset ?? "?"}" has no algorithms array`);
+      }
+    }
+    return subsets;
+  };
+
   const oll = new Map<number, string>();
-  for (const subset of file.OLL ?? []) {
+  for (const subset of subsetsOf("OLL")) {
     for (const entry of subset.algorithms) {
       const match = /^OLL-(\d+)\b/.exec(entry.name);
       if (!match) fail(`cubedex OLL entry has no case number: "${entry.name}"`);
@@ -282,7 +296,7 @@ function readCubedex(): { oll: Map<number, string>; pll: Map<string, string> } {
   }
 
   const pll = new Map<string, string>();
-  for (const subset of file.PLL ?? []) {
+  for (const subset of subsetsOf("PLL")) {
     for (const entry of subset.algorithms) {
       const match = /^([A-Za-z]+) Perm$/.exec(entry.name);
       if (!match) fail(`cubedex PLL entry has no perm letter: "${entry.name}"`);
@@ -334,8 +348,15 @@ function readAlgTrainer(): { oll: Map<number, string[]>; pll: Map<string, string
 
 /** algdb keys its cases `"OLL <n>"` and `"<X> perm"`. */
 function readAlgdb(): { oll: Map<number, string[]>; pll: Map<string, string[]> } {
-  const parse = (name: string) =>
-    JSON.parse(readVendored(name)) as { cases: { name: string; algs: string[] }[] };
+  const parse = (name: string) => {
+    const file = JSON.parse(readVendored(name)) as { cases: { name: string; algs: string[] }[] };
+    if (!Array.isArray(file?.cases)) fail(`algdb ${name} has no cases array`);
+    for (const entry of file.cases) {
+      if (!Array.isArray(entry?.algs))
+        fail(`algdb ${name} case "${entry?.name ?? "?"}" has no algs`);
+    }
+    return file;
+  };
 
   const oll = new Map<number, string[]>();
   for (const entry of parse("algdb-OLL.json").cases) {

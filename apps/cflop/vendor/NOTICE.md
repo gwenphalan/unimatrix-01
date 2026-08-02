@@ -9,7 +9,7 @@ it and does.
 - Source: <https://raw.githubusercontent.com/poliva/cubedex/main/src/data/defaultAlgs.json>
 - Fetched 2026-08-02, repository HEAD `e5849e2c0e58df681a707a7b7c8fc30a43405d3b`
 
-```
+```text
 MIT License
 
 Copyright (c) 2024 Pau Oliva Fora
@@ -38,7 +38,7 @@ SOFTWARE.
 - Source: <https://raw.githubusercontent.com/tao-yu/Alg-Trainer/master/js/alg_list.js>
 - Fetched 2026-08-02, repository HEAD `cb95945c3e4839ee1e4b058d4a79bc022615b220`
 
-```
+```text
 MIT License
 
 Copyright (c) 2017-2021 Tao Yu
@@ -71,7 +71,7 @@ the generator consumes `var OLL` and `var PLL` only.
   <https://raw.githubusercontent.com/slsj31/algdb/main/algSets/PLL.json>
 - Fetched 2026-08-02, repository HEAD `ed8cb619a9f8921f74f38c7d0ddcb465c4ebe37a`
 
-```
+```text
 MIT License
 
 Copyright (c) 2023 Spencer Chubb
