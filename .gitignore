@@ -74,3 +74,6 @@ ds-bundle/
 # Prerender driver output. A vite SSR bundle, kept out of `dist/` because the
 # Dockerfile copies `dist` wholesale into the nginx image.
 apps/cflop/.prerender/
+
+# Algorithm generator output, the same vite SSR bundle pattern as above.
+apps/cflop/.generate/

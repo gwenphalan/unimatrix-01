@@ -177,7 +177,18 @@ describe("alternate algorithms consistency", () => {
   //     turn for algorithms written from a different recognition angle.
   const AUF_OPTIONS = ["", "U", "U2", "U'"];
 
-  describe.each(OLL_ALGORITHMS.filter((c) => c.algorithms.length > 1))("$id", (algorithmCase) => {
+  const ollWithAlternates = OLL_ALGORITHMS.filter((c) => c.algorithms.length > 1);
+  const pllWithAlternates = PLL_ALGORITHMS.filter((c) => c.algorithms.length > 1);
+
+  // Both collections below drive the suites through `describe.each` and a `for`, and an empty
+  // one generates no tests and no failure - a regenerated dataset carrying no alternate at all
+  // would turn this whole block into a green no-op.
+  it("has cases carrying alternates to check", () => {
+    expect(ollWithAlternates.length).toBeGreaterThan(0);
+    expect(pllWithAlternates.length).toBeGreaterThan(0);
+  });
+
+  describe.each(ollWithAlternates)("$id", (algorithmCase) => {
     const primary = algorithmCase.algorithms[0];
     if (!primary) return;
 
@@ -201,12 +212,10 @@ describe("alternate algorithms consistency", () => {
     });
   });
 
-  const pllCases = PLL_ALGORITHMS.filter((c) => c.algorithms.length > 1);
-
   // PLL algorithms fix permutation completely, so - unlike OLL above - every alternate
   // *should* reach exactly solved (up to reorientation + a single leading/trailing AUF turn
   // for algorithms written from a different recognition angle).
-  for (const algorithmCase of pllCases) {
+  for (const algorithmCase of pllWithAlternates) {
     const primary = algorithmCase.algorithms[0];
     if (!primary) continue;
 

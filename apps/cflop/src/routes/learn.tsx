@@ -9,6 +9,6 @@ export const Route = createFileRoute("/learn")({
       title: "CFLOP - Learn",
       description:
         "Learn 3x3 OLL and PLL algorithms in a guided teaching order, one case at a time.",
-      indexable: false,
+      indexable: true,
     }),
 });

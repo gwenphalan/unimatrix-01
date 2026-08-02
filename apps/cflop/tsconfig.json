@@ -21,6 +21,7 @@
     "playwright.config.ts",
     "prerender/**/*.ts",
     "prerender/**/*.tsx",
+    "scripts/**/*.ts",
     "src/**/*.ts",
     "src/**/*.tsx",
     "test/**/*.ts",
