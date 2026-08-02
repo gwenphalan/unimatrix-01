@@ -530,10 +530,17 @@ thread, and on a PR state it could not read. `SHIP_PR_AUTO_MERGE=0` turns it off
 qualifies: a refusal read nothing, a review with findings is not clean, and `did not have any
 reviewable changes` is an unreviewed merge in a clean one's clothes.
 
-**That `--match-head-commit` pin is the whole safety argument for the default being on, and its
-REJECT path has never been exercised.** A matching head is proven — it merged a PR. A *mismatching*
-one, where a push lands after the arm and GitHub is supposed to refuse, rests on GitHub's documented
-behaviour and on nothing measured here. Also unmeasured: whether GitHub's auto-merge updates an
+**That `--match-head-commit` pin is the whole safety argument for the default being on, and both its
+paths are now measured.** Controlled pair on PR #187 — same command, same PR state (checks pending,
+`BLOCKED`), only the sha differing. Pinned to a **stale** sha it was refused, `GraphQL: Pull Request
+is not mergeable`, with `autoMergeRequest` left `null`; pinned to the **current** head it armed. So
+`expectedHeadOid` is enforced when auto-merge is *enabled*, and an arm attempted after a push simply
+does not take.
+
+What that does **not** settle is a push landing *after* a successful arm — enable-time enforcement
+says nothing about merge time, and GitHub's docs promise an auto-disable only for a pusher **without**
+write permission, which is never us. Treat a long-armed PR as worth a glance rather than trusted.
+Also unmeasured: whether GitHub's auto-merge updates an
 out-of-date branch by itself. Read as no, and the failure direction is benign either way — a
 self-update moves the head sha, which cancels the arm rather than merging anything.
 

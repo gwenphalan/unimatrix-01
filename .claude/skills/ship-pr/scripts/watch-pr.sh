@@ -226,10 +226,11 @@ Environment:
                         the reviewed head sha, so a push landing after the review
                         cancels it rather than merging code nothing read. That
                         REJECT path is the whole safety argument for the default
-                        being 1, and it has never been exercised: the ACCEPT path
-                        is proven (a matching head merged), a mismatching one
-                        rests on GitHub's documented behaviour and nothing
-                        measured here.
+                        being 1, and both paths are measured: pinned to a stale
+                        sha the arm is refused outright and auto-merge stays off,
+                        pinned to the current head it arms. Enforced when
+                        auto-merge is enabled. Whether a push landing after a
+                        successful arm is caught is still unmeasured.
   SHIP_PR_CHECKS_TIMEOUT
                         Seconds phase 1 will wait for the required contexts to
                         report. Default 2700 (45 minutes). Reached, the run ends
