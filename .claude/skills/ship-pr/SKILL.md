@@ -1,6 +1,6 @@
 ---
 name: ship-pr
-description: Take a task all the way to merged. Use at the start of any session whose end state is a merge — given the task itself, or a pointer to a .notes/issues/*.todo.md. Carries the ordered steps — plan through a subagent, attack the plan, get approval, implement through a subagent, check in, then PR, review and merge — plus the PR body a fresh reader can review from, the review ladder and its costs, and striking the shipped line from .notes/.
+description: Take a task all the way to merged. Use at the start of any session whose end state is a merge — given the task itself, or a pointer to a .notes/todo/*.todo.md. Carries the ordered steps — plan through a subagent, attack the plan, get approval, implement through a subagent, check in, then PR, review and merge — plus the PR body a fresh reader can review from, the review ladder and its costs, and striking the shipped line from .notes/.
 ---
 
 # Ship a PR
@@ -8,7 +8,7 @@ description: Take a task all the way to merged. Use at the start of any session 
 ## How this is invoked
 
 **The owner types this at the *start* of a session, not the end.** The argument is either the
-task in their own words, or a pointer to a `.notes/issues/*.todo.md` — sometimes just the file,
+task in their own words, or a pointer to a `.notes/todo/*.todo.md` — sometimes just the file,
 meaning "the first unfinished item on it". Resolve that before doing anything: read the file, and if
 the target is ambiguous, name the line you are about to implement and say so rather than guessing.
 
@@ -123,7 +123,7 @@ The body must carry three things, in this order:
    chose. Behaviour they specified that a reader would otherwise assume was your invention. **This
    is load-bearing**: a fresh reviewer can check "is this sound" from the diff alone, but can only
    check "is this what was asked" if the ask is written down here. If it came from a
-   `.notes/issues/*.todo.md` line, quote the line.
+   `.notes/todo/*.todo.md` line, quote the line.
 2. **Why, before what.** Lead with the problem — what was wrong, what it cost, why the obvious
    alternative was not taken. The *what* follows from it and is usually the shorter half. If a
    decision has a non-obvious reason (an ordering that prevents a silent no-op, a hook owned by one
@@ -481,11 +481,12 @@ against the baseline taken before the ping
 (`reviewThreads` via GraphQL, `isResolved == false`), and the summary comment's markers.
 
 **Replying to findings inflates the count, and `review-count.sh` filters that out.** CodeRabbit
-files a review object for every thread reply it posts, so acknowledging its own answers to your
-replies raises the raw count without any review having run. Measured on PR #187: the raw count read
-11 where three reviews had actually happened, and a genuinely **clean** third review was reported as
-`reviewed: 10 -> 11` — the arm that means "it found something". The script now counts only reviews
-carrying a body. If you ever read the count by hand, apply the same filter.
+files a review object for every thread reply it posts, so its acknowledgement of your reply raises
+the raw count without any review having run. Measured on PR #187: the raw count read 11 where three
+reviews had actually happened, and a genuinely **clean** third review was reported as
+`reviewed: 10 -> 11` — the arm that means "it found something", which is why auto-merge never fired.
+The script now counts only reviews carrying a body. If you read the count by hand, apply the same
+filter.
 
 **The count only moves when there were findings.** A review that comes back clean leaves it exactly
 where it was, so `count == baseline` is ambiguous between "still running", "never ran" and "ran and
@@ -498,7 +499,7 @@ from upstream and marked as such.
 
 | Outcome | How you know | Ends the wait? |
 | --- | --- | --- |
-| Reviewed, findings | count > baseline — counting only reviews with a **body**, see below | yes — triage them |
+| Reviewed, findings | count > baseline — counting only reviews with a **body**, see above | yes — triage them |
 | Reviewed clean | `No actionable comments were generated in the recent review` — **count stays at baseline** | yes |
 | Rate-limited | `rate limited by coderabbit.ai` | yes — cool down, re-ping |
 | Merged PR | `Review failed` / `The pull request is closed` | yes — CodeRabbit is done, forever |
@@ -646,7 +647,7 @@ That is `gh` failing to check out `main` locally *after* merging; confirm with
 This is the owner's scratch file on disk, not the harness task list — that one is yours and is
 already finished by now.
 
-If the owner started this session by pointing at a `*.todo.md` in `.notes/issues/`, delete the
+If the owner started this session by pointing at a `*.todo.md` in `.notes/todo/`, delete the
 line(s) the merged work completed from that file once the PR is merged — not before. Leaving a
 shipped item on the list is what makes the list stop being trusted.
 
