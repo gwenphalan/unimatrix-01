@@ -77,3 +77,11 @@ apps/cflop/.prerender/
 
 # Algorithm generator output, the same vite SSR bundle pattern as above.
 apps/cflop/.generate/
+
+# lab prototypes: local-dev sketches only, never committed. Backstops the
+# "No prototypes on main" CI check (.github/workflows/prototypes-guard.yml),
+# which enforces the same rule on the diff — this keeps a sketch from being
+# staged at all. See lab/prototypes/README.md.
+lab/prototypes/*
+!lab/prototypes/.gitkeep
+!lab/prototypes/README.md
