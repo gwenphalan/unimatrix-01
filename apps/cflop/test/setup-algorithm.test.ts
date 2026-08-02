@@ -17,7 +17,7 @@ describe("chooseSetupAlgorithm", () => {
       displayName: "Empty",
       group: "Test",
       id: "empty",
-      probabilityWeight: 1,
+      caseFrequency: 1,
     };
 
     expect(chooseSetupAlgorithm(empty, "pll")).toBeUndefined();
@@ -29,7 +29,7 @@ describe("chooseSetupAlgorithm", () => {
       displayName: "Sune",
       group: "Test",
       id: "sune",
-      probabilityWeight: 1,
+      caseFrequency: 1,
     };
 
     expect(chooseSetupAlgorithm(single, "oll")?.algorithmIndex).toBe(0);

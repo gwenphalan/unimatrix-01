@@ -7,7 +7,7 @@ export const PLL_ALGORITHMS: AlgorithmCase[] = [
     displayName: "PLL H",
     group: "Edges Only",
     algorithms: ["M2 U M2 U2 M2 U M2", "M2 U' M2 U2 M2 U' M2"],
-    probabilityWeight: 1,
+    caseFrequency: 1,
   },
   {
     id: "pll-z",
@@ -19,7 +19,7 @@ export const PLL_ALGORITHMS: AlgorithmCase[] = [
       "y M2 U M2 U M' U2 M2 U2 M'",
       "M2 U' M2 U' M' U2 M2 U2 M'",
     ],
-    probabilityWeight: 2,
+    caseFrequency: 2,
   },
   {
     id: "pll-ua",
@@ -30,7 +30,7 @@ export const PLL_ALGORITHMS: AlgorithmCase[] = [
       "R U' R U R U R U' R' U' R2",
       "y2 R2 U' R' U' R U R U R U' R",
     ],
-    probabilityWeight: 4,
+    caseFrequency: 4,
   },
   {
     id: "pll-ub",
@@ -42,7 +42,7 @@ export const PLL_ALGORITHMS: AlgorithmCase[] = [
       "y2 R' U R' U' R' U' (R' U R U) R2",
       "y2 R' U R' U' R3 U' (R' U R U) R2",
     ],
-    probabilityWeight: 4,
+    caseFrequency: 4,
   },
   {
     id: "pll-aa",
@@ -54,7 +54,7 @@ export const PLL_ALGORITHMS: AlgorithmCase[] = [
       "y x R' U R' D2 R U' R' D2 R2",
       "y2 x' R2 D2 R' U' R D2 R' U R'",
     ],
-    probabilityWeight: 4,
+    caseFrequency: 4,
   },
   {
     id: "pll-ab",
@@ -66,7 +66,7 @@ export const PLL_ALGORITHMS: AlgorithmCase[] = [
       "y2 x R2 D2 R U R' D2 R U' R",
       "y' x' R U' R D2 R' U R D2 R2",
     ],
-    probabilityWeight: 4,
+    caseFrequency: 4,
   },
   {
     id: "pll-e",
@@ -76,14 +76,14 @@ export const PLL_ALGORITHMS: AlgorithmCase[] = [
       "x' L' U L D' L' U' L D L' U' L D' L' U L D",
       "x' R U' R' D R U R' D' R U R' D R U' R' D'",
     ],
-    probabilityWeight: 2,
+    caseFrequency: 2,
   },
   {
     id: "pll-f",
     displayName: "PLL F",
     group: "Adjacent Corner Swap",
     algorithms: ["R' U' F' R U R' U' R' F R2 U' R' U' R U R' U R"],
-    probabilityWeight: 4,
+    caseFrequency: 4,
   },
   {
     id: "pll-ja",
@@ -94,14 +94,14 @@ export const PLL_ALGORITHMS: AlgorithmCase[] = [
       "y2 L' U' L F L' U' L U L F' L2 U L",
       "y' R' U L' U2 R U' R' U2 R L",
     ],
-    probabilityWeight: 4,
+    caseFrequency: 4,
   },
   {
     id: "pll-jb",
     displayName: "PLL Jb",
     group: "Adjacent Corner Swap",
     algorithms: ["R U R' F' R U R' U' R' F R2 U' R'"],
-    probabilityWeight: 4,
+    caseFrequency: 4,
   },
   {
     id: "pll-ra",
@@ -112,7 +112,7 @@ export const PLL_ALGORITHMS: AlgorithmCase[] = [
       "R U R' F' R U2 R' U2 R' F R U R U2 R'",
       "y' L U2 L' U2 L F' L' U' L U L F L2",
     ],
-    probabilityWeight: 4,
+    caseFrequency: 4,
   },
   {
     id: "pll-rb",
@@ -123,14 +123,14 @@ export const PLL_ALGORITHMS: AlgorithmCase[] = [
       "y' R' U2 R U2 R' F R U R' U' R' F' R2",
       "R' U2 R' D' R U' R' D R U R U' R' U' R",
     ],
-    probabilityWeight: 4,
+    caseFrequency: 4,
   },
   {
     id: "pll-t",
     displayName: "PLL T",
     group: "Adjacent Corner Swap",
     algorithms: ["R U R' U' R' F R2 U' R' U' (R U R') F'"],
-    probabilityWeight: 4,
+    caseFrequency: 4,
   },
   {
     id: "pll-y",
@@ -140,7 +140,7 @@ export const PLL_ALGORITHMS: AlgorithmCase[] = [
       "F R U' R' U' R U R' F' R U R' U' R' F R F'",
       "F R' F R2 U' R' U' R U R' F' R U R' U' F'",
     ],
-    probabilityWeight: 4,
+    caseFrequency: 4,
   },
   {
     id: "pll-v",
@@ -153,7 +153,7 @@ export const PLL_ALGORITHMS: AlgorithmCase[] = [
       "R U2 R' D R U' R U' R U R2 D R' U' R D2",
       "x' R' F R F' U R U2 R' U' R U' R' U2 R U R' U'",
     ],
-    probabilityWeight: 4,
+    caseFrequency: 4,
   },
   {
     id: "pll-na",
@@ -163,7 +163,7 @@ export const PLL_ALGORITHMS: AlgorithmCase[] = [
       "R U R' U R U R' F' R U R' U' R' F R2 U' R' U2 R U' R'",
       "z U R' D R2 U' R D' U R' D R2 U' R D'",
     ],
-    probabilityWeight: 1,
+    caseFrequency: 1,
   },
   {
     id: "pll-nb",
@@ -173,21 +173,21 @@ export const PLL_ALGORITHMS: AlgorithmCase[] = [
       "R' (U R U' R') F' U' F R U R' F R' F' R U' R",
       "z D' R U' R2 D R' U D' R U' R2 D R' U",
     ],
-    probabilityWeight: 1,
+    caseFrequency: 1,
   },
   {
     id: "pll-ga",
     displayName: "PLL Ga",
     group: "Adjacent Corner Swap",
     algorithms: ["R2 U R' U R' U' R U' R2 (U' D) R' U R D'", "R2 u R' U R' U' R u' R2 y' R' U R"],
-    probabilityWeight: 4,
+    caseFrequency: 4,
   },
   {
     id: "pll-gb",
     displayName: "PLL Gb",
     group: "Adjacent Corner Swap",
     algorithms: ["R' U' R (U D') R2 U R' U R U' R U' R2 D", "y F' U' F R2 u R' U R U' R u' R2"],
-    probabilityWeight: 4,
+    caseFrequency: 4,
   },
   {
     id: "pll-gc",
@@ -198,13 +198,13 @@ export const PLL_ALGORITHMS: AlgorithmCase[] = [
       "y2 R2 F2 R U2 R U2 R' F R U R' U' R' F R2",
       "R2 u' R U' R U R' u R2 y R U' R'",
     ],
-    probabilityWeight: 4,
+    caseFrequency: 4,
   },
   {
     id: "pll-gd",
     displayName: "PLL Gd",
     group: "Adjacent Corner Swap",
     algorithms: ["R U R' (U' D) R2 U' R U' R' U R' U R2 D'", "R U R' y' R2 u' R U' R' U R' u R2"],
-    probabilityWeight: 4,
+    caseFrequency: 4,
   },
 ];
