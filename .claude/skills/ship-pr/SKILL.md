@@ -142,7 +142,8 @@ makes it feel skippable. Which surfaces need it, and how, belong to the root `AG
 PM-mode and does not read diffs line by line, and — see the next section — the pre-merge review is
 done by a reader with no access to this conversation. Both of them get the PR body and nothing else.
 A body that only lists what changed is unreviewable: it gives them no way to tell correct from
-plausible.
+plausible. If working from `.notes/todo/`, use the pr name the todo item lists, with the items
+description quoted in the body in the owners own words.
 
 Conventional commit for the title, and the scope after the type is the workspace or surface, not a
 file. The rest of the title should read as a sentence a human would say — what the change makes
