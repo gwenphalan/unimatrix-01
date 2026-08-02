@@ -480,6 +480,13 @@ against the baseline taken before the ping
 (`.claude/skills/ship-pr/scripts/review-count.sh`), unresolved threads
 (`reviewThreads` via GraphQL, `isResolved == false`), and the summary comment's markers.
 
+**Replying to findings inflates the count, and `review-count.sh` filters that out.** CodeRabbit
+files a review object for every thread reply it posts, so acknowledging its own answers to your
+replies raises the raw count without any review having run. Measured on PR #187: the raw count read
+11 where three reviews had actually happened, and a genuinely **clean** third review was reported as
+`reviewed: 10 -> 11` — the arm that means "it found something". The script now counts only reviews
+carrying a body. If you ever read the count by hand, apply the same filter.
+
 **The count only moves when there were findings.** A review that comes back clean leaves it exactly
 where it was, so `count == baseline` is ambiguous between "still running", "never ran" and "ran and
 found nothing" — and only the summary comment tells them apart. Never treat a flat count as evidence
@@ -491,7 +498,7 @@ from upstream and marked as such.
 
 | Outcome | How you know | Ends the wait? |
 | --- | --- | --- |
-| Reviewed, findings | count > baseline | yes — triage them |
+| Reviewed, findings | count > baseline — counting only reviews with a **body**, see below | yes — triage them |
 | Reviewed clean | `No actionable comments were generated in the recent review` — **count stays at baseline** | yes |
 | Rate-limited | `rate limited by coderabbit.ai` | yes — cool down, re-ping |
 | Merged PR | `Review failed` / `The pull request is closed` | yes — CodeRabbit is done, forever |
