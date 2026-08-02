@@ -489,6 +489,13 @@ outstanding=("${required[@]}")
 
 while true; do
   rc=0
+  # Two variables, because the two streams answer different questions. stdout is
+  # the JSON the gate parses; stderr carries the `no checks reported` wording the
+  # normalisation below keys on. Merged into one, any line gh writes to stderr —
+  # a debug trace, a warning — lands inside a status-8 payload that is otherwise
+  # valid JSON and fails the array check, so an ordinary pending poll is counted
+  # as a failed read and three of them exit 2 before anything is pinged.
+  checks_err=""
 
   # The fixture index has to advance in this shell: a `payload=$(helper)`
   # command substitution runs in a subshell, so the increment would be lost and
@@ -500,9 +507,10 @@ while true; do
     fi
     entry=${checks_fixtures[$checks_step]}
     checks_step=$((checks_step + 1))
+    payload=""
     case $entry in
       ERROR=*)
-        payload=${entry#ERROR=}
+        checks_err=${entry#ERROR=}
         rc=1
         ;;
       EXIT8=*)
@@ -511,7 +519,7 @@ while true; do
         if [ -r "$entry" ]; then
           payload=$(cat "$entry")
         else
-          payload="fixture not readable: $entry"
+          checks_err="fixture not readable: $entry"
           rc=1
         fi
         ;;
@@ -519,13 +527,16 @@ while true; do
         if [ -r "$entry" ]; then
           payload=$(cat "$entry")
         else
-          payload="fixture not readable: $entry"
+          checks_err="fixture not readable: $entry"
           rc=1
         fi
         ;;
     esac
   else
-    payload=$(gh pr checks "$pr" --repo "$repo" --json name,bucket,description 2>&1) && rc=0 || rc=$?
+    checks_err_file=$(mktemp)
+    payload=$(gh pr checks "$pr" --repo "$repo" --json name,bucket,description 2>"$checks_err_file") && rc=0 || rc=$?
+    checks_err=$(cat "$checks_err_file")
+    rm -f "$checks_err_file"
   fi
 
   # An empty checks list is an *error*, not an empty list: status 1 with
@@ -534,10 +545,11 @@ while true; do
   # — counted as a failure it exits 2 three polls later, before anything is
   # pinged, and the ledger cannot tell it from an expired token.
   if [ "$rc" -ne 0 ] && [ "$rc" -ne 8 ]; then
-    case $payload in
+    case $checks_err in
       *"no checks reported"*)
         rc=0
         payload='[]'
+        checks_err=""
         ;;
     esac
   fi
@@ -554,7 +566,7 @@ while true; do
   # is counted as one.
   if [ "$rc" -eq 0 ] && ! jq -e 'type == "array"' >/dev/null 2>&1 <<<"$payload"; then
     rc=1
-    payload="the checks payload would not parse as a JSON array"
+    checks_err="the checks payload would not parse as a JSON array"
   fi
 
   if [ "$rc" -eq 0 ]; then
@@ -617,7 +629,10 @@ while true; do
   else
     checks_fails=$((checks_fails + 1))
     if [ "$checks_fails" -ge 3 ]; then
-      printf 'checks API ERROR x%s — stopping rather than gating blind: %s\n' "$checks_fails" "$payload"
+      # stderr where there is any, since that is where gh says what went wrong;
+      # the stdout payload otherwise, which is what a call that failed without a
+      # word on stderr leaves behind.
+      printf 'checks API ERROR x%s — stopping rather than gating blind: %s\n' "$checks_fails" "${checks_err:-$payload}"
       exit 2
     fi
   fi
