@@ -155,9 +155,6 @@ describe("OLL Dot group ground truth", () => {
 });
 
 describe("alternate algorithms consistency", () => {
-  // Earlier version of this test required every alternate to bring the primary's setup
-  // state back to the literal solved array (up to reorientation + a single AUF turn) and
-  // skipped 34 (case, alternate) pairs that didn't. That premise was wrong, not the engine:
   // OLL algorithms only fix *orientation* - they make no promise about permutation. Two
   // independently-published OLL algorithms for the same case can legitimately leave the
   // last layer in different (but each internally consistent) permutation states, differing
