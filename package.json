@@ -32,9 +32,10 @@
     "check:compose-env": "node ./infra/scripts/check-compose-env.mjs",
     "check:runner-labels": "node ./infra/scripts/check-runner-labels.mjs",
     "check:coverage-drift": "node ./infra/scripts/check-coverage-drift.mjs",
-    "check": "pnpm format:check && pnpm deps:check && pnpm check:app-wiring && pnpm check:agents-md && pnpm check:watch-paths && pnpm check:stale-comments && pnpm check:doc-script-refs && pnpm check:compose-env && pnpm check:runner-labels && turbo run lint typecheck test && pnpm check:coverage-drift",
+    "check:ship-pr-fixtures": "bash ./.claude/skills/ship-pr/scripts/fixtures/run-fixtures.sh",
+    "check": "pnpm format:check && pnpm deps:check && pnpm check:app-wiring && pnpm check:agents-md && pnpm check:watch-paths && pnpm check:stale-comments && pnpm check:doc-script-refs && pnpm check:compose-env && pnpm check:runner-labels && pnpm check:ship-pr-fixtures && turbo run lint typecheck test && pnpm check:coverage-drift",
     "knip": "knip",
-    "verify": "pnpm format:check && pnpm deps:check && pnpm check:app-wiring && pnpm check:agents-md && pnpm check:watch-paths && pnpm check:stale-comments && pnpm check:doc-script-refs && pnpm check:compose-env && pnpm check:runner-labels && turbo run build lint typecheck test && pnpm check:coverage-drift"
+    "verify": "pnpm format:check && pnpm deps:check && pnpm check:app-wiring && pnpm check:agents-md && pnpm check:watch-paths && pnpm check:stale-comments && pnpm check:doc-script-refs && pnpm check:compose-env && pnpm check:runner-labels && pnpm check:ship-pr-fixtures && turbo run build lint typecheck test && pnpm check:coverage-drift"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^7.0.0",

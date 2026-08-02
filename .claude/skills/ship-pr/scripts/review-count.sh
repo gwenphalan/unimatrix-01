@@ -6,8 +6,8 @@ usage() {
 review-count.sh <owner/repo> <pr>
 
 Prints the number of reviews CodeRabbit has left on a pull request, as a bare
-integer on stdout. This is the baseline `wait-coderabbit.sh` records before a
-ping, and the only signal that separates "reviewed" from every other outcome.
+integer on stdout. This is the baseline `watch-pr.sh` records before a ping, and
+the only signal that separates "reviewed" from every other outcome.
 
 A PR that has been reviewed once already starts at n >= 1, so a caller testing
 n > 0 succeeds on its first read without a review having run. Compare against a

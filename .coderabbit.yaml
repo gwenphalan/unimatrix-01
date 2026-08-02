@@ -17,8 +17,8 @@
 #
 #     @coderabbitai full review
 #
-# `.claude/skills/ship-pr/scripts/wait-coderabbit.sh` posts that ping itself and waits on the
-# outcome, so do not also post one by hand.
+# `.claude/skills/ship-pr/scripts/watch-pr.sh` posts that ping itself, once the required checks
+# have gone green, and waits on the outcome — so do not also post one by hand.
 #
 # `drafts` is left at its default (false) so the same holds for draft PRs.
 reviews:
