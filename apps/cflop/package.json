@@ -6,7 +6,7 @@
   "license": "MIT",
   "type": "module",
   "scripts": {
-    "build": "vite build",
+    "build": "vite build && vite build --ssr prerender/entry.tsx --outDir .prerender --emptyOutDir && node .prerender/entry.js",
     "dev": "vite",
     "lint": "eslint .",
     "preview": "vite preview",

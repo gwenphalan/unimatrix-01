@@ -19,6 +19,8 @@
   "include": [
     "e2e/**/*.ts",
     "playwright.config.ts",
+    "prerender/**/*.ts",
+    "prerender/**/*.tsx",
     "src/**/*.ts",
     "src/**/*.tsx",
     "test/**/*.ts",

@@ -5,7 +5,20 @@ import react from "@vitejs/plugin-react";
 import { tanstackRouter } from "@tanstack/router-plugin/vite";
 import { defineConfig, type UserConfig } from "vite";
 
-export function createCflopViteConfig(): UserConfig {
+export interface CreateCflopViteConfigOptions {
+  /**
+   * Build for the prerender driver rather than the browser. The `react` alias
+   * below resolves React to a filesystem path, which bundles it into the SSR
+   * output while bare-imported `react-dom/server` stays external and resolves
+   * its own copy. Two copies of React kill the render with an `Invalid hook
+   * call` naming whichever component happens to render first.
+   */
+  ssr?: boolean;
+}
+
+export function createCflopViteConfig({
+  ssr = false,
+}: CreateCflopViteConfigOptions = {}): UserConfig {
   return {
     plugins: [
       tanstackRouter({
@@ -48,10 +61,14 @@ export function createCflopViteConfig(): UserConfig {
           find: /^@unimatrix\/ui$/,
           replacement: fileURLToPath(new URL("../../packages/ui/src/index.ts", import.meta.url)),
         },
-        {
-          find: /^react$/,
-          replacement: fileURLToPath(new URL("./node_modules/react", import.meta.url)),
-        },
+        ...(ssr
+          ? []
+          : [
+              {
+                find: /^react$/,
+                replacement: fileURLToPath(new URL("./node_modules/react", import.meta.url)),
+              },
+            ]),
       ],
       // `@tanstack/react-router` is deduped, not just React. `@unimatrix/chrome`
       // declares it as a peer and resolves from its own directory, so without
@@ -62,4 +79,6 @@ export function createCflopViteConfig(): UserConfig {
   };
 }
 
-export default defineConfig(() => createCflopViteConfig());
+export default defineConfig(({ isSsrBuild }) =>
+  createCflopViteConfig({ ssr: isSsrBuild === true }),
+);
