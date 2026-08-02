@@ -57,7 +57,12 @@ the rest to report. Nothing that arrives later un-reds it.
 
 Every terminal bucket is printed as it lands — PASS, FAIL and SKIPPING alike,
 required or not. A filter that matched only success would be silent through a
-failure, and silence is indistinguishable from still-running.
+failure, and silence is indistinguishable from still-running. FAIL and CANCEL
+go to stdout; PASS and SKIPPING go to stderr, which still reaches the terminal
+and the Monitor output file — the same split the heartbeat below already
+uses. Under Monitor every stdout line is a notification, so this keeps a
+clean PR's dozen passing checks from waking the caller a dozen times to be
+told nothing.
 
 `gh pr checks <pr> --watch` is the wrong tool for this: it reports once, after
 everything has reported, so a `Verify` failure two minutes in stays invisible
@@ -311,8 +316,8 @@ Environment:
                         skips the startup check rather than reaching the
                         network.
 
-Output from phase 1, in order:
-  <BUCKET>  <check-name>                      once, the first time that result appears
+Output from phase 1, in order, on stdout:
+  <BUCKET>  <check-name>                      FAIL or CANCEL, the first time it appears
   <BUCKET>  <check-name>  — <desc>            same, for a check that carries one
   no required status checks — refusing to read an empty list as green
   cannot read the PR's base branch — refusing to gate blind
@@ -322,9 +327,13 @@ Output from phase 1, in order:
   branch is BEHIND — update it and re-arm     terminal, nothing pinged
   branch is DIRTY — resolve the conflicts and re-arm
   PR is a draft — mark it ready and re-arm
+
+On stderr, so a clean run does not wake a `Monitor` caller to be told nothing:
+  <BUCKET>  <check-name>                      PASS or SKIPPING, the first time it appears
+  <BUCKET>  <check-name>  — <desc>            same, for a check that carries one
   checks green on <sha>                       the phase boundary; the slot is about to be spent
 
-Under --no-review the run ends there, on one of these two or on any of the
+Under --no-review the run ends there, on the stderr line above or on any of the
 `auto-merge` lines below — the arm is the same code and declines for the same
 reasons:
   auto-merge armed UNREVIEWED on <sha> — nothing has read this diff
@@ -626,7 +635,18 @@ while true; do
       | "\(.bucket | ascii_upcase)  \(.name)"
         + (if (.description // "") == "" then "" else "  — \(.description)" end)
     ' <<<"$payload" | LC_ALL=C sort)
-    LC_ALL=C comm -13 <(printf '%s\n' "$checks_prev") <(printf '%s\n' "$cur")
+    # Non-actionable rows go to stderr, which still reaches the terminal and the
+    # Monitor output file. Every stdout line under Monitor is a notification, and
+    # each notification is one main-loop turn over the whole session context — so
+    # ~a dozen PASS rows on a clean PR are a dozen wakes to be told nothing.
+    # FAIL and CANCEL stay on stdout: those are the rows a caller must act on.
+    LC_ALL=C comm -13 <(printf '%s\n' "$checks_prev") <(printf '%s\n' "$cur") \
+      | while IFS= read -r row; do
+          case $row in
+            FAIL* | CANCEL*) printf '%s\n' "$row" ;;
+            *) printf '%s\n' "$row" >&2 ;;
+          esac
+        done
     checks_prev=$cur
 
     # green = {pass, skipping}, red = {fail, cancel}, and anything else keeps
@@ -864,7 +884,7 @@ else
   fi
 fi
 
-echo "checks green on $head_sha"
+echo "checks green on $head_sha" >&2
 
 # `--no-review` ends the run here. Phase 2 is the review — the ping, the wait,
 # the comment matching — and there is nothing else in it to keep.

@@ -34,9 +34,11 @@ Read `.tool` on each alert. This repo runs CodeQL and OSSF Scorecard. **A Scorec
 recommendation about the repository, not a defect in the diff** — report it separately and never as
 something blocking the PR.
 
-**Bots that comment instead of failing.** Socket reports as a passing check and puts its findings in
-a comment; dependency review is separate again. Read them with `gh pr view <pr> --comments` and say what they
-actually claim — this is the one signal the script does not collect.
+**Bot comments.** The script does not collect these — read them with `gh pr view <pr> --comments` and
+say what they actually claim. Measured over PRs 150–194 (issue-comment authors: `coderabbitai[bot]`
+×100, `dokploy-*[bot]` ×5, `github-advanced-security[bot]` ×1): Socket's findings here arrive as
+checks, not comments — it has never posted one. `coderabbitai[bot]`'s comments are `watch-pr.sh`'s
+surface, not yours.
 
 **Unresolved review threads** arrive as `unresolvedThreads`. Count them and name the files. Do not summarise their content as settled — an unresolved thread is an open question
 by definition.

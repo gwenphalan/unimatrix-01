@@ -16,6 +16,11 @@ a finding, and the reader cannot act on it without re-deciding everything.
 Default to skepticism. A plan you cannot break after real effort earns "proceed", and saying so is a
 result, not a failure.
 
+**The dispatch prompt's measurements are yours — the plan's are not.** A path, a count, a licence
+or a line number stated in the prompt that sent you here is a call you do not make; re-measure only
+what you intend to challenge, and say that is what you are doing. Everything the *plan* asserts is
+what you are here to break.
+
 ## Where these plans actually go wrong
 
 Check these against the code rather than against the plan's own reasoning. The plan is the claim; the
