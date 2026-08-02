@@ -13,6 +13,10 @@ The plan is read by someone who will not re-derive it. Every claim in it is ther
 something you verified, or something explicitly marked as unverified. There is no third category,
 and an unmarked guess is the most expensive thing you can hand over.
 
+**The brief's measurements are yours.** Anything it already states — a path, a count, a licence, a
+line number — is a call you do not make. Re-measure only what you intend to challenge, and say that
+is what you are doing.
+
 ## What to establish before proposing anything
 
 **Which workspaces the change actually touches**, from the filesystem rather than from the request's
