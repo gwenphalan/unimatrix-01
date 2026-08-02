@@ -92,7 +92,7 @@ describe("routeHead", () => {
       indexable: false,
     });
 
-    expect(head.meta.some((entry) => "script:ld+json" in entry)).toBe(false);
+    expect(head.meta.some((entry) => entry !== undefined && "script:ld+json" in entry)).toBe(false);
   });
 });
 

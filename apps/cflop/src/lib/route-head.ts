@@ -1,4 +1,4 @@
-import type { MetaDescriptor } from "@tanstack/react-router";
+import type { AnyRouteMatch, MetaDescriptor } from "@tanstack/react-router";
 
 /**
  * The origin every absolute URL in a route head is built from. Hardcoded rather
@@ -12,6 +12,10 @@ export const ROBOTS_EXCLUDED = "noindex,follow";
 
 type LdJson = Extract<MetaDescriptor, { "script:ld+json": unknown }>["script:ld+json"];
 
+type HeadMeta = NonNullable<AnyRouteMatch["meta"]>;
+type HeadMetaEntry = HeadMeta[number];
+type HeadLinks = NonNullable<AnyRouteMatch["links"]>;
+
 export interface RouteHeadOptions {
   /** Route path, leading slash included — `/` or `/learn`. */
   path: string;
@@ -23,8 +27,8 @@ export interface RouteHeadOptions {
 }
 
 export interface RouteHeadResult {
-  meta: Array<MetaDescriptor>;
-  links: Array<{ rel: string; href: string }>;
+  meta: HeadMeta;
+  links: HeadLinks;
 }
 
 export function routeHead({
@@ -35,7 +39,7 @@ export function routeHead({
   jsonLd,
 }: RouteHeadOptions): RouteHeadResult {
   const url = `${CANONICAL_ORIGIN}${path}`;
-  const meta: Array<MetaDescriptor> = [
+  const meta: HeadMeta = [
     { title },
     { name: "description", content: description },
     { name: "robots", content: indexable ? ROBOTS_INDEXABLE : ROBOTS_EXCLUDED },
@@ -56,8 +60,10 @@ export function routeHead({
 
   // JSON-LD travels in `meta`, not a `scripts` key: `HeadContent` builds its
   // tags by walking `match.meta` and branching on this key, and never reads
-  // `scripts` at all.
-  if (jsonLd) meta.push({ "script:ld+json": jsonLd });
+  // `scripts` at all. The cast is the gap between that runtime behaviour and
+  // the React binding, which types a match's `meta` as `<meta>` props only —
+  // `MetaDescriptor` in `@tanstack/router-core` is the shape actually accepted.
+  if (jsonLd) meta.push({ "script:ld+json": jsonLd } as unknown as HeadMetaEntry);
 
   return { meta, links: indexable ? [{ rel: "canonical", href: url }] : [] };
 }
