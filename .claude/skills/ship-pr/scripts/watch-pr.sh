@@ -351,6 +351,7 @@ monitor's output file without waking a caller that only reads stdout:
 
 Also on stderr, said once where they apply:
   cannot reach GitHub — no head sha, do not wait blind   terminal
+  cannot reach GitHub — no baseline, do not wait blind   terminal
   merge state reads <VALUE>
   no CodeRabbit commit status on <sha> — falling back to comment matching
   offline: first ping suppressed, ping_at=<time>

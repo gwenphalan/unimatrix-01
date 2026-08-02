@@ -53,8 +53,8 @@ and a lack of objection is not approval.
    stop, unless they have said not to.
 6. **Once they are satisfied, open the PR.** Body per the section below.
 7. **Arm `watch-pr.sh`** — it waits for every required check, pings CodeRabbit once they are green,
-   and arms auto-merge on a clean review. Alongside it, `pr-signal-collector` for the findings that
-   never reach the checks list, then a fresh reader.
+   and arms auto-merge on a clean review. Dispatch `pr-signal-collector` alongside it for the
+   findings that never reach the checks list, then hand the PR to a fresh reader.
 8. **Merge once everything clears,** then strike the shipped line from `.notes/`.
 
 Steps 1 and 4 are delegated on purpose: a fresh context re-derives from the code, where you would
