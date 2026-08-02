@@ -703,7 +703,11 @@ done
 # Arming the merge
 ########################################################################
 
-auto_merge=${SHIP_PR_AUTO_MERGE:-1}
+# String-compared below, never integer-compared: `[ "false" -eq 1 ]` is a bash error,
+# not a false, so a non-numeric value used to fall through to arming while printing
+# nothing. Empty is the other trap - `:-` fires on it, so `SHIP_PR_AUTO_MERGE=`
+# read as unset and armed. Anything that is not exactly 1 is off.
+auto_merge=${SHIP_PR_AUTO_MERGE-1}
 
 # Unresolved review threads on the PR, as a bare integer. Nothing on failure.
 #
@@ -765,7 +769,7 @@ unresolved_threads() {
 # different situations, and "merge by hand" is not what a reader needs to know
 # when the answer is that the PR is still a draft.
 arm_auto_merge() {
-  [ "$auto_merge" -eq 1 ] || return 0
+  [ "$auto_merge" = 1 ] || return 0
   if [ "$offline" -eq 1 ]; then
     echo "offline: auto-merge not armed"
     return 0
@@ -875,7 +879,7 @@ echo "checks green on $head_sha"
 # overriding the off switch, and the run's only other output is "checks green" —
 # indistinguishable from a script that died.
 if [ "$no_review" -eq 1 ]; then
-  if [ "$auto_merge" -ne 1 ]; then
+  if [ "$auto_merge" != 1 ]; then
     echo "no review requested, and auto-merge is off — nothing armed"
     exit 0
   fi
