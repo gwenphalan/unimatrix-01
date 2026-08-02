@@ -7,6 +7,7 @@ export interface AlgorithmCase {
   displayName: string;
   group: string;
   algorithms: string[];
+  /** Real-cube case frequency. Read only by `orderedLearnCases`; Drill draws uniformly. */
   probabilityWeight: number;
 }
 
