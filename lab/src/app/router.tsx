@@ -17,20 +17,32 @@ import { PrototypeIndexPage } from "@/routes/prototype-index";
  * The router exists at all because `@unimatrix/chrome`'s `ToolShell` calls
  * `useRouterState` — a shell without a router above it reads a context nothing
  * ever wrote to.
+ *
+ * The root renders a bare `<Outlet />`: the lab's own chrome belongs to the
+ * index, not to a prototype. A prototype gets the whole viewport, because a
+ * sketch judged inside someone else's title bar and footer is judged against
+ * furniture the real surface will not have — and a prototype *of* chrome is
+ * judged against chrome that contradicts it. A prototype that wants the tool
+ * shell imports `ToolShell` itself; that is one line, and it makes the choice
+ * visible in the file being designed.
  */
 const rootRoute = createRootRoute({
-  component: () => (
-    <LabShell>
-      <Outlet />
-    </LabShell>
-  ),
+  component: Outlet,
 });
 
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/",
-  component: PrototypeIndexPage,
+  component: PrototypeIndexRoute,
 });
+
+function PrototypeIndexRoute() {
+  return (
+    <LabShell>
+      <PrototypeIndexPage />
+    </LabShell>
+  );
+}
 
 /**
  * `/p/$` rather than `/p/$prototypeId`: prototype ids carry the directory

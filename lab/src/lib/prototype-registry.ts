@@ -60,10 +60,6 @@ export const prototypes: PrototypeEntry[] = Object.keys(modules)
   })
   .sort((a, b) => a.id.localeCompare(b.id));
 
-export function findPrototype(id: string): PrototypeEntry | undefined {
-  return prototypes.find((entry) => entry.id === id);
-}
-
 /**
  * Dynamically imports the prototype module for `id`.
  *

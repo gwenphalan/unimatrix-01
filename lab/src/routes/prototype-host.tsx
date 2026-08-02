@@ -1,7 +1,6 @@
 import { useEffect, useState, type ComponentType } from "react";
-import { ToolTitleBar } from "@unimatrix/chrome/tool";
 
-import { findPrototype, loadPrototype } from "@/lib/prototype-registry";
+import { loadPrototype } from "@/lib/prototype-registry";
 
 // Every variant carries the id it belongs to. Without that, changing
 // `prototypeId` leaves the PREVIOUS component rendering under the new title
@@ -13,7 +12,14 @@ type LoadState =
   | { status: "error"; id: string; message: string };
 
 /**
- * Renders one prototype below a title bar that gets back to the index.
+ * Renders one prototype, full viewport, contributing nothing to the screen.
+ *
+ * The harness draws no chrome around a running prototype — no title bar, no
+ * footer, not even a back link, because the browser already has one. Everything
+ * visible is the sketch. A wrapper makes the sketch answer for space it does not
+ * own, and when the sketch *is* chrome — a shell's section nav, say — the
+ * wrapper actively contradicts it. A prototype that wants the tool shell imports
+ * `ToolShell` itself.
  *
  * `useState` + `useEffect` rather than `React.lazy` + `Suspense`: a prototype
  * that fails to load is the normal case here — a half-written sketch, a missing
@@ -23,7 +29,6 @@ type LoadState =
  */
 export function PrototypeHostPage({ prototypeId }: { prototypeId: string }) {
   const [state, setState] = useState<LoadState>({ status: "loading", id: prototypeId });
-  const entry = findPrototype(prototypeId);
 
   useEffect(() => {
     let cancelled = false;
@@ -51,24 +56,27 @@ export function PrototypeHostPage({ prototypeId }: { prototypeId: string }) {
     };
   }, [prototypeId]);
 
-  return (
-    <div className="flex w-full flex-col gap-6">
-      <ToolTitleBar
-        back={{ label: "Back to prototypes", to: "/" }}
-        title={entry?.title ?? prototypeId}
-      />
+  if (state.id !== prototypeId || state.status === "loading") {
+    return <HostMessage>Loading {prototypeId}…</HostMessage>;
+  }
 
-      {state.id !== prototypeId || state.status === "loading" ? (
-        <p className="text-sm text-muted-foreground">Loading {prototypeId}…</p>
-      ) : null}
-
-      {state.status === "error" ? (
-        <p className="border border-destructive/45 px-4 py-3 font-mono text-sm text-destructive">
+  if (state.status === "error") {
+    return (
+      <HostMessage>
+        <span className="border border-destructive/45 px-4 py-3 font-mono text-sm text-destructive">
           {state.message}
-        </p>
-      ) : null}
+        </span>
+      </HostMessage>
+    );
+  }
 
-      {state.status === "ready" ? <state.Component /> : null}
+  return <state.Component />;
+}
+
+function HostMessage({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex min-h-[100dvh] items-center justify-center p-8 text-sm text-muted-foreground">
+      {children}
     </div>
   );
 }

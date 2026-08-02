@@ -32,6 +32,15 @@ Then `pnpm --filter @unimatrix/lab dev` and open the printed URL.
 
 ## Rules
 
+- **A prototype gets the bare viewport.** The host renders your default export
+  and draws nothing around it — no title bar, no footer, no back link, because
+  the browser has one. Import the shell the sketch actually belongs in:
+  `ToolShell` from `@unimatrix/chrome/tool` for a tool or admin surface,
+  `@unimatrix/chrome/public` for a site one, neither if you are designing chrome
+  itself. The harness supplies none of them because it cannot know which is
+  right, and the two are different layouts — a public-site sketch wrapped in tool
+  chrome is designed against the wrong furniture just as surely as one wrapped in
+  none.
 - **Data comes from `lab/src/mocks/` and nowhere else.** `@unimatrix/api-client`,
   `@unimatrix/user-data`, `@unimatrix/auth/react` and `@clerk/*` are lint errors
   in this workspace. The mocks need no Clerk keys, no running API and no
