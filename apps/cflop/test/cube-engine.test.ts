@@ -11,6 +11,14 @@ function solveFromAlgorithm(alg: string): FaceletCube {
   return applyMoves(createSolvedCube(), parseAlgorithm(alg));
 }
 
+// The state a case is drilled from. The net rotation is applied to the solved cube *before*
+// inverting, so the two rotations cancel instead of interacting with the moves between them;
+// correcting the orientation afterwards composes differently and gives a different permutation.
+function setupStateFor(alg: string): FaceletCube {
+  const moves = parseAlgorithm(alg);
+  return applyMoves(createSolvedCube(), [...netRotationFor(moves), ...invertMoves(moves)]);
+}
+
 function repeat(alg: string, times: number): FaceletCube {
   const moves = parseAlgorithm(alg);
   let cube = createSolvedCube();
@@ -137,10 +145,7 @@ describe("OLL Dot group ground truth", () => {
       const primary = dotCase.algorithms[0];
       if (!primary) throw new Error(`Case ${caseId} has no primary algorithm`);
 
-      const setupMoves = invertMoves(parseAlgorithm(primary));
-      const setupState = applyMoves(createSolvedCube(), setupMoves);
-      const normalized = normalizeOrientation(setupState);
-      const { top, sideRows } = extractLastLayer(normalized);
+      const { top, sideRows } = extractLastLayer(normalizeOrientation(setupStateFor(primary)));
 
       expect(top[4]).toBe("U");
       for (const edgeIndex of [1, 3, 5, 7]) {
@@ -176,11 +181,7 @@ describe("alternate algorithms consistency", () => {
     const primary = algorithmCase.algorithms[0];
     if (!primary) return;
 
-    const primaryMoves = parseAlgorithm(primary);
-    const setupState = applyMoves(createSolvedCube(), [
-      ...netRotationFor(primaryMoves),
-      ...invertMoves(primaryMoves),
-    ]);
+    const setupState = setupStateFor(primary);
 
     algorithmCase.algorithms.forEach((algorithm, index) => {
       if (index === 0) return;
@@ -209,11 +210,7 @@ describe("alternate algorithms consistency", () => {
     const primary = algorithmCase.algorithms[0];
     if (!primary) continue;
 
-    const primaryMoves = parseAlgorithm(primary);
-    const setupState = applyMoves(createSolvedCube(), [
-      ...netRotationFor(primaryMoves),
-      ...invertMoves(primaryMoves),
-    ]);
+    const setupState = setupStateFor(primary);
     const solved = createSolvedCube();
 
     algorithmCase.algorithms.forEach((algorithm, index) => {
