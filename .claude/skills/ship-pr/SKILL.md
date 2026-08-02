@@ -1,6 +1,6 @@
 ---
 name: ship-pr
-description: Take a task all the way to merged. Use at the start of any session whose end state is a merge — given the task itself, or a pointer to a .notes/todo/*.todo.md. Carries the ordered steps — plan through a subagent, attack the plan, get approval, implement through a subagent, check in, then PR, review and merge — plus the PR body a fresh reader can review from, the review ladder and its costs, and striking the shipped line from .notes/.
+description: Take a task all the way to merged. Use at the start of any session whose end state is a merge — given the task itself, or a pointer to a .notes/01-todo/*.todo.md. Carries the ordered steps — plan through a subagent, attack the plan, get approval, implement through a subagent, check in, then PR, review and merge — plus the PR body a fresh reader can review from, the review ladder and its costs, and striking the shipped line from .notes/.
 ---
 
 # Ship a PR
@@ -8,7 +8,7 @@ description: Take a task all the way to merged. Use at the start of any session 
 ## How this is invoked
 
 **The owner types this at the *start* of a session, not the end.** The argument is either the
-task in their own words, or a pointer to a `.notes/todo/*.todo.md` — sometimes just the file,
+task in their own words, or a pointer to a `.notes/01-todo/*.todo.md` — sometimes just the file,
 meaning "the first unfinished item on it". Resolve that before doing anything: read the file, and if
 the target is ambiguous, name the line you are about to implement and say so rather than guessing.
 
@@ -142,7 +142,7 @@ makes it feel skippable. Which surfaces need it, and how, belong to the root `AG
 PM-mode and does not read diffs line by line, and — see the next section — the pre-merge review is
 done by a reader with no access to this conversation. Both of them get the PR body and nothing else.
 A body that only lists what changed is unreviewable: it gives them no way to tell correct from
-plausible. If working from `.notes/todo/`, use the pr name the todo item lists, with the items
+plausible. If working from `.notes/01-todo/`, use the pr name the todo item lists, with the items
 description quoted in the body in the owners own words.
 
 Conventional commit for the title, and the scope after the type is the workspace or surface, not a
@@ -161,7 +161,7 @@ The body must carry three things, in this order:
    chose. Behaviour they specified that a reader would otherwise assume was your invention. **This
    is load-bearing**: a fresh reviewer can check "is this sound" from the diff alone, but can only
    check "is this what was asked" if the ask is written down here. If it came from a
-   `.notes/todo/*.todo.md` line, quote the line.
+   `.notes/01-todo/*.todo.md` line, quote the line.
 2. **Why, before what.** Lead with the problem — what was wrong, what it cost, why the obvious
    alternative was not taken. The *what* follows from it and is usually the shorter half. If a
    decision has a non-obvious reason (an ordering that prevents a silent no-op, a hook owned by one
@@ -357,7 +357,7 @@ That is `gh` failing to check out `main` locally *after* merging; confirm with
 This is the owner's scratch file on disk, not the harness task list — that one is yours and is
 already finished by now.
 
-If the owner started this session by pointing at a `*.todo.md` in `.notes/todo/`, delete the
+If the owner started this session by pointing at a `*.todo.md` in `.notes/01-todo/`, delete the
 line(s) the merged work completed from that file once the PR is merged — not before. Leaving a
 shipped item on the list is what makes the list stop being trusted.
 
