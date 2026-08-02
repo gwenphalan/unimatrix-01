@@ -1,6 +1,6 @@
 ---
 name: ship-pr
-description: Take a task all the way to merged. Use at the start of any session whose end state is a merge — given the task itself, or a pointer to a .notes/issues/*.todo.md. Carries the ordered steps — plan through a subagent, attack the plan, get approval, implement through a subagent, check in, then PR, review and merge — plus the PR body a fresh reader can review from, the review ladder and its costs, and striking the shipped line from .notes/.
+description: Take a task all the way to merged. Use at the start of any session whose end state is a merge — given the task itself, or a pointer to a .notes/todo/*.todo.md. Carries the ordered steps — plan through a subagent, attack the plan, get approval, implement through a subagent, check in, then PR, review and merge — plus the PR body a fresh reader can review from, the review ladder and its costs, and striking the shipped line from .notes/.
 ---
 
 # Ship a PR
@@ -8,7 +8,7 @@ description: Take a task all the way to merged. Use at the start of any session 
 ## How this is invoked
 
 **The owner types this at the *start* of a session, not the end.** The argument is either the
-task in their own words, or a pointer to a `.notes/issues/*.todo.md` — sometimes just the file,
+task in their own words, or a pointer to a `.notes/todo/*.todo.md` — sometimes just the file,
 meaning "the first unfinished item on it". Resolve that before doing anything: read the file, and if
 the target is ambiguous, name the line you are about to implement and say so rather than guessing.
 
@@ -52,8 +52,13 @@ and a lack of objection is not approval.
    understandable without opening the diff, because it will be read without opening the diff. Then
    stop, unless they have said not to.
 6. **Once they are satisfied, open the PR.** Body per the section below.
-7. **Watch the checks, then review once green** — every required check, then `pr-signal-collector`
-   for the findings that never reach the checks list, then a fresh reader.
+7. **Arm `watch-pr.sh`** — it waits for every required check, pings CodeRabbit once they are green,
+   and arms auto-merge on a clean review. Dispatch `pr-signal-collector` alongside it for the
+   findings that never reach the checks list. **Wait for the watcher to report before handing the
+   PR to a fresh reader** — it runs under `Monitor`, so it is still working while you read this
+   line, and a reader dispatched now gets a branch whose checks have not reported. If that fresh
+   reader *is* the pre-merge review, run with `SHIP_PR_AUTO_MERGE=0`, or the PR can merge out from
+   under it.
 8. **Merge once everything clears,** then strike the shipped line from `.notes/`.
 
 Steps 1 and 4 are delegated on purpose: a fresh context re-derives from the code, where you would
@@ -118,7 +123,7 @@ The body must carry three things, in this order:
    chose. Behaviour they specified that a reader would otherwise assume was your invention. **This
    is load-bearing**: a fresh reviewer can check "is this sound" from the diff alone, but can only
    check "is this what was asked" if the ask is written down here. If it came from a
-   `.notes/issues/*.todo.md` line, quote the line.
+   `.notes/todo/*.todo.md` line, quote the line.
 2. **Why, before what.** Lead with the problem — what was wrong, what it cost, why the obvious
    alternative was not taken. The *what* follows from it and is usually the shorter half. If a
    decision has a non-obvious reason (an ordering that prevents a silent no-op, a hook owned by one
@@ -145,15 +150,17 @@ fresh *framing* — you still write its prompt, choose what it looks at, and dec
 reviewer pointed at a branch that then goes red reviews code you are about to change, and the fix
 either wastes the review or costs a second one. This is not a formality: CodeQL and the `Images`
 matrix both land well after the PR opens, and CodeQL can fail on a *new* alert introduced by the diff
-even when its own workflow succeeds, so "the PR opened without complaint" tells you nothing yet. Wait
-for green, then arm the waiter.
+even when its own workflow succeeds, so "the PR opened without complaint" tells you nothing yet. For
+CodeRabbit that wait belongs to `watch-pr.sh` and you arm it straight away; for any of the other three
+readers below, it is on you.
 
 So the pre-merge check goes to a reader with no path back to this conversation. Pick by what the
 change is:
 
-1. **CodeRabbit is the default, and you request it yourself** — by arming `wait-coderabbit.sh`, which
-   posts the ping, once the diff is final *and* the required checks are green (see the section below
-   for the exact mechanics and why timing matters). It is the only reviewer that is a *different tool*
+1. **CodeRabbit is the default, and you request it yourself** — by arming `watch-pr.sh`, which waits
+   for the required checks to go green and then posts the ping. Arm it once the diff is final; the
+   waiting for green is the script's job, not yours (see the section below for the exact mechanics
+   and why the timing matters). It is the only reviewer that is a *different tool*
    rather than a different context, so it
    does not share your model's blind spots — that is what makes it the first choice rather than the
    consolation prize.
@@ -291,16 +298,25 @@ reports, so a `Verify` failure two minutes in stays invisible until the slowest 
 minutes later — you sit on a fixable red the whole time. **Arm this under `Monitor`, not `Bash` with
 `run_in_background`** — background Bash notifies once, when the script exits, which is the same
 blindness by a different route. `Monitor` is a deferred tool, so its own guidance on which to pick is
-not in context until you fetch it; that is why the choice is stated here rather than left to it.
-`--help` for the script's outputs and exit codes:
+not in context until you fetch it; that is why the choice is stated here rather than left to it. One
+stream now carries both the check results and the review outcome, which makes that choice matter
+more, not less. `--help` for the script's outputs and exit codes:
 
 ```sh
-.claude/skills/ship-pr/scripts/watch-checks.sh <pr>
+.claude/skills/ship-pr/scripts/watch-pr.sh <owner/repo> <pr>
 ```
 
-**Arm the checks watch first and the CodeRabbit wait after it goes green.** The waiter posts the ping
-itself, and a ping fired while CI is still running spends a slot on code a red check is about to
-change.
+**The checks come before the ping, and that is the script's property rather than your instruction.**
+A ping fired while CI is still running spends a slot on code a red check is about to change, so
+`watch-pr.sh` refuses to post one until every context `required-checks.sh` names has reported green.
+The gate is the *required* list specifically: `gh pr checks` reports only what exists on the head
+commit, so a fast third-party app answering first makes a partial list look complete, and a red
+non-required check would hold back a ping that should go out. A red required check, a `BEHIND` or
+`DIRTY` branch, and a draft PR each end the run without pinging.
+
+It stops watching the checks at the ping. A required check that goes red *after* auto-merge is armed
+means GitHub holds the merge indefinitely, and nothing reports that — so a PR that has been armed and
+has gone quiet is worth one look at.
 
 If a check fails for a reason unrelated to the diff (flake, infrastructure), say so explicitly rather
 than silently re-running.
@@ -316,12 +332,12 @@ the cooldown and re-ping" below.
 ### Ask for the review — it does not run automatically
 
 `.coderabbit.yaml` sets `reviews.auto_review.enabled: false`, so a review happens only when asked
-for. **Ask by arming `wait-coderabbit.sh` — it posts `@coderabbitai full review` itself.** Do not
-type the ping as well; the section below covers what a second ping costs.
+for. **Ask by arming `watch-pr.sh` — it posts `@coderabbitai full review` itself.** Do not type the
+ping as well; the section below covers what a second ping costs.
 
-Arm it once, when the diff is finished and every required check is green — batch every outstanding
-fix into one push first. Arming at PR-open is the common mistake: the checks have not reported yet,
-so a red one arrives afterwards and the review you just spent covers code you are about to change.
+Arm it once, when the diff is finished — batch every outstanding fix into one push first. Arming
+before the diff is settled is the mistake that survives: the script will not ping ahead of green, but
+it will happily ping a diff you are about to change again, and that slot is spent.
 
 **The "✅ Action performed / Review finished" ack carries no information — not that a review ran, and
 not that one failed.** It lands within seconds of *any* ping, identical every time, and it is **not**
@@ -388,8 +404,10 @@ through the checks list instead of the API.
 
 So a green `CodeRabbit` row read at a glance is the thing most likely to wave an unreviewed merge
 through, and reading it *early* is how you conclude the check is meaningless — it is not, it is just
-stale until a review finishes. `watch-checks.sh` prints the description for this reason. Every other
-check here has an empty one, so the annotation appears only where it carries information.
+stale until a review finishes. `watch-pr.sh` prints the description alongside the bucket for this
+reason. Every other check here has an empty one, so the annotation appears only where it carries
+information. The `CodeRabbit` row is deliberately not part of that script's green gate — it is `pass`
+on every PR, so gating on it would be reading the signal the review wait exists to discriminate.
 
 Confirm a review from the review itself regardless; the description says one ran, not what it found.
 
@@ -428,11 +446,13 @@ To wait: **arm a `Monitor` and carry on working.** This is the case `Monitor` is
 arrives on someone else's schedule, with no way to know which of five endings it will be.
 
 ```sh
-.claude/skills/ship-pr/scripts/wait-coderabbit.sh <owner/repo> <pr>
+.claude/skills/ship-pr/scripts/watch-pr.sh <owner/repo> <pr>
 ```
 
-**Arm it and do not ping — it pings for you.** It takes the review-count baseline and pins the head
-sha first, then posts `@coderabbitai full review` and records GitHub's own timestamp for it. That
+**Arm it and do not ping — it pings for you.** It waits for the required checks first, then pins the
+head sha and takes the review-count baseline, then posts `@coderabbitai full review` and records
+GitHub's own timestamp for it. The baseline is taken after the wait rather than at arm time, so a
+review that lands during CI cannot be read as one the ping produced. That
 timestamp is the whole discriminator afterwards, which is why the ping has to be the script's: a
 manual one alongside it is a second slot spent, and it moves the marker the script does its cooldown
 arithmetic on, so the automatic re-ping then fires early into a live window and burns the retry cap
@@ -460,6 +480,14 @@ against the baseline taken before the ping
 (`.claude/skills/ship-pr/scripts/review-count.sh`), unresolved threads
 (`reviewThreads` via GraphQL, `isResolved == false`), and the summary comment's markers.
 
+**Replying to findings inflates the count, and `review-count.sh` filters that out.** CodeRabbit
+files a review object for every thread reply it posts, so its acknowledgement of your reply raises
+the raw count without any review having run. Measured on PR #187: the raw count read 11 where three
+reviews had actually happened, and a genuinely **clean** third review was reported as
+`reviewed: 10 -> 11` — the arm that means "it found something", which is why auto-merge never fired.
+The script now counts only reviews carrying a body. If you read the count by hand, apply the same
+filter.
+
 **The count only moves when there were findings.** A review that comes back clean leaves it exactly
 where it was, so `count == baseline` is ambiguous between "still running", "never ran" and "ran and
 found nothing" — and only the summary comment tells them apart. Never treat a flat count as evidence
@@ -471,7 +499,7 @@ from upstream and marked as such.
 
 | Outcome | How you know | Ends the wait? |
 | --- | --- | --- |
-| Reviewed, findings | count > baseline | yes — triage them |
+| Reviewed, findings | count > baseline — counting only reviews with a **body**, see above | yes — triage them |
 | Reviewed clean | `No actionable comments were generated in the recent review` — **count stays at baseline** | yes |
 | Rate-limited | `rate limited by coderabbit.ai` | yes — cool down, re-ping |
 | Merged PR | `Review failed` / `The pull request is closed` | yes — CodeRabbit is done, forever |
@@ -508,11 +536,31 @@ to the summary comment", not as an answer.
 **The waiter can merge for you on the clean row, and only that row.** It arms GitHub's native
 auto-merge by default when the review comes back clean, pinned with `--match-head-commit` to the sha
 that was reviewed; GitHub then squashes once every required check passes, so nothing here re-verifies
-green or races a branch that goes `BEHIND`, and a push landing after the review cancels the arm
-instead of merging code nothing read. It declines to arm on a draft PR, on any unresolved review
+green or races a branch that goes `BEHIND`. A push landing between the review and the arm makes the
+arm fail outright — measured, see below — but a push landing *after* a successful arm is a case
+nothing here has established, so do not read this as a standing guarantee. It declines to arm on a
+draft PR, on any unresolved review
 thread, and on a PR state it could not read. `SHIP_PR_AUTO_MERGE=0` turns it off. No other row
 qualifies: a refusal read nothing, a review with findings is not clean, and `did not have any
 reviewable changes` is an unreviewed merge in a clean one's clothes.
+
+**That `--match-head-commit` pin is the whole safety argument for the default being on, and both its
+paths are now measured.** Controlled pair on PR #187 — same command, same PR state (checks pending,
+`BLOCKED`), only the sha differing. Pinned to a **stale** sha it was refused, `GraphQL: Pull Request
+is not mergeable`, with `autoMergeRequest` left `null`; pinned to the **current** head it armed. So
+`expectedHeadOid` is enforced when auto-merge is *enabled*, and an arm attempted after a push simply
+does not take.
+
+What that does **not** settle is a push landing *after* a successful arm — enable-time enforcement
+says nothing about merge time, and GitHub's docs promise an auto-disable only for a pusher **without**
+write permission, which is never us. Treat a long-armed PR as worth a glance rather than trusted.
+Also unmeasured: whether GitHub's auto-merge updates an
+out-of-date branch by itself. Read as no, and the failure direction is benign either way — a
+self-update moves the head sha, which cancels the arm rather than merging anything.
+
+**And the watcher stops reading the checks at the ping.** Once auto-merge is armed, a required check
+going red leaves GitHub holding the merge indefinitely with nothing reporting it. An armed PR that
+has gone quiet for longer than a CI cycle is worth `gh pr checks` by hand.
 
 **A ping can be swallowed with no marker at all.** Observed here: `@coderabbitai review` drew no ack
 and no review, while the PR-open `Review skipped` notice sat above it looking like a reply. The
@@ -599,7 +647,7 @@ That is `gh` failing to check out `main` locally *after* merging; confirm with
 This is the owner's scratch file on disk, not the harness task list — that one is yours and is
 already finished by now.
 
-If the owner started this session by pointing at a `*.todo.md` in `.notes/issues/`, delete the
+If the owner started this session by pointing at a `*.todo.md` in `.notes/todo/`, delete the
 line(s) the merged work completed from that file once the PR is merged — not before. Leaving a
 shipped item on the list is what makes the list stop being trusted.
 

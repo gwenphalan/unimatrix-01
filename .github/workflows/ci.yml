@@ -86,6 +86,20 @@ jobs:
       - name: Runner labels
         run: node ./infra/scripts/check-runner-labels.mjs
 
+      # Same placement rationale as the gates above — bash and jq over fixture
+      # files, no `node_modules`. `watch-pr.sh` is the one script in this repo
+      # that arms an unattended merge, and this suite is the only thing that
+      # exercises its gate: that a partial checks list does not read as green,
+      # that a red required context stops before the ping, and that an empty
+      # checks list is not counted as an API failure. It reaches the network on
+      # no path — asserted by running it with a `gh` stub on PATH that logs and
+      # exits 99, which came back with zero invocations.
+      #
+      # (jq is in the ubuntu-24.04 runner image's tool list — read from that
+      # list, not measured here; no other step in this workflow uses jq.)
+      - name: Ship-pr fixtures
+        run: bash ./.claude/skills/ship-pr/scripts/fixtures/run-fixtures.sh
+
       # The repo's shell reaches no other static analysis: CodeQL has no shell
       # extractor, `.claude/` is in no pnpm workspace so turbo never sees it, and
       # prettier has no bash parser. A step in `Verify` rather than a job of its

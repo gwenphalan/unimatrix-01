@@ -6,8 +6,18 @@ usage() {
 review-count.sh <owner/repo> <pr>
 
 Prints the number of reviews CodeRabbit has left on a pull request, as a bare
-integer on stdout. This is the baseline `wait-coderabbit.sh` records before a
-ping, and the only signal that separates "reviewed" from every other outcome.
+integer on stdout. This is the baseline `watch-pr.sh` records before a ping. It
+is one signal rather than the outcome: a clean review never moves it, and a flat
+count reads the same whether the review is still running or was skipped. Against
+the pre-ping baseline it says a review landed; the `CodeRabbit` commit status or
+the summary comment says what that review found.
+
+Empty-bodied reviews are excluded, and that is not tidiness. CodeRabbit files a
+review object for every *thread reply* it makes, so answering its findings
+inflates the count with acks that reviewed nothing. Measured on PR #187: the
+raw count read 11 where three reviews had actually run, and a genuinely clean
+third review was misreported as "reviewed: 10 -> 11" — which is exactly the arm
+that decides a review found something. A real review always carries a body.
 
 A PR that has been reviewed once already starts at n >= 1, so a caller testing
 n > 0 succeeds on its first read without a review having run. Compare against a
@@ -51,7 +61,7 @@ repo=$1
 pr=$2
 
 if [ -n "${SHIP_PR_REVIEWS_FIXTURE:-}" ]; then
-  jq '[.[] | select(.user.login == "coderabbitai[bot]")] | length' "$SHIP_PR_REVIEWS_FIXTURE"
+  jq '[.[] | select(.user.login == "coderabbitai[bot]") | select((.body // "") != "")] | length' "$SHIP_PR_REVIEWS_FIXTURE"
 else
   # `--jq` runs per page, so an aggregating filter behind `--paginate` prints one
   # integer per page and the caller's `[ "$n" -gt "$base" ]` dies on a multi-line
@@ -60,5 +70,5 @@ else
   # failed `gh` exits with its own status instead of feeding jq an empty stream
   # and printing a confident 0.
   raw=$(gh api "repos/$repo/pulls/$pr/reviews" --paginate --jq '.[]')
-  jq -s '[.[] | select(.user.login=="coderabbitai[bot]")] | length' <<<"$raw"
+  jq -s '[.[] | select(.user.login=="coderabbitai[bot]") | select((.body // "") != "")] | length' <<<"$raw"
 fi
