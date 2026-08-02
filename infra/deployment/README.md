@@ -98,9 +98,15 @@ just some). See "Clerk setup" below.
 - Domains page: route `cflop.unimatrix-01.dev` to the `cflop` service,
   container port `8080`
 
-The cflop container is a static SPA container, same shape as the web
-service. Preserve SPA fallback behavior inside the container regardless of
-routing. It has no API dependency, so it does not need an entry in
+Unlike the web service, the cflop container serves one HTML file per route and
+answers an unknown path with a real 404. Do not add a catch-all in Dokploy or
+Traefik that routes every path to the app: it would reinstate the soft 404 from
+outside the container, where `infra/scripts/check-cflop-serving.sh` cannot see
+it and the only symptom is unknown URLs quietly returning 200 again. The web
+service keeps its SPA fallback (`apps/web/nginx.conf`) and is right to — it has
+no per-route files to serve instead.
+
+cflop has no API dependency, so it does not need an entry in
 `CORS_ALLOWED_ORIGINS`.
 
 #### The pre-rebrand `cube.` hostname

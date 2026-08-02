@@ -15,7 +15,7 @@
  */
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdir, readdir, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
 import os from "node:os";
 import path from "node:path";
@@ -36,9 +36,15 @@ import lighthouse from "lighthouse";
  *
  * `seo` is the exception and carries no margin, because it does not need one:
  * unlike performance it is a fixed set of pass/fail audits with no timing
- * component, so it does not drift between runs. Both apps score 1.00 on every
- * route, and any drop means an audit genuinely started failing — a page with no
- * meta description, a non-crawlable link, an image without alt text.
+ * component, so it does not drift between runs. A drop means an audit genuinely
+ * started failing — a page with no meta description, a non-crawlable link, an
+ * image without alt text.
+ *
+ * A route deliberately kept out of search cannot score 1.00, since `is-crawlable`
+ * fails by design. Declaring a `sitemap` swaps the category budget for
+ * per-audit assertions on any route the sitemap omits: `is-crawlable` must fail
+ * and every other weight-1 audit must still pass, so exclusion stays a decision
+ * about indexing rather than cover for a page with no title.
  */
 const APPS = {
   // Measured 2026-07-27 against a build with no `VITE_CLERK_PUBLISHABLE_KEY`,
@@ -60,10 +66,31 @@ const APPS = {
   "apps/cflop": {
     routes: ["/", "/learn", "/drill"],
     budgets: { performance: 0.9, accessibility: 0.95, "best-practices": 0.95, seo: 1 },
+    sitemap: "dist/sitemap.xml",
   },
 };
 
 const CATEGORIES = ["performance", "accessibility", "best-practices", "seo"];
+
+/**
+ * The weight-1 `seo` audits asserted individually on a route the sitemap omits.
+ * Seven, not six: 4.043478 (`is-crawlable`) + 7 is the category total, so a
+ * shorter list would be silently ignoring an audit.
+ *
+ * `canonical` is deliberately absent — weight 0, reported `notApplicable`, and
+ * Lighthouse audits a `127.0.0.1` preview while the canonical names the real
+ * host, so it structurally cannot verify one. The build assertion in
+ * `apps/cflop/prerender/entry.tsx` owns canonical correctness.
+ */
+const SEO_AUDITS_OUTSIDE_SITEMAP = [
+  "document-title",
+  "meta-description",
+  "http-status-code",
+  "link-text",
+  "crawlable-anchors",
+  "robots-txt",
+  "hreflang",
+];
 
 // Floor on the gap between a route's two performance samples. The retry pass
 // below normally supplies far more than this by auditing every other route in
@@ -204,6 +231,17 @@ async function main() {
   try {
     await waitForServer(baseUrl);
     await mkdir(reportDir, { recursive: true });
+
+    // Which routes claim to be indexable, read from the artifact the build
+    // actually ships rather than a second list kept in step with it here.
+    let sitemapPaths = null;
+    if (config.sitemap) {
+      const xml = await readFile(path.join(appDir, config.sitemap), "utf8");
+      sitemapPaths = new Set(
+        [...xml.matchAll(/<loc>([^<]+)<\/loc>/gu)].map((match) => new URL(match[1]).pathname),
+      );
+      console.log(`  ${appDir}/${config.sitemap} lists ${[...sitemapPaths].join(", ")}`);
+    }
     chrome = await launch({
       chromeFlags: ["--headless=new", "--no-sandbox"],
       chromePath: await resolveChromePath(),
@@ -221,6 +259,7 @@ async function main() {
 
       return {
         report: result.report,
+        audits: result.lhr.audits,
         scores: Object.fromEntries(
           CATEGORIES.map((category) => [category, result.lhr.categories[category]?.score ?? 0]),
         ),
@@ -305,6 +344,23 @@ async function main() {
       }
 
       for (const category of CATEGORIES) {
+        if (category === "seo" && sitemapPaths && !sitemapPaths.has(route)) {
+          for (const [id, expected] of [
+            ["is-crawlable", 0],
+            ...SEO_AUDITS_OUTSIDE_SITEMAP.map((auditId) => [auditId, 1]),
+          ]) {
+            const auditScore = audit.audits[id]?.score;
+            const status = auditScore === expected ? "ok  " : "FAIL";
+            console.log(
+              `  ${status} ${appDir}${route} seo/${id}: ${auditScore} (expected ${expected})`,
+            );
+            if (auditScore !== expected) {
+              failures.push(`${appDir}${route} seo/${id}: ${auditScore} != ${expected}`);
+            }
+          }
+          continue;
+        }
+
         const score = scores[category];
         const budget = config.budgets[category];
         const status = score >= budget ? "ok  " : "FAIL";

@@ -229,3 +229,12 @@ jobs:
       # cache to invalidate, and the build context is the repo itself.
       - name: Build ${{ matrix.app }} image
         run: docker build --file "apps/${{ matrix.app }}/Dockerfile" --tag "unimatrix-${{ matrix.app }}:ci" .
+
+      # cflop serves one HTML file per route and returns real 404s, which lives
+      # entirely in its `nginx.conf`. Nothing else reaches it: the unit suite
+      # starts no server, Playwright drives a client router that renders a
+      # not-found card over a 200, and `vite preview` reproduces none of the
+      # rules. Here because this job is the only one with a built image.
+      - name: cflop serving contract
+        if: matrix.app == 'cflop'
+        run: bash ./infra/scripts/check-cflop-serving.sh "unimatrix-cflop:ci"

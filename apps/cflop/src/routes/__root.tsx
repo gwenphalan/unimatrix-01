@@ -2,10 +2,15 @@ import { HeadContent, Link, Outlet, createRootRoute } from "@tanstack/react-rout
 import { RiAlertLine } from "@remixicon/react";
 
 import { AppShell } from "@/app/app-shell";
+import { ROBOTS_EXCLUDED } from "@/lib/route-head";
 import { Badge, Button, Card } from "@unimatrix/ui/public";
 
 export const Route = createRootRoute({
   component: RootComponent,
+  // Deliberately not `routeHead`: the root emits no canonical, so a leaf's is
+  // the only one in the document, and it defaults to exclusion — a route that
+  // forgets `routeHead` stays out of search rather than being indexed under the
+  // root's title.
   head: () => ({
     meta: [
       { title: "CFLOP" },
@@ -13,6 +18,7 @@ export const Route = createRootRoute({
         name: "description",
         content: "A flashcard trainer for memorizing every 3x3 Rubik's Cube OLL and PLL algorithm.",
       },
+      { name: "robots", content: ROBOTS_EXCLUDED },
     ],
   }),
   notFoundComponent: RootNotFound,

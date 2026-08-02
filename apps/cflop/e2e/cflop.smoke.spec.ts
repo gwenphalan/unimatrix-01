@@ -49,6 +49,24 @@ test("homepage load", async ({ page }) => {
   await expect(main.getByRole("link", { name: "Drill" })).toBeVisible();
 
   await scanAccessibility(page, "/");
+
+  // Assert the tags were served before asserting they are gone. `count === 0`
+  // on its own passes against any server that never emitted them — a dev server
+  // reached through `reuseExistingServer`, or a build whose prerender step
+  // silently did nothing. The pair is what makes the removal the thing measured.
+  const servedHtml = await (await page.request.get("/")).text();
+  expect(servedHtml).toContain("data-prerendered-head");
+
+  // React owns the head once it mounts, so leaving any of it behind means two
+  // of every meta and link.
+  await expect(page.locator("[data-prerendered-head]")).toHaveCount(0);
+
+  // The one real-browser check that React's `<title>` wins over the static one
+  // the served file keeps. A stale tab title after a client navigation is the
+  // symptom if it stops.
+  await main.getByRole("link", { name: "Learn" }).click();
+  await expect(page).toHaveTitle("CFLOP - Learn");
+
   expectNoPageErrors(pageErrors);
 });
 
