@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { AlgorithmCase } from "@/features/algorithms/types";
 import { pickNextCase } from "@/features/trainer/pick-next-case";
@@ -50,5 +50,15 @@ describe("pickNextCase", () => {
 
   it("returns undefined for an empty case list", () => {
     expect(pickNextCase([], {}, undefined)).toBeUndefined();
+  });
+
+  it("picks uniformly rather than by probabilityWeight", () => {
+    const cases = [makeCase("a"), makeCase("b"), makeCase("c"), makeCase("d", 4)];
+
+    vi.spyOn(Math, "random").mockReturnValue(0.5);
+
+    // Uniform: floor(0.5 * 4) === 2, so "c". Weight-proportional would land on
+    // "d": roll = 0.5 * 7 = 3.5, and a/b/c consume only 3 of it.
+    expect(pickNextCase(cases, {}, undefined)?.id).toBe("c");
   });
 });
