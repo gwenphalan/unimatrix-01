@@ -299,6 +299,7 @@ Output from phase 1, in order:
   <BUCKET>  <check-name>                      once, the first time that result appears
   <BUCKET>  <check-name>  — <desc>            same, for a check that carries one
   no required status checks — refusing to read an empty list as green
+  cannot read the PR's base branch — refusing to gate blind
   the required check list could not be read — refusing to gate blind
   checks red: <names> — not pinging           terminal
   checks timed out after <m>m — never reported: <names>
@@ -349,6 +350,7 @@ monitor's output file without waking a caller that only reads stdout:
   still waiting, nothing from CodeRabbit yet, count=<n>, <m>m elapsed
 
 Also on stderr, said once where they apply:
+  cannot reach GitHub — no head sha, do not wait blind   terminal
   merge state reads <VALUE>
   no CodeRabbit commit status on <sha> — falling back to comment matching
   offline: first ping suppressed, ping_at=<time>
