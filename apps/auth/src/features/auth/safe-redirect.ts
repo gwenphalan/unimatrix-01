@@ -9,6 +9,32 @@
  */
 const ROOT_DOMAIN = "unimatrix-01.dev";
 
+/**
+ * The same allowlist as {@link isAllowedRedirectUrl}, in the shape Clerk's
+ * `allowedRedirectOrigins` takes — handed to `AuthProvider` in `main.tsx`.
+ *
+ * Clerk validates `forceRedirectUrl` against this list independently of our
+ * own check and **silently discards a non-matching target**, falling back to
+ * its default redirect with a `warnOnce` in the console. Left unset, its
+ * defaults are the current origin plus the eTLD+1 of the Clerk frontend API
+ * and its subdomains — which in production is `unimatrix-01.dev` and covers
+ * every service, but in development is `accounts.dev`, so a sibling dev
+ * server on another loopback port matches nothing and the return address is
+ * dropped after a completed sign-in.
+ *
+ * Clerk tests these against `url.origin`, so they are anchored on an origin
+ * and never match a path.
+ *
+ * Two allowlists is one more than ideal, but the shapes are not
+ * interchangeable: ours answers a `string | undefined` and returns a
+ * fallback, Clerk's is a pattern array it applies inside its own widgets.
+ * `test/safe-redirect.test.ts` asserts the two agree.
+ */
+export const ALLOWED_REDIRECT_ORIGINS: readonly RegExp[] = [
+  new RegExp(`^https://(?:[a-z0-9-]+\\.)*${ROOT_DOMAIN.replaceAll(".", "\\.")}$`),
+  /^https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?$/,
+];
+
 function isAllowedRedirectUrl(raw: string): boolean {
   let url: URL;
 
