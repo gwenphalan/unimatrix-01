@@ -68,7 +68,8 @@ and a lack of objection is not approval.
    stop, unless they have said not to.
 6. **Once they are satisfied, open the PR.** Body per the section below.
 7. **Arm `watch-pr.sh`** — it waits for every required check, pings CodeRabbit once they are green,
-   and arms auto-merge on a clean review. **Wait for the watcher to report before handing the
+   and arms auto-merge once the review clears: immediately on a clean one, or after the reply-and-fix
+   cycle on one with findings. **Wait for the watcher to report before handing the
    PR to a fresh reader** — it runs under `Monitor`, so it is still working while you read this
    line, and a reader dispatched now gets a branch whose checks have not reported. If that fresh
    reader *is* the pre-merge review, run with `SHIP_PR_AUTO_MERGE=0`, or the PR can merge out from
