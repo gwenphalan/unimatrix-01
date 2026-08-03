@@ -530,60 +530,98 @@ function processFile(repoRoot, targetAbsPath) {
 
   let changedFile = false;
 
+  // Two References entries can cite the identical path:line, and the sidecar
+  // keys a record by that literal text — so they must resolve exactly once,
+  // together, off the one record that names them both. Resolving per entry
+  // instead re-keys the record mid-loop on the first occurrence's move,
+  // leaving the second occurrence looking up a key that is already gone; it
+  // then reads as first-seen and baselines against whatever now sits at the
+  // stale line, recording a wrong answer as correct with no later run able
+  // to self-correct it. Grouping by citationKey and resolving one result per
+  // group — applied identically to every entry in it — is what keeps
+  // duplicate citations in lockstep. The report and the counts follow the
+  // same grouping: one row and one count per unique citation, not one per
+  // occurrence, so a citation cited twice is not double-counted.
+  const groups = new Map();
   for (const entry of entries) {
-    const result = resolveEntry(repoRoot, entry, fileRecords, diffCache, linesCache, currentHead);
-    if (result.finalKey) seenKeys.add(result.finalKey);
-    else seenKeys.add(entry.citationKey);
+    const group = groups.get(entry.citationKey);
+    if (group) group.push(entry);
+    else groups.set(entry.citationKey, [entry]);
+  }
 
-    let newLine;
+  for (const [citationKey, groupEntries] of groups) {
+    const representative = groupEntries[0];
+    const result = resolveEntry(
+      repoRoot,
+      representative,
+      fileRecords,
+      diffCache,
+      linesCache,
+      currentHead,
+    );
+    if (result.finalKey) seenKeys.add(result.finalKey);
+    else seenKeys.add(citationKey);
+
+    let lineFor;
     switch (result.outcome) {
       case "baselined":
         counts.baselined += 1;
         reportRows.push(
-          reportRow("baselined", `${entry.path}:${rangeText(entry.startLine, entry.endLine)}`),
+          reportRow(
+            "baselined",
+            `${representative.path}:${rangeText(representative.startLine, representative.endLine)}`,
+          ),
         );
-        newLine = reconstructLine(entry, entry.path, entry.startLine, entry.endLine, null);
+        lineFor = (entry) =>
+          reconstructLine(entry, entry.path, entry.startLine, entry.endLine, null);
         break;
       case "stale":
         counts.stale += 1;
         reportRows.push(
           reportRow(
             "STALE",
-            `${entry.path}:${rangeText(entry.startLine, entry.endLine)}  ${result.reason}`,
+            `${representative.path}:${rangeText(representative.startLine, representative.endLine)}  ${result.reason}`,
           ),
         );
-        newLine = reconstructLine(entry, entry.path, entry.startLine, entry.endLine, result.reason);
+        lineFor = (entry) =>
+          reconstructLine(entry, entry.path, entry.startLine, entry.endLine, result.reason);
         break;
       case "moved":
         counts.moved += 1;
         reportRows.push(
           reportRow(
             "moved",
-            `${entry.path}:${rangeText(result.oldStart, result.oldEnd)} -> :${rangeText(result.newStart, result.newEnd)}`,
+            `${representative.path}:${rangeText(result.oldStart, result.oldEnd)} -> :${rangeText(result.newStart, result.newEnd)}`,
           ),
         );
-        newLine = reconstructLine(entry, entry.path, result.newStart, result.newEnd, null);
+        lineFor = (entry) =>
+          reconstructLine(entry, entry.path, result.newStart, result.newEnd, null);
         break;
       case "recovered":
         counts.recovered += 1;
         reportRows.push(
           reportRow(
             "recovered",
-            `${entry.path}:${rangeText(result.oldStart, result.oldEnd)} -> :${rangeText(result.newStart, result.newEnd)}  (by content match; diff said ${formatCandidate(result.diffCandidate)})`,
+            `${representative.path}:${rangeText(result.oldStart, result.oldEnd)} -> :${rangeText(result.newStart, result.newEnd)}  (by content match; diff said ${formatCandidate(result.diffCandidate)})`,
           ),
         );
-        newLine = reconstructLine(entry, entry.path, result.newStart, result.newEnd, null);
+        lineFor = (entry) =>
+          reconstructLine(entry, entry.path, result.newStart, result.newEnd, null);
         break;
       case "unchanged":
-        newLine = reconstructLine(entry, entry.path, entry.startLine, entry.endLine, null);
+        lineFor = (entry) =>
+          reconstructLine(entry, entry.path, entry.startLine, entry.endLine, null);
         break;
       default:
         throw new ToolError(`unreachable resolution outcome: ${result.outcome}`);
     }
 
-    if (newLine !== bodyLines[entry.lineIndex]) {
-      bodyLines[entry.lineIndex] = newLine;
-      changedFile = true;
+    for (const entry of groupEntries) {
+      const newLine = lineFor(entry);
+      if (newLine !== bodyLines[entry.lineIndex]) {
+        bodyLines[entry.lineIndex] = newLine;
+        changedFile = true;
+      }
     }
   }
 

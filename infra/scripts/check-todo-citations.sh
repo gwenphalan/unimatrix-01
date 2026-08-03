@@ -328,6 +328,67 @@ else
   fail "case9-url-with-port-no-sidecar (a sidecar record was created for a non-citation entry)"
 fi
 
+# --- case 10: two entries citing the identical path:line in one file ------
+# Both must resolve to the same place, in lockstep, off one sidecar record.
+# The regression this reproduces: the first entry used to resolve, re-key
+# the sidecar record to its new citation text, and delete the old key; the
+# second entry then found no record under the old key, treated itself as
+# first-seen, and baselined against whatever now sat at the stale line
+# number — silently recording a wrong answer as correct, with no later run
+# able to self-correct it.
+
+dir=$(new_repo case10-duplicate-citation)
+printf 'A\nB\nTARGET\nD\nE\n' >"${dir}/f.txt"
+mkdir -p "${dir}/.notes/01-todo"
+cat >"${dir}/.notes/01-todo/x.todo.md" <<'EOF'
+- **feat(x): thing**
+
+  - **References:**
+     a. `f.txt:3`
+     b. `f.txt:3`
+EOF
+(cd "${dir}" && git add -A && git commit -q -m init)
+run_resolver "${dir}" >/dev/null
+
+sed -i '1i x1\nx2' "${dir}/f.txt"
+
+check case10-duplicate-citation 0 "${dir}" <<'EOF'
+resolve-todo-citations: .notes/01-todo/x.todo.md
+
+  moved       f.txt:3 -> :5
+
+  1 rewritten
+EOF
+
+if [ "$(todo_body "${dir}")" = "$(printf '\n  - **References:**\n     a. `f.txt:5`\n     b. `f.txt:5`')" ]; then
+  ran=$((ran + 1))
+  printf '  ok    case10-duplicate-citation-both-rewritten\n'
+else
+  fail "case10-duplicate-citation-both-rewritten (the two occurrences disagreed, or one was left stale)"
+fi
+
+record_count=$(node -e '
+  const data = JSON.parse(require("node:fs").readFileSync(process.argv[1], "utf8"));
+  console.log(Object.keys(data.files[".notes/01-todo/x.todo.md"]).length);
+' "${dir}/.notes/.todo-citations.json")
+ran=$((ran + 1))
+if [ "${record_count}" = "1" ]; then
+  printf '  ok    case10-duplicate-citation-one-sidecar-record\n'
+else
+  fail "case10-duplicate-citation-one-sidecar-record (sidecar holds ${record_count} records, wanted 1)"
+fi
+
+todo_before_case10=$(cat "${dir}/.notes/01-todo/x.todo.md")
+sidecar_before_case10=$(cat "${dir}/.notes/.todo-citations.json")
+run_resolver "${dir}" >/dev/null
+ran=$((ran + 1))
+if [ "$(cat "${dir}/.notes/01-todo/x.todo.md")" = "${todo_before_case10}" ] &&
+  [ "$(cat "${dir}/.notes/.todo-citations.json")" = "${sidecar_before_case10}" ]; then
+  printf '  ok    case10-duplicate-citation-idempotent\n'
+else
+  fail "case10-duplicate-citation-idempotent (a repeat run changed the file or sidecar)"
+fi
+
 printf '\n'
 
 if ((ran == 0)); then
