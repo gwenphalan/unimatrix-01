@@ -96,17 +96,20 @@ describe("ToolShell", () => {
     expect(within(footer).queryByRole("link")).not.toBeInTheDocument();
   });
 
-  it("renders no footer at all when showCopyright is false and there is no other footer content", async () => {
+  it("keeps the footer landmark, empty, when showCopyright is false and there is no other footer content", async () => {
     await renderInRouter(
       <ToolShell ownerName="Gwen Phalan" showCopyright={false}>
         tool content
       </ToolShell>,
     );
 
-    // With the copyright line suppressed and no `footerEnd`, the strip would
-    // hold nothing but its own padding — an empty `contentinfo` landmark, not
-    // a genuine omission — so the shell must render no footer at all.
-    expect(screen.queryByRole("contentinfo")).not.toBeInTheDocument();
+    // The `contentinfo` landmark count must not vary with `showCopyright` —
+    // the footer strip stays present in both ToolShell layouts regardless of
+    // its content, per packages/chrome/CLAUDE.md.
+    const footer = screen.getByRole("contentinfo");
+
+    expect(footer).not.toHaveTextContent(`${new Date().getFullYear()} Gwen Phalan`);
+    expect(within(footer).queryByRole("link")).not.toBeInTheDocument();
   });
 
   it("still renders the footer's tool attribution when showCopyright is false", async () => {

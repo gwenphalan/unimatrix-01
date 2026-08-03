@@ -178,13 +178,6 @@ function ToolFooter({
   const year = new Date().getFullYear();
   const copyright = `${year} ${ownerName}`;
 
-  // With neither the copyright line nor `end` content, there is nothing to
-  // put in the strip — render no footer at all rather than a `contentinfo`
-  // landmark holding only its own padding.
-  if (!showCopyright && end === undefined) {
-    return null;
-  }
-
   return (
     <footer className="py-1">
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-xs text-muted-foreground/70">
