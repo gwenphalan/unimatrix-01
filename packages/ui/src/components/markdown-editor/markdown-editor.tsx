@@ -1,7 +1,12 @@
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { EditorState, Compartment, type Extension } from "@codemirror/state";
-import { EditorView, keymap, placeholder as placeholderExtension } from "@codemirror/view";
+import {
+  EditorView,
+  drawSelection,
+  keymap,
+  placeholder as placeholderExtension,
+} from "@codemirror/view";
 import {
   RiBold,
   RiCodeSSlashLine,
@@ -188,15 +193,6 @@ const baseTheme = EditorView.theme({
     backgroundColor: "color-mix(in oklab, var(--primary) 28%, transparent)",
   },
   ".cm-placeholder": { color: "var(--muted-foreground)" },
-  // The caret is the browser's own — `drawSelection()` is not in the extension
-  // list — so on a line holding only a widget it is drawn against the buffer
-  // element CodeMirror inserts before that widget, not against a text node.
-  // That buffer is `1em` tall inside a `1lh` line box, so an empty document
-  // showed the caret riding above the placeholder's glyphs by the line's
-  // half-leading, correcting itself the moment a character was typed. `1lh` is
-  // the line box exactly, and unlike a hardcoded ratio it follows any later
-  // change to `line-height`.
-  ".cm-widgetBuffer": { height: "1lh" },
 });
 
 function buildExtensions(options: {
@@ -208,6 +204,16 @@ function buildExtensions(options: {
 }): Extension[] {
   return [
     history(),
+    // Without this the caret and the selection are the browser's own, drawn
+    // against whatever DOM CodeMirror happens to have emitted — so on a line
+    // holding only the placeholder widget they land on the zero-width buffer
+    // element inserted before it, and where that sits differs by engine:
+    // correct in Chrome, a caret riding above the placeholder in Firefox.
+    // `drawSelection` replaces both with elements CodeMirror positions from
+    // its own coordinates, which is also what the `.cm-cursor`,
+    // `.cm-dropCursor` and `.cm-selectionBackground` rules in `baseTheme`
+    // have always been written against — they matched nothing until now.
+    drawSelection(),
     keymap.of([...defaultKeymap, ...historyKeymap]),
     markdown({ base: markdownLanguage }),
     EditorView.lineWrapping,
@@ -262,6 +268,14 @@ export const MarkdownEditor = React.forwardRef<MarkdownEditorHandle, MarkdownEdi
     const [uncontrolledMode, setUncontrolledMode] = React.useState<MarkdownEditorMode>(defaultMode);
     const mode = controlledMode ?? uncontrolledMode;
     const [expanded, setExpanded] = React.useState(false);
+    const boxRef = React.useRef<HTMLDivElement | null>(null);
+    // The height the box had when it was expanded, held as its floor for as
+    // long as it stays expanded. Expanding hands CodeMirror's own height to
+    // the document, so a short draft would otherwise make "expand" visibly
+    // shrink the writing surface — the opposite of what the control says it
+    // does. Captured rather than declared: the collapsed box takes whatever
+    // the consumer's layout leaves it, so there is no static value to use.
+    const [expandedMinHeight, setExpandedMinHeight] = React.useState<number | null>(null);
 
     // The updateListener is installed once, so it must not close over a stale
     // callback when the consumer re-renders with a new one.
@@ -453,6 +467,12 @@ export const MarkdownEditor = React.forwardRef<MarkdownEditorHandle, MarkdownEdi
             expanded ? "h-auto" : "flex-1 overflow-auto",
             editorClassName,
           )}
+          ref={boxRef}
+          style={
+            expanded && expandedMinHeight !== null
+              ? { minHeight: `${expandedMinHeight}px` }
+              : undefined
+          }
         >
           {/*
            * `flex-1` on the host, and `height: 100%` on `.cm-editor` inside it,
@@ -480,6 +500,11 @@ export const MarkdownEditor = React.forwardRef<MarkdownEditorHandle, MarkdownEdi
                   // they are pure, which would fire this callback twice.
                   const next = !expanded;
 
+                  // Read before the state change, while the box is still the
+                  // size being preserved.
+                  setExpandedMinHeight(
+                    next ? (boxRef.current?.getBoundingClientRect().height ?? null) : null,
+                  );
                   setExpanded(next);
                   onExpandedChange?.(next);
                 }}
