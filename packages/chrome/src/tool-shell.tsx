@@ -28,8 +28,16 @@ export type ToolShellProps = {
    * Rendered at the right of the title bar. When this and `homeHref` are both
    * absent no title bar is rendered at all, and the shell is container +
    * field + main + footer.
+   *
+   * Takes the render-prop form when the app needs to adapt to the section
+   * rail's collapsed state — a `ReactNode` alone cannot see it, since the
+   * package cannot restyle a slot it does not control, and this is what lets
+   * the app itself change how it renders that slot without the package
+   * gaining any knowledge of what is inside it (or `@unimatrix/auth`, which
+   * it must never depend on). Resolved with `{ collapsed: false }` when
+   * `sections` is absent, since there is no rail and so no collapse concept.
    */
-  accountControl?: React.ReactNode;
+  accountControl?: React.ReactNode | ((state: { collapsed: boolean }) => React.ReactNode);
   children: React.ReactNode;
   className?: string;
   /**
@@ -69,6 +77,13 @@ export type ToolShellProps = {
 };
 
 const DEFAULT_OWNER_NAME = "Gwen Phalan";
+
+function resolveAccountControl(
+  accountControl: ToolShellProps["accountControl"],
+  collapsed: boolean,
+): React.ReactNode {
+  return typeof accountControl === "function" ? accountControl({ collapsed }) : accountControl;
+}
 
 export function ToolPageContainer({
   className,
@@ -201,6 +216,11 @@ export function ToolShell({
   // it is forced off when `hasSections` even if both are supplied.
   const hasTitleBar = !hasSections && (accountControl !== undefined || homeLabel !== undefined);
   const [collapsed, setCollapsed] = useState(false);
+  // The no-sections layout has no rail and so no collapse concept: the
+  // function form of `accountControl` always resolves with `collapsed:
+  // false` there, never the state variable above (which this branch never
+  // sets anyway).
+  const resolvedAccountControl = resolveAccountControl(accountControl, hasSections && collapsed);
 
   const main = (
     <main
@@ -232,16 +252,13 @@ export function ToolShell({
         {skipLink}
 
         <ToolSectionRail
-          accountControl={accountControl}
+          accountControl={resolvedAccountControl}
           collapsed={collapsed}
-          footerEnd={footerEnd}
-          homeHref={homeHref}
           homeLabel={homeLabel}
           logoSrc={logoSrc}
           onToggleCollapsed={() => {
             setCollapsed((wasCollapsed) => !wasCollapsed);
           }}
-          ownerName={ownerName}
           sections={sections}
           sectionsHomeHref={sectionsHomeHref}
           sectionsLabel={sectionsLabel}
@@ -249,6 +266,7 @@ export function ToolShell({
 
         <ToolPageContainer className="min-h-0 flex-1" wide>
           {main}
+          <ToolFooter end={footerEnd} homeHref={homeHref} ownerName={ownerName} />
         </ToolPageContainer>
       </div>
     );
@@ -273,7 +291,7 @@ export function ToolShell({
             </a>
           )}
           {accountControl === undefined ? null : (
-            <div className="flex shrink-0 items-center gap-2">{accountControl}</div>
+            <div className="flex shrink-0 items-center gap-2">{resolvedAccountControl}</div>
           )}
         </div>
       ) : null}

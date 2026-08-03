@@ -8,7 +8,7 @@ import {
   createRouter,
 } from "@tanstack/react-router";
 import { act } from "react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { ToolSection } from "../src/tool.js";
 import { ToolShell } from "../src/tool.js";
@@ -81,7 +81,7 @@ describe("ToolShell with sections", () => {
     expect(screen.queryByRole("link", { name: "Unimatrix-01" })).not.toBeInTheDocument();
   });
 
-  it("puts the copyright inside the rail's footer", async () => {
+  it("renders the copyright in the footer below the content", async () => {
     await renderInRouter(
       <ToolShell ownerName="Gwen Phalan" sections={SECTIONS}>
         tool content
@@ -113,6 +113,26 @@ describe("ToolShell with sections", () => {
     expect(screen.getByRole("button", { name: "Expand sections" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Content" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Feedback" })).toBeInTheDocument();
+  });
+
+  it("resolves the accountControl render-prop form with the rail's collapsed state", async () => {
+    const accountControl = vi.fn(({ collapsed }: { collapsed: boolean }) => (
+      <span>{collapsed ? "collapsed" : "expanded"}</span>
+    ));
+
+    await renderInRouter(
+      <ToolShell accountControl={accountControl} sections={SECTIONS}>
+        tool content
+      </ToolShell>,
+    );
+
+    expect(accountControl).toHaveBeenCalledWith({ collapsed: false });
+    expect(screen.getByText("expanded")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Collapse sections" }));
+
+    expect(accountControl).toHaveBeenCalledWith({ collapsed: true });
+    expect(screen.getByText("collapsed")).toBeInTheDocument();
   });
 
   it("marks only the active section as the current page", async () => {
