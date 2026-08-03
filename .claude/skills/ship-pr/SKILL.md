@@ -68,7 +68,8 @@ and a lack of objection is not approval.
    stop, unless they have said not to.
 6. **Once they are satisfied, open the PR.** Body per the section below.
 7. **Arm `watch-pr.sh`** — it waits for every required check, pings CodeRabbit once they are green,
-   and arms auto-merge on a clean review. **Wait for the watcher to report before handing the
+   and arms auto-merge once the review clears: immediately on a clean one, or after the reply-and-fix
+   cycle on one with findings. **Wait for the watcher to report before handing the
    PR to a fresh reader** — it runs under `Monitor`, so it is still working while you read this
    line, and a reader dispatched now gets a branch whose checks have not reported. If that fresh
    reader *is* the pre-merge review, run with `SHIP_PR_AUTO_MERGE=0`, or the PR can merge out from
@@ -89,6 +90,16 @@ closes when it is done.
 **One dispatch is one task, however many pieces it covers.** Five tasks flipped together report five
 workstreams you cannot see; the pieces you will check afterwards are verification checkpoints and
 stay pending until you have checked them.
+
+**Every subagent's own file rejects a resumed message that doesn't begin `VIA ORCHESTRATOR: `** —
+so when you send a follow-up to a subagent you dispatched (`SendMessage` to an agent that already
+reported, or mid-task), that prefix has to be yours, every time, not assumed. This exists because a
+message can reach a dispatched subagent from somewhere other than the session that dispatched it —
+the owner testing it directly, a misrouted message meant for a different session — and a subagent
+with no way to tell that apart from a real follow-up has acted on it: pushed, opened, and closed a
+PR from one, none of it authorized by anyone actually orchestrating that run. Forgetting the prefix
+on a message you actually mean makes your own follow-up bounce, which is the safe failure — the
+subagent replies with its fixed refusal and does nothing, rather than doing the wrong thing.
 
 ### The fast lane, for a change too small to pay for the flow
 
@@ -277,9 +288,11 @@ commit, so a fast third-party app answering first makes a partial list look comp
 non-required check would hold back a ping that should go out. A red required check, a `BEHIND` or
 `DIRTY` branch, and a draft PR each end the run without pinging.
 
-It stops watching the checks at the ping. A required check that goes red *after* auto-merge is armed
-means GitHub holds the merge indefinitely, and nothing reports that — so a PR that has been armed and
-has gone quiet is worth one look at.
+On a clean review it stops watching the checks at the ping. A required check that goes red *after*
+auto-merge is armed means GitHub holds the merge indefinitely, and nothing reports that — so a PR
+that has been armed and has gone quiet is worth one look at. On a review with findings it does not
+exit at the ping outcome — it waits for every thread to clear and re-checks required checks on the
+new head before arming, per `reference/coderabbit.md`.
 
 If a check fails for a reason unrelated to the diff (flake, infrastructure), say so explicitly rather
 than silently re-running.
@@ -323,7 +336,14 @@ is indistinguishable from a thread nobody read. Verify each claim against the co
 wrong, reply with the evidence rather than applying a change you cannot justify. If it is taste that
 contradicts a documented convention, the convention wins — link it.
 
-Do not let an unresolved advisory comment block a merge. Do let a real defect it surfaced block one.
+**A reply is not enough to unblock the merge — `watch-pr.sh` waits on `isResolved`, not on reply
+existence.** For anything fixed, CodeRabbit's own follow-up commit resolves the thread and the wait
+clears on its own. For anything refuted or deliberately not acted on, resolve the conversation by
+hand in GitHub's UI after replying, or the run waits out `SHIP_PR_THREAD_WAIT_TIMEOUT` (45m default)
+and stops rather than merging.
+
+Do not let an unresolved advisory comment's *substance* block a merge — refute it and resolve the
+thread. Do let a real defect it surfaced block one.
 
 ## Merging
 
