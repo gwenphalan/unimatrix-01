@@ -642,6 +642,26 @@ if [ "${#required[@]}" -eq 0 ]; then
 fi
 required_json=$(printf '%s\n' "${required[@]}" | jq -Rsc 'split("\n") | map(select(length > 0))')
 
+# One-shot bucket read: red/green/outstanding per required context, given a
+# `gh pr checks --json name,bucket,description` payload. $required_json is
+# read from the enclosing scope, same as every other reference to it in this
+# file. Shared by wait_for_required_checks()'s own gate and by
+# wait_for_merge()'s post-arm check, so the bucket vocabulary lives in
+# exactly one place.
+required_gate() {
+  jq -r --argjson req "$required_json" '
+    . as $rows
+    | $req[]
+    | . as $ctx
+    | ([$rows[] | select(.name == $ctx) | .bucket]) as $b
+    | (if ($b | length) == 0 then "outstanding"
+       elif ($b | any(. == "fail" or . == "cancel")) then "red"
+       elif ($b | any(. != "pass" and . != "skipping")) then "outstanding"
+       else "green" end) as $s
+    | "\($s)\t\($ctx)"
+  ' <<<"$1"
+}
+
 # A function rather than an inline loop because phase 2 runs this a second
 # time, against whatever head a fix commit produced, before arming on a review
 # that had findings. `$1` is the only difference between the two calls: phase
@@ -788,17 +808,7 @@ wait_for_required_checks() {
       # polling. A bucket vocabulary that grew a member has to stall rather than
       # satisfy the gate.
       local gate=()
-      mapfile -t gate < <(jq -r --argjson req "$required_json" '
-        . as $rows
-        | $req[]
-        | . as $ctx
-        | ([$rows[] | select(.name == $ctx) | .bucket]) as $b
-        | (if ($b | length) == 0 then "outstanding"
-           elif ($b | any(. == "fail" or . == "cancel")) then "red"
-           elif ($b | any(. != "pass" and . != "skipping")) then "outstanding"
-           else "green" end) as $s
-        | "\($s)\t\($ctx)"
-      ' <<<"$payload")
+      mapfile -t gate < <(required_gate "$payload")
 
       local checks_red=()
       outstanding=()
@@ -1016,9 +1026,20 @@ wait_for_threads_replied() {
 # Every path here says which one it took. One generic failure line covered five
 # different situations, and "merge by hand" is not what a reader needs to know
 # when the answer is that the PR is still a draft.
+# Return code is a real contract now, not just an echo: every branch returns 1
+# except the one where the live `gh pr merge` call actually succeeds, which
+# returns 0 via its trailing echo. `wait_for_merge` below is only ever entered
+# on that one true arm, never on "nothing to arm" or "arming failed".
 arm_auto_merge() {
   local unreviewed=$1
-  [ "$auto_merge" = 1 ] || return 0
+  if [ "$auto_merge" != 1 ]; then
+    if [ "$offline" -eq 1 ]; then
+      echo "offline: auto-merge not armed (auto-merge is off)"
+    else
+      echo "auto-merge is off — nothing armed, merge by hand"
+    fi
+    return 1
+  fi
   if [ "$offline" -eq 1 ]; then
     # Says what it would have done rather than only that it did nothing, so an
     # offline fixture run can assert the sha a re-pin produced and which of the
@@ -1030,7 +1051,7 @@ arm_auto_merge() {
     else
       echo "offline: auto-merge not armed (would arm on $head_sha)"
     fi
-    return 0
+    return 1
   fi
   local draft threads
   draft=$(gh pr view "$pr" --repo "$repo" --json isDraft --jq '.isDraft' 2>/dev/null) || draft=""
@@ -1039,28 +1060,96 @@ arm_auto_merge() {
   # unattended merge.
   if [ -z "$draft" ] || [ -z "$threads" ]; then
     echo "auto-merge not armed — the PR state could not be read"
-    return 0
+    return 1
   fi
   if [ "$draft" = "true" ]; then
     echo "auto-merge not armed — PR is a draft"
-    return 0
+    return 1
   fi
   if [ "$threads" -ne 0 ]; then
     echo "auto-merge not armed — $threads unresolved threads"
-    return 0
+    return 1
   fi
   if gh pr merge "$pr" --repo "$repo" --auto --squash --match-head-commit "$head_sha" >/dev/null 2>&1; then
     if [ "$unreviewed" -eq 1 ]; then
-      echo "auto-merge armed UNREVIEWED on $head_sha — nothing has read this diff"
+      echo "auto-merge armed UNREVIEWED on $head_sha — nothing has read this diff" >&2
     else
-      echo "auto-merge armed on $head_sha — GitHub squashes once the required checks pass"
+      echo "auto-merge armed on $head_sha — GitHub squashes once the required checks pass" >&2
     fi
   else
     # Never silent, and never phrased as though it merged. Arming fails for
     # reasons worth seeing: auto-merge disabled on the repo, a branch GitHub will
     # not fast-forward, missing permission.
     echo "auto-merge could NOT be armed — merge by hand"
+    return 1
   fi
+}
+
+# Reached only from a live, successful arm — never offline, never a decline.
+# Arming is not merging: GitHub still waits for every required check on its
+# own clock, so this keeps polling past the arm the same way phase 2 keeps
+# polling past its own ping — both wait on something this script itself set in
+# motion, so an uncapped wait here carries the same justification phase 2's
+# already does. A cap would let a merge complete unattended after the script
+# gave up watching it.
+wait_for_merge() {
+  local armed_sha=$1
+  [ "$offline" -eq 1 ] && return 0
+
+  local fails=0 i=0 started last_red="" push_reported=0
+  started=$(date +%s)
+
+  while true; do
+    local pr_json rc=0
+    pr_json=$(gh pr view "$pr" --repo "$repo" --json state,headRefOid,mergeCommit 2>/dev/null) || rc=1
+
+    if [ "$rc" -eq 0 ] && [ -n "$pr_json" ]; then
+      fails=0
+      local state cur_sha merged_sha
+      state=$(jq -r '.state // ""' <<<"$pr_json")
+      cur_sha=$(jq -r '.headRefOid // ""' <<<"$pr_json")
+      merged_sha=$(jq -r '.mergeCommit.oid // ""' <<<"$pr_json")
+
+      if [ "$state" = "MERGED" ]; then
+        echo "merged ${merged_sha:-$cur_sha}"
+        exit 0
+      fi
+      if [ "$state" = "CLOSED" ]; then
+        echo "PR closed without merging — nothing left to watch"
+        exit 0
+      fi
+
+      if [ "$push_reported" -eq 0 ] && [ -n "$cur_sha" ] && [ "$cur_sha" != "$armed_sha" ]; then
+        push_reported=1
+        echo "head changed after arm, from $armed_sha to $cur_sha — re-arm by hand: gh pr merge $pr --repo $repo --auto --squash --match-head-commit $cur_sha"
+      fi
+
+      local checks_payload checks_rc=0
+      checks_payload=$(gh pr checks "$pr" --repo "$repo" --json name,bucket,description 2>/dev/null) || checks_rc=$?
+      if [ "$checks_rc" -eq 0 ] || [ "$checks_rc" -eq 8 ]; then
+        local red
+        red=$(required_gate "$checks_payload" | awk -F'\t' '$1=="red"{print $2}' | LC_ALL=C sort | tr '\n' ,)
+        if [ -n "$red" ] && [ "$red" != "$last_red" ]; then
+          last_red=$red
+          echo "required check red after arm: ${red%,} — GitHub's resume behaviour here is undocumented; re-arm by hand: gh pr merge $pr --repo $repo --auto --squash --match-head-commit $armed_sha"
+        elif [ -z "$red" ]; then
+          last_red=""
+        fi
+      fi
+    else
+      fails=$((fails + 1))
+      if [ "$fails" -ge 3 ]; then
+        printf 'merge-wait API ERROR x%s — stopping rather than waiting blind\n' "$fails"
+        exit 2
+      fi
+    fi
+
+    i=$((i + 1))
+    if [ $((i % 10)) -eq 0 ]; then
+      echo "still waiting for the merge, $((($(date +%s) - started) / 60))m elapsed" >&2
+    fi
+    sleep "$poll"
+  done
 }
 
 ########################################################################
@@ -1168,7 +1257,9 @@ post_review_wait() {
   wait_for_required_checks "— not arming"
   echo "checks green again on $head_sha" >&2
   re_pin_head_sha
-  arm_auto_merge 0
+  if arm_auto_merge 0; then
+    wait_for_merge "$head_sha"
+  fi
   exit 0
 }
 
@@ -1213,7 +1304,9 @@ if [ "$no_review" -eq 1 ]; then
   if [ -n "$count_now" ] && [ "$count_now" -gt 0 ]; then
     unreviewed=0
   fi
-  arm_auto_merge "$unreviewed"
+  if arm_auto_merge "$unreviewed"; then
+    wait_for_merge "$head_sha"
+  fi
   exit 0
 fi
 
@@ -1661,7 +1754,9 @@ while true; do
         # was still in it.
         *"No actionable comments were generated"*)
           echo "reviewed clean, count unchanged at $n"
-          arm_auto_merge 0
+          if arm_auto_merge 0; then
+            wait_for_merge "$head_sha"
+          fi
           exit 0
           ;;
         *"rate limited by coderabbit.ai"*)

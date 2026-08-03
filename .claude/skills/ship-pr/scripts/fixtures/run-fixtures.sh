@@ -263,6 +263,14 @@ reviewed clean, count unchanged at 1
 offline: auto-merge not armed (would arm on fixture-head-sha)
 EOF
 
+# The off switch outranks a genuinely clean review, and arm_auto_merge()'s
+# return code is what wait_for_merge() gates on — a non-zero return here must
+# not enter that wait.
+check clean-auto-merge-off 0 "$(f clean)" SHIP_PR_AUTO_MERGE=0 <<'EOF'
+reviewed clean, count unchanged at 1
+offline: auto-merge not armed (auto-merge is off)
+EOF
+
 check head-changed 0 "$(f head-changed)" <<'EOF'
 refused: head commit changed mid-review, reviewed head was fixture-head-sha
 EOF
