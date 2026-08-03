@@ -9,8 +9,10 @@ description: Take a task all the way to merged. Use at the start of any session 
 
 **The owner types this at the *start* of a session, not the end.** The argument is either the
 task in their own words, or a pointer to a `.notes/01-todo/*.todo.md` — sometimes just the file,
-meaning "the first unfinished item on it". Resolve that before doing anything: read the file, and if
-the target is ambiguous, name the line you are about to implement and say so rather than guessing.
+meaning "the first unfinished item on it". Resolve that before doing anything: if the target is a
+todo file, run `node infra/scripts/resolve-todo-citations.mjs <file>` and surface anything it
+reports as `STALE` rather than acting on that citation, then read the file. If the target is
+ambiguous, name the line you are about to implement and say so rather than guessing.
 
 Because you are invoked before the work exists, the whole arc is yours: plan, build, then ship. Take
 it to merged. Come back for the two stops below, for a decision that is theirs to make, or when
