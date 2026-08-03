@@ -116,9 +116,7 @@ export function ToolSectionRail({
               title={section.label}
               to={section.to}
             >
-              {Icon === undefined ? null : (
-                <Icon aria-hidden="true" className="size-4 shrink-0" />
-              )}
+              {Icon === undefined ? null : <Icon aria-hidden="true" className="size-4 shrink-0" />}
               <span className={cn("truncate", collapsed && "sr-only")}>{section.label}</span>
             </Link>
           );
@@ -137,7 +135,11 @@ export function ToolSectionRail({
         )}
         <p className={cn("text-xs text-muted-foreground/70", collapsed && "sr-only")}>
           ©{" "}
-          {homeHref === undefined ? copyright : <ToolFooterLink href={homeHref}>{copyright}</ToolFooterLink>}
+          {homeHref === undefined ? (
+            copyright
+          ) : (
+            <ToolFooterLink href={homeHref}>{copyright}</ToolFooterLink>
+          )}
         </p>
         {footerEnd === undefined ? null : (
           <p className={cn("text-xs text-muted-foreground/70", collapsed && "sr-only")}>

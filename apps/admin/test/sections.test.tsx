@@ -27,9 +27,15 @@ function SectionLabels() {
 
 async function renderAt(pathname: string) {
   const rootRoute = createRootRoute();
-  const routes = ["/", "/content", "/feedback", "/deploys", "/analytics", "/social", "/secrets"].map(
-    (path) => createRoute({ component: SectionLabels, getParentRoute: () => rootRoute, path }),
-  );
+  const routes = [
+    "/",
+    "/content",
+    "/feedback",
+    "/deploys",
+    "/analytics",
+    "/social",
+    "/secrets",
+  ].map((path) => createRoute({ component: SectionLabels, getParentRoute: () => rootRoute, path }));
   const router = createRouter({
     history: createMemoryHistory({ initialEntries: [pathname] }),
     routeTree: rootRoute.addChildren(routes),
