@@ -68,17 +68,19 @@ export function ToolSectionRail({
         collapsed ? "w-16" : "w-56",
       )}
     >
-      {/* Floats outside the rail's own flow so it can straddle the right
-          border rather than sharing a row (and the wordmark's width) with the
-          wordmark. `top-3` matches the rail's `p-3` padding, and both this
-          button and the wordmark link below are `h-9`, so their centres land
-          on the same line. `-right-4` centres the button (`size-icon`, 36px)
-          on the border: 16px of it sits outside the rail, 20px inside. The
-          position is relative to the rail's own edge, so it does not move
-          when the rail's width changes between collapsed and expanded. */}
+      {/* Floats outside the rail's own flow so it can sit beside it rather
+          than sharing a row (and the wordmark's width) with the wordmark.
+          `left-full` places the button's left edge at the rail's own right
+          edge — entirely outside the border, not straddling it — and `ml-2`
+          (8px) opens a small gap past that edge. `top-3` matches the rail's
+          `p-3` padding, and both this button and the wordmark link below are
+          `h-9`, so their centres land on the same line. Because the position
+          is relative to the rail's own edge rather than a fixed offset, it
+          does not move when the rail's width changes between collapsed and
+          expanded, and it does not depend on the button's own width either. */}
       <Button
         aria-label={collapsed ? "Expand sections" : "Collapse sections"}
-        className="absolute -right-4 top-3 z-10 bg-background"
+        className="absolute left-full top-3 z-10 ml-2 bg-background"
         onClick={onToggleCollapsed}
         size="icon"
         variant="outline"
