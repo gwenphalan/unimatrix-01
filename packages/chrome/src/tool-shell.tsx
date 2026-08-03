@@ -211,16 +211,54 @@ export function ToolShell({
     </main>
   );
 
+  const skipLink = (
+    <a
+      className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:border focus:border-primary/45 focus:bg-background focus:px-3 focus:py-2 focus:text-sm"
+      href="#main-content"
+    >
+      Skip to main content
+    </a>
+  );
+
+  // The rail is application chrome and belongs against the viewport edge, so it
+  // sits *outside* `ToolPageContainer` rather than inside it. Only the content
+  // region keeps the centred, padded column — putting the whole layout in one
+  // container insets the rail by the container's own gutter and makes it read
+  // as a card on a page.
+  if (hasSections) {
+    return (
+      <div className={cn("relative flex min-h-[100dvh] w-full", className)}>
+        <GraphBackground />
+        {skipLink}
+
+        <ToolSectionRail
+          accountControl={accountControl}
+          collapsed={collapsed}
+          footerEnd={footerEnd}
+          homeHref={homeHref}
+          homeLabel={homeLabel}
+          logoSrc={logoSrc}
+          onToggleCollapsed={() => {
+            setCollapsed((wasCollapsed) => !wasCollapsed);
+          }}
+          ownerName={ownerName}
+          sections={sections}
+          sectionsHomeHref={sectionsHomeHref}
+          sectionsLabel={sectionsLabel}
+        />
+
+        <ToolPageContainer className="min-h-0 flex-1" wide>
+          {main}
+        </ToolPageContainer>
+      </div>
+    );
+  }
+
   return (
-    <ToolPageContainer className={className} wide={hasSections}>
+    <ToolPageContainer className={className}>
       <GraphBackground />
 
-      <a
-        className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:border focus:border-primary/45 focus:bg-background focus:px-3 focus:py-2 focus:text-sm"
-        href="#main-content"
-      >
-        Skip to main content
-      </a>
+      {skipLink}
 
       {hasTitleBar ? (
         <div className="flex items-center justify-between gap-4">
@@ -240,32 +278,9 @@ export function ToolShell({
         </div>
       ) : null}
 
-      {hasSections ? (
-        <div className="flex flex-1 gap-8">
-          <ToolSectionRail
-            accountControl={accountControl}
-            collapsed={collapsed}
-            footerEnd={footerEnd}
-            homeHref={homeHref}
-            homeLabel={homeLabel}
-            logoSrc={logoSrc}
-            onToggleCollapsed={() => {
-              setCollapsed((wasCollapsed) => !wasCollapsed);
-            }}
-            ownerName={ownerName}
-            sections={sections}
-            sectionsHomeHref={sectionsHomeHref}
-            sectionsLabel={sectionsLabel}
-          />
-          {main}
-        </div>
-      ) : (
-        main
-      )}
+      {main}
 
-      {hasSections ? null : (
-        <ToolFooter end={footerEnd} homeHref={homeHref} ownerName={ownerName} />
-      )}
+      <ToolFooter end={footerEnd} homeHref={homeHref} ownerName={ownerName} />
     </ToolPageContainer>
   );
 }
