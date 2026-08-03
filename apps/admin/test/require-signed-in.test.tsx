@@ -84,9 +84,9 @@ describe("RequireSignedIn", () => {
     expect(screen.getByText("console body")).toBeInTheDocument();
   });
 
-  // Dev builds pass `enabled={false}`. The console has to stay reachable on a
-  // loopback port, where the hub can never issue a session and the redirect
-  // would therefore loop straight back out.
+  // No build passes `enabled={false}` today — dev included, since a local hub
+  // issues a session a local console can read. The prop is still the guard's
+  // contract, so the off state stays asserted rather than assumed.
   it("renders its children signed out when disabled", () => {
     auth.isLoaded = true;
     auth.isSignedIn = false;

@@ -19,9 +19,9 @@ function validateSearch(search: Record<string, unknown>): EditPostSearch {
   return { id: id.success ? id.data : "" };
 }
 
-export const Route = createFileRoute("/admin/posts/edit")({
+export const Route = createFileRoute("/content/posts/edit")({
   validateSearch,
   head: () => ({
-    meta: [{ title: "Unimatrix-01 - Edit post" }, { name: "robots", content: "noindex, nofollow" }],
+    meta: [{ title: "Unimatrix Admin - Edit post" }],
   }),
 });

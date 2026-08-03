@@ -11,8 +11,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // closing over a normal module-level `const` reads it inside its temporal dead
 // zone the moment anything imports the mocked module at module scope — the file
 // fails to collect with "Cannot access 'toastSuccess' before initialization".
-// Deferring the import into a test is the other way to dodge that, and is what
-// this file used to do; see the note on the import for why it stopped.
+// Deferring the import into a test is the other way to dodge that; static
+// import plus `vi.hoisted` is the one that keeps the module's own load cost off
+// a single test's budget — see the comment on the import below.
 const { apiClient, toastError, toastSuccess } = vi.hoisted(() => ({
   apiClient: { createPost: vi.fn(), updatePost: vi.fn() } satisfies Partial<ApiClient>,
   toastError: vi.fn(),
@@ -21,7 +22,6 @@ const { apiClient, toastError, toastSuccess } = vi.hoisted(() => ({
 
 vi.mock("@/lib/api-client", () => ({
   useApiClient: () => apiClient as unknown as ApiClient,
-  apiClient: apiClient as unknown as ApiClient,
 }));
 
 vi.mock("@unimatrix/auth/react", () => ({
@@ -36,11 +36,15 @@ vi.mock("@unimatrix/ui/editor", async () => {
 
 // Statically imported, not `await import(...)` inside the first test.
 // `post-form` reaches `@unimatrix/ui/editor` and CodeMirror through it, and
-// resolving that inside a test charged the whole cost to one 5s budget — only
-// the first test paid it, the rest hit the module cache. It timed out twice on
-// CI, on unrelated branches, while running in under a second locally. At module
-// scope the cost lands in collection, which `testTimeout` does not bound.
-import { PostForm } from "@/features/admin/post-form";
+// resolving that inside a test charged the whole cost to one 5s budget in
+// apps/web — only the first test paid it, the rest hit the module cache. It
+// timed out twice on CI, on unrelated branches, while running in under a
+// second locally (commit 2c87453, "stop charging the admin form's module load
+// to one test's budget"). At module scope the cost lands in collection, which
+// `testTimeout` does not bound.
+import { PostForm } from "@/features/content/post-form";
+
+const BASE_URL = "https://api.unimatrix-01.dev";
 
 const PROJECT: ContentPost = {
   id: "33333333-3333-4333-8333-333333333333",
@@ -79,7 +83,9 @@ describe("PostForm", () => {
   it("creates a blog post as a draft without any project-only fields", async () => {
     apiClient.createPost.mockResolvedValue({ ...PROJECT, title: "New post" });
 
-    renderForm(<PostForm title="Edit post" onDone={() => {}} post={null} type="blog" />);
+    renderForm(
+      <PostForm baseUrl={BASE_URL} title="Edit post" onDone={() => {}} post={null} type="blog" />,
+    );
 
     type("Title", "New post");
     type("Slug", "new-post");
@@ -107,7 +113,9 @@ describe("PostForm", () => {
   });
 
   it("derives the slug from the title until the slug is typed in", () => {
-    renderForm(<PostForm title="Edit post" onDone={() => {}} post={null} type="blog" />);
+    renderForm(
+      <PostForm baseUrl={BASE_URL} title="Edit post" onDone={() => {}} post={null} type="blog" />,
+    );
 
     type("Title", "A Post About Things");
     expect(screen.getByLabelText("Slug")).toHaveValue("a-post-about-things");
@@ -130,7 +138,15 @@ describe("PostForm", () => {
    * rewrite it, so derivation starts off rather than on when editing.
    */
   it("never rewrites an existing post's slug from its title", () => {
-    renderForm(<PostForm title="Edit post" onDone={() => {}} post={PROJECT} type="project" />);
+    renderForm(
+      <PostForm
+        baseUrl={BASE_URL}
+        title="Edit post"
+        onDone={() => {}}
+        post={PROJECT}
+        type="project"
+      />,
+    );
 
     type("Title", "CFLOP Renamed");
 
@@ -138,7 +154,9 @@ describe("PostForm", () => {
   });
 
   it("offers no project fields on a blog post", () => {
-    renderForm(<PostForm title="Edit post" onDone={() => {}} post={null} type="blog" />);
+    renderForm(
+      <PostForm baseUrl={BASE_URL} title="Edit post" onDone={() => {}} post={null} type="blog" />,
+    );
 
     expect(screen.queryByLabelText("Repository URL")).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/Feature on the homepage/u)).not.toBeInTheDocument();
@@ -152,7 +170,15 @@ describe("PostForm", () => {
   it("offers no project status field, and never sends one", async () => {
     apiClient.updatePost.mockResolvedValue(PROJECT);
 
-    renderForm(<PostForm onDone={() => {}} post={PROJECT} title="Edit post" type="project" />);
+    renderForm(
+      <PostForm
+        baseUrl={BASE_URL}
+        onDone={() => {}}
+        post={PROJECT}
+        title="Edit post"
+        type="project"
+      />,
+    );
 
     expect(screen.queryByLabelText("Project status")).not.toBeInTheDocument();
 
@@ -170,7 +196,15 @@ describe("PostForm", () => {
   it("loads an existing project into the form and sends an update keyed by id", async () => {
     apiClient.updatePost.mockResolvedValue(PROJECT);
 
-    renderForm(<PostForm title="Edit post" onDone={() => {}} post={PROJECT} type="project" />);
+    renderForm(
+      <PostForm
+        baseUrl={BASE_URL}
+        title="Edit post"
+        onDone={() => {}}
+        post={PROJECT}
+        type="project"
+      />,
+    );
 
     expect(screen.getByLabelText("Title")).toHaveValue("CFLOP");
     expect(screen.getByLabelText("Repository URL")).toHaveValue("https://example.com/repo");
@@ -198,7 +232,9 @@ describe("PostForm", () => {
 
     apiClient.createPost.mockRejectedValue(new Error("nope"));
 
-    renderForm(<PostForm onDone={onDone} post={null} title="Edit post" type="blog" />);
+    renderForm(
+      <PostForm baseUrl={BASE_URL} onDone={onDone} post={null} title="Edit post" type="blog" />,
+    );
 
     type("Title", "New post");
     type("Slug", "new-post");
@@ -219,7 +255,9 @@ describe("PostForm", () => {
    * check has to be the stricter of the two.
    */
   it("uses a slug pattern that compiles under the flag browsers apply", () => {
-    renderForm(<PostForm onDone={vi.fn()} post={null} title="Edit post" type="blog" />);
+    renderForm(
+      <PostForm baseUrl={BASE_URL} onDone={vi.fn()} post={null} title="Edit post" type="blog" />,
+    );
 
     const pattern = screen.getByLabelText("Slug").getAttribute("pattern");
 

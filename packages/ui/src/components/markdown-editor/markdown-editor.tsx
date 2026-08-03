@@ -1,7 +1,12 @@
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { EditorState, Compartment, type Extension } from "@codemirror/state";
-import { EditorView, keymap, placeholder as placeholderExtension } from "@codemirror/view";
+import {
+  EditorView,
+  drawSelection,
+  keymap,
+  placeholder as placeholderExtension,
+} from "@codemirror/view";
 import {
   RiBold,
   RiCodeSSlashLine,
@@ -136,6 +141,13 @@ export interface MarkdownEditorProps {
   /**
    * Show a control that grows the editing surface to the whole document
    * instead of scrolling inside its box.
+   *
+   * The control is unconditional once this is set. It was previously gated on
+   * the collapsed box measuring as overflowing, on the reasoning that an
+   * answer to a scrollbar is pointless without one — but the gate made the
+   * affordance appear and disappear with the viewport, the font load and the
+   * height of the fields above the editor, so in a tall enough container it
+   * was simply never offered.
    */
   expandable?: boolean;
   /**
@@ -192,6 +204,16 @@ function buildExtensions(options: {
 }): Extension[] {
   return [
     history(),
+    // Without this the caret and the selection are the browser's own, drawn
+    // against whatever DOM CodeMirror happens to have emitted — so on a line
+    // holding only the placeholder widget they land on the zero-width buffer
+    // element inserted before it, and where that sits differs by engine:
+    // correct in Chrome, a caret riding above the placeholder in Firefox.
+    // `drawSelection` replaces both with elements CodeMirror positions from
+    // its own coordinates, which is also what the `.cm-cursor`,
+    // `.cm-dropCursor` and `.cm-selectionBackground` rules in `baseTheme`
+    // have always been written against — they matched nothing until now.
+    drawSelection(),
     keymap.of([...defaultKeymap, ...historyKeymap]),
     markdown({ base: markdownLanguage }),
     EditorView.lineWrapping,
@@ -246,44 +268,18 @@ export const MarkdownEditor = React.forwardRef<MarkdownEditorHandle, MarkdownEdi
     const [uncontrolledMode, setUncontrolledMode] = React.useState<MarkdownEditorMode>(defaultMode);
     const mode = controlledMode ?? uncontrolledMode;
     const [expanded, setExpanded] = React.useState(false);
-    // Whether the collapsed box is actually cutting the document off. The
-    // control is an answer to a scrollbar, so without one there is nothing for
-    // it to offer and it stays out of the toolbar's way.
-    const [overflowing, setOverflowing] = React.useState(false);
     const boxRef = React.useRef<HTMLDivElement | null>(null);
+    // The height the box had when it was expanded, held as its floor for as
+    // long as it stays expanded. Expanding hands CodeMirror's own height to
+    // the document, so a short draft would otherwise make "expand" visibly
+    // shrink the writing surface — the opposite of what the control says it
+    // does. Captured rather than declared: the collapsed box takes whatever
+    // the consumer's layout leaves it, so there is no static value to use.
+    const [expandedMinHeight, setExpandedMinHeight] = React.useState<number | null>(null);
 
     // The updateListener is installed once, so it must not close over a stale
     // callback when the consumer re-renders with a new one.
     onChangeRef.current = onChange;
-
-    // Measured rather than derived from the document length: what overflows
-    // depends on the box's height and the wrapped line count, and both change
-    // without the value changing at all — a window resize, a font load, the
-    // fields above growing by a row.
-    React.useEffect(() => {
-      const box = boxRef.current;
-
-      if (box === null || !expandable) {
-        return;
-      }
-
-      const measure = () => {
-        setOverflowing(box.scrollHeight > box.clientHeight + 1);
-      };
-
-      measure();
-
-      const observer = new ResizeObserver(measure);
-      observer.observe(box);
-
-      for (const child of box.children) {
-        observer.observe(child);
-      }
-
-      return () => {
-        observer.disconnect();
-      };
-    }, [expandable, expanded, value]);
 
     React.useEffect(() => {
       const host = hostRef.current;
@@ -472,6 +468,11 @@ export const MarkdownEditor = React.forwardRef<MarkdownEditorHandle, MarkdownEdi
             editorClassName,
           )}
           ref={boxRef}
+          style={
+            expanded && expandedMinHeight !== null
+              ? { minHeight: `${expandedMinHeight}px` }
+              : undefined
+          }
         >
           {/*
            * `flex-1` on the host, and `height: 100%` on `.cm-editor` inside it,
@@ -483,7 +484,7 @@ export const MarkdownEditor = React.forwardRef<MarkdownEditorHandle, MarkdownEdi
            */}
           <div className="flex-1" ref={hostRef} />
 
-          {expandable && (expanded || overflowing) ? (
+          {expandable ? (
             /* `sticky`, not `absolute`: in the collapsed box the control has to
                stay reachable while the document scrolls under it, and in the
                expanded one it has to stay with the bottom edge rather than sit
@@ -499,6 +500,11 @@ export const MarkdownEditor = React.forwardRef<MarkdownEditorHandle, MarkdownEdi
                   // they are pure, which would fire this callback twice.
                   const next = !expanded;
 
+                  // Read before the state change, while the box is still the
+                  // size being preserved.
+                  setExpandedMinHeight(
+                    next ? (boxRef.current?.getBoundingClientRect().height ?? null) : null,
+                  );
                   setExpanded(next);
                   onExpandedChange?.(next);
                 }}

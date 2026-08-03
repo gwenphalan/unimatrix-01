@@ -2,8 +2,6 @@ import { queryOptions, type QueryClient } from "@tanstack/react-query";
 import { ApiClientError, type ApiClient } from "@unimatrix/api-client";
 import type { ContentPostSummary, ContentPostType, ListPostsResponse } from "@unimatrix/shared";
 
-import { contentQueryKeys } from "@/features/content/queries/content-posts";
-
 /**
  * Admin reads, keyed separately from the public ones. The two answer different
  * questions about the same rows — `/content/posts` returns published entries,
@@ -25,7 +23,7 @@ export const adminQueryKeys = {
  * pending and error states. Do not move one of these into a route loader
  * without also setting `retry: false` — awaited through `ensureQueryData`, any
  * retry above `0` leaves the promise unsettled and the route renders nothing
- * at all. The measurement is in `@/features/content/queries/content-posts`.
+ * at all.
  */
 function retryUnlessClientError(failureCount: number, error: Error): boolean {
   if (error instanceof ApiClientError && error.status >= 400 && error.status < 500) {
@@ -37,10 +35,6 @@ function retryUnlessClientError(failureCount: number, error: Error): boolean {
 
 /**
  * Every post in a collection, in every publication state.
- *
- * The per-row controls on `/blog` and `/projects` share this query with the
- * `/admin` table, which is why it is keyed by `type` rather than fetched per
- * row: a listing page with twenty rows issues one request, not twenty.
  */
 export function adminPostsQueryOptions(client: ApiClient, type?: ContentPostType) {
   return queryOptions<ListPostsResponse>({
@@ -60,16 +54,12 @@ export function findPostBySlug(
 }
 
 /**
- * Drops every cached content read after a write.
+ * Drops every cached admin content read after a write.
  *
- * Deliberately blunt: a single edit can change what a public list contains,
- * what the homepage features, and what the admin table shows, and the cost of
- * refetching a few small list responses is far below the cost of an admin
- * seeing their own change not take effect.
+ * There is no public content cache to invalidate here — that lives in
+ * `apps/web`, on a different origin with its own query client — so this only
+ * touches the admin keys.
  */
 export async function invalidateContent(queryClient: QueryClient): Promise<void> {
-  await Promise.all([
-    queryClient.invalidateQueries({ queryKey: contentQueryKeys.all }),
-    queryClient.invalidateQueries({ queryKey: adminQueryKeys.all }),
-  ]);
+  await queryClient.invalidateQueries({ queryKey: adminQueryKeys.all });
 }

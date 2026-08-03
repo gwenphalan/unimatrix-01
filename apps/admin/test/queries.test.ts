@@ -3,13 +3,12 @@ import { ApiClientError, type ApiClient } from "@unimatrix/api-client";
 import type { ContentPostSummary, ListPostsResponse } from "@unimatrix/shared";
 import { describe, expect, it, vi } from "vitest";
 
-import { contentQueryKeys } from "@/features/content/queries/content-posts";
 import {
   adminPostsQueryOptions,
   adminQueryKeys,
   findPostBySlug,
   invalidateContent,
-} from "@/features/admin/queries";
+} from "@/features/content/queries";
 
 const POST: ContentPostSummary = {
   id: "0f9d2f5c-8f4d-4d0e-9a4f-2b5e6d7c8a90",
@@ -35,10 +34,9 @@ function stubClient(response: ListPostsResponse = { posts: [POST] }) {
 
 describe("admin content queries", () => {
   it("keys admin reads apart from the public ones", () => {
-    // The two endpoints answer differently about the same rows — the admin one
-    // includes drafts — so a shared key would let a public list render a draft
-    // out of the cache.
-    expect(adminQueryKeys.list("blog")).not.toEqual(contentQueryKeys.list("blog"));
+    // No public content cache exists in this app — that lives in apps/web, on
+    // a different origin — so the admin keys only have to answer to
+    // themselves.
     expect(adminQueryKeys.list(undefined)).toEqual(["admin", "content", "list", "all"]);
     expect(adminQueryKeys.list("project")).toEqual(["admin", "content", "list", "project"]);
   });
@@ -79,13 +77,12 @@ describe("admin content queries", () => {
     expect(findPostBySlug(undefined, "a-post")).toBeUndefined();
   });
 
-  it("invalidates both the public and the admin caches after a write", async () => {
+  it("invalidates the admin cache after a write", async () => {
     const queryClient = new QueryClient();
     const invalidateQueries = vi.spyOn(queryClient, "invalidateQueries").mockResolvedValue();
 
     await invalidateContent(queryClient);
 
-    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: contentQueryKeys.all });
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: adminQueryKeys.all });
   });
 });

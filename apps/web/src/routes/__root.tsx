@@ -1,15 +1,8 @@
-import {
-  HeadContent,
-  Link,
-  Outlet,
-  createRootRouteWithContext,
-  useRouterState,
-} from "@tanstack/react-router";
+import { HeadContent, Link, Outlet, createRootRouteWithContext } from "@tanstack/react-router";
 import { RiAlertLine } from "@remixicon/react";
 
 import { AppShell } from "@/app/app-shell";
 import type { AppRouterContext } from "@/app/router";
-import { useAdminAccess } from "@/features/admin/admin-slot";
 import { Badge, Button, Card } from "@unimatrix/ui/public";
 
 export const Route = createRootRouteWithContext<AppRouterContext>()({
@@ -27,42 +20,7 @@ export const Route = createRootRouteWithContext<AppRouterContext>()({
   notFoundComponent: RootNotFound,
 });
 
-/**
- * Picks the shell.
- *
- * The public site's header, nav and footer are wayfinding for a reader; the
- * admin subtree is a tool, so it brings its own application chrome
- * (`AdminShell`) and must not be wrapped in the site's. Matched on the `/admin`
- * route id rather than on the pathname so every child route — the editor pages
- * included — is covered without a second case to remember.
- *
- * Only an admin gets the dashboard chrome. A visitor without the permission
- * sees the ordinary site around the route's "not for you" notice, which is both
- * a better place to land and one less shell to build. Rendering nothing until
- * Clerk resolves avoids mounting the public shell and swapping it out a beat
- * later, which would remount the whole subtree.
- */
 function RootComponent() {
-  const isAdminRoute = useRouterState({
-    select: (state) => state.matches.some((match) => match.routeId === "/admin"),
-  });
-  const { isLoaded, isAdmin } = useAdminAccess();
-
-  if (isAdminRoute) {
-    if (!isLoaded) {
-      return null;
-    }
-
-    if (isAdmin) {
-      return (
-        <>
-          <HeadContent />
-          <Outlet />
-        </>
-      );
-    }
-  }
-
   return (
     <AppShell>
       <HeadContent />

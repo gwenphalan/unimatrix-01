@@ -15,7 +15,6 @@ const apiClient = {
 
 vi.mock("@/lib/api-client", () => ({
   useApiClient: () => apiClient as unknown as ApiClient,
-  apiClient: apiClient as unknown as ApiClient,
 }));
 
 const toastSuccess = vi.fn();
@@ -63,7 +62,7 @@ function panel(name: "Blog posts" | "Projects") {
   return within(screen.getByRole("region", { name }));
 }
 
-describe("AdminPage", () => {
+describe("PostsPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     apiClient.adminListPosts.mockResolvedValue({ posts: [DRAFT, PUBLISHED] });
@@ -74,9 +73,9 @@ describe("AdminPage", () => {
   });
 
   it("lists every post in every publication state", async () => {
-    const { AdminPage } = await import("@/features/admin/admin-page");
+    const { PostsPage } = await import("@/features/content/posts-page");
 
-    renderInRouter(<AdminPage />);
+    renderInRouter(<PostsPage />);
 
     expect(await screen.findByText("A post")).toBeInTheDocument();
     expect(screen.getByText("Shipped project")).toBeInTheDocument();
@@ -89,9 +88,9 @@ describe("AdminPage", () => {
   });
 
   it("keeps bulk actions hidden until something is selected", async () => {
-    const { AdminPage } = await import("@/features/admin/admin-page");
+    const { PostsPage } = await import("@/features/content/posts-page");
 
-    renderInRouter(<AdminPage />);
+    renderInRouter(<PostsPage />);
 
     // One prompt per collection, because each manages its own selection.
     expect(await screen.findAllByText(/Select rows to manage them in bulk/u)).toHaveLength(2);
@@ -101,9 +100,9 @@ describe("AdminPage", () => {
   it("publishes exactly the selected rows", async () => {
     apiClient.setPostsState.mockResolvedValue({ affected: 1 });
 
-    const { AdminPage } = await import("@/features/admin/admin-page");
+    const { PostsPage } = await import("@/features/content/posts-page");
 
-    renderInRouter(<AdminPage />);
+    renderInRouter(<PostsPage />);
 
     fireEvent.click(await screen.findByRole("checkbox", { name: "Select A post" }));
     fireEvent.click(screen.getByRole("button", { name: "Publish" }));
@@ -118,9 +117,9 @@ describe("AdminPage", () => {
   });
 
   it("keeps each collection's select-all to its own rows", async () => {
-    const { AdminPage } = await import("@/features/admin/admin-page");
+    const { PostsPage } = await import("@/features/content/posts-page");
 
-    renderInRouter(<AdminPage />);
+    renderInRouter(<PostsPage />);
 
     await screen.findByText("A post");
     fireEvent.click(panel("Blog posts").getByRole("checkbox", { name: "Select all rows" }));
@@ -140,9 +139,9 @@ describe("AdminPage", () => {
   it("names the count in the delete confirmation and deletes nothing until it is confirmed", async () => {
     apiClient.deletePosts.mockResolvedValue({ affected: 2 });
 
-    const { AdminPage } = await import("@/features/admin/admin-page");
+    const { PostsPage } = await import("@/features/content/posts-page");
 
-    renderInRouter(<AdminPage />);
+    renderInRouter(<PostsPage />);
 
     await screen.findByText("A post");
     fireEvent.click(panel("Blog posts").getByRole("checkbox", { name: "Select A post" }));
@@ -171,9 +170,9 @@ describe("AdminPage", () => {
   });
 
   it("uses the singular in the confirmation for one post and names it", async () => {
-    const { AdminPage } = await import("@/features/admin/admin-page");
+    const { PostsPage } = await import("@/features/content/posts-page");
 
-    renderInRouter(<AdminPage />);
+    renderInRouter(<PostsPage />);
 
     fireEvent.click(await screen.findByRole("checkbox", { name: "Select A post" }));
     fireEvent.click(screen.getByRole("button", { name: "Delete" }));
@@ -191,9 +190,9 @@ describe("AdminPage", () => {
   it("deletes only the row its own delete button belongs to", async () => {
     apiClient.deletePosts.mockResolvedValue({ affected: 1 });
 
-    const { AdminPage } = await import("@/features/admin/admin-page");
+    const { PostsPage } = await import("@/features/content/posts-page");
 
-    renderInRouter(<AdminPage />);
+    renderInRouter(<PostsPage />);
 
     // A different row is ticked, so a selection-driven delete would take it.
     fireEvent.click(await screen.findByRole("checkbox", { name: "Select A post" }));
@@ -218,9 +217,9 @@ describe("AdminPage", () => {
   it("reports a failed load in both panels instead of rendering an empty table", async () => {
     apiClient.adminListPosts.mockRejectedValue(new Error("network down"));
 
-    const { AdminPage } = await import("@/features/admin/admin-page");
+    const { PostsPage } = await import("@/features/content/posts-page");
 
-    renderInRouter(<AdminPage />);
+    renderInRouter(<PostsPage />);
 
     // One request backs both collections, but the failure is reported inside
     // each panel: collapsing to a single combined card would change the shape
@@ -234,9 +233,9 @@ describe("AdminPage", () => {
   it("says so when there is nothing to manage", async () => {
     apiClient.adminListPosts.mockResolvedValue({ posts: [] });
 
-    const { AdminPage } = await import("@/features/admin/admin-page");
+    const { PostsPage } = await import("@/features/content/posts-page");
 
-    renderInRouter(<AdminPage />);
+    renderInRouter(<PostsPage />);
 
     expect(await screen.findAllByText("Nothing here yet.")).toHaveLength(2);
   });

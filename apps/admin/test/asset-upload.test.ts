@@ -5,7 +5,9 @@ import {
   AssetUploadError,
   assetUrl,
   uploadAsset,
-} from "@/features/admin/asset-upload";
+} from "@/features/content/asset-upload";
+
+const BASE_URL = "https://api.unimatrix-01.dev";
 
 const METADATA = {
   hash: "a".repeat(64),
@@ -39,11 +41,11 @@ describe("uploadAsset", () => {
   it("posts multipart form data with the bearer token and no Content-Type header", async () => {
     vi.mocked(fetch).mockResolvedValue(jsonResponse(METADATA, 201));
 
-    await expect(uploadAsset(pngFile(), "token-123")).resolves.toEqual(METADATA);
+    await expect(uploadAsset(pngFile(), "token-123", BASE_URL)).resolves.toEqual(METADATA);
 
     const [url, init] = vi.mocked(fetch).mock.calls[0] ?? [];
 
-    expect(url).toMatch(/\/content\/admin\/assets$/u);
+    expect(url).toBe(`${BASE_URL}/content/admin/assets`);
     expect(init?.method).toBe("POST");
     expect(init?.body).toBeInstanceOf(FormData);
     // Setting Content-Type by hand would omit the multipart boundary the
@@ -52,7 +54,7 @@ describe("uploadAsset", () => {
   });
 
   it("refuses to send anything without a token", async () => {
-    await expect(uploadAsset(pngFile(), null)).rejects.toBeInstanceOf(AssetUploadError);
+    await expect(uploadAsset(pngFile(), null, BASE_URL)).rejects.toBeInstanceOf(AssetUploadError);
 
     expect(fetch).not.toHaveBeenCalled();
   });
@@ -62,7 +64,7 @@ describe("uploadAsset", () => {
       jsonResponse({ message: "Only image uploads are allowed." }, 415),
     );
 
-    await expect(uploadAsset(pngFile(), "token-123")).rejects.toThrow(
+    await expect(uploadAsset(pngFile(), "token-123", BASE_URL)).rejects.toThrow(
       "Only image uploads are allowed.",
     );
   });
@@ -76,7 +78,7 @@ describe("uploadAsset", () => {
       json: () => Promise.reject(new SyntaxError("Unexpected token <")),
     } as unknown as Response);
 
-    await expect(uploadAsset(pngFile(), "token-123")).rejects.toThrow(/too large/u);
+    await expect(uploadAsset(pngFile(), "token-123", BASE_URL)).rejects.toThrow(/too large/u);
   });
 
   it("falls back to the status for any other unparseable failure", async () => {
@@ -86,13 +88,15 @@ describe("uploadAsset", () => {
       json: () => Promise.reject(new SyntaxError("Unexpected token <")),
     } as unknown as Response);
 
-    await expect(uploadAsset(pngFile(), "token-123")).rejects.toThrow("The upload failed (502).");
+    await expect(uploadAsset(pngFile(), "token-123", BASE_URL)).rejects.toThrow(
+      "The upload failed (502).",
+    );
   });
 });
 
 describe("assetUrl", () => {
-  it("builds the public, content-addressed URL an editor embeds", () => {
-    expect(assetUrl(METADATA.hash)).toMatch(new RegExp(`/content/assets/${METADATA.hash}$`, "u"));
+  it("builds the content-addressed URL an editor embeds, on the API origin", () => {
+    expect(assetUrl(METADATA.hash, BASE_URL)).toBe(`${BASE_URL}/content/assets/${METADATA.hash}`);
   });
 });
 

@@ -77,13 +77,69 @@ describe("MarkdownEditor", () => {
     expect(screen.getAllByRole("radio").map((radio) => radio.textContent)).toEqual(["Live", "Raw"]);
   });
 
-  it("shows the expand control only once the body overflows its box", () => {
+  // The control used to be gated on the box measuring as overflowing, which
+  // made it a function of viewport height and font loading rather than of the
+  // consumer's intent — in a tall container it never appeared at all.
+  it("shows the expand control whenever the consumer asks for one", () => {
     render(<MarkdownEditor expandable label="Post body" onChange={vi.fn()} value="Body." />);
 
-    // jsdom reports every element as zero-sized, so nothing overflows and the
-    // control has nothing to offer. The measured behaviour is checked in a real
-    // browser; this pins the "no scrollbar, no control" half of the rule.
+    expect(screen.getByRole("button", { name: "Expand the editor" })).toBeInTheDocument();
+  });
+
+  it("shows no expand control when the consumer does not ask for one", () => {
+    render(<MarkdownEditor label="Post body" onChange={vi.fn()} value="Body." />);
+
     expect(screen.queryByRole("button", { name: /the editor/u })).not.toBeInTheDocument();
+  });
+
+  // The toolbar's job is to reach the document, not to own formatting: each
+  // button dispatches into CodeMirror and the value comes back through
+  // `onChange` like any other edit, so a consumer never has two sources for
+  // the same text.
+  it("applies a toolbar command to the document", async () => {
+    const onChange = vi.fn();
+
+    render(<MarkdownEditor label="Post body" onChange={onChange} value="" />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Bold" }));
+
+    await waitFor(() => {
+      expect(onChange).toHaveBeenCalled();
+    });
+    expect(onChange.mock.calls.at(-1)?.[0]).toContain("**");
+  });
+
+  // Expanded, the editor stops scrolling internally and grows with the
+  // document, so a height-locked consumer has to release that lock. It cannot
+  // observe the change any other way — nothing above the editor is reachable
+  // from inside it — which is what makes the callback load-bearing rather than
+  // informational.
+  it("toggles expansion and reports each change to the consumer", () => {
+    const onExpandedChange = vi.fn();
+
+    render(
+      <MarkdownEditor
+        expandable
+        label="Post body"
+        onChange={vi.fn()}
+        onExpandedChange={onExpandedChange}
+        value="Body."
+      />,
+    );
+
+    const control = screen.getByRole("button", { name: "Expand the editor" });
+    expect(control).toHaveAttribute("aria-pressed", "false");
+
+    fireEvent.click(control);
+
+    expect(onExpandedChange).toHaveBeenCalledWith(true);
+    const shrink = screen.getByRole("button", { name: "Shrink the editor" });
+    expect(shrink).toHaveAttribute("aria-pressed", "true");
+
+    fireEvent.click(shrink);
+
+    expect(onExpandedChange).toHaveBeenLastCalledWith(false);
+    expect(screen.getByRole("button", { name: "Expand the editor" })).toBeInTheDocument();
   });
 
   it("reports mode changes to a controlled consumer without moving itself", () => {

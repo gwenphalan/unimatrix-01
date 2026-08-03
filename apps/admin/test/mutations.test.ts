@@ -1,7 +1,7 @@
 import { ApiClientError } from "@unimatrix/api-client";
 import { describe, expect, it } from "vitest";
 
-import { describeAffected, describeAdminError } from "@/features/admin/mutations";
+import { describeAffected, describeAdminError } from "@/features/content/mutations";
 
 describe("describeAdminError", () => {
   it("names the session as the problem for a 401 and the role for a 403", () => {

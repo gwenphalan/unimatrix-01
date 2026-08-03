@@ -1,14 +1,6 @@
 import type { ContentAssetMetadata } from "@unimatrix/shared";
 import { contentAssetMetadataSchema } from "@unimatrix/shared";
 
-import { loadWebRuntimeConfig } from "@/lib/config";
-
-const runtimeConfig = loadWebRuntimeConfig({
-  VITE_API_BASE_URL: import.meta.env.VITE_API_BASE_URL,
-  VITE_AUTH_APP_URL: import.meta.env.VITE_AUTH_APP_URL,
-  VITE_CLERK_PUBLISHABLE_KEY: import.meta.env.VITE_CLERK_PUBLISHABLE_KEY,
-});
-
 /**
  * Kept in step with the API's `isInlineSafeContentType` allowlist. Used only
  * to set the file picker's `accept` and to fail fast on an obvious mistake —
@@ -23,10 +15,16 @@ export class AssetUploadError extends Error {}
  *
  * Done with `fetch` rather than through `@unimatrix/api-client` because that
  * package is JSON-only by rule — binary I/O belongs to the caller. The token
- * is passed in rather than read here so this stays a plain function, callable
- * outside a React render.
+ * and the API base URL are both passed in rather than read from module-scope
+ * config, so this stays a plain function, callable outside a React render and
+ * without reading `import.meta.env` — `baseUrl` comes from the router
+ * context, supplied by the caller.
  */
-export async function uploadAsset(file: File, token: string | null): Promise<ContentAssetMetadata> {
+export async function uploadAsset(
+  file: File,
+  token: string | null,
+  baseUrl: string,
+): Promise<ContentAssetMetadata> {
   if (token === null) {
     throw new AssetUploadError("Your session has expired. Sign in again to upload.");
   }
@@ -37,7 +35,7 @@ export async function uploadAsset(file: File, token: string | null): Promise<Con
 
   // No `Content-Type` header: the browser has to set it itself so the
   // multipart boundary matches the body it generated.
-  const response = await fetch(`${runtimeConfig.apiBaseUrl}/content/admin/assets`, {
+  const response = await fetch(`${baseUrl}/content/admin/assets`, {
     method: "POST",
     headers: { authorization: `Bearer ${token}` },
     body,
@@ -84,6 +82,6 @@ async function describeUploadFailure(response: Response): Promise<string> {
 }
 
 /** The public URL an uploaded asset is served from, for embedding in markdown. */
-export function assetUrl(hash: string): string {
-  return `${runtimeConfig.apiBaseUrl}/content/assets/${hash}`;
+export function assetUrl(hash: string, baseUrl: string): string {
+  return `${baseUrl}/content/assets/${hash}`;
 }

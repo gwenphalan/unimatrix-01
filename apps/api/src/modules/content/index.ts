@@ -227,6 +227,12 @@ export const contentModule: FastifyPluginAsync = async (app) => {
 
       reply.header("cache-control", ASSET_CACHE_CONTROL);
       reply.header("etag", etag);
+      // Helmet's global default is `same-origin`, which blocks the `<img>` no-cors
+      // load this asset feeds on both the admin origin (editor preview) and the
+      // public origin (published post) — both are cross-origin from the API. Scoped
+      // to this route rather than helmet's config, since it is the only route that
+      // needs the wider policy.
+      reply.header("cross-origin-resource-policy", "cross-origin");
 
       if (request.headers["if-none-match"] === etag) {
         return reply.status(304).send();

@@ -15,7 +15,6 @@ content/home/**
 content/projects/**
 packages/api-client/**
 packages/app-config/**
-packages/auth/**
 packages/chrome/**
 packages/config-typescript/**
 packages/content/**
@@ -38,7 +37,10 @@ control the frozen pnpm install used by the Docker build.
 rebuilding, so two apps serve different chrome with nothing to indicate it.
 
 When adding a workspace dependency or another build input, add its path here
-and to the Dokploy service's watch-path configuration. See
+and to the Dokploy service's watch-path configuration. Removing one is the same
+two edits: `check-watch-paths.mjs` is one-directional on purpose and fails only
+on a *missing* entry, so a path left behind after its import goes away costs
+nothing but rebuilds and is invisible to every check. See
 [`infra/deployment/README.md`](../../infra/deployment/README.md) for the
 repository-wide convention.
 

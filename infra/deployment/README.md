@@ -42,19 +42,14 @@ application type (not the plain Dockerfile application type).
 - compose path: `infra/docker/web-compose.yaml`
 - environment variables (set in Dokploy's UI, not in the file):
   - `VITE_API_BASE_URL=https://api.example.com`
-  - `VITE_CLERK_PUBLISHABLE_KEY=pk_live_...` (optional) — enables the header
-    sign-in affordance on the public site; leave unset to ship the site with no
-    auth UI
-  - `VITE_AUTH_APP_URL=https://auth.unimatrix-01.dev` (optional; this is the
-    default) — where the "Sign in" link points
 - Domains page: route `site.example.com` to the `web` service, container port
   `8080`
 
-These `VITE_*` values are inlined into the bundle at **build** time, so they
-must be present before the image builds (the compose file passes them as build
-args). Setting `VITE_CLERK_PUBLISHABLE_KEY` only after the container is running
-has no effect — the built bundle already decided whether auth is enabled, so a
-rebuild/redeploy is required for the sign-in button to appear.
+This `VITE_*` value is inlined into the bundle at **build** time, so it must be
+present before the image builds (the compose file passes it as a build arg).
+The public site is fully anonymous — no Clerk, no sign-in affordance, no
+account-scoped UI. That surface now lives on `apps/admin`; see the admin
+service below.
 
 The web container is a static SPA container. Preserve SPA fallback behavior
 inside the web container regardless of routing.
@@ -233,7 +228,8 @@ A human needs to do the following once in the Clerk Dashboard:
    verify permissions networklessly from the session token.
 2. Set the backend env (`CLERK_SECRET_KEY`, `CLERK_PUBLISHABLE_KEY`,
    `CLERK_JWT_KEY`) on the API service, and the frontend env
-   (`VITE_CLERK_PUBLISHABLE_KEY`) on the web and auth services.
+   (`VITE_CLERK_PUBLISHABLE_KEY`) on the auth and admin services. The web
+   service carries no Clerk key — it is a fully anonymous public site.
 3. Bootstrap the first platform administrator by setting that user's
    `publicMetadata` to `{ "permissions": { "auth": ["admin"] } }` directly in
    the Dashboard — there is no public "become admin" flow.
@@ -404,8 +400,8 @@ survivable here, so do not disable it.
 
 - **`apps/cflop`** — the clean case. No build args, no backend, no env;
   progress lives in `localStorage`.
-- **`apps/web`** — point previews at the production API and leave
-  `VITE_CLERK_PUBLISHABLE_KEY` unset so previews stay anonymous.
+- **`apps/web`** — point previews at the production API. The site carries no
+  Clerk key at all, so every preview is anonymous by construction.
 - **`apps/auth`** — **do not preview.** Not for secret exposure:
   `VITE_CLERK_PUBLISHABLE_KEY` is public by design and `CLERK_SECRET_KEY`
   never enters the auth image (it is API-only). The real reason is that
@@ -432,7 +428,7 @@ survivable here, so do not disable it.
 9. Set `previewLimit` deliberately — the default of 3 skips silently once
    exceeded.
 10. For `apps/web`, set preview build args to the production
-    `VITE_API_BASE_URL` and leave `VITE_CLERK_PUBLISHABLE_KEY` unset.
+    `VITE_API_BASE_URL`.
 11. Optionally add a `preview` label gate if per-PR build load is a problem.
 
 ### Doing it over the API instead of the UI

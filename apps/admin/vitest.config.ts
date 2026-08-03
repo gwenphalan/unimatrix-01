@@ -13,6 +13,12 @@ export default defineConfig({
         replacement: fileURLToPath(new URL("./src", import.meta.url)),
       },
       {
+        find: /^@unimatrix\/api-client$/,
+        replacement: fileURLToPath(
+          new URL("../../packages/api-client/src/index.ts", import.meta.url),
+        ),
+      },
+      {
         find: /^@unimatrix\/auth\/react$/,
         replacement: fileURLToPath(new URL("../../packages/auth/src/react.tsx", import.meta.url)),
       },
@@ -25,8 +31,18 @@ export default defineConfig({
         replacement: fileURLToPath(new URL("../../packages/chrome/src/tool.ts", import.meta.url)),
       },
       {
+        find: /^@unimatrix\/shared$/,
+        replacement: fileURLToPath(new URL("../../packages/shared/src/index.ts", import.meta.url)),
+      },
+      {
         find: /^@unimatrix\/ui\/public$/,
         replacement: fileURLToPath(new URL("../../packages/ui/src/public.ts", import.meta.url)),
+      },
+      // Must sit before the bare `@unimatrix/ui` entry below — see the same
+      // comment in `vite.config.ts`.
+      {
+        find: /^@unimatrix\/ui\/editor$/,
+        replacement: fileURLToPath(new URL("../../packages/ui/src/editor.ts", import.meta.url)),
       },
       {
         find: /^@unimatrix\/ui$/,
@@ -44,15 +60,14 @@ export default defineConfig({
     // copied from a sibling: `@unimatrix/config-vitest` owns the provider,
     // reporters and exclusions, and each workspace supplies its own numbers.
     //
-    // Measured 2026-08-02 at 53.84% statements / 57.14% functions, rounded
-    // down. `src/main.tsx`, `src/routes/__root.tsx`, `createAppRouter`, and
-    // every route's non-lazy file sit at zero — they are bootstrap and route
-    // registration, exercised by the browser and by nothing else here. That is
-    // an honest measurement, not a gap papered over by excluding them: when
-    // the CMS lands, the ratio moves and this number gets re-measured rather
-    // than lowered.
+    // Re-measured 2026-08-02 after the CMS landed: 64.18% statements / 67.2%
+    // functions, rounded down. Raised from the pre-CMS 53/57 — the new
+    // `src/features/content` code arrived well-tested and pulled the ratio up.
+    // `src/main.tsx`, `src/routes/__root.tsx`, `createAppRouter`, and every
+    // route's non-lazy file still sit at zero — they are bootstrap and route
+    // registration, exercised by the browser and by nothing else here.
     coverage: createCoverageConfig({
-      thresholds: { statements: 53, functions: 57 },
+      thresholds: { statements: 64, functions: 67 },
     }),
     environment: "jsdom",
     include: ["test/**/*.test.ts", "test/**/*.test.tsx"],

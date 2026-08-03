@@ -21,9 +21,9 @@ function validateSearch(search: Record<string, unknown>): NewPostSearch {
   return { type: type.success ? type.data : "blog" };
 }
 
-export const Route = createFileRoute("/admin/posts/new")({
+export const Route = createFileRoute("/content/posts/new")({
   validateSearch,
   head: () => ({
-    meta: [{ title: "Unimatrix-01 - New post" }, { name: "robots", content: "noindex, nofollow" }],
+    meta: [{ title: "Unimatrix Admin - New post" }],
   }),
 });

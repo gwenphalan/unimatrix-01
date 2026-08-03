@@ -16,7 +16,7 @@ import type { ReactNode } from "react";
  * when the target is missing, so this list has to keep up with the admin
  * routes — a missing entry fails as a render error rather than a bad link.
  */
-const ADMIN_PATHS = ["/", "/admin", "/admin/posts/new", "/admin/posts/edit"] as const;
+const ADMIN_PATHS = ["/", "/content", "/content/posts/new", "/content/posts/edit"] as const;
 
 /**
  * Mounts a node under a router and a query client of its own.

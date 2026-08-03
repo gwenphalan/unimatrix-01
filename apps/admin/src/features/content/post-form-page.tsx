@@ -5,7 +5,7 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyTitle, Skeleton } from "@uni
 
 import { useApiClient } from "@/lib/api-client";
 
-import { AdminPanel } from "./admin-shell";
+import { AdminPanel } from "./content-panel";
 import { describeAdminError } from "./mutations";
 import { PostForm } from "./post-form";
 import { adminPostsQueryOptions } from "./queries";
@@ -16,18 +16,26 @@ const TYPE_LABELS: Record<ContentPostType, string> = {
 };
 
 /**
- * `/admin/posts/new` and `/admin/posts/edit` — the full-page editor.
+ * `/content/posts/new` and `/content/posts/edit` — the full-page editor.
  *
  * Editing is addressed by id because that is the only stable handle: the slug
  * is editable in the very form this page renders, so a slug-addressed URL would
  * stop resolving the moment it was saved.
  *
  * There is no get-by-id contract, so the row is found in the admin list — which
- * `/admin` has almost always already cached — and the body is then fetched by
+ * `/content` has almost always already cached — and the body is then fetched by
  * `(type, slug)`. Two requests on a cold load, one on the common path from the
  * admin table.
  */
-export function PostFormPage({ postId, type }: { postId: string | null; type: ContentPostType }) {
+export interface PostFormPageProps {
+  /** The API's base URL, supplied by the route from the router context. */
+  baseUrl: string;
+  /** `null` creates a post; an id edits that one. */
+  postId: string | null;
+  type: ContentPostType;
+}
+
+export function PostFormPage({ baseUrl, postId, type }: PostFormPageProps) {
   const client = useApiClient();
   const navigate = useNavigate();
 
@@ -52,13 +60,21 @@ export function PostFormPage({ postId, type }: { postId: string | null; type: Co
   });
 
   function leave() {
-    void navigate({ to: "/admin" });
+    void navigate({ to: "/content" });
   }
 
   // `PostForm` renders its own panel — the publication state lives in the panel
   // header and has to stay inside the `<form>`.
   if (postId === null) {
-    return <PostForm onDone={leave} post={null} title={`New ${TYPE_LABELS[type]}`} type={type} />;
+    return (
+      <PostForm
+        baseUrl={baseUrl}
+        onDone={leave}
+        post={null}
+        title={`New ${TYPE_LABELS[type]}`}
+        type={type}
+      />
+    );
   }
 
   const error = list.error ?? detail.error;
@@ -105,6 +121,7 @@ export function PostFormPage({ postId, type }: { postId: string | null; type: Co
 
   return (
     <PostForm
+      baseUrl={baseUrl}
       onDone={leave}
       post={detail.data}
       title={`Edit ${TYPE_LABELS[detail.data.type]}`}

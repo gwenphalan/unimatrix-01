@@ -28,16 +28,9 @@ export function createWebViteConfig(mode: string): UserConfig {
       rolldownOptions: {
         output: {
           // Rolldown emits a separate chunk for every module shared by two or
-          // more chunks. Mounting `AdminSlot` in the app shell and in the blog,
-          // projects and admin lazy routes crossed that threshold for a handful of small modules and
-          // shattered the eager set from 6 chunks into 11 — the same ~950 kB
-          // of JavaScript, but nearly twice the requests on the critical path.
-          // Measured cost: homepage Lighthouse performance 0.87 to 0.83, with
-          // /blog and /projects also dropping under budget.
-          //
-          // Note the top-level `minSize`/`minShareCount` keys are only
-          // fallbacks for `groups` entries — setting them alone does nothing,
-          // which is worth knowing before reaching for them.
+          // more chunks. Note the top-level `minSize`/`minShareCount` keys are
+          // only fallbacks for `groups` entries — setting them alone does
+          // nothing, which is worth knowing before reaching for them.
           codeSplitting: {
             groups: [
               {
@@ -47,18 +40,8 @@ export function createWebViteConfig(mode: string): UserConfig {
                 // that only lazy routes need, which grew the eager set from
                 // 954 kB to 992 kB and gave back most of what the smaller
                 // request count won.
-                //
-                // A group claims every module its `test` matches regardless of
-                // how that module is reached, so the admin feature and the
-                // editor are excluded explicitly — matching them here would
-                // pull them out of their dynamic-import chunks and onto the
-                // public critical path, the exact regression `./editor` and
-                // `admin-slot` exist to prevent.
                 test: (id: string) => {
                   if (/[\\/]node_modules[\\/]/u.test(id)) return false;
-                  if (/[\\/]src[\\/]features[\\/]admin[\\/]/u.test(id)) return false;
-                  if (/[\\/]packages[\\/]ui[\\/]src[\\/]editor\.ts$/u.test(id)) return false;
-                  if (/[\\/]components[\\/]markdown-editor[\\/]/u.test(id)) return false;
 
                   return /[\\/](apps[\\/]web|packages[\\/][a-z-]+)[\\/]src[\\/]/u.test(id);
                 },
@@ -119,14 +102,6 @@ export function createWebViteConfig(mode: string): UserConfig {
           ),
         },
         {
-          find: /^@unimatrix\/auth\/react$/,
-          replacement: fileURLToPath(new URL("../../packages/auth/src/react.tsx", import.meta.url)),
-        },
-        {
-          find: /^@unimatrix\/auth$/,
-          replacement: fileURLToPath(new URL("../../packages/auth/src/index.ts", import.meta.url)),
-        },
-        {
           find: /^@unimatrix\/content$/,
           replacement: fileURLToPath(
             new URL("../../packages/content/src/index.ts", import.meta.url),
@@ -143,13 +118,6 @@ export function createWebViteConfig(mode: string): UserConfig {
           replacement: fileURLToPath(
             new URL("../../packages/chrome/src/public.ts", import.meta.url),
           ),
-        },
-        // Ordered before the bare `@unimatrix/ui` entry below: these are
-        // prefix-anchored regexes evaluated in order, and the bare one would
-        // otherwise never let a subpath through.
-        {
-          find: /^@unimatrix\/ui\/editor$/,
-          replacement: fileURLToPath(new URL("../../packages/ui/src/editor.ts", import.meta.url)),
         },
         {
           find: /^@unimatrix\/ui\/public$/,

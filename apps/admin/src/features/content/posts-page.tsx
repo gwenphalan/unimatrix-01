@@ -8,7 +8,11 @@ import {
 } from "@remixicon/react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import type { ContentPostSummary, ContentPostType } from "@unimatrix/shared";
+import {
+  formatPublishedDate,
+  type ContentPostSummary,
+  type ContentPostType,
+} from "@unimatrix/shared";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -36,10 +40,9 @@ import {
 } from "@unimatrix/ui/editor";
 import { useMemo, useState } from "react";
 
-import { formatPublishedDate } from "@/features/content/entries";
 import { useApiClient } from "@/lib/api-client";
 
-import { AdminPanel } from "./admin-shell";
+import { AdminPanel } from "./content-panel";
 import { describeAdminError, useDeletePosts, useSetPostsState } from "./mutations";
 import { adminPostsQueryOptions } from "./queries";
 
@@ -61,7 +64,7 @@ const COLLECTIONS: readonly { type: ContentPostType; title: string; newLabel: st
  * Still one request: the unfiltered admin list is fetched once here and
  * partitioned by type, so splitting the UI costs no extra round trip.
  */
-export function AdminPage() {
+export function PostsPage() {
   const client = useApiClient();
   const { data, error, isPending } = useQuery(adminPostsQueryOptions(client));
 
@@ -85,7 +88,7 @@ export function AdminPage() {
         <AdminPanel
           actions={
             <Button asChild className="gap-2" size="sm" variant="outline">
-              <Link search={{ type: collection.type }} to="/admin/posts/new">
+              <Link search={{ type: collection.type }} to="/content/posts/new">
                 <RiAddLine aria-hidden="true" className="size-4" />
                 {collection.newLabel}
               </Link>
@@ -139,7 +142,8 @@ function StateBadge({ className, post }: { className?: string; post: ContentPost
  *
  * View is the exit that actually gets used: after publishing, the next thing an
  * admin wants is that post on the site. A plain anchor, because it leaves the
- * admin subtree. Absent for a draft, which has no public URL to open — the
+ * admin subtree — and now leaves the origin entirely, since the public site is
+ * a different one. Absent for a draft, which has no public URL to open — the
  * public routes 404 on anything unpublished.
  */
 function RowActions({
@@ -155,13 +159,15 @@ function RowActions({
     <div className="flex shrink-0 items-center justify-end gap-1">
       {post.publicationState === "published" ? (
         <Button aria-label={`View ${post.title}`} asChild size="sm" variant="ghost">
-          <a href={`/${post.type === "blog" ? "blog" : "projects"}/${post.slug}`}>
+          <a
+            href={`https://unimatrix-01.dev/${post.type === "blog" ? "blog" : "projects"}/${post.slug}`}
+          >
             <RiExternalLinkLine aria-hidden="true" className="size-4" />
           </a>
         </Button>
       ) : null}
       <Button aria-label={`Edit ${post.title}`} asChild size="sm" variant="outline">
-        <Link search={{ id: post.id }} to="/admin/posts/edit">
+        <Link search={{ id: post.id }} to="/content/posts/edit">
           <RiEditLine aria-hidden="true" className="size-4" />
         </Link>
       </Button>

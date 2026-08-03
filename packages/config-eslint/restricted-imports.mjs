@@ -106,38 +106,6 @@ const WORKSPACE_RESTRICTIONS = {
 };
 
 /**
- * The admin CMS is the one part of `apps/web` allowed to import
- * `@unimatrix/ui/editor`, and only from inside its own feature directory.
- *
- * The workspace-wide ban above exists because that entry point carries
- * CodeMirror and the dialog/table primitives: measured on the production
- * build, naming it from a module the public routes reach adds it to the set
- * `index.html` eagerly preloads whether or not the symbols are used (+497.6
- * kB raw, +169.3 kB gzip — the measurement is written up in
- * `packages/ui/src/editor.ts`). Confining it here means a stray import in a
- * route file is a lint error rather than half a megabyte shipped to every
- * reader.
- *
- * Scoped by file rather than by workspace, so it lives outside the table
- * above. Flat config applies later entries last, so this replaces the
- * workspace rule for these files only.
- */
-const WEB_ADMIN_FEATURE_CONFIG = {
-  // The admin tests are listed too: they mock `@unimatrix/ui/editor` to
-  // intercept `toast`, which means naming the specifier. A test file is not
-  // bundled, so it cannot widen a chunk — the pattern stays narrow so this
-  // does not become a way to import the entry point from anywhere in `test/`.
-  files: ["src/features/admin/**/*.{ts,tsx}", "test/admin-*.test.{ts,tsx}"],
-  patterns: [
-    {
-      regex: String.raw`^@unimatrix/ui$|^@unimatrix/ui/(?!public$)(?!editor$)(?!styles\.css$)`,
-      message:
-        "The admin feature may import `@unimatrix/ui/editor` (and `./public`), but not the root barrel or any other subpath.",
-    },
-  ],
-};
-
-/**
  * `packages/auth` ships three deliberately separate entry points: `.` stays
  * framework-agnostic and dependency-free, `./server` is Node-only, and
  * `./react` is browser-only. A cross-import between the last two would drag
@@ -200,18 +168,6 @@ export function createRestrictedImportConfigs({ tsconfigRootDir }) {
       files: restrictions.files,
       rules: {
         "@typescript-eslint/no-restricted-imports": ["error", { patterns: restrictions.patterns }],
-      },
-    });
-  }
-
-  if (workspaceId === "apps/web") {
-    configs.push({
-      files: WEB_ADMIN_FEATURE_CONFIG.files,
-      rules: {
-        "@typescript-eslint/no-restricted-imports": [
-          "error",
-          { patterns: WEB_ADMIN_FEATURE_CONFIG.patterns },
-        ],
       },
     });
   }

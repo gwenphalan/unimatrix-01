@@ -19,14 +19,6 @@ export default defineConfig({
         ),
       },
       {
-        find: /^@unimatrix\/auth\/react$/,
-        replacement: fileURLToPath(new URL("../../packages/auth/src/react.tsx", import.meta.url)),
-      },
-      {
-        find: /^@unimatrix\/auth$/,
-        replacement: fileURLToPath(new URL("../../packages/auth/src/index.ts", import.meta.url)),
-      },
-      {
         find: /^@unimatrix\/content$/,
         replacement: fileURLToPath(new URL("../../packages/content/src/index.ts", import.meta.url)),
       },
@@ -47,18 +39,13 @@ export default defineConfig({
   },
   test: {
     coverage: createCoverageConfig({
-      // Statements dropped one point when per-route `meta` descriptions were
-      // added to the non-lazy route files: `head: () => ({ meta: [...] })` only
-      // runs when the router renders a route, which the Playwright smoke suite
-      // does and the vitest unit suite does not. The statements are real and
-      // shipped, they are simply unreachable from this suite.
-      //
-      // Both dropped ~2 points again when `src/lib/use-media-query.ts` was
-      // deleted (the circuit-field mobile gate moved into `@unimatrix/ui`).
-      // That file was 13 statements and 7 functions of *fully covered* code —
-      // every app-shell render exercised it — so removing it took more from
-      // the numerator than the denominator. Nothing became less tested.
-      thresholds: { statements: 59, functions: 60 },
+      // Re-measured after the CMS and Clerk auth left for `apps/admin`
+      // (2026-08-02): 52.38%/50% statements/functions, rounded down to 52/50.
+      // The drop from the prior 59/60 is the CMS's own well-tested code
+      // leaving alongside it, not a new gap — the remaining `*.lazy.tsx` route
+      // components are still only exercised by the Playwright smoke suite,
+      // same as before the move.
+      thresholds: { statements: 52, functions: 50 },
     }),
     environment: "jsdom",
     include: ["test/**/*.test.ts", "test/**/*.test.tsx"],

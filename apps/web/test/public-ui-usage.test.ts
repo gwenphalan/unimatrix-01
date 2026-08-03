@@ -148,6 +148,7 @@ describe("public UI package usage", () => {
     const rootSource = readRepositoryFile("packages/ui/src/index.ts");
     const uiPackageJson = readRepositoryFile("packages/ui/package.json");
     const webViteConfig = readRepositoryFile("apps/web/vite.config.ts");
+    const adminViteConfig = readRepositoryFile("apps/admin/vite.config.ts");
 
     expect(editorSource).toMatch(/MarkdownEditor/u);
     expect(uiPackageJson).toContain('"./editor"');
@@ -164,50 +165,14 @@ describe("public UI package usage", () => {
     expect(publicSource).not.toMatch(/markdown-editor/u);
     expect(rootSource).not.toMatch(/MarkdownEditor/u);
 
-    // Vite matches these prefix-anchored aliases in order: the bare
-    // `@unimatrix/ui` entry would swallow the subpath if it came first.
-    expect(webViteConfig.indexOf("@unimatrix\\/ui\\/editor")).toBeGreaterThan(-1);
-    expect(webViteConfig.indexOf("@unimatrix\\/ui\\/editor")).toBeLessThan(
-      webViteConfig.indexOf("find: /^@unimatrix\\/ui$/"),
+    // The editor is now an admin-only concern: apps/web never names it, and
+    // apps/admin resolves the same prefix-anchored alias ordering (the bare
+    // `@unimatrix/ui` entry would otherwise swallow the subpath).
+    expect(webViteConfig).not.toMatch(/@unimatrix\\\/ui\\\/editor/u);
+    expect(adminViteConfig.indexOf("@unimatrix\\/ui\\/editor")).toBeGreaterThan(-1);
+    expect(adminViteConfig.indexOf("@unimatrix\\/ui\\/editor")).toBeLessThan(
+      adminViteConfig.indexOf("find: /^@unimatrix\\/ui$/"),
     );
-  });
-
-  it("reaches the admin surface only through the slot's dynamic import", () => {
-    // The requirement is that admin code is not *delivered* to non-admins, not
-    // that it is hidden once delivered. Only a dynamic `import()` achieves
-    // that, and only if nothing else in the graph names the module statically:
-    // one static import from a public route would fold the whole admin chunk
-    // back into that route's chunk.
-    const sourceFiles = collectRepositoryFiles("apps/web/src").filter((path) =>
-      /\.(ts|tsx)$/u.test(path),
-    );
-    const adminFeatureFiles = sourceFiles.filter((path) =>
-      path.startsWith(join("apps", "web", "src", "features", "admin")),
-    );
-
-    const slotSource = stripComments(
-      readRepositoryFile("apps/web/src/features/admin/admin-slot.tsx"),
-    );
-
-    expect(slotSource).toMatch(/lazy\(/u);
-    expect(slotSource).toMatch(/import\("\.\/admin-surface"\)/u);
-    // The gate itself must stay clear of the entry point it is gating,
-    // otherwise it drags the whole surface into the public chunk it lives in.
-    expect(slotSource).not.toMatch(/@unimatrix\/ui\/editor/u);
-
-    // Everything outside the admin feature directory may name `admin-slot`,
-    // and nothing at all may name a module inside the chunk.
-    const chunkImporters = sourceFiles.filter((path) => {
-      if (adminFeatureFiles.includes(path)) {
-        return false;
-      }
-
-      return /from "@\/features\/admin\/(?!admin-slot")/u.test(
-        stripComments(readRepositoryFile(path)),
-      );
-    });
-
-    expect(chunkImporters).toEqual([]);
   });
 
   it("packages/ui owns the canonical shadcn config and shared stylesheet export", () => {
@@ -282,12 +247,13 @@ describe("public UI package usage", () => {
 
     // The shell delegates its chrome to `@unimatrix/chrome/public` rather than
     // building a header of its own. What must stay in the app is the knowledge
-    // the package deliberately refuses to hold: the route-to-tab mapping, the
-    // breadcrumb trail, and the auth control it passes in as a slot.
+    // the package deliberately refuses to hold: the route-to-tab mapping and
+    // the breadcrumb trail. The site is anonymous, so no `accountControl` is
+    // passed at all (the same as apps/cflop).
     expect(appShellSource).toMatch(/from "@unimatrix\/chrome\/public"/u);
     expect(appShellSource).toMatch(/PublicShell/u);
     expect(appShellSource).toMatch(/Unimatrix-01/u);
-    expect(appShellSource).toMatch(/accountControl=/u);
+    expect(appShellSource).not.toMatch(/accountControl=/u);
     expect(appShellSource).toMatch(/breadcrumbItems=/u);
     expect(appShellSource).not.toMatch(/aria-label="Primary"/u);
 

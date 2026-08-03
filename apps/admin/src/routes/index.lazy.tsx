@@ -29,8 +29,8 @@ function IndexRoute() {
             Unimatrix Admin
           </h1>
           <p className="text-sm leading-7 text-muted-foreground">
-            This origin is up and running on the shared tool shell. It has no sections yet — the
-            section navigation and the content management screens arrive in later changes.
+            This origin is up and running on the shared tool shell, with Content live as its first
+            built section. The rest arrive as their own screens are built.
           </p>
         </div>
       </div>

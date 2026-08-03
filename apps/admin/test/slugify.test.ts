@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { slugifyTitle } from "@/features/admin/slugify";
+import { slugifyTitle } from "@/features/content/slugify";
 
 const SLUG_PATTERN = /^[a-z0-9][a-z0-9-]*$/u;
 

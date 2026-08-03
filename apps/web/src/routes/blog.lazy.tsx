@@ -1,6 +1,5 @@
 import { Link, createLazyFileRoute } from "@tanstack/react-router";
 
-import { AdminSlot } from "@/features/admin/admin-slot";
 import {
   PublicNotice,
   PublicSectionHeading,
@@ -17,14 +16,7 @@ function BlogRoute() {
 
   return (
     <div className="space-y-5">
-      {/* The create button rides the heading's trailing slot rather than a row
-          of its own: it is chrome for one reader, and a full-width row under
-          the title pushed the first entry down for everyone else. */}
-      <PublicSectionHeading
-        headingLevel={1}
-        title="Blog"
-        trailing={<AdminSlot kind="new-post" type="blog" />}
-      />
+      <PublicSectionHeading headingLevel={1} title="Blog" />
 
       {entries.length === 0 ? (
         <PublicNotice
@@ -37,12 +29,6 @@ function BlogRoute() {
           {entries.map((entry, index) => (
             <div className="grid gap-3" key={entry.slug}>
               <PublicTransmissionListItem
-                actions={
-                  <AdminSlot kind="post-controls" part="actions" slug={entry.slug} type="blog" />
-                }
-                badge={
-                  <AdminSlot kind="post-controls" part="badge" slug={entry.slug} type="blog" />
-                }
                 headingLevel={2}
                 entry={entry}
                 index={index + 1}

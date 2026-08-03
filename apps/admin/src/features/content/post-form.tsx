@@ -24,7 +24,7 @@ import {
 } from "@unimatrix/ui/editor";
 import { useId, useRef, useState } from "react";
 
-import { AdminPanel } from "./admin-shell";
+import { AdminPanel } from "./content-panel";
 import { ASSET_ACCEPT, assetUrl, uploadAsset } from "./asset-upload";
 import { useCreatePost, useUpdatePost } from "./mutations";
 import { slugifyTitle } from "./slugify";
@@ -129,6 +129,8 @@ function toUpdateBody(form: PostFormState, post: ContentPost): UpdatePostBody {
 }
 
 export interface PostFormProps {
+  /** The API origin, supplied by the route from the router context. */
+  baseUrl: string;
   /** The post being edited, or `null` to create a new one. */
   post: ContentPost | null;
   /** Collection the created post belongs to. Ignored when editing. */
@@ -158,7 +160,7 @@ export interface PostFormProps {
  * title, and it has to stay inside the `<form>` element to be part of the same
  * submission and to keep its `<label for>` association.
  */
-export function PostForm({ post, type, title, onDone }: PostFormProps) {
+export function PostForm({ baseUrl, post, type, title, onDone }: PostFormProps) {
   const effectiveType = post?.type ?? type;
   const [form, setForm] = useState<PostFormState>(() =>
     post === null ? EMPTY_FORM : toFormState(post),
@@ -195,9 +197,9 @@ export function PostForm({ post, type, title, onDone }: PostFormProps) {
     setIsUploading(true);
 
     try {
-      const asset = await uploadAsset(file, await getToken());
+      const asset = await uploadAsset(file, await getToken(), baseUrl);
 
-      editorRef.current?.insertAtCursor(`![${file.name}](${assetUrl(asset.hash)})`);
+      editorRef.current?.insertAtCursor(`![${file.name}](${assetUrl(asset.hash, baseUrl)})`);
       toast.success(`${file.name} uploaded.`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "The upload failed.");

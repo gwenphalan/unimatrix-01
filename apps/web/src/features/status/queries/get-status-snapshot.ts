@@ -44,10 +44,10 @@ export async function getStatusSnapshot(apiClient: ApiClient): Promise<StatusSna
 
 /**
  * Not currently wired to a route — kept as the reference example for
- * fetching `GET /health` through `@unimatrix/api-client`. Callers should
- * pass the client returned by `useApiClient()` (token-bearing when auth is
- * enabled) rather than reaching for a client directly, so there is a single
- * clear way to obtain one.
+ * fetching `GET /health` through `@unimatrix/api-client`. Callers should pass
+ * the shared `apiClient` exported from `@/lib/api-client` rather than
+ * constructing a client directly, so there is a single clear way to obtain
+ * one.
  */
 export function statusSnapshotQueryOptions(apiClient: ApiClient) {
   return queryOptions({
