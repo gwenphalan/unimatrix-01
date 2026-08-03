@@ -13,11 +13,8 @@
       // says nothing about the cause.
       "@unimatrix/chrome/public": ["../../packages/chrome/src/public.ts"],
       "@unimatrix/e2e-helpers": ["../../packages/e2e-helpers/src/index.ts"],
-      "@unimatrix/auth/react": ["../../packages/auth/src/react.tsx"],
-      "@unimatrix/auth": ["../../packages/auth/src/index.ts"],
       "@unimatrix/content": ["../../packages/content/src/index.ts"],
       "@unimatrix/shared": ["../../packages/shared/src/index.ts"],
-      "@unimatrix/ui/editor": ["../../packages/ui/src/editor.ts"],
       "@unimatrix/ui/public": ["../../packages/ui/src/public.ts"],
       "@unimatrix/ui": ["../../packages/ui/src/index.ts"]
     },

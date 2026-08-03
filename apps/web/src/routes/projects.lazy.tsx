@@ -1,7 +1,6 @@
 import { Link, createLazyFileRoute } from "@tanstack/react-router";
 import { RiArrowRightUpLine } from "@remixicon/react";
 
-import { AdminSlot, useAdminAccess } from "@/features/admin/admin-slot";
 import {
   PublicNotice,
   PublicProjectLedgerItem,
@@ -16,18 +15,11 @@ export const Route = createLazyFileRoute("/projects")({
 
 function ProjectsRoute() {
   const projects = Route.useLoaderData();
-  const { isAdmin } = useAdminAccess();
 
   if (projects.length === 0) {
     return (
       <div className="space-y-5">
-        {/* Also on the empty branch: an empty list is exactly when an admin
-            most needs the create button. */}
-        <PublicSectionHeading
-          headingLevel={1}
-          title="Projects"
-          trailing={<AdminSlot kind="new-post" type="project" />}
-        />
+        <PublicSectionHeading headingLevel={1} title="Projects" />
 
         <PublicNotice
           description="Nothing is published here yet. Check back once the first project goes up."
@@ -40,19 +32,12 @@ function ProjectsRoute() {
 
   return (
     <div className="space-y-5">
-      {/* Inline with the title, not a row below it — see the empty branch. */}
-      <PublicSectionHeading
-        headingLevel={1}
-        title="Projects"
-        trailing={<AdminSlot kind="new-post" type="project" />}
-      />
+      <PublicSectionHeading headingLevel={1} title="Projects" />
 
       <div className="grid gap-3">
         {projects.map((project, index) => {
           const { liveUrl, repoUrl } = project.frontmatter;
-          // `isAdmin` counts: the admin controls live in this row now, so a
-          // project with neither link still has an action row to put them in.
-          const hasActions = Boolean(liveUrl) || Boolean(repoUrl) || isAdmin;
+          const hasActions = Boolean(liveUrl) || Boolean(repoUrl);
 
           return (
             <div className="grid gap-3" key={project.slug}>
@@ -77,17 +62,8 @@ function ProjectsRoute() {
                           </a>
                         </Button>
                       ) : null}
-                      <AdminSlot
-                        kind="post-controls"
-                        part="actions"
-                        slug={project.slug}
-                        type="project"
-                      />
                     </>
                   ) : undefined
-                }
-                badge={
-                  <AdminSlot kind="post-controls" part="badge" slug={project.slug} type="project" />
                 }
                 index={index + 1}
                 project={project}
