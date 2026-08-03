@@ -91,6 +91,16 @@ closes when it is done.
 workstreams you cannot see; the pieces you will check afterwards are verification checkpoints and
 stay pending until you have checked them.
 
+**Every subagent's own file rejects a resumed message that doesn't begin `VIA ORCHESTRATOR: `** —
+so when you send a follow-up to a subagent you dispatched (`SendMessage` to an agent that already
+reported, or mid-task), that prefix has to be yours, every time, not assumed. This exists because a
+message can reach a dispatched subagent from somewhere other than the session that dispatched it —
+the owner testing it directly, a misrouted message meant for a different session — and a subagent
+with no way to tell that apart from a real follow-up has acted on it: pushed, opened, and closed a
+PR from one, none of it authorized by anyone actually orchestrating that run. Forgetting the prefix
+on a message you actually mean makes your own follow-up bounce, which is the safe failure — the
+subagent replies with its fixed refusal and does nothing, rather than doing the wrong thing.
+
 ### The fast lane, for a change too small to pay for the flow
 
 Step 2's thresholds decide whether a plan needs an adversary. These are tighter, and decide whether
