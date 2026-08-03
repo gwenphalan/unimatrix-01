@@ -33,7 +33,7 @@ import {
   symlinkSync,
 } from "node:fs";
 import { execFileSync } from "node:child_process";
-import { dirname, join, relative, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
@@ -44,10 +44,6 @@ const LINK_TARGETS = [
   { relPath: ".notes", mode: "whole-directory" },
   { relPath: "lab/prototypes", mode: "entries", excludeNames: new Set([".gitkeep", "README.md"]) },
 ];
-
-function toRepoRelativePath(absPath) {
-  return relative(REPO_ROOT, absPath).replaceAll("\\", "/");
-}
 
 /**
  * The main checkout's root, found via the git-common-dir every worktree

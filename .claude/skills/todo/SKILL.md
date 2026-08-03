@@ -7,9 +7,11 @@ description: Compose a `.notes/01-todo/*.todo.md` item with the owner, turn by t
 
 ## Before you write anything
 
-Read `.notes/AGENTS.md` — it owns the format. Scaffolding a new file may not trigger that
-directory's auto-load, and the injection doesn't survive a `/compact`, so don't trust it to already
-be in context. If the target file already exists, run
+Read `.notes/AGENTS.md` — it owns the format. `.notes/` is gitignored, so a fresh clone has this
+skill without it; if it's missing, stop and tell the user the format contract is missing rather than
+guessing at one. Scaffolding a new file may not trigger that directory's auto-load, and the
+injection doesn't survive a `/compact`, so don't trust it to already be in context. If the target
+file already exists, run
 `node infra/scripts/resolve-todo-citations.mjs <file>` first and surface anything it reports as
 `STALE` verbatim before writing anything else.
 

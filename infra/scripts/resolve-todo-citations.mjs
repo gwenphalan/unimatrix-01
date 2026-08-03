@@ -73,8 +73,28 @@ function printHelp() {
 
 // --- git plumbing -----------------------------------------------------------
 
+// Pinned alongside core.quotepath=false for the same reason: DIFF_GIT_RE below
+// only matches the default `diff --git a/<path> b/<path>` header. A
+// contributor with `diff.noprefix=true` or `diff.mnemonicPrefix=true` in
+// their global git config gets a header with no `a/`/`b/` prefixes at all
+// (`diff --git f.txt f.txt`), which silently fails to match, builds an empty
+// diff map, and loses rename/delete detection with no error. Config, not
+// `--default-prefix`, because the wrapper already applies config to every
+// invocation and `--default-prefix` is a newer flag this repo hasn't
+// confirmed is available in every git it targets.
+const DIFF_PREFIX_ARGS = [
+  "-c",
+  "diff.noprefix=false",
+  "-c",
+  "diff.mnemonicPrefix=false",
+  "-c",
+  "diff.srcPrefix=a/",
+  "-c",
+  "diff.dstPrefix=b/",
+];
+
 function git(repoRoot, args) {
-  return execFileSync("git", ["-c", "core.quotepath=false", ...args], {
+  return execFileSync("git", ["-c", "core.quotepath=false", ...DIFF_PREFIX_ARGS, ...args], {
     cwd: repoRoot,
     encoding: "utf8",
     maxBuffer: 64 * 1024 * 1024,
@@ -220,6 +240,10 @@ const CITATION_RE = /^(.+):(\d+)(?:-(\d+))?$/;
 // colon-then-line-number.
 const URL_SCHEME_RE = /^[a-z][a-z0-9+.-]*:\/\//i;
 const BACKTICKED_TOKEN_RE = /`([^`]+)`/g;
+// Strips a marker this tool itself appended (` — STALE: <reason>`) so a
+// rewrite regenerates it instead of accumulating a second one; anything
+// else in the trailing text is the owner's prose and survives verbatim.
+const STALE_MARKER_RE = / — STALE:.*$/;
 
 /** Parses a bare token (no backticks) into a path:line/range citation, or null if it isn't one. */
 function parseCitationToken(token) {
@@ -250,7 +274,7 @@ function parseCitationEntries(bodyLines) {
     if (!inBlock) continue;
     const entryMatch = ENTRY_RE.exec(line);
     if (!entryMatch) continue;
-    const [, indent, letter, token] = entryMatch;
+    const [, indent, letter, token, suffix] = entryMatch;
     const citation = parseCitationToken(token);
     if (!citation) continue;
     entries.push({
@@ -261,6 +285,7 @@ function parseCitationEntries(bodyLines) {
       startLine: citation.startLine,
       endLine: citation.endLine,
       citationKey: token,
+      trailingText: suffix.replace(STALE_MARKER_RE, ""),
     });
   }
   return entries;
@@ -299,8 +324,8 @@ function rangeText(start, end) {
 }
 
 function reconstructLine(entry, path, start, end, staleReason) {
-  const suffix = staleReason ? ` — STALE: ${staleReason}` : "";
-  return `${entry.indent}${entry.letter}. \`${path}:${rangeText(start, end)}\`${suffix}`;
+  const stale = staleReason ? ` — STALE: ${staleReason}` : "";
+  return `${entry.indent}${entry.letter}. \`${path}:${rangeText(start, end)}\`${entry.trailingText}${stale}`;
 }
 
 // --- line resolution -----------------------------------------------------------

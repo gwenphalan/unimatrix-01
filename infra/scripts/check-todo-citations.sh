@@ -452,6 +452,129 @@ else
   fail "case11-symlinked-notes-idempotent (a repeat run through the symlink changed the file or sidecar)"
 fi
 
+# --- case 12: diff.noprefix/mnemonicPrefix in the target repo's own config -
+# `diff --git a/... b/...` becomes `diff --git f.txt f.txt` under either
+# setting, which DIFF_GIT_RE doesn't match — the diff map comes back empty and
+# a rename reads as untouched instead of stale. Pinned via `-c` on every git
+# invocation in the wrapper, so it must hold even when the repo being resolved
+# sets the opposite locally.
+
+dir=$(new_repo case12-noprefix-config)
+(cd "${dir}" && git config diff.noprefix true && git config diff.mnemonicPrefix true)
+printf 'l1\nl2\nl3\nl4\nl5\n' >"${dir}/f.txt"
+write_todo "${dir}" "f.txt:3"
+(cd "${dir}" && git add -A && git commit -q -m init)
+run_resolver "${dir}" >/dev/null
+
+(cd "${dir}" && git mv f.txt g.txt && git commit -q -m rename)
+
+check case12-noprefix-config 0 "${dir}" <<'EOF'
+resolve-todo-citations: .notes/01-todo/x.todo.md
+
+  STALE       f.txt:3  file moved to `g.txt`
+
+  1 needs attention
+EOF
+
+if [ "$(todo_body "${dir}")" = "$(printf '\n  - **References:**\n     a. `f.txt:3` — STALE: file moved to `g.txt`')" ]; then
+  ran=$((ran + 1))
+  printf '  ok    case12-noprefix-config-rename-detected\n'
+else
+  fail "case12-noprefix-config-rename-detected (rename went undetected under diff.noprefix/mnemonicPrefix)"
+fi
+
+# --- case 13: trailing prose on a References entry survives a rewrite -----
+# reconstructLine used to discard ENTRY_RE's captured suffix outright, so any
+# owner-written text after the backticked citation was silently deleted the
+# first time the cited line moved or went stale.
+
+# (a) trailing prose + a line that merely moved: prose survives, line updates.
+dir=$(new_repo case13a-trailing-prose-moves)
+mkdir -p "${dir}/.notes/01-todo"
+printf 'l1\nl2\nl3\nl4\nl5\n' >"${dir}/f.txt"
+cat >"${dir}/.notes/01-todo/x.todo.md" <<'EOF'
+- **feat(x): thing**
+
+  - **References:**
+     a. `f.txt:3` — the merge loop
+EOF
+(cd "${dir}" && git add -A && git commit -q -m init)
+run_resolver "${dir}" >/dev/null
+
+sed -i '1i inserted' "${dir}/f.txt"
+
+check case13a-trailing-prose-moves 0 "${dir}" <<'EOF'
+resolve-todo-citations: .notes/01-todo/x.todo.md
+
+  moved       f.txt:3 -> :4
+
+  1 rewritten
+EOF
+
+if [ "$(todo_body "${dir}")" = "$(printf '\n  - **References:**\n     a. `f.txt:4` — the merge loop')" ]; then
+  ran=$((ran + 1))
+  printf '  ok    case13a-trailing-prose-kept-on-move\n'
+else
+  fail "case13a-trailing-prose-kept-on-move (trailing prose was dropped when the line moved)"
+fi
+
+# (b) trailing prose + a line edited in place: exactly one STALE marker, prose kept.
+dir=$(new_repo case13b-trailing-prose-goes-stale)
+mkdir -p "${dir}/.notes/01-todo"
+printf 'l1\nl2\nl3\nl4\nl5\n' >"${dir}/f.txt"
+cat >"${dir}/.notes/01-todo/x.todo.md" <<'EOF'
+- **feat(x): thing**
+
+  - **References:**
+     a. `f.txt:3` — important context
+EOF
+(cd "${dir}" && git add -A && git commit -q -m init)
+run_resolver "${dir}" >/dev/null
+
+sed -i '3s/.*/l3-edited/' "${dir}/f.txt"
+
+check case13b-trailing-prose-goes-stale 0 "${dir}" <<'EOF'
+resolve-todo-citations: .notes/01-todo/x.todo.md
+
+  STALE       f.txt:3  line changed or removed
+
+  1 needs attention
+EOF
+
+if [ "$(todo_body "${dir}")" = "$(printf '\n  - **References:**\n     a. `f.txt:3` — important context — STALE: line changed or removed')" ]; then
+  ran=$((ran + 1))
+  printf '  ok    case13b-trailing-prose-kept-on-stale\n'
+else
+  fail "case13b-trailing-prose-kept-on-stale (prose lost, or not exactly one STALE marker)"
+fi
+
+# (c) an already-annotated entry (prose + an existing STALE marker) re-run
+# must not accumulate a second marker or lose the prose.
+dir=$(new_repo case13c-no-marker-accumulation)
+mkdir -p "${dir}/.notes/01-todo"
+cat >"${dir}/.notes/01-todo/x.todo.md" <<'EOF'
+- **feat(x): thing**
+
+  - **References:**
+     a. `f.txt:3` — important context — STALE: file not found
+EOF
+(cd "${dir}" && git add -A && git commit -q -m init)
+
+check case13c-no-marker-accumulation 0 "${dir}" <<'EOF'
+resolve-todo-citations: .notes/01-todo/x.todo.md
+
+  STALE       f.txt:3  file not found
+
+  1 needs attention
+EOF
+
+if [ "$(todo_body "${dir}")" = "$(printf '\n  - **References:**\n     a. `f.txt:3` — important context — STALE: file not found')" ]; then
+  ran=$((ran + 1))
+  printf '  ok    case13c-no-marker-accumulation\n'
+else
+  fail "case13c-no-marker-accumulation (marker accumulated, or prose lost)"
+fi
+
 printf '\n'
 
 if ((ran == 0)); then
