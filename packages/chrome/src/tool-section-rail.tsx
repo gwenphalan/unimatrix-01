@@ -64,7 +64,14 @@ export function ToolSectionRail({
         // the shell's centred, padded container. `relative` is load-bearing
         // for the toggle below — it must not gain `overflow-hidden`, or the
         // part of the toggle that overhangs the right edge is clipped.
-        "relative flex shrink-0 flex-col gap-4 border-r border-border/60 bg-background/70 p-3 backdrop-blur-sm",
+        // `z-10` belongs on the rail, not only on the toggle inside it.
+        // `backdrop-blur-sm` sets a `backdrop-filter`, which creates a
+        // stacking context, so a `z-index` on a descendant is confined to the
+        // rail and never competes with the page. Without it the toggle — which
+        // now hangs past the rail's edge — is painted over by
+        // `ToolPageContainer`, a later `relative` sibling, and stops being
+        // clickable while still looking perfectly fine.
+        "relative z-10 flex shrink-0 flex-col gap-4 border-r border-border/60 bg-background/70 p-3 backdrop-blur-sm",
         collapsed ? "w-16" : "w-56",
       )}
     >
