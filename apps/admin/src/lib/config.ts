@@ -73,6 +73,14 @@ export function loadAdminAppDevProxyConfig(env: AdminAppDevProxyEnv): AdminAppDe
 }
 
 /**
+ * The public site, as an absolute URL. Every link from this origin to the site
+ * is cross-origin, so each one is a plain anchor rather than a router `Link` —
+ * a `Link to="/"` here resolves to the admin root, which is the bug this
+ * constant exists to make hard to reintroduce.
+ */
+export const PUBLIC_SITE_URL = "https://unimatrix-01.dev/";
+
+/**
  * Builds the auth hub's sign-in URL with a validated return address.
  *
  * `admin.` is a different origin from `auth.`, so this is a full-page

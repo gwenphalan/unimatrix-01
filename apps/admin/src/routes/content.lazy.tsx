@@ -21,6 +21,7 @@ export const Route = createLazyFileRoute("/content")({
  */
 function ContentRoute() {
   const { isLoaded, permissions } = usePermissions();
+  const { runtimeConfig } = Route.useRouteContext();
 
   if (!isLoaded) {
     return null;
@@ -28,7 +29,11 @@ function ContentRoute() {
 
   return (
     <>
-      {canAccessAdminSection({ permissions }, "content") ? <Outlet /> : <AdminAccessDenied />}
+      {canAccessAdminSection({ permissions }, "content") ? (
+        <Outlet />
+      ) : (
+        <AdminAccessDenied authAppUrl={runtimeConfig.authAppUrl} />
+      )}
       <Toaster position="bottom-right" />
     </>
   );

@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { ToolShell } from "@unimatrix/chrome/tool";
 
 import { AccountControl } from "@/features/auth/account-control";
+import { PUBLIC_SITE_URL } from "@/lib/config";
 
 import { useAdminSections } from "./sections";
 
@@ -33,7 +34,7 @@ export function AppShell({ children }: AppShellProps) {
   return (
     <ToolShell
       accountControl={({ collapsed }) => <AccountControl collapsed={collapsed} />}
-      homeHref="https://unimatrix-01.dev/"
+      homeHref={PUBLIC_SITE_URL}
       homeLabel="Unimatrix Admin"
       sections={sections}
       sectionsHomeHref="/"
