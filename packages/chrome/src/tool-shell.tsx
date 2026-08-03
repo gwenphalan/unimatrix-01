@@ -1,8 +1,11 @@
 import type * as React from "react";
+import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { RiArrowLeftLine } from "@remixicon/react";
 
 import { Button, GraphBackground, cn } from "@unimatrix/ui/public";
+
+import { ToolSectionRail, type ToolSection } from "./tool-section-rail.js";
 
 /**
  * The desktop-app shell every tool, dashboard, and admin surface in this repo
@@ -43,17 +46,43 @@ export type ToolShellProps = {
   homeHref?: string;
   /** Wordmark shown in the title bar beside `homeHref`. */
   homeLabel?: string;
+  /**
+   * `src` for the wordmark's logo image when `sections` is given. Defaults to
+   * `/logo.png`, matching the public shell's own default.
+   */
+  logoSrc?: string;
   /** Name in the footer's copyright line. */
   ownerName?: string;
+  /**
+   * The tool's section rail. When given a non-empty list, the shell renders a
+   * collapsible vertical rail in place of the title bar and footer strip —
+   * the wordmark, `accountControl`, and copyright all move into it. An empty
+   * array is treated the same as omitting `sections` entirely, so a caller
+   * computing sections from permissions falls back to today's layout instead
+   * of losing its wordmark, account control, and copyright to an empty rail.
+   */
+  sections?: readonly ToolSection[];
+  /** Where the rail's wordmark links. Defaults to `"/"`. */
+  sectionsHomeHref?: string;
+  /** The rail `<nav>`'s `aria-label`. Defaults to `"Sections"`. */
+  sectionsLabel?: string;
 };
 
 const DEFAULT_OWNER_NAME = "Gwen Phalan";
 
-export function ToolPageContainer({ className, ...props }: React.ComponentProps<"div">) {
+export function ToolPageContainer({
+  className,
+  wide,
+  ...props
+}: React.ComponentProps<"div"> & {
+  /** Widens the container's cap from `max-w-5xl` to `max-w-7xl`, for a rail + content layout. */
+  wide?: boolean;
+}) {
   return (
     <div
       className={cn(
-        "relative mx-auto flex min-h-[100dvh] w-full max-w-5xl flex-col gap-8 px-4 py-4 sm:px-6 lg:gap-10 lg:px-8 lg:py-6",
+        "relative mx-auto flex min-h-[100dvh] w-full flex-col gap-8 px-4 py-4 sm:px-6 lg:gap-10 lg:px-8 lg:py-6",
+        wide ? "max-w-7xl" : "max-w-5xl",
         className,
       )}
       {...props}
@@ -154,16 +183,36 @@ export function ToolShell({
   footerEnd,
   homeHref,
   homeLabel,
+  logoSrc = "/logo.png",
   ownerName = DEFAULT_OWNER_NAME,
+  sections,
+  sectionsHomeHref = "/",
+  sectionsLabel = "Sections",
 }: ToolShellProps) {
+  // An empty array falls back to the no-sections layout, not a rail with
+  // nothing in it — a caller computing `sections` from permissions must not
+  // lose its wordmark, account control, and copyright to a rail with no
+  // sections in it.
+  const hasSections = sections !== undefined && sections.length > 0;
   // A tool with neither an account control nor a wordmark has nothing to put in
   // a title bar, and an empty bar would only cost vertical space. `apps/cflop`
   // is that case today, which is why migrating it onto this shell is a no-op on
-  // screen rather than a redesign.
-  const hasTitleBar = accountControl !== undefined || homeLabel !== undefined;
+  // screen rather than a redesign. A rail replaces the title bar outright, so
+  // it is forced off when `hasSections` even if both are supplied.
+  const hasTitleBar = !hasSections && (accountControl !== undefined || homeLabel !== undefined);
+  const [collapsed, setCollapsed] = useState(false);
+
+  const main = (
+    <main
+      className={cn("flex flex-1 flex-col gap-8 lg:gap-10", !hasSections && "justify-center")}
+      id="main-content"
+    >
+      {children}
+    </main>
+  );
 
   return (
-    <ToolPageContainer className={className}>
+    <ToolPageContainer className={className} wide={hasSections}>
       <GraphBackground />
 
       <a
@@ -191,11 +240,32 @@ export function ToolShell({
         </div>
       ) : null}
 
-      <main className="flex flex-1 flex-col justify-center gap-8 lg:gap-10" id="main-content">
-        {children}
-      </main>
+      {hasSections ? (
+        <div className="flex flex-1 gap-8">
+          <ToolSectionRail
+            accountControl={accountControl}
+            collapsed={collapsed}
+            footerEnd={footerEnd}
+            homeHref={homeHref}
+            homeLabel={homeLabel}
+            logoSrc={logoSrc}
+            onToggleCollapsed={() => {
+              setCollapsed((wasCollapsed) => !wasCollapsed);
+            }}
+            ownerName={ownerName}
+            sections={sections}
+            sectionsHomeHref={sectionsHomeHref}
+            sectionsLabel={sectionsLabel}
+          />
+          {main}
+        </div>
+      ) : (
+        main
+      )}
 
-      <ToolFooter end={footerEnd} homeHref={homeHref} ownerName={ownerName} />
+      {hasSections ? null : (
+        <ToolFooter end={footerEnd} homeHref={homeHref} ownerName={ownerName} />
+      )}
     </ToolPageContainer>
   );
 }
