@@ -1,18 +1,11 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
-/**
- * No loader: every admin read needs an `auth:admin` session, and a route
- * loader runs before the component can tell whether the visitor has one. The
- * data is fetched inside the admin chunk instead, which only mounts for an
- * admin — so a signed-out visitor landing here makes no API call at all.
- */
+// The CMS moved to its own origin (`apps/admin`, on `admin.unimatrix-01.dev`).
+// This route only exists to catch anyone with the old `/admin` URL bookmarked
+// or linked and send them to the new home. `href` (rather than `to`) makes
+// this a full-document navigation, since the target is a different origin.
 export const Route = createFileRoute("/admin")({
-  head: () => ({
-    meta: [
-      { title: "Unimatrix-01 - Admin" },
-      // Not a security control — the API is. This keeps a page that is useless
-      // to the public out of search results.
-      { name: "robots", content: "noindex, nofollow" },
-    ],
-  }),
+  beforeLoad: () => {
+    redirect({ href: "https://admin.unimatrix-01.dev/", throw: true });
+  },
 });
