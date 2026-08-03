@@ -1,7 +1,7 @@
 # AGENTS.md
 
 ## 1. Overview
-`apps/web` is the Vite + React public site for Unimatrix. It is fully anonymous — no Clerk, no sign-in affordance, no account-scoped UI. Blog and project content is fetched from the API at runtime; `content/home/index.md` is the only file compiled into the bundle. Public-site composition stays separate from shared UI primitives. The CMS that used to live here (`src/features/admin`) moved onto `apps/admin`; `/admin` and `/admin/*` now redirect there.
+`apps/web` is the Vite + React public site for Unimatrix. It is fully anonymous — no Clerk, no sign-in affordance, no account-scoped UI. Blog and project content is fetched from the API at runtime; `content/home/index.md` is the only file compiled into the bundle. Public-site composition stays separate from shared UI primitives. Content is managed from `apps/admin`, not here: `/admin` and `/admin/*` are redirect-only routes pointing at that origin, and this app holds no editing surface and no authenticated API client.
 
 ## 2. Folder Structure
 - `src/app`: `router.tsx` (router creation), `app-shell.tsx` (shell layout), `providers.tsx` (provider wiring).

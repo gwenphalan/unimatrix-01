@@ -27,15 +27,15 @@ const TYPE_LABELS: Record<ContentPostType, string> = {
  * `(type, slug)`. Two requests on a cold load, one on the common path from the
  * admin table.
  */
-export function PostFormPage({
-  baseUrl,
-  postId,
-  type,
-}: {
+export interface PostFormPageProps {
+  /** The API's base URL, supplied by the route from the router context. */
   baseUrl: string;
+  /** `null` creates a post; an id edits that one. */
   postId: string | null;
   type: ContentPostType;
-}) {
+}
+
+export function PostFormPage({ baseUrl, postId, type }: PostFormPageProps) {
   const client = useApiClient();
   const navigate = useNavigate();
 
