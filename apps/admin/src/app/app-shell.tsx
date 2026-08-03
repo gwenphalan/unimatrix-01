@@ -32,7 +32,7 @@ export function AppShell({ children }: AppShellProps) {
 
   return (
     <ToolShell
-      accountControl={<AccountControl />}
+      accountControl={({ collapsed }) => <AccountControl collapsed={collapsed} />}
       homeHref="https://unimatrix-01.dev/"
       homeLabel="Unimatrix Admin"
       sections={sections}
