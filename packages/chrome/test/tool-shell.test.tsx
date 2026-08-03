@@ -95,6 +95,39 @@ describe("ToolShell", () => {
     expect(footer).toHaveTextContent(`${new Date().getFullYear()} Gwen Phalan`);
     expect(within(footer).queryByRole("link")).not.toBeInTheDocument();
   });
+
+  it("renders no footer at all when showCopyright is false and there is no other footer content", async () => {
+    await renderInRouter(
+      <ToolShell ownerName="Gwen Phalan" showCopyright={false}>
+        tool content
+      </ToolShell>,
+    );
+
+    // With the copyright line suppressed and no `footerEnd`, the strip would
+    // hold nothing but its own padding — an empty `contentinfo` landmark, not
+    // a genuine omission — so the shell must render no footer at all.
+    expect(screen.queryByRole("contentinfo")).not.toBeInTheDocument();
+  });
+
+  it("still renders the footer's tool attribution when showCopyright is false", async () => {
+    await renderInRouter(
+      <ToolShell
+        footerEnd={<ToolFooterLink href="https://example.test/src">Source</ToolFooterLink>}
+        ownerName="Gwen Phalan"
+        showCopyright={false}
+      >
+        tool content
+      </ToolShell>,
+    );
+
+    const footer = screen.getByRole("contentinfo");
+
+    expect(within(footer).getByRole("link", { name: "Source" })).toHaveAttribute(
+      "href",
+      "https://example.test/src",
+    );
+    expect(footer).not.toHaveTextContent(`${new Date().getFullYear()} Gwen Phalan`);
+  });
 });
 
 describe("ToolTitleBar", () => {
