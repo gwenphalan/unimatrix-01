@@ -5,7 +5,7 @@ import { RouterProvider } from "@tanstack/react-router";
 import { AuthProvider } from "@unimatrix/auth/react";
 
 import { createAppRouter } from "@/app/router";
-import { loadAdminAppRuntimeConfig } from "@/lib/config";
+import { buildSignInHref, loadAdminAppRuntimeConfig } from "@/lib/config";
 import "@/styles.css";
 
 const rootElement = document.getElementById("app");
@@ -36,10 +36,22 @@ const router = createAppRouter({ runtimeConfig });
 // `signInUrl`/`signUpUrl` point at the auth hub rather than at a local route:
 // this app hosts no Clerk widgets of its own, and `auth.unimatrix-01.dev` is
 // the one place a session is established for the whole family.
+//
+// `afterSignOutUrl` carries a `redirect_url` back to this origin, and the bare
+// hub URL is the wrong value however reasonable it looks. Signing out is the
+// one exit that starts *here*, so nothing downstream can recover where you
+// were: you land on the hub's own landing, sign in, and the hub has no return
+// address to honour — it sends you to `/account`, which reads as the sign-in
+// redirect being broken when it is only ever missing. Sign out, sign back in,
+// and you are returned to the console instead.
+//
+// The origin rather than `window.location.href`: this is fixed when the
+// provider mounts, not when the button is clicked, so a deep path here would
+// be whichever route happened to load first.
 ReactDOM.createRoot(rootElement).render(
   <React.StrictMode>
     <AuthProvider
-      afterSignOutUrl={runtimeConfig.authAppUrl}
+      afterSignOutUrl={buildSignInHref(runtimeConfig.authAppUrl, window.location.origin)}
       publishableKey={runtimeConfig.clerkPublishableKey}
       signInUrl={`${runtimeConfig.authAppUrl}/sign-in`}
       signUpUrl={`${runtimeConfig.authAppUrl}/sign-up`}
