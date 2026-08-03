@@ -13,6 +13,7 @@
   and `react-dom` are declared **peers** and are supplied by the consuming app (see §5 for why
   the router in particular must not resolve twice). Both shells take the account control as a `ReactNode` slot, which is what lets a sign-in-free tool like `apps/cflop` import a shell without pulling Clerk into its dependency tree.
 - Route knowledge — nav items, breadcrumb trails, sign-in hrefs — is passed in by the app, never computed here.
+- `./tool`'s `ToolShell` has two layouts. Supplying a non-empty `sections` moves the wordmark and `accountControl` into a collapsible section rail and removes the title bar; the footer strip stays below the content in both layouts, so the `contentinfo` landmark count never changes; omitting `sections` (or passing an empty array) keeps today's title-bar-plus-footer layout.
 
 ## 4. Conventions
 Source-only, like `@unimatrix/e2e-helpers`. Consumers resolve `src/*.ts` through a Vite alias plus a tsconfig `paths` entry, so this package's tsconfig extends `base.json` rather than `library.json`: `composite` forbids the cross-package `paths` mapping onto `packages/ui/src`, and the emit would be dead weight nothing reads.

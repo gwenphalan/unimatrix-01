@@ -40,18 +40,19 @@ export default defineConfig({
     dedupe: ["@tanstack/react-router", "react", "react-dom"],
   },
   test: {
-    // This workspace's own floor, measured on the scaffold rather than copied
-    // from a sibling: `@unimatrix/config-vitest` owns the provider, reporters
-    // and exclusions, and each workspace supplies its own numbers.
+    // This workspace's own floor, measured on this workspace rather than
+    // copied from a sibling: `@unimatrix/config-vitest` owns the provider,
+    // reporters and exclusions, and each workspace supplies its own numbers.
     //
-    // Measured 2026-07-29 at 65.38% statements / 64.7% functions, rounded
-    // down. `src/main.tsx`, the route files and `createAppRouter` sit at zero —
-    // they are bootstrap and route registration, exercised by the browser and
-    // by nothing else here. That is an honest measurement, not a gap papered
-    // over by excluding them: when the CMS lands, the ratio moves and this
-    // number gets re-measured rather than lowered.
+    // Measured 2026-08-02 at 53.84% statements / 57.14% functions, rounded
+    // down. `src/main.tsx`, `src/routes/__root.tsx`, `createAppRouter`, and
+    // every route's non-lazy file sit at zero — they are bootstrap and route
+    // registration, exercised by the browser and by nothing else here. That is
+    // an honest measurement, not a gap papered over by excluding them: when
+    // the CMS lands, the ratio moves and this number gets re-measured rather
+    // than lowered.
     coverage: createCoverageConfig({
-      thresholds: { statements: 28, functions: 45 },
+      thresholds: { statements: 53, functions: 57 },
     }),
     environment: "jsdom",
     include: ["test/**/*.test.ts", "test/**/*.test.tsx"],

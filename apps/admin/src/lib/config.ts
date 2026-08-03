@@ -14,6 +14,17 @@ export interface AdminAppRuntimeConfig {
   apiBaseUrl: string;
   authAppUrl: string;
   clerkPublishableKey: string;
+  /**
+   * Whether a signed-out visitor is sent to the auth hub. Not env-derived and
+   * not validated here — it is a property of the build, supplied by
+   * `main.tsx`, which is the one file allowed to read `import.meta.env`.
+   *
+   * It is off in dev because the hub only ever establishes a session for
+   * `*.unimatrix-01.dev`, never for a loopback port, so a dev server can only
+   * ever bounce straight back out again and the console is unreachable
+   * locally. Production builds always set it.
+   */
+  requireSignIn: boolean;
 }
 
 export interface AdminAppRuntimeEnv {
@@ -45,7 +56,9 @@ const runtimeEnvSchema = envSchema({
  * be corrected by restarting the container — the earlier it is rejected, the
  * cheaper it is, and the CMS move is what starts consuming it.
  */
-export function loadAdminAppRuntimeConfig(env: AdminAppRuntimeEnv): AdminAppRuntimeConfig {
+export function loadAdminAppRuntimeConfig(
+  env: AdminAppRuntimeEnv,
+): Omit<AdminAppRuntimeConfig, "requireSignIn"> {
   const parsed = parseAppEnv("admin app", runtimeEnvSchema, env);
 
   return {

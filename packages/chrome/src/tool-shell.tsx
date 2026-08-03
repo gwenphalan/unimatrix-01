@@ -1,8 +1,11 @@
 import type * as React from "react";
+import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { RiArrowLeftLine } from "@remixicon/react";
 
 import { Button, GraphBackground, cn } from "@unimatrix/ui/public";
+
+import { ToolSectionRail, type ToolSection } from "./tool-section-rail.js";
 
 /**
  * The desktop-app shell every tool, dashboard, and admin surface in this repo
@@ -25,8 +28,16 @@ export type ToolShellProps = {
    * Rendered at the right of the title bar. When this and `homeHref` are both
    * absent no title bar is rendered at all, and the shell is container +
    * field + main + footer.
+   *
+   * Takes the render-prop form when the app needs to adapt to the section
+   * rail's collapsed state — a `ReactNode` alone cannot see it, since the
+   * package cannot restyle a slot it does not control, and this is what lets
+   * the app itself change how it renders that slot without the package
+   * gaining any knowledge of what is inside it (or `@unimatrix/auth`, which
+   * it must never depend on). Resolved with `{ collapsed: false }` when
+   * `sections` is absent, since there is no rail and so no collapse concept.
    */
-  accountControl?: React.ReactNode;
+  accountControl?: React.ReactNode | ((state: { collapsed: boolean }) => React.ReactNode);
   children: React.ReactNode;
   className?: string;
   /**
@@ -43,17 +54,50 @@ export type ToolShellProps = {
   homeHref?: string;
   /** Wordmark shown in the title bar beside `homeHref`. */
   homeLabel?: string;
+  /**
+   * `src` for the wordmark's logo image when `sections` is given. Defaults to
+   * `/logo.png`, matching the public shell's own default.
+   */
+  logoSrc?: string;
   /** Name in the footer's copyright line. */
   ownerName?: string;
+  /**
+   * The tool's section rail. When given a non-empty list, the shell renders a
+   * collapsible vertical rail in place of the title bar and footer strip —
+   * the wordmark and `accountControl` both move into it. An empty
+   * array is treated the same as omitting `sections` entirely, so a caller
+   * computing sections from permissions falls back to today's layout instead
+   * of losing its wordmark and account control to an empty rail.
+   */
+  sections?: readonly ToolSection[];
+  /** Where the rail's wordmark links. Defaults to `"/"`. */
+  sectionsHomeHref?: string;
+  /** The rail `<nav>`'s `aria-label`. Defaults to `"Sections"`. */
+  sectionsLabel?: string;
 };
 
 const DEFAULT_OWNER_NAME = "Gwen Phalan";
 
-export function ToolPageContainer({ className, ...props }: React.ComponentProps<"div">) {
+function resolveAccountControl(
+  accountControl: ToolShellProps["accountControl"],
+  collapsed: boolean,
+): React.ReactNode {
+  return typeof accountControl === "function" ? accountControl({ collapsed }) : accountControl;
+}
+
+export function ToolPageContainer({
+  className,
+  wide,
+  ...props
+}: React.ComponentProps<"div"> & {
+  /** Widens the container's cap from `max-w-5xl` to `max-w-7xl`, for a rail + content layout. */
+  wide?: boolean;
+}) {
   return (
     <div
       className={cn(
-        "relative mx-auto flex min-h-[100dvh] w-full max-w-5xl flex-col gap-8 px-4 py-4 sm:px-6 lg:gap-10 lg:px-8 lg:py-6",
+        "relative mx-auto flex min-h-[100dvh] w-full flex-col gap-8 px-4 py-4 sm:px-6 lg:gap-10 lg:px-8 lg:py-6",
+        wide ? "max-w-7xl" : "max-w-5xl",
         className,
       )}
       {...props}
@@ -154,24 +198,89 @@ export function ToolShell({
   footerEnd,
   homeHref,
   homeLabel,
+  logoSrc = "/logo.png",
   ownerName = DEFAULT_OWNER_NAME,
+  sections,
+  sectionsHomeHref = "/",
+  sectionsLabel = "Sections",
 }: ToolShellProps) {
+  // An empty array falls back to the no-sections layout, not a rail with
+  // nothing in it — a caller computing `sections` from permissions must not
+  // lose its wordmark and account control to a rail with no sections in it.
+  const hasSections = sections !== undefined && sections.length > 0;
   // A tool with neither an account control nor a wordmark has nothing to put in
   // a title bar, and an empty bar would only cost vertical space. `apps/cflop`
   // is that case today, which is why migrating it onto this shell is a no-op on
-  // screen rather than a redesign.
-  const hasTitleBar = accountControl !== undefined || homeLabel !== undefined;
+  // screen rather than a redesign. A rail replaces the title bar outright, so
+  // it is forced off when `hasSections` even if both are supplied.
+  const hasTitleBar = !hasSections && (accountControl !== undefined || homeLabel !== undefined);
+  const [collapsed, setCollapsed] = useState(false);
+  // The no-sections layout has no rail and so no collapse concept: the
+  // function form of `accountControl` always resolves with `collapsed:
+  // false` there, never the state variable above (which this branch never
+  // sets anyway).
+  const resolvedAccountControl = resolveAccountControl(accountControl, hasSections && collapsed);
+
+  const main = (
+    <main
+      className={cn("flex flex-1 flex-col gap-8 lg:gap-10", !hasSections && "justify-center")}
+      id="main-content"
+    >
+      {children}
+    </main>
+  );
+
+  const skipLink = (
+    <a
+      className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:border focus:border-primary/45 focus:bg-background focus:px-3 focus:py-2 focus:text-sm"
+      href="#main-content"
+    >
+      Skip to main content
+    </a>
+  );
+
+  // The rail is application chrome and belongs against the viewport edge, so it
+  // sits *outside* `ToolPageContainer` rather than inside it. Only the content
+  // region keeps the centred, padded column — putting the whole layout in one
+  // container insets the rail by the container's own gutter and makes it read
+  // as a card on a page.
+  // `pl-16` is the gutter the fixed rail sits in, and it is deliberately the
+  // *collapsed* width rather than the expanded one. The rail is out of flow, so
+  // this is the only thing reserving space for it; pinning the gutter to one
+  // width is what stops expanding the rail from shoving the page sideways.
+  // Expanded, the rail spans onto the content instead.
+  if (hasSections) {
+    return (
+      <div className={cn("relative flex min-h-[100dvh] w-full pl-16", className)}>
+        <GraphBackground />
+        {skipLink}
+
+        <ToolSectionRail
+          accountControl={resolvedAccountControl}
+          collapsed={collapsed}
+          homeLabel={homeLabel}
+          logoSrc={logoSrc}
+          onToggleCollapsed={() => {
+            setCollapsed((wasCollapsed) => !wasCollapsed);
+          }}
+          sections={sections}
+          sectionsHomeHref={sectionsHomeHref}
+          sectionsLabel={sectionsLabel}
+        />
+
+        <ToolPageContainer className="min-h-0 flex-1" wide>
+          {main}
+          <ToolFooter end={footerEnd} homeHref={homeHref} ownerName={ownerName} />
+        </ToolPageContainer>
+      </div>
+    );
+  }
 
   return (
     <ToolPageContainer className={className}>
       <GraphBackground />
 
-      <a
-        className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:border focus:border-primary/45 focus:bg-background focus:px-3 focus:py-2 focus:text-sm"
-        href="#main-content"
-      >
-        Skip to main content
-      </a>
+      {skipLink}
 
       {hasTitleBar ? (
         <div className="flex items-center justify-between gap-4">
@@ -186,14 +295,12 @@ export function ToolShell({
             </a>
           )}
           {accountControl === undefined ? null : (
-            <div className="flex shrink-0 items-center gap-2">{accountControl}</div>
+            <div className="flex shrink-0 items-center gap-2">{resolvedAccountControl}</div>
           )}
         </div>
       ) : null}
 
-      <main className="flex flex-1 flex-col justify-center gap-8 lg:gap-10" id="main-content">
-        {children}
-      </main>
+      {main}
 
       <ToolFooter end={footerEnd} homeHref={homeHref} ownerName={ownerName} />
     </ToolPageContainer>

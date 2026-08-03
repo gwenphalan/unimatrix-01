@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { safeRedirectUrl, withRedirectParam } from "@/features/auth/safe-redirect";
+import {
+  hasValidatedRedirectUrl,
+  safeRedirectUrl,
+  withRedirectParam,
+} from "@/features/auth/safe-redirect";
 
 describe("safeRedirectUrl", () => {
   it("honors the root domain over https", () => {
@@ -44,6 +48,31 @@ describe("safeRedirectUrl", () => {
 
   it("honors a custom fallback", () => {
     expect(safeRedirectUrl("https://example.com/", "/sign-in")).toBe("/sign-in");
+  });
+});
+
+describe("hasValidatedRedirectUrl", () => {
+  it("is true when raw passed the allowlist and produced target", () => {
+    const raw = "https://cflop.unimatrix-01.dev/oll";
+
+    expect(hasValidatedRedirectUrl(raw, safeRedirectUrl(raw))).toBe(true);
+  });
+
+  it("is false when raw is absent", () => {
+    expect(hasValidatedRedirectUrl(undefined, safeRedirectUrl(undefined))).toBe(false);
+  });
+
+  it("is false when raw was rejected and target is the fallback", () => {
+    const raw = "https://attacker.com/";
+
+    expect(hasValidatedRedirectUrl(raw, safeRedirectUrl(raw))).toBe(false);
+  });
+
+  it("is false for the literal fallback path, even though it would equal target", () => {
+    // "/" fails isAllowedRedirectUrl (not absolute) and safeRedirectUrl falls
+    // back to "/" — the same string a caller could pass as raw. Without the
+    // `target !== "/"` guard this would read as a validated redirect.
+    expect(hasValidatedRedirectUrl("/", safeRedirectUrl("/"))).toBe(false);
   });
 });
 
