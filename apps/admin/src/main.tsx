@@ -1,5 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider } from "@tanstack/react-router";
 
 import { AuthProvider } from "@unimatrix/auth/react";
@@ -31,7 +32,8 @@ const runtimeConfig = {
   requireSignIn: !import.meta.env.DEV,
 };
 
-const router = createAppRouter({ runtimeConfig });
+const queryClient = new QueryClient();
+const router = createAppRouter({ queryClient, runtimeConfig });
 
 // `signInUrl`/`signUpUrl` point at the auth hub rather than at a local route:
 // this app hosts no Clerk widgets of its own, and `auth.unimatrix-01.dev` is
@@ -56,7 +58,9 @@ ReactDOM.createRoot(rootElement).render(
       signInUrl={`${runtimeConfig.authAppUrl}/sign-in`}
       signUpUrl={`${runtimeConfig.authAppUrl}/sign-up`}
     >
-      <RouterProvider router={router} />
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>
     </AuthProvider>
   </React.StrictMode>,
 );

@@ -16,6 +16,9 @@ import { Route as DeploysRouteImport } from './deploys'
 import { Route as FeedbackRouteImport } from './feedback'
 import { Route as SecretsRouteImport } from './secrets'
 import { Route as SocialRouteImport } from './social'
+import { Route as ContentIndexRouteImport } from './content.index'
+import { Route as ContentPostsEditRouteImport } from './content.posts.edit'
+import { Route as ContentPostsNewRouteImport } from './content.posts.new'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -52,34 +55,57 @@ const SocialRoute = SocialRouteImport.update({
   path: '/social',
   getParentRoute: () => rootRouteImport,
 } as any).lazy(() => import('./social.lazy').then((d) => d.Route))
+const ContentIndexRoute = ContentIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => ContentRoute,
+} as any).lazy(() => import('./content.index.lazy').then((d) => d.Route))
+const ContentPostsEditRoute = ContentPostsEditRouteImport.update({
+  id: '/posts/edit',
+  path: '/posts/edit',
+  getParentRoute: () => ContentRoute,
+} as any).lazy(() => import('./content.posts.edit.lazy').then((d) => d.Route))
+const ContentPostsNewRoute = ContentPostsNewRouteImport.update({
+  id: '/posts/new',
+  path: '/posts/new',
+  getParentRoute: () => ContentRoute,
+} as any).lazy(() => import('./content.posts.new.lazy').then((d) => d.Route))
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/analytics': typeof AnalyticsRoute
-  '/content': typeof ContentRoute
+  '/content': typeof ContentRouteWithChildren
   '/deploys': typeof DeploysRoute
   '/feedback': typeof FeedbackRoute
   '/secrets': typeof SecretsRoute
   '/social': typeof SocialRoute
+  '/content/': typeof ContentIndexRoute
+  '/content/posts/edit': typeof ContentPostsEditRoute
+  '/content/posts/new': typeof ContentPostsNewRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/analytics': typeof AnalyticsRoute
-  '/content': typeof ContentRoute
   '/deploys': typeof DeploysRoute
   '/feedback': typeof FeedbackRoute
   '/secrets': typeof SecretsRoute
   '/social': typeof SocialRoute
+  '/content': typeof ContentIndexRoute
+  '/content/posts/edit': typeof ContentPostsEditRoute
+  '/content/posts/new': typeof ContentPostsNewRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/analytics': typeof AnalyticsRoute
-  '/content': typeof ContentRoute
+  '/content': typeof ContentRouteWithChildren
   '/deploys': typeof DeploysRoute
   '/feedback': typeof FeedbackRoute
   '/secrets': typeof SecretsRoute
   '/social': typeof SocialRoute
+  '/content/': typeof ContentIndexRoute
+  '/content/posts/edit': typeof ContentPostsEditRoute
+  '/content/posts/new': typeof ContentPostsNewRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -91,15 +117,20 @@ export interface FileRouteTypes {
     | '/feedback'
     | '/secrets'
     | '/social'
+    | '/content/'
+    | '/content/posts/edit'
+    | '/content/posts/new'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/analytics'
-    | '/content'
     | '/deploys'
     | '/feedback'
     | '/secrets'
     | '/social'
+    | '/content'
+    | '/content/posts/edit'
+    | '/content/posts/new'
   id:
     | '__root__'
     | '/'
@@ -109,12 +140,15 @@ export interface FileRouteTypes {
     | '/feedback'
     | '/secrets'
     | '/social'
+    | '/content/'
+    | '/content/posts/edit'
+    | '/content/posts/new'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AnalyticsRoute: typeof AnalyticsRoute
-  ContentRoute: typeof ContentRoute
+  ContentRoute: typeof ContentRouteWithChildren
   DeploysRoute: typeof DeploysRoute
   FeedbackRoute: typeof FeedbackRoute
   SecretsRoute: typeof SecretsRoute
@@ -172,13 +206,49 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SocialRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/content/': {
+      id: '/content/'
+      path: '/'
+      fullPath: '/content/'
+      preLoaderRoute: typeof ContentIndexRouteImport
+      parentRoute: typeof ContentRoute
+    }
+    '/content/posts/edit': {
+      id: '/content/posts/edit'
+      path: '/posts/edit'
+      fullPath: '/content/posts/edit'
+      preLoaderRoute: typeof ContentPostsEditRouteImport
+      parentRoute: typeof ContentRoute
+    }
+    '/content/posts/new': {
+      id: '/content/posts/new'
+      path: '/posts/new'
+      fullPath: '/content/posts/new'
+      preLoaderRoute: typeof ContentPostsNewRouteImport
+      parentRoute: typeof ContentRoute
+    }
   }
 }
+
+interface ContentRouteChildren {
+  ContentIndexRoute: typeof ContentIndexRoute
+  ContentPostsEditRoute: typeof ContentPostsEditRoute
+  ContentPostsNewRoute: typeof ContentPostsNewRoute
+}
+
+const ContentRouteChildren: ContentRouteChildren = {
+  ContentIndexRoute: ContentIndexRoute,
+  ContentPostsEditRoute: ContentPostsEditRoute,
+  ContentPostsNewRoute: ContentPostsNewRoute,
+}
+
+const ContentRouteWithChildren =
+  ContentRoute._addFileChildren(ContentRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AnalyticsRoute: AnalyticsRoute,
-  ContentRoute: ContentRoute,
+  ContentRoute: ContentRouteWithChildren,
   DeploysRoute: DeploysRoute,
   FeedbackRoute: FeedbackRoute,
   SecretsRoute: SecretsRoute,

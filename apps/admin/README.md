@@ -3,10 +3,12 @@
 The administration console is a Vite SPA built from `apps/admin/Dockerfile`
 and served by nginx on port 8080, matching the other three static apps.
 
-It is scaffold-only today: one placeholder route on `@unimatrix/chrome`'s tool
-shell. It is nonetheless deployed and reachable: `infra/docker/admin-compose.yaml`
-is the Dokploy Compose file, and `admin.unimatrix-01.dev` sits behind Cloudflare
-Access, which is what makes the ungated placeholder route safe.
+Content is the first built section — the blog/project CMS, moved here from
+`apps/web` — on `@unimatrix/chrome`'s tool shell; the other six section routes
+are still placeholders. It is deployed and reachable:
+`infra/docker/admin-compose.yaml` is the Dokploy Compose file, and
+`admin.unimatrix-01.dev` sits behind Cloudflare Access, which is what makes the
+ungated placeholder routes safe.
 
 ## Build arguments
 
@@ -26,10 +28,12 @@ to any of them can change the built browser bundle or its container:
 
 ```text
 apps/admin/**
+packages/api-client/**
 packages/app-config/**
 packages/auth/**
 packages/chrome/**
 packages/config-typescript/**
+packages/shared/**
 packages/ui/**
 infra/docker/admin-compose.yaml
 package.json

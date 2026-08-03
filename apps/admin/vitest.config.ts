@@ -13,6 +13,12 @@ export default defineConfig({
         replacement: fileURLToPath(new URL("./src", import.meta.url)),
       },
       {
+        find: /^@unimatrix\/api-client$/,
+        replacement: fileURLToPath(
+          new URL("../../packages/api-client/src/index.ts", import.meta.url),
+        ),
+      },
+      {
         find: /^@unimatrix\/auth\/react$/,
         replacement: fileURLToPath(new URL("../../packages/auth/src/react.tsx", import.meta.url)),
       },
@@ -25,8 +31,18 @@ export default defineConfig({
         replacement: fileURLToPath(new URL("../../packages/chrome/src/tool.ts", import.meta.url)),
       },
       {
+        find: /^@unimatrix\/shared$/,
+        replacement: fileURLToPath(new URL("../../packages/shared/src/index.ts", import.meta.url)),
+      },
+      {
         find: /^@unimatrix\/ui\/public$/,
         replacement: fileURLToPath(new URL("../../packages/ui/src/public.ts", import.meta.url)),
+      },
+      // Must sit before the bare `@unimatrix/ui` entry below — see the same
+      // comment in `vite.config.ts`.
+      {
+        find: /^@unimatrix\/ui\/editor$/,
+        replacement: fileURLToPath(new URL("../../packages/ui/src/editor.ts", import.meta.url)),
       },
       {
         find: /^@unimatrix\/ui$/,

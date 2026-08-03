@@ -1,16 +1,35 @@
-import { createLazyFileRoute } from "@tanstack/react-router";
-import { RiArticleLine } from "@remixicon/react";
+import { Outlet, createLazyFileRoute } from "@tanstack/react-router";
+import { canAccessAdminSection } from "@unimatrix/auth";
+import { usePermissions } from "@unimatrix/auth/react";
+import { Toaster } from "@unimatrix/ui";
 
-import { NotBuiltPlaceholder } from "@/features/sections/not-built-placeholder";
+import { AdminAccessDenied } from "@/features/content/content-panel";
 
 export const Route = createLazyFileRoute("/content")({
   component: ContentRoute,
 });
 
-// Ungated like every other section route today — `ADMIN_SECTIONS` in
-// `@unimatrix/auth` names only `content` as gate-eligible, and this route has
-// nothing behind it yet for that gate to protect. It gains the gate when the
-// CMS actually moves onto this origin.
+/**
+ * The only gated section today. `usePermissions().permissions` is
+ * `UserPermissionsMetadata["permissions"]`, so wrapping it in `{ permissions }`
+ * satisfies `canAccessAdminSection`'s first parameter directly.
+ *
+ * `<Toaster />` is mounted here rather than in `AppShell`: publish, delete and
+ * upload are the only actions in this app that report errors through a toast,
+ * and this is the one section that reaches `@unimatrix/ui`'s root barrel — the
+ * other six stay on `NotBuiltPlaceholder` from `./public`.
+ */
 function ContentRoute() {
-  return <NotBuiltPlaceholder icon={RiArticleLine} label="Content" />;
+  const { isLoaded, permissions } = usePermissions();
+
+  if (!isLoaded) {
+    return null;
+  }
+
+  return (
+    <>
+      {canAccessAdminSection({ permissions }, "content") ? <Outlet /> : <AdminAccessDenied />}
+      <Toaster position="bottom-right" />
+    </>
+  );
 }
