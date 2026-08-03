@@ -57,12 +57,12 @@ export function PrototypeHostPage({ prototypeId }: { prototypeId: string }) {
   }, [prototypeId]);
 
   if (state.id !== prototypeId || state.status === "loading") {
-    return <HostMessage>Loading {prototypeId}…</HostMessage>;
+    return <HostMessage role="status">Loading {prototypeId}…</HostMessage>;
   }
 
   if (state.status === "error") {
     return (
-      <HostMessage>
+      <HostMessage role="alert">
         <span className="border border-destructive/45 px-4 py-3 font-mono text-sm text-destructive">
           {state.message}
         </span>
@@ -73,9 +73,16 @@ export function PrototypeHostPage({ prototypeId }: { prototypeId: string }) {
   return <state.Component />;
 }
 
-function HostMessage({ children }: { children: React.ReactNode }) {
+// Both states replace the route's content after it has already rendered, so
+// without a live region a screen reader is told nothing at all. `status` and
+// `alert` each carry their own implicit `aria-live`, which is why neither is
+// written out here.
+function HostMessage({ children, role }: { children: React.ReactNode; role: "alert" | "status" }) {
   return (
-    <div className="flex min-h-[100dvh] items-center justify-center p-8 text-sm text-muted-foreground">
+    <div
+      className="flex min-h-[100dvh] items-center justify-center p-8 text-sm text-muted-foreground"
+      role={role}
+    >
       {children}
     </div>
   );

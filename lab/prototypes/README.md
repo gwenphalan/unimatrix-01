@@ -19,6 +19,11 @@ Drop a `.tsx` file here with a default export and it appears on the lab's index
 page. Nested directories work: `admin/section-nav.tsx` is the prototype
 `admin/section-nav`, and `admin/section-nav/index.tsx` is the same id.
 
+**Two directory levels, no deeper.** Discovery finds a prototype at any depth,
+but the stylesheet scans three levels and no more, so a deeper file loads and
+renders with no Tailwind classes at all. Nothing fails — see the styling rule
+below for why the scan cannot simply be made recursive.
+
 ```tsx
 // lab/prototypes/admin/section-nav.tsx
 import { createLabApiClient, labAdminSession } from "@/mocks";
@@ -48,7 +53,11 @@ Then `pnpm --filter @unimatrix/lab dev` and open the printed URL.
 - **This directory is excluded from lint, typecheck and prettier.** A
   half-finished sketch is not a failing check. It is *not* excluded from the
   stylesheet's `@source` globs — Tailwind still emits the classes you write
-  here, because a prototype with no styles is worse than useless.
+  here, because a prototype with no styles is worse than useless. Those globs
+  are enumerated one per directory level rather than written recursively, which
+  is where the two-level cap above comes from: this directory is gitignored, and
+  a recursive glob would skip it entirely. `lab/src/styles.css` carries the
+  measurement.
 - **Expect rot.** `lab/*` branches drift behind `packages/ui` and
   `packages/chrome`. That is correct for throwaway work: a stale prototype
   breaks in the browser, which is the only place it is ever used.
