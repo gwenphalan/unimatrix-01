@@ -10,20 +10,31 @@ two sequential phases and one process. Arm it under `Monitor` and carry on
 working.
 
   Phase 1  every required status check reports, and every one is green
-  Phase 2  CodeRabbit is pinged, the review is waited out, and a clean one
-           arms GitHub's auto-merge
+  Phase 2  CodeRabbit is pinged and the review is waited out. A clean review
+           arms GitHub's auto-merge directly. A review with findings does not
+           exit — it stays up through the reply-and-fix cycle: every review
+           thread has to clear, the required checks have to go green again on
+           whatever head that produced, and only then does it arm
 
-`--no-review` runs phase 1 and then arms, with no phase 2 at all — no ping and
-no wait. It skips the review and nothing else: BEHIND, DIRTY and a draft are
-still terminal in the transition, and the arm still declines on a draft, on
+`--no-review` skips the ping and the review wait, but not the wait that
+follows one: it still waits for every review thread to clear before arming, on
+the theory that a PR resumed with `--no-review` may carry threads from an
+earlier review this run never posted. What it actually removes is the ping and
+the checks re-wait that only a fix commit would justify — see "the review
+budget is one, this flag is not a second one" below. BEHIND, DIRTY and a draft
+are still terminal in the transition, and the arm still declines on a draft, on
 unresolved review threads and on a PR state it could not read. A red required
 check and a phase-1 timeout end the run exactly as they do without it, since
 both are terminal before the flag is ever consulted. SHIP_PR_AUTO_MERGE=0 still
 wins: with both set, nothing is armed and the run says so.
 
-The arm it produces prints a different line, and that is deliberate. CodeRabbit
-refuses a merged PR outright, so an unreviewed merge is unreviewed permanently
-rather than pending — an outcome worth reading as loudly as it deserves.
+An unreviewed arm prints a different line, and that is deliberate — but which
+line depends on whether this PR actually carries a review, not on whether this
+flag was passed. `--no-review` on a PR CodeRabbit has already reviewed prints
+the ordinary armed line; only a PR with no review in its history at all gets
+the UNREVIEWED one. CodeRabbit refuses a merged PR outright, so an unreviewed
+merge is unreviewed permanently rather than pending — an outcome worth reading
+as loudly as it deserves, and exactly as loudly whether or not it deserves it.
 
 The ordering is the reason these are one script rather than two. A ping fired
 while CI is still running spends a slot on code a red check is about to change,
@@ -112,12 +123,17 @@ between phase 1's last read and this one would review a sha whose checks were
 never confirmed. The window is one round trip, and `--match-head-commit` bounds
 the damage to a cancelled arm rather than an unreviewed merge.
 
-**Check-watching stops at the ping.** Phase 2 never re-reads the checks: the
-only thing that moves one afterwards is a push, and a push already terminates
-the review with `The head commit changed during the review`, which phase 2
-catches by a better signal. The gap that leaves is worth knowing — a required
-check going red *after* auto-merge is armed means GitHub holds the merge
-indefinitely, and nothing here reports that.
+**Check-watching stops at the ping only on the clean row.** A clean review
+never re-reads the checks: the only thing that moves one afterwards on that row
+is a push, and a push already terminates the review with `The head commit
+changed during the review`, which phase 2 catches by a better signal. A review
+with findings is different — the fix commit that answers it is new code
+nothing has run CI on, so once every thread has a reply the checks are watched
+again, from a fresh clock, before arming. `--no-review` resuming a PR carries
+the same watch for the same reason, on whatever threads a prior review left
+open. The gap that survives is on the clean row and after a successful arm on
+either row: a required check going red *after* auto-merge is armed means
+GitHub holds the merge indefinitely, and nothing here reports that.
 
 Re-arming this on a PR that is already green costs three calls before the gate
 passes on its first iteration: the base-branch read, the ruleset read, and one
@@ -188,8 +204,9 @@ costing the caller a notification per interval.
 Arguments:
   <owner/repo>  e.g. gwenphalan/unimatrix-01
   <pr>          Pull request number
-  --no-review   Skip phase 2 entirely and arm on green. Above for what it does
-                not skip.
+  --no-review   Skip the ping and the review wait, then arm once every review
+                thread this PR already carries has cleared. Above for what it
+                does not skip.
 
 A rate-limit refusal is not a review — nothing was read — so this rides the
 cooldown out and re-pings, once, rather than handing back three manual steps
@@ -227,6 +244,54 @@ Fixture runs never post. Both the first ping and the re-ping are live-only, and
 offline runs continue as though each landed so the one-retry cap stays
 exercisable.
 
+=== After the ping — findings, and the review budget is one, this flag is not
+    a second one ===
+
+A clean review arms immediately, on the sha it was reviewed on, and stops
+there. A review with findings, and a `--no-review` resume, both keep the
+script running instead: reply-and-fix is a real workflow with real wall-clock
+in it, and the alternative was ending the run at the ping and pushing that
+whole cycle onto a human running a second `watch-pr.sh --no-review` — which is
+exactly the flag this section exists to stop needing.
+
+  1. Wait for every review thread to clear (`isResolved == true` on all of
+     them, the same GraphQL `unresolved_threads()` already gated the arm on).
+     Threads first, because a fix commit can land after the reply that
+     explains it — checking checks before threads would routinely read a
+     stale or not-yet-caught-up state.
+  2. Findings only: wait for every required check to go green again, on
+     whatever head the fix commits produced. This is the same required-checks
+     wait run a second time, fresh clock and fresh red/green ledger, with its
+     red-check line ending `— not arming` instead of `— not pinging`.
+     `--no-review` skips this: it never expects a fix commit, so there is
+     nothing new for CI to have run on.
+  3. Re-read the live head sha, once, and arm on that.
+
+**A refuted finding is a reply, not a commit, and step 1 cannot see the
+difference from here.** `unresolved_threads()` reads GitHub's `isResolved`
+flag, the same mechanism the arm already gated on — deliberately not a second
+"was this replied to" check with its own definition of done, because two
+definitions of "handled" disagreeing with each other in the same code path is
+worse than one imperfect one. The accepted cost: a reply with no code change
+does not clear a thread by itself. Either CodeRabbit auto-resolves it, or a
+human clicks "Resolve conversation" on GitHub. `SHIP_PR_THREAD_WAIT_TIMEOUT`
+bounds the wait either way, and its expiry is not an error — it is a PR that
+needs the same manual step it would have needed without this script at all.
+
+**The re-pin in step 3 narrows the last round trip. It does not close the
+race.** CodeRabbit only ever reviews the sha it was pinged on, once, at the
+start of phase 2 — this script posts exactly one ping and never a second, so
+nothing downstream re-reviews the eventual merge sha. What actually covers the
+new head by the time step 3 arms is (i) every thread clear per
+`unresolved_threads()`, findings or not, and (ii) required checks green on
+that head, findings only — not a sha comparison. The re-read-then-arm only
+bounds the *last* round trip to the same one-round-trip shape the transition
+above already accepts, not the whole wait across steps 1-2, which is much
+longer and not bounded the same way. `gh pr merge --auto`'s own re-verification
+at merge time answers "is CI green", not "was this reviewed" — CodeRabbit is
+deliberately not a required check, so that re-verification says nothing about
+whether the arming sha was ever read.
+
 Environment:
   SHIP_PR_POLL_SECONDS  Seconds between polls, in both phases. Default 30. Set
                         it to 0 for a fixture run, which has nothing to wait for
@@ -255,7 +320,16 @@ Environment:
                         Seconds phase 1 will wait for the required contexts to
                         report. Default 2700 (45 minutes). Reached, the run ends
                         naming the contexts that never reported. 0 means the very
-                        first poll is the last one.
+                        first poll is the last one. Also the timeout for the
+                        post-review recheck of the same contexts, which reuses
+                        this script's own name for the reason above.
+  SHIP_PR_THREAD_WAIT_TIMEOUT
+                        Seconds the post-review wait will wait for every review
+                        thread to clear. Default 2700, matching
+                        SHIP_PR_CHECKS_TIMEOUT's default. Reached, the run says
+                        so and exits 0 — this is a PR that needs a human to
+                        reply and re-arm, or to resolve a thread by hand, not a
+                        script failure.
   SHIP_PR_MAX_COOLDOWN  Longest cooldown to wait out, in seconds. Default 1800.
                         Beyond it the script exits and leaves the call to you.
                         Raise it for an overnight run, where wall-clock is free
@@ -288,7 +362,20 @@ Environment:
                         ERROR=<message>, standing in for a failed call. No entry
                         may contain a colon, which is the separator. A
                         multi-entry list is how the pending -> green transition is
-                        exercised.
+                        exercised. Consumed twice per run when phase 2 reaches
+                        the post-review recheck: the cursor is a continuous
+                        stream across both calls, matching every other
+                        fixture-cursor idiom in this file.
+  SHIP_PR_THREADS_FIXTURES
+                        Colon-separated entries consumed one per post-review
+                        poll in place of the `unresolved_threads()` GraphQL
+                        call. An entry is either a path to a JSON file holding
+                        what the paginated `reviewThreads` query would return,
+                        or the form ERROR=<message>, standing in for a failed
+                        call. Unset offline, the post-review wait reads as
+                        already-clear (0) rather than reaching the network, so
+                        every fixture case that does not set this is unaffected
+                        by the wait existing at all.
   SHIP_PR_BRANCH_RULES_FIXTURE
                         Read by required-checks.sh, which this script runs as a
                         child, so exporting it supplies the required-context list
@@ -322,7 +409,7 @@ Output from phase 1, in order, on stdout:
   no required status checks — refusing to read an empty list as green
   cannot read the PR's base branch — refusing to gate blind
   the required check list could not be read — refusing to gate blind
-  checks red: <names> — not pinging           terminal
+  checks red: <names> — not pinging           terminal, phase 1's own call only
   checks timed out after <m>m — never reported: <names>
   branch is BEHIND — update it and re-arm     terminal, nothing pinged
   branch is DIRTY — resolve the conflicts and re-arm
@@ -333,21 +420,12 @@ On stderr, so a clean run does not wake a `Monitor` caller to be told nothing:
   <BUCKET>  <check-name>  — <desc>            same, for a check that carries one
   checks green on <sha>                       the phase boundary; the slot is about to be spent
 
-Under --no-review the run ends there, on the stderr line above or on any of the
-`auto-merge` lines below — the arm is the same code and declines for the same
-reasons:
-  auto-merge armed UNREVIEWED on <sha> — nothing has read this diff
-  no review requested, and auto-merge is off — nothing armed
+Under --no-review, before any wait:
+  no review requested, and auto-merge is off — nothing armed   terminal
 
-Otherwise, from phase 2, one line, whichever applies:
-  reviewed: <base> -> <n>                     the count rose; triage the findings
-  reviewed clean, count unchanged at <n>      it ran and found nothing
-  auto-merge armed on <sha> — GitHub squashes once the required checks pass
-  auto-merge not armed — PR is a draft
-  auto-merge not armed — <n> unresolved threads
-  auto-merge not armed — the PR state could not be read
-  auto-merge could NOT be armed — merge by hand
-  offline: auto-merge not armed
+Otherwise, from phase 2's own ping-and-wait, one line, whichever applies:
+  reviewed: <base> -> <n>                     the count rose; the post-review wait starts next
+  reviewed clean, count unchanged at <n>      it ran and found nothing, arms directly
   review in progress                          said once, then carried by the heartbeat
   live rate-limit marker at arm time, <n>m left
   stale rate-limit marker at arm time, deadline lapsed — pinging anyway
@@ -369,16 +447,36 @@ Otherwise, from phase 2, one line, whichever applies:
   refused: skipped — ping did not register    re-ping, nothing was spent
   nothing reviewable — that IS the review
 
-Either phase can also end on stdout with, respectively:
-  checks API ERROR xN — <message>             three consecutive failures in phase 1
-  API ERROR xN (count=<n>) — <message>        three consecutive failures in phase 2
+The post-review wait — reached from `reviewed: <base> -> <n>` and, minus the
+checks recheck, from `--no-review` once auto-merge is on — on stdout:
+  checks red: <names> — not arming             terminal, the recheck's own call only
+  checks timed out after <m>m — never reported: <names>   the recheck's own clock
+  threads still unresolved after <m>m — reply and re-arm, or resolve by hand   terminal, exit 0
+  thread count API ERROR xN — stopping rather than waiting blind   three consecutive failures, exit 2
+
+Then the arm, on stdout — the same code and the same lines regardless of which
+of the three call sites (clean review, findings resolved, --no-review) reached
+it:
+  auto-merge armed on <sha> — GitHub squashes once the required checks pass
+  auto-merge armed UNREVIEWED on <sha> — nothing has read this diff
+  auto-merge not armed — PR is a draft
+  auto-merge not armed — <n> unresolved threads
+  auto-merge not armed — the PR state could not be read
+  auto-merge could NOT be armed — merge by hand
+  offline: auto-merge not armed (would arm on <sha>)
+  offline: auto-merge not armed (would be UNREVIEWED on <sha>)
+
+Either phase, or the post-review wait, can also end on stdout with:
+  checks API ERROR xN — <message>             three consecutive failures in phase 1 or the recheck
+  API ERROR xN (count=<n>) — <message>        three consecutive failures in phase 2's own wait
   FIXTURES EXHAUSTED                          offline runs only
 
-On stderr, every 10th poll of either phase, so it reaches a terminal and the
+On stderr, every 10th poll of any wait, so it reaches a terminal and the
 monitor's output file without waking a caller that only reads stdout:
   still waiting on checks, <k>/<n> required reported, outstanding: <names>, <m>m elapsed
   still waiting, review running, count=<n>, <m>m elapsed
   still waiting, nothing from CodeRabbit yet, count=<n>, <m>m elapsed
+  still waiting, <n> unresolved review threads, <m>m elapsed
 
 Also on stderr, said once where they apply:
   cannot reach GitHub — no head sha, do not wait blind   terminal
@@ -386,15 +484,20 @@ Also on stderr, said once where they apply:
   merge state reads <VALUE>
   no CodeRabbit commit status on <sha> — falling back to comment matching
   offline: first ping suppressed, ping_at=<time>
+  checks green again on <sha>                  the recheck's own boundary
+  re-pinned head to <sha>                       immediately before the arm; unchanged from the
+                                                 original pin unless a push landed during the wait
 
 Exit codes:
-  0  a terminal outcome in either phase was reached, or a fixture list ran out
-  1  bad usage, a partial fixture set, a non-numeric SHIP_PR_CHECKS_TIMEOUT, an
-     empty or unreadable required-context list, an unreadable base branch or head
-     sha, a failed baseline, or a ping that would not post or came back with a
+  0  a terminal outcome in any wait was reached, or a fixture list ran out
+  1  bad usage, a partial fixture set, a non-numeric SHIP_PR_CHECKS_TIMEOUT or
+     SHIP_PR_THREAD_WAIT_TIMEOUT, an empty or unreadable required-context list,
+     an unreadable base branch or head sha (including the re-pin's own read),
+     a failed baseline, or a ping that would not post or came back with a
      timestamp nothing can compare against
-  2  three consecutive API failures. The two phases count separately: different
-     calls, different failure modes.
+  2  three consecutive API failures — required checks (either call), the
+     review-wait comment/status reads, or the thread-count read. Each ledger
+     counts separately: different calls, different failure modes.
 EOF
 }
 
@@ -430,6 +533,7 @@ repo=${args[0]}
 pr=${args[1]}
 poll=${SHIP_PR_POLL_SECONDS:-30}
 checks_timeout=${SHIP_PR_CHECKS_TIMEOUT:-2700}
+thread_wait_timeout=${SHIP_PR_THREAD_WAIT_TIMEOUT:-2700}
 
 # The three fixture variables are one switch. Setting one without the others
 # would run half the script offline and the other half against the live API —
@@ -452,6 +556,10 @@ if ! [[ $checks_timeout =~ ^[0-9]+$ ]]; then
   echo "SHIP_PR_CHECKS_TIMEOUT must be a whole number of seconds, got: $checks_timeout" >&2
   exit 1
 fi
+if ! [[ $thread_wait_timeout =~ ^[0-9]+$ ]]; then
+  echo "SHIP_PR_THREAD_WAIT_TIMEOUT must be a whole number of seconds, got: $thread_wait_timeout" >&2
+  exit 1
+fi
 
 fixtures=()
 checks_fixtures=()
@@ -461,11 +569,19 @@ if [ "$set_fixtures" -eq 3 ]; then
   IFS=: read -r -a fixtures <<<"$SHIP_PR_FIXTURES"
   IFS=: read -r -a checks_fixtures <<<"$SHIP_PR_CHECKS_FIXTURES"
 fi
-# Two indices and two ledgers, one per phase. Sharing either would make the two
-# fixture lists fight over one cursor, and would fire the three-strikes abort
-# after fewer than three consecutive failures within a phase.
+# Independent of the three-fixture switch: unlike phase 1 and phase 2, the
+# post-review wait has a real offline default (already-clear) rather than a
+# hard requirement to reach the network, so it is not part of that gate.
+threads_fixtures=()
+if [ "$offline" -eq 1 ] && [ -n "${SHIP_PR_THREADS_FIXTURES:-}" ]; then
+  IFS=: read -r -a threads_fixtures <<<"$SHIP_PR_THREADS_FIXTURES"
+fi
+# Three indices and three ledgers, one per wait. Sharing any would make two
+# fixture lists fight over one cursor, and would fire a three-strikes abort
+# after fewer than three consecutive failures within a single wait.
 step=0
 checks_step=0
+threads_step=0
 
 count() {
   if [ -n "${1:-}" ]; then
@@ -526,198 +642,219 @@ if [ "${#required[@]}" -eq 0 ]; then
 fi
 required_json=$(printf '%s\n' "${required[@]}" | jq -Rsc 'split("\n") | map(select(length > 0))')
 
-checks_prev=""
-checks_fails=0
-checks_i=0
-checks_started=$(date +%s)
-# Seeded, not left empty: a run whose every poll failed still has to name what it
-# was waiting for when the cap fires.
-outstanding=("${required[@]}")
+# A function rather than an inline loop because phase 2 runs this a second
+# time, against whatever head a fix commit produced, before arming on a review
+# that had findings. `$1` is the only difference between the two calls: phase
+# 1 says a red check holds back the ping, the reused call says it holds back
+# the arm. `required` and `required_json` stay module-level — the required
+# list itself does not change between calls — but every ledger below is
+# function-local and reset fresh each time, because the second call is
+# watching a different moment for a different purpose than the first and a
+# carried-over red/green history from phase 1 would misreport it.
+wait_for_required_checks() {
+  local suffix=$1
+  local checks_prev="" checks_fails=0 checks_i=0 checks_started
+  checks_started=$(date +%s)
+  # Seeded, not left empty: a run whose every poll failed still has to name what
+  # it was waiting for when the cap fires.
+  local outstanding=("${required[@]}")
 
-while true; do
-  rc=0
-  # Two variables, because the two streams answer different questions. stdout is
-  # the JSON the gate parses; stderr carries the `no checks reported` wording the
-  # normalisation below keys on. Merged into one, any line gh writes to stderr —
-  # a debug trace, a warning — lands inside a status-8 payload that is otherwise
-  # valid JSON and fails the array check, so an ordinary pending poll is counted
-  # as a failed read and three of them exit 2 before anything is pinged.
-  checks_err=""
+  while true; do
+    local rc=0
+    # Two variables, because the two streams answer different questions. stdout is
+    # the JSON the gate parses; stderr carries the `no checks reported` wording the
+    # normalisation below keys on. Merged into one, any line gh writes to stderr —
+    # a debug trace, a warning — lands inside a status-8 payload that is otherwise
+    # valid JSON and fails the array check, so an ordinary pending poll is counted
+    # as a failed read and three of them exit 2 before anything is pinged.
+    local checks_err=""
+    local entry payload
 
-  # The fixture index has to advance in this shell: a `payload=$(helper)`
-  # command substitution runs in a subshell, so the increment would be lost and
-  # the loop would reread entry 0 forever.
-  if [ "$offline" -eq 1 ]; then
-    if [ "$checks_step" -ge "${#checks_fixtures[@]}" ]; then
-      echo "FIXTURES EXHAUSTED"
-      exit 0
-    fi
-    entry=${checks_fixtures[$checks_step]}
-    checks_step=$((checks_step + 1))
-    payload=""
-    case $entry in
-      ERROR=*)
-        checks_err=${entry#ERROR=}
-        rc=1
-        ;;
-      EXIT8=*)
-        entry=${entry#EXIT8=}
-        rc=8
-        if [ -r "$entry" ]; then
-          payload=$(cat "$entry")
-        else
-          checks_err="fixture not readable: $entry"
+    # The fixture index has to advance in this shell: a `payload=$(helper)`
+    # command substitution runs in a subshell, so the increment would be lost and
+    # the loop would reread entry 0 forever. `checks_fixtures`/`checks_step` stay
+    # module-level and are not reset per call: the second call continues
+    # consuming the same colon-separated list, the same "fixture cursor is a
+    # continuous stream" idiom every other fixture list in this file follows.
+    if [ "$offline" -eq 1 ]; then
+      if [ "$checks_step" -ge "${#checks_fixtures[@]}" ]; then
+        echo "FIXTURES EXHAUSTED"
+        exit 0
+      fi
+      entry=${checks_fixtures[$checks_step]}
+      checks_step=$((checks_step + 1))
+      payload=""
+      case $entry in
+        ERROR=*)
+          checks_err=${entry#ERROR=}
           rc=1
-        fi
-        ;;
-      *)
-        if [ -r "$entry" ]; then
-          payload=$(cat "$entry")
-        else
-          checks_err="fixture not readable: $entry"
-          rc=1
-        fi
-        ;;
-    esac
-  else
-    checks_err_file=$(mktemp)
-    payload=$(gh pr checks "$pr" --repo "$repo" --json name,bucket,description 2>"$checks_err_file") && rc=0 || rc=$?
-    checks_err=$(cat "$checks_err_file")
-    rm -f "$checks_err_file"
-  fi
-
-  # An empty checks list is an *error*, not an empty list: status 1 with
-  # `no checks reported on the '<branch>' branch` on stderr. That is the state
-  # for the first minutes after a PR opens, which is exactly when this is armed
-  # — counted as a failure it exits 2 three polls later, before anything is
-  # pinged, and the ledger cannot tell it from an expired token.
-  if [ "$rc" -ne 0 ] && [ "$rc" -ne 8 ]; then
-    case $checks_err in
-      *"no checks reported"*)
-        rc=0
-        payload='[]'
-        checks_err=""
-        ;;
-    esac
-  fi
-
-  # 8 is `gh pr checks` for "something is still pending", alongside valid JSON —
-  # the normal state of a PR whose checks have not all reported. Treated as a
-  # failure it trips the three-strike abort on every ordinary run.
-  if [ "$rc" -eq 8 ]; then
-    rc=0
-  fi
-
-  # A payload that will not parse must not read as "no required context has
-  # reported yet". That would poll to the cap on garbage; it is a failed read and
-  # is counted as one.
-  if [ "$rc" -eq 0 ] && ! jq -e 'type == "array"' >/dev/null 2>&1 <<<"$payload"; then
-    rc=1
-    checks_err="the checks payload would not parse as a JSON array"
-  fi
-
-  if [ "$rc" -eq 0 ]; then
-    checks_fails=0
-    # Every terminal bucket, required or not — a filter matching only success
-    # would be silent through a failure, and silence is indistinguishable from
-    # still-running. The description is appended because a green bucket does not
-    # always mean the check did its job: `CodeRabbit` is pass either way, and
-    # only the description separates "Review skipped: automatic reviews are
-    # disabled" from "Review completed". Every other check here has an empty one,
-    # so this annotates only the checks saying something.
-    #
-    # LC_ALL=C on both halves: `comm` reads two sorted streams, and a collation
-    # that disagrees with the sort's silently drops or duplicates lines. This
-    # suite is asserted byte-for-byte and now runs in CI as well as here.
-    cur=$(jq -r '
-      .[]
-      | select(.bucket != "pending")
-      | "\(.bucket | ascii_upcase)  \(.name)"
-        + (if (.description // "") == "" then "" else "  — \(.description)" end)
-    ' <<<"$payload" | LC_ALL=C sort)
-    # Non-actionable rows go to stderr, which still reaches the terminal and the
-    # Monitor output file. Every stdout line under Monitor is a notification, and
-    # each notification is one main-loop turn over the whole session context — so
-    # ~a dozen PASS rows on a clean PR are a dozen wakes to be told nothing.
-    # FAIL and CANCEL stay on stdout: those are the rows a caller must act on.
-    LC_ALL=C comm -13 <(printf '%s\n' "$checks_prev") <(printf '%s\n' "$cur") \
-      | while IFS= read -r row; do
-          case $row in
-            FAIL* | CANCEL*) printf '%s\n' "$row" ;;
-            *) printf '%s\n' "$row" >&2 ;;
-          esac
-        done
-    checks_prev=$cur
-
-    # green = {pass, skipping}, red = {fail, cancel}, and anything else keeps
-    # polling. A bucket vocabulary that grew a member has to stall rather than
-    # satisfy the gate.
-    gate=()
-    mapfile -t gate < <(jq -r --argjson req "$required_json" '
-      . as $rows
-      | $req[]
-      | . as $ctx
-      | ([$rows[] | select(.name == $ctx) | .bucket]) as $b
-      | (if ($b | length) == 0 then "outstanding"
-         elif ($b | any(. == "fail" or . == "cancel")) then "red"
-         elif ($b | any(. != "pass" and . != "skipping")) then "outstanding"
-         else "green" end) as $s
-      | "\($s)\t\($ctx)"
-    ' <<<"$payload")
-
-    checks_red=()
-    outstanding=()
-    for line in ${gate+"${gate[@]}"}; do
-      case ${line%%$'\t'*} in
-        red) checks_red+=("${line#*$'\t'}") ;;
-        green) : ;;
-        *) outstanding+=("${line#*$'\t'}") ;;
+          ;;
+        EXIT8=*)
+          entry=${entry#EXIT8=}
+          rc=8
+          if [ -r "$entry" ]; then
+            payload=$(cat "$entry")
+          else
+            checks_err="fixture not readable: $entry"
+            rc=1
+          fi
+          ;;
+        *)
+          if [ -r "$entry" ]; then
+            payload=$(cat "$entry")
+          else
+            checks_err="fixture not readable: $entry"
+            rc=1
+          fi
+          ;;
       esac
-    done
+    else
+      local checks_err_file
+      checks_err_file=$(mktemp)
+      payload=$(gh pr checks "$pr" --repo "$repo" --json name,bucket,description 2>"$checks_err_file") && rc=0 || rc=$?
+      checks_err=$(cat "$checks_err_file")
+      rm -f "$checks_err_file"
+    fi
 
-    # Terminal on the poll it appears, without waiting for the rest to report.
-    # Nothing arriving later un-reds a required check.
-    if [ "${#checks_red[@]}" -gt 0 ]; then
-      echo "checks red: $(join_names ${checks_red+"${checks_red[@]}"}) — not pinging"
+    # An empty checks list is an *error*, not an empty list: status 1 with
+    # `no checks reported on the '<branch>' branch` on stderr. That is the state
+    # for the first minutes after a PR opens, which is exactly when this is armed
+    # — counted as a failure it exits 2 three polls later, before anything is
+    # pinged, and the ledger cannot tell it from an expired token.
+    if [ "$rc" -ne 0 ] && [ "$rc" -ne 8 ]; then
+      case $checks_err in
+        *"no checks reported"*)
+          rc=0
+          payload='[]'
+          checks_err=""
+          ;;
+      esac
+    fi
+
+    # 8 is `gh pr checks` for "something is still pending", alongside valid JSON —
+    # the normal state of a PR whose checks have not all reported. Treated as a
+    # failure it trips the three-strike abort on every ordinary run.
+    if [ "$rc" -eq 8 ]; then
+      rc=0
+    fi
+
+    # A payload that will not parse must not read as "no required context has
+    # reported yet". That would poll to the cap on garbage; it is a failed read and
+    # is counted as one.
+    if [ "$rc" -eq 0 ] && ! jq -e 'type == "array"' >/dev/null 2>&1 <<<"$payload"; then
+      rc=1
+      checks_err="the checks payload would not parse as a JSON array"
+    fi
+
+    if [ "$rc" -eq 0 ]; then
+      checks_fails=0
+      # Every terminal bucket, required or not — a filter matching only success
+      # would be silent through a failure, and silence is indistinguishable from
+      # still-running. The description is appended because a green bucket does not
+      # always mean the check did its job: `CodeRabbit` is pass either way, and
+      # only the description separates "Review skipped: automatic reviews are
+      # disabled" from "Review completed". Every other check here has an empty one,
+      # so this annotates only the checks saying something.
+      #
+      # LC_ALL=C on both halves: `comm` reads two sorted streams, and a collation
+      # that disagrees with the sort's silently drops or duplicates lines. This
+      # suite is asserted byte-for-byte and now runs in CI as well as here.
+      local cur
+      cur=$(jq -r '
+        .[]
+        | select(.bucket != "pending")
+        | "\(.bucket | ascii_upcase)  \(.name)"
+          + (if (.description // "") == "" then "" else "  — \(.description)" end)
+      ' <<<"$payload" | LC_ALL=C sort)
+      # Non-actionable rows go to stderr, which still reaches the terminal and the
+      # Monitor output file. Every stdout line under Monitor is a notification, and
+      # each notification is one main-loop turn over the whole session context — so
+      # ~a dozen PASS rows on a clean PR are a dozen wakes to be told nothing. On
+      # the reused call this fires again for every context still green from the
+      # first call, since `checks_prev` reset empty — a repeat of PASS rows already
+      # seen, and accepted, because a fresh call has no other way to know what was
+      # already reported.
+      # FAIL and CANCEL stay on stdout: those are the rows a caller must act on.
+      LC_ALL=C comm -13 <(printf '%s\n' "$checks_prev") <(printf '%s\n' "$cur") \
+        | while IFS= read -r row; do
+            case $row in
+              FAIL* | CANCEL*) printf '%s\n' "$row" ;;
+              *) printf '%s\n' "$row" >&2 ;;
+            esac
+          done
+      checks_prev=$cur
+
+      # green = {pass, skipping}, red = {fail, cancel}, and anything else keeps
+      # polling. A bucket vocabulary that grew a member has to stall rather than
+      # satisfy the gate.
+      local gate=()
+      mapfile -t gate < <(jq -r --argjson req "$required_json" '
+        . as $rows
+        | $req[]
+        | . as $ctx
+        | ([$rows[] | select(.name == $ctx) | .bucket]) as $b
+        | (if ($b | length) == 0 then "outstanding"
+           elif ($b | any(. == "fail" or . == "cancel")) then "red"
+           elif ($b | any(. != "pass" and . != "skipping")) then "outstanding"
+           else "green" end) as $s
+        | "\($s)\t\($ctx)"
+      ' <<<"$payload")
+
+      local checks_red=()
+      outstanding=()
+      for line in ${gate+"${gate[@]}"}; do
+        case ${line%%$'\t'*} in
+          red) checks_red+=("${line#*$'\t'}") ;;
+          green) : ;;
+          *) outstanding+=("${line#*$'\t'}") ;;
+        esac
+      done
+
+      # Terminal on the poll it appears, without waiting for the rest to report.
+      # Nothing arriving later un-reds a required check. `$suffix` is the only
+      # line that differs between the two calls this function serves.
+      if [ "${#checks_red[@]}" -gt 0 ]; then
+        echo "checks red: $(join_names ${checks_red+"${checks_red[@]}"}) $suffix"
+        exit 0
+      fi
+      if [ "${#outstanding[@]}" -eq 0 ]; then
+        return 0
+      fi
+    else
+      checks_fails=$((checks_fails + 1))
+      if [ "$checks_fails" -ge 3 ]; then
+        # stderr where there is any, since that is where gh says what went wrong;
+        # the stdout payload otherwise, which is what a call that failed without a
+        # word on stderr leaves behind.
+        printf 'checks API ERROR x%s — stopping rather than gating blind: %s\n' "$checks_fails" "${checks_err:-$payload}"
+        exit 2
+      fi
+    fi
+
+    checks_i=$((checks_i + 1))
+    local checks_elapsed=$(($(date +%s) - checks_started))
+
+    # This clock is fresh per call, so the reused call gets its own full
+    # SHIP_PR_CHECKS_TIMEOUT rather than whatever phase 1 left on it — the fix
+    # commit's CI run is a new wait, not a continuation of the first one.
+    if [ "$checks_elapsed" -ge "$checks_timeout" ]; then
+      printf 'checks timed out after %sm — never reported: %s\n' \
+        "$((checks_elapsed / 60))" "$(join_names ${outstanding+"${outstanding[@]}"})"
       exit 0
     fi
-    if [ "${#outstanding[@]}" -eq 0 ]; then
-      break
+
+    if [ $((checks_i % 10)) -eq 0 ]; then
+      # stderr, for the same reason phase 2's heartbeat is on stderr. Without it a
+      # gate stuck on a context that never appears is indistinguishable from a dead
+      # script.
+      echo "still waiting on checks, $((${#required[@]} - ${#outstanding[@]}))/${#required[@]} required reported, outstanding: $(join_names ${outstanding+"${outstanding[@]}"}), $((checks_elapsed / 60))m elapsed" >&2
     fi
-  else
-    checks_fails=$((checks_fails + 1))
-    if [ "$checks_fails" -ge 3 ]; then
-      # stderr where there is any, since that is where gh says what went wrong;
-      # the stdout payload otherwise, which is what a call that failed without a
-      # word on stderr leaves behind.
-      printf 'checks API ERROR x%s — stopping rather than gating blind: %s\n' "$checks_fails" "${checks_err:-$payload}"
-      exit 2
-    fi
-  fi
 
-  checks_i=$((checks_i + 1))
-  checks_elapsed=$(($(date +%s) - checks_started))
+    sleep "$poll"
+  done
+}
 
-  # Phase 2's deliberate lack of a cap does not transfer here. It waits on a ping
-  # it posted; this waits on contexts that may never be created at all — `CodeQL`
-  # is a status posted by an app with no workflow of its own, so a SARIF upload
-  # that never lands is a required context that never appears. Under `Monitor` an
-  # unbounded wait produces nothing a caller can act on.
-  if [ "$checks_elapsed" -ge "$checks_timeout" ]; then
-    printf 'checks timed out after %sm — never reported: %s\n' \
-      "$((checks_elapsed / 60))" "$(join_names ${outstanding+"${outstanding[@]}"})"
-    exit 0
-  fi
-
-  if [ $((checks_i % 10)) -eq 0 ]; then
-    # stderr, for the same reason phase 2's heartbeat is on stderr. Without it a
-    # gate stuck on a context that never appears is indistinguishable from a dead
-    # script.
-    echo "still waiting on checks, $((${#required[@]} - ${#outstanding[@]}))/${#required[@]} required reported, outstanding: $(join_names ${outstanding+"${outstanding[@]}"}), $((checks_elapsed / 60))m elapsed" >&2
-  fi
-
-  sleep "$poll"
-done
+wait_for_required_checks "— not pinging"
 
 ########################################################################
 # Arming the merge
@@ -741,22 +878,37 @@ auto_merge=${SHIP_PR_AUTO_MERGE-1}
 # A line that is not a bare integer aborts the sum and prints nothing, which the
 # caller reads as a count it could not establish — the guard fails closed in
 # every direction it can fail.
+#
+# Optional `$1` is a fixture path holding one GraphQL response — the same
+# "optional first arg is a fixture path" shape `count()` uses. Live and fixture
+# reads share the same jq filter because the fixture is the same response shape
+# `--paginate` streams, just with one page instead of however many the real PR
+# has; a fixture never needed pagination of its own before now, since the only
+# caller was `arm_auto_merge`'s own offline short-circuit, which never reached
+# this function at all.
 unresolved_threads() {
   local pages
-  # shellcheck disable=SC2016  # GraphQL variables, not shell: $owner/$name/$pr
-  # are bound by the -F flags above, and $endCursor by --paginate.
-  pages=$(gh api graphql --paginate -F owner="${repo%%/*}" -F name="${repo##*/}" -F pr="$pr" --jq \
-    '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false)] | length' \
-    -f query='query($owner: String!, $name: String!, $pr: Int!, $endCursor: String) {
-      repository(owner: $owner, name: $name) {
-        pullRequest(number: $pr) {
-          reviewThreads(first: 100, after: $endCursor) {
-            nodes { isResolved }
-            pageInfo { hasNextPage endCursor }
+  if [ -n "${1:-}" ]; then
+    [ -f "$1" ] || return 1
+    pages=$(jq -r \
+      '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false)] | length' \
+      "$1" 2>/dev/null) || return 1
+  else
+    # shellcheck disable=SC2016  # GraphQL variables, not shell: $owner/$name/$pr
+    # are bound by the -F flags above, and $endCursor by --paginate.
+    pages=$(gh api graphql --paginate -F owner="${repo%%/*}" -F name="${repo##*/}" -F pr="$pr" --jq \
+      '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false)] | length' \
+      -f query='query($owner: String!, $name: String!, $pr: Int!, $endCursor: String) {
+        repository(owner: $owner, name: $name) {
+          pullRequest(number: $pr) {
+            reviewThreads(first: 100, after: $endCursor) {
+              nodes { isResolved }
+              pageInfo { hasNextPage endCursor }
+            }
           }
         }
-      }
-    }' 2>/dev/null) || return 1
+      }' 2>/dev/null) || return 1
+  fi
   # `bad` rather than a bare `exit 1`: awk runs END even on exit, so exiting
   # there alone still printed a total — a zero, which is precisely the answer
   # that arms the merge.
@@ -764,16 +916,92 @@ unresolved_threads() {
        END { if (bad || NR == 0) exit 1 ; print total + 0 }' <<<"$pages"
 }
 
+# Waits for `unresolved_threads()` to read 0, the same mechanism the arm
+# already gates on — deliberately not a second "was this replied to" check
+# with its own definition of done, since two definitions of "handled"
+# disagreeing in the same code path is worse than one imperfect one. The
+# accepted cost is in `--help`: a refuted finding (a reply with no code
+# change) does not clear here unless CodeRabbit auto-resolves it or a human
+# resolves the conversation on GitHub by hand.
+#
+# Offline with no SHIP_PR_THREADS_FIXTURES reads as already-clear and returns
+# immediately, printing nothing — so every fixture case that does not set that
+# variable is unaffected by this wait existing at all. Set, an entry is either
+# a fixture path `unresolved_threads()` reads or `ERROR=<message>`, standing in
+# for a failed call, the same idiom `wait_for_required_checks` uses for its own
+# fixture list.
+wait_for_threads_replied() {
+  if [ "$offline" -eq 1 ] && [ "${#threads_fixtures[@]}" -eq 0 ]; then
+    return 0
+  fi
+
+  local threads_fails=0 threads_i=0 threads_started
+  threads_started=$(date +%s)
+
+  while true; do
+    local rc=0 threads="" entry
+    if [ "$offline" -eq 1 ]; then
+      if [ "$threads_step" -ge "${#threads_fixtures[@]}" ]; then
+        echo "FIXTURES EXHAUSTED"
+        exit 0
+      fi
+      entry=${threads_fixtures[$threads_step]}
+      threads_step=$((threads_step + 1))
+      case $entry in
+        ERROR=*) rc=1 ;;
+        *) threads=$(unresolved_threads "$entry") || rc=1 ;;
+      esac
+    else
+      threads=$(unresolved_threads) || rc=1
+    fi
+
+    if [ "$rc" -eq 0 ]; then
+      threads_fails=0
+      if [ "$threads" -eq 0 ]; then
+        return 0
+      fi
+    else
+      threads_fails=$((threads_fails + 1))
+      if [ "$threads_fails" -ge 3 ]; then
+        echo "thread count API ERROR x$threads_fails — stopping rather than waiting blind"
+        exit 2
+      fi
+    fi
+
+    threads_i=$((threads_i + 1))
+    local threads_elapsed=$(($(date +%s) - threads_started))
+
+    # Bounded, unlike phase 2's own wait: that one waits on a ping this script
+    # posted, so it is always either running or terminal. This waits on a human
+    # reply, or on someone clicking "Resolve conversation" for a refuted
+    # finding, and either can simply never happen. Terminal rather than an
+    # error — the PR just needs the same manual step it would have needed
+    # without this script at all.
+    if [ "$threads_elapsed" -ge "$thread_wait_timeout" ]; then
+      echo "threads still unresolved after $((threads_elapsed / 60))m — reply and re-arm, or resolve by hand"
+      exit 0
+    fi
+
+    if [ $((threads_i % 10)) -eq 0 ]; then
+      echo "still waiting, $threads unresolved review threads, $((threads_elapsed / 60))m elapsed" >&2
+    fi
+
+    sleep "$poll"
+  done
+}
+
 # Hands the merge to GitHub rather than performing it here. `--auto` waits for
 # every *required* status check on its own, so this never has to re-verify green
 # or race a branch that goes BEHIND mid-wait — the same contract
 # .github/workflows/dependabot-auto-merge.yml relies on.
 #
-# Two callers. From phase 2 it is the clean-review arm and only that one: a
-# refusal read nothing, a review with findings is not clean, and an unreviewable
-# diff is an unreviewed merge in a clean one's clothes. From `--no-review` there
-# was no review at all, which is why the armed line below says so — a reader
-# scanning the output must not have to remember which flags the run carried.
+# Three callers, and `$1` is the only thing distinguishing them: the clean-
+# review arm and the post-findings arm both pass 0, since both know a review
+# actually ran; `--no-review` passes whichever `count()` says — 0 when this
+# PR carries a prior real review, 1 when it genuinely never had one. The
+# wording is about the diff, not the flag: `--no-review` on an already-reviewed
+# PR reads the same as the clean-review arm, because CodeRabbit did read it,
+# just not in this run.
 #
 # `--match-head-commit` is the guard the default carries its weight on. GitHub's
 # auto-merge survives subsequent pushes, which is the entire hazard — pinning the
@@ -789,9 +1017,19 @@ unresolved_threads() {
 # different situations, and "merge by hand" is not what a reader needs to know
 # when the answer is that the PR is still a draft.
 arm_auto_merge() {
+  local unreviewed=$1
   [ "$auto_merge" = 1 ] || return 0
   if [ "$offline" -eq 1 ]; then
-    echo "offline: auto-merge not armed"
+    # Says what it would have done rather than only that it did nothing, so an
+    # offline fixture run can assert the sha a re-pin produced and which of the
+    # two wordings a `--no-review` baseline read actually earned — neither is
+    # otherwise observable without a live `gh pr merge` call this branch
+    # deliberately never makes.
+    if [ "$unreviewed" -eq 1 ]; then
+      echo "offline: auto-merge not armed (would be UNREVIEWED on $head_sha)"
+    else
+      echo "offline: auto-merge not armed (would arm on $head_sha)"
+    fi
     return 0
   fi
   local draft threads
@@ -812,7 +1050,7 @@ arm_auto_merge() {
     return 0
   fi
   if gh pr merge "$pr" --repo "$repo" --auto --squash --match-head-commit "$head_sha" >/dev/null 2>&1; then
-    if [ "$no_review" -eq 1 ]; then
+    if [ "$unreviewed" -eq 1 ]; then
       echo "auto-merge armed UNREVIEWED on $head_sha — nothing has read this diff"
     else
       echo "auto-merge armed on $head_sha — GitHub squashes once the required checks pass"
@@ -829,13 +1067,19 @@ arm_auto_merge() {
 # The transition — pin the head, then phase 2
 ########################################################################
 
-# Captured once and never re-read. CodeRabbit's commit status is per sha, so a
-# push landing after the review leaves the new head carrying only this repo's
-# resting skip notice — re-reading the head each poll would read that and call it
-# a swallowed ping. Pinning it means a moved head shows up as a moved head.
+# Captured once and never re-read on the clean-review row. CodeRabbit's commit
+# status is per sha, so a push landing after the review leaves the new head
+# carrying only this repo's resting skip notice — re-reading the head each poll
+# would read that and call it a swallowed ping. Pinning it means a moved head
+# shows up as a moved head.
 #
-# This is the only read of it. Phase 1 watched a moving head and this pins one;
-# a second read further down would reintroduce the race this bounds.
+# Phase 1 watched a moving head and this pins one; a second read inside the
+# review-wait poll loop below would reintroduce the race this bounds. That
+# still holds for the clean-review row, which arms straight off this pin and
+# never reads the head again. The findings row and `--no-review` are
+# different: both re-read it once more, immediately before arming, via
+# `re_pin_head_sha` — see --help, "The re-pin in step 3 narrows the last round
+# trip. It does not close the race," for what that does and does not cover.
 #
 # An empty sha is the same failure as an unreachable one, and louder about it
 # than the exit code is: `--jq` prints nothing and exits 0 when the field is
@@ -886,8 +1130,53 @@ fi
 
 echo "checks green on $head_sha" >&2
 
-# `--no-review` ends the run here. Phase 2 is the review — the ping, the wait,
-# the comment matching — and there is nothing else in it to keep.
+# Re-reads the live head sha, once, immediately before arming — used by the
+# findings row of phase 2's own wait and by `--no-review`, never by the
+# clean-review row, whose pin above stays this run's only read of it. See
+# --help, "The re-pin in step 3 narrows the last round trip. It does not close
+# the race," for the honest accounting of what this does and does not cover:
+# it is not a second review, and nothing downstream re-reviews whatever this
+# reads.
+re_pin_head_sha() {
+  if [ "$offline" -eq 1 ]; then
+    # Defaults to a no-op — the same sha the original pin used — so every
+    # fixture case that does not set SHIP_PR_HEAD_SHA_2 exercises this
+    # function without its output changing. Set to something else, it is the
+    # only way this logic is exercised without a live PR.
+    head_sha=${SHIP_PR_HEAD_SHA_2:-$head_sha}
+  else
+    head_sha=$(gh pr view "$pr" --repo "$repo" --json headRefOid --jq '.headRefOid // ""' 2>/dev/null) || head_sha=""
+    if [ -z "$head_sha" ]; then
+      echo "cannot reach GitHub — no head sha, do not wait blind" >&2
+      exit 1
+    fi
+  fi
+  echo "re-pinned head to $head_sha" >&2
+}
+
+# Reached from the findings row of phase 2's own wait ("reviewed: <base> ->
+# <n>") only — the clean-review row arms directly, above, and never reaches
+# this.
+#
+# Threads first, then checks, then the re-pin, then the arm. A fix commit can
+# land after the thread reply that explains it, so checking checks ahead of
+# threads would routinely read a state CI has not caught up to yet. Checks
+# are re-watched at all only here, never under `--no-review`: a fix commit is
+# new code nothing has run CI on, and `--no-review` by definition has none.
+post_review_wait() {
+  wait_for_threads_replied
+  wait_for_required_checks "— not arming"
+  echo "checks green again on $head_sha" >&2
+  re_pin_head_sha
+  arm_auto_merge 0
+  exit 0
+}
+
+# `--no-review` skips the ping and the review wait — there is nothing else in
+# phase 2's own wait to keep — but not the wait that follows a review, since a
+# PR resumed with this flag may carry threads from an earlier review this run
+# never posted. What it does skip, beyond the ping: the checks recheck, since
+# it never expects a fix commit to justify one.
 #
 # What it must not skip is the merge preconditions, and it does not: BEHIND,
 # DIRTY and a draft are terminal in the transition above, before this line, and
@@ -903,7 +1192,28 @@ if [ "$no_review" -eq 1 ]; then
     echo "no review requested, and auto-merge is off — nothing armed"
     exit 0
   fi
-  arm_auto_merge
+  wait_for_threads_replied
+  re_pin_head_sha
+
+  # Whether this diff was ever read is a property of the PR's history, not of
+  # this flag — `--no-review` means "do not ping and do not wait for one", not
+  # "nothing has read this diff". A PR carrying a real review already (count
+  # > 0, the same non-zero-baseline reasoning phase 2's own baseline read
+  # rests on) gets the ordinary armed wording; a genuinely never-reviewed one
+  # keeps the UNREVIEWED line. Read through the same offline/live split as the
+  # baseline call below, so this stays reachable without a live PR: offline it
+  # reads `fixtures[0]`, the same entry the baseline read would take if phase 2
+  # ran, live it hits the network.
+  if [ "$offline" -eq 1 ]; then
+    count_now=$(count "${fixtures[0]}/reviews.json") || count_now=""
+  else
+    count_now=$(count) || count_now=""
+  fi
+  unreviewed=1
+  if [ -n "$count_now" ] && [ "$count_now" -gt 0 ]; then
+    unreviewed=0
+  fi
+  arm_auto_merge "$unreviewed"
   exit 0
 fi
 
@@ -1319,7 +1629,11 @@ while true; do
 
     if [ "$n" -gt "$base" ]; then
       echo "reviewed: $base -> $n"
-      exit 0
+      # Findings, not a stop: the reply-and-fix cycle is a real workflow with
+      # real wall-clock in it, and ending the run here pushed that whole cycle
+      # onto a human running a second `watch-pr.sh --no-review` — the flag
+      # this function exists to stop needing.
+      post_review_wait
     fi
 
     # `Review completed` is a phase, not an outcome: it says CodeRabbit stopped,
@@ -1347,7 +1661,7 @@ while true; do
         # was still in it.
         *"No actionable comments were generated"*)
           echo "reviewed clean, count unchanged at $n"
-          arm_auto_merge
+          arm_auto_merge 0
           exit 0
           ;;
         *"rate limited by coderabbit.ai"*)
