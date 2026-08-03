@@ -288,9 +288,10 @@ commit, so a fast third-party app answering first makes a partial list look comp
 non-required check would hold back a ping that should go out. A red required check, a `BEHIND` or
 `DIRTY` branch, and a draft PR each end the run without pinging.
 
-On a clean review it stops watching the checks at the ping. A required check that goes red *after*
-auto-merge is armed means GitHub holds the merge indefinitely, and nothing reports that — so a PR
-that has been armed and has gone quiet is worth one look at. On a review with findings it does not
+On a clean review it stops watching the checks at the ping. A successful arm does not end the run
+either way — the watcher polls past it, reports `merged <sha>` once GitHub squashes, and if a
+required check goes red or the head moves after the arm, reports that too with the exact
+`gh pr merge --match-head-commit` command to re-arm by hand. On a review with findings it does not
 exit at the ping outcome — it waits for every thread to clear and re-checks required checks on the
 new head before arming, per `reference/coderabbit.md`.
 

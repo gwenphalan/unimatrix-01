@@ -5,9 +5,9 @@ usage() {
   cat <<'EOF'
 watch-pr.sh [--no-review] <owner/repo> <pr>
 
-Watches a pull request from "CI is still running" to "auto-merge is armed", in
-two sequential phases and one process. Arm it under `Monitor` and carry on
-working.
+Watches a pull request from "CI is still running" to "merged", in two
+sequential phases and the wait that follows a successful arm, all in one
+process. Arm it under `Monitor` and carry on working.
 
   Phase 1  every required status check reports, and every one is green
   Phase 2  CodeRabbit is pinged and the review is waited out. A clean review
@@ -15,6 +15,10 @@ working.
            exit — it stays up through the reply-and-fix cycle: every review
            thread has to clear, the required checks have to go green again on
            whatever head that produced, and only then does it arm
+
+Arming is not merging. GitHub still has to run every required check on its
+own clock before it squashes, so the script keeps running past a successful
+arm — see "After the arm" below.
 
 `--no-review` skips the ping and the review wait, but not the wait that
 follows one: it still waits for every review thread to clear before arming, on
@@ -201,6 +205,30 @@ to a silent failure, and a review that is genuinely running would trip it. It
 heartbeats on stderr instead, so silence carries its own elapsed time without
 costing the caller a notification per interval.
 
+=== After the arm ===
+
+Arming is not merging: `gh pr merge --auto` hands the decision to GitHub, which
+still waits for every required check on its own clock before it squashes. So a
+successful arm — on the clean row, the findings row, or `--no-review` — does
+not end the run. It polls instead, the same way phase 2 polls on a ping it
+posted rather than capping the wait: this waits on something the script itself
+just placed (the arm), and a cap here would let the merge complete unattended
+after the script had already given up watching it.
+
+It polls for: the PR reaching MERGED (reports the merge sha and stops), the PR
+reaching CLOSED without merging (terminal), and three consecutive API failures
+(terminal, same three-strikes shape as every other wait in this script). Two
+staleness cases are also caught, each reported with the exact `gh pr merge
+--match-head-commit` command to re-arm by hand, because GitHub's own docs name
+only two things that disable an armed auto-merge — a push from a user without
+write permission, and switching the base branch — and say nothing about either
+of these:
+
+  - A required check going red after the arm. GitHub's resume behaviour once
+    it goes green again is undocumented, so this does not guess at it.
+  - The head sha moving after the arm, caught by comparing the live head sha
+    against the sha the arm pinned on every poll.
+
 Arguments:
   <owner/repo>  e.g. gwenphalan/unimatrix-01
   <pr>          Pull request number
@@ -247,9 +275,10 @@ exercisable.
 === After the ping — findings, and the review budget is one, this flag is not
     a second one ===
 
-A clean review arms immediately, on the sha it was reviewed on, and stops
-there. A review with findings, and a `--no-review` resume, both keep the
-script running instead: reply-and-fix is a real workflow with real wall-clock
+A clean review arms immediately, on the sha it was reviewed on, and moves
+straight into the wait-for-merge phase (see "After the arm" above). A review
+with findings, and a `--no-review` resume, both keep the script running before
+they ever reach an arm: reply-and-fix is a real workflow with real wall-clock
 in it, and the alternative was ending the run at the ping and pushing that
 whole cycle onto a human running a second `watch-pr.sh --no-review` — which is
 exactly the flag this section exists to stop needing.
@@ -293,9 +322,11 @@ deliberately not a required check, so that re-verification says nothing about
 whether the arming sha was ever read.
 
 Environment:
-  SHIP_PR_POLL_SECONDS  Seconds between polls, in both phases. Default 30. Set
-                        it to 0 for a fixture run, which has nothing to wait for
-                        and would otherwise take 30s per entry.
+  SHIP_PR_POLL_SECONDS  Seconds between polls, in both phases and the
+                        wait-for-merge phase that follows a successful arm.
+                        Default 30. Set it to 0 for a fixture run, which has
+                        nothing to wait for and would otherwise take 30s per
+                        entry.
   SHIP_PR_AUTO_REPING   1 to ride out a rate limit and re-ping once (default),
                         0 to report the refusal and exit as before. Only
                         *acting* is gated; a live marker is reported either way.
@@ -450,17 +481,27 @@ checks recheck, from `--no-review` once auto-merge is on — on stdout:
 
 Then the arm, on stdout — the same code and the same lines regardless of which
 of the three call sites (clean review, findings resolved, --no-review) reached
-it:
-  auto-merge armed on <sha> — GitHub squashes once the required checks pass
-  auto-merge armed UNREVIEWED on <sha> — nothing has read this diff
+it. Only the live `gh pr merge` call succeeding leads to the wait-for-merge
+phase below; every other line here is arm_auto_merge()'s own return of 1:
+  auto-merge is off — nothing armed, merge by hand
   auto-merge not armed — PR is a draft
   auto-merge not armed — <n> unresolved threads
   auto-merge not armed — the PR state could not be read
   auto-merge could NOT be armed — merge by hand
+  offline: auto-merge not armed (auto-merge is off)
   offline: auto-merge not armed (would arm on <sha>)
   offline: auto-merge not armed (would be UNREVIEWED on <sha>)
 
-Either phase, or the post-review wait, can also end on stdout with:
+The wait-for-merge phase, reached only from a successful arm — see "After the
+arm" above — on stdout:
+  merged <sha>                                terminal
+  PR closed without merging — nothing left to watch   terminal
+  required check red after arm: <names> — ...re-arm by hand: gh pr merge ...
+  head changed after arm, from <sha> to <sha> — re-arm by hand: gh pr merge ...
+  merge-wait API ERROR xN — stopping rather than waiting blind   three consecutive failures, exit 2
+
+Either phase, the post-review wait, or the wait-for-merge phase can also end
+on stdout with:
   checks API ERROR xN — <message>             three consecutive failures in phase 1 or the recheck
   API ERROR xN (count=<n>) — <message>        three consecutive failures in phase 2's own wait
   FIXTURES EXHAUSTED                          offline runs only
@@ -471,6 +512,7 @@ monitor's output file without waking a caller that only reads stdout:
   still waiting, review running, count=<n>, <m>m elapsed
   still waiting, nothing from CodeRabbit yet, count=<n>, <m>m elapsed
   still waiting, <n> unresolved review threads, <m>m elapsed
+  still waiting for the merge, <m>m elapsed   the wait-for-merge phase's own heartbeat
 
 Also on stderr, said once where they apply:
   cannot reach GitHub — no head sha, do not wait blind   terminal
@@ -487,6 +529,8 @@ Also on stderr, said once where they apply:
   rate-limit marker at arm time, countdown unreadable — pinging anyway
   cooling down <n>m, [re-]pinging at <time>   riding out a rate limit, then one ping
   pinged at <time> / re-pinged at <time>      the ping is posted; the wait goes on
+  auto-merge armed on <sha> — GitHub squashes once the required checks pass
+  auto-merge armed UNREVIEWED on <sha> — nothing has read this diff
 
 Exit codes:
   0  a terminal outcome in any wait was reached, or a fixture list ran out
@@ -496,8 +540,9 @@ Exit codes:
      a failed baseline, or a ping that would not post or came back with a
      timestamp nothing can compare against
   2  three consecutive API failures — required checks (either call), the
-     review-wait comment/status reads, or the thread-count read. Each ledger
-     counts separately: different calls, different failure modes.
+     review-wait comment/status reads, the thread-count read, or the
+     wait-for-merge phase's own PR read. Each ledger counts separately:
+     different calls, different failure modes.
 EOF
 }
 

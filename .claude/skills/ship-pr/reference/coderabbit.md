@@ -235,9 +235,8 @@ to the summary comment", not as an answer.
 row too, on different terms.** On a clean review it arms GitHub's native auto-merge immediately,
 pinned with `--match-head-commit` to the sha that was actually reviewed; GitHub then squashes once
 every required check passes, so nothing here re-verifies green or races a branch that goes `BEHIND`.
-A push landing between the review and the arm makes the arm fail outright — measured, see below — but
-a push landing *after* a successful arm is a case nothing here has established, so do not read this
-as a standing guarantee.
+A push landing between the review and the arm makes the arm fail outright — measured, see below — and
+a push landing *after* a successful arm is caught too, see below.
 
 On a review **with findings**, it no longer exits at `reviewed: <base> -> <n>`. It waits for every
 review thread to clear (`unresolvedThreads`, `isResolved == false`, the same check the clean row's
@@ -270,19 +269,18 @@ is not mergeable`, with `autoMergeRequest` left `null`; pinned to the **current*
 `expectedHeadOid` is enforced when auto-merge is *enabled*, and an arm attempted after a push simply
 does not take.
 
-What that does **not** settle is a push landing *after* a successful arm — enable-time enforcement
-says nothing about merge time, and GitHub's docs promise an auto-disable only for a pusher **without**
-write permission, which is never us. Treat a long-armed PR as worth a glance rather than trusted.
-Also unmeasured: whether GitHub's auto-merge updates an
-out-of-date branch by itself. Read as no, and the failure direction is benign either way — a
-self-update moves the head sha, which cancels the arm rather than merging anything.
-
-**On the clean row, the watcher stops reading the checks at the ping.** Once auto-merge is armed,
-a required check going red leaves GitHub holding the merge indefinitely with nothing reporting it. An
-armed PR that has gone quiet for longer than a CI cycle is worth `gh pr checks` by hand. On the
-findings row this gap is smaller but not closed: the post-review wait re-checks once, right before
-arming — a red check there is caught and reported (`— not arming`) — but nothing watches the checks
-again after that arm either.
+Enable-time enforcement says nothing about what happens after: GitHub's own docs name only two things
+that disable an armed auto-merge — a push from a user **without** write permission, and switching the
+base branch — and say nothing about a required check going red and later recovering. **On both rows,
+the watcher settles this itself by polling past every successful arm** rather than leaning on GitHub's
+silence. It watches required checks and the live head sha, reports `merged <sha>` once GitHub squashes,
+and reports a required check going red or the head moving with the exact `gh pr merge
+--match-head-commit` command to re-arm by hand. On the findings row this sits alongside the pre-arm
+recheck: the post-review wait still re-checks required checks once, right before arming, and a red
+check there is caught and reported (`— not arming`) before the arm is even attempted. Also unmeasured:
+whether GitHub's auto-merge updates an out-of-date branch by itself. Read as no, and the failure
+direction is benign either way — a self-update moves the head sha, which the watcher's polling catches
+the same as any other post-arm push.
 
 **A ping can be swallowed with no marker at all.** Observed here: `@coderabbitai review` drew no ack
 and no review, while the PR-open `Review skipped` notice sat above it looking like a reply. The
