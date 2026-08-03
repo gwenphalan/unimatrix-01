@@ -4,14 +4,17 @@ import { ToolShell } from "@unimatrix/chrome/tool";
 import { labAdminSession, MockAccountControl } from "@/mocks";
 
 /**
- * The lab is a tool, so it gets the tool shell — the same one every dashboard
- * and admin surface in this repo gets, imported rather than reimplemented. That
- * is not incidental: a prototype laid out inside a hand-rolled approximation of
- * the shell would be designed against chrome that does not exist.
+ * Chrome for the prototype index, and only the index. The lab is a tool, so its
+ * own page gets the tool shell — the same one every dashboard and admin surface
+ * here gets, imported rather than reimplemented.
  *
- * The account control is the mock one, wired here rather than per prototype, so
- * a signed-in view is the default state of the harness. There are no Clerk keys
- * anywhere in this workspace.
+ * It does not wrap a running prototype. This repo has two shells, tool and
+ * public, and the harness cannot know which one a given sketch is for — so it
+ * imposes neither and a prototype imports the one it belongs in. Handing every
+ * sketch the tool shell would design public-site work against tool chrome.
+ *
+ * The account control is the mock one. There are no Clerk keys anywhere in this
+ * workspace.
  */
 export function LabShell({ children }: { children: ReactNode }) {
   return (

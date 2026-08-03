@@ -1,14 +1,39 @@
+/* Every `@source` below is mandatory, because `source(none)` turns off
+   Tailwind's automatic file detection for this workspace. Nothing here is
+   belt-and-braces: a path not listed contributes no classes.
+
+   Why give up automatic detection at all — `lab/prototypes/` is gitignored, and
+   Tailwind skips gitignored paths. Automatic detection adds a source covering
+   the whole workspace, and the presence of that one recursive source makes the
+   gitignore filter apply to *every* source in the scan, so no `@source` of any
+   shape can reach a gitignored file while it is switched on. Measured on
+   @tailwindcss/oxide 4.3.3 by calling its `Scanner` directly against these
+   files: the prototype source alone yields `w-56`; the same source concatenated
+   after a workspace-wide recursive one yields a candidate set identical to the
+   recursive source on its own, prototypes absent. That concatenation is exactly
+   what `@tailwindcss/vite` does in dev, which is the only way the lab runs.
+
+   The failure this prevents is silent. Lint, typecheck and every other check
+   stay green while a prototype loses every class it does not happen to share
+   with `@unimatrix/ui` or `@unimatrix/chrome` — so it renders half-styled and
+   reads as a bad sketch rather than a missing stylesheet. */
+@import "tailwindcss" source(none);
 @import "@unimatrix/ui/styles.css";
 
-/* Tailwind v4 source detection does not reach a sibling workspace, so without
-   these two lines the utilities `@unimatrix/ui` and `@unimatrix/chrome` use are
-   simply never emitted and the shell renders unstyled. Nothing catches that but
-   a browser: lint, types and every automated check stay green.
-
-   `prototypes/` is listed too. It is excluded from lint, typecheck and coverage
-   — but a stylesheet is not a check, and omitting it would mean every prototype
-   silently loses every Tailwind class it writes, which is the one failure this
-   harness cannot tolerate. */
+@source "../src/**/*.{ts,tsx}";
 @source "../../packages/ui/src/**/*.{ts,tsx}";
 @source "../../packages/chrome/src/**/*.{ts,tsx}";
-@source "../prototypes/**/*.{ts,tsx}";
+
+/* The prototype lines are split by depth on purpose. Even with automatic
+   detection off, a pattern containing a doubled star is walked as a directory
+   tree and still respects gitignore; a pattern whose wildcards are all
+   single-level is expanded as an explicit file list and is scanned whatever git
+   thinks of it. So: one single star per directory level, enumerated.
+
+   The depth cap is real — a prototype nested deeper than these lines reach goes
+   unstyled. Add a line rather than reaching for the doubled star, which must
+   not be written in this comment either: its closing half ends the comment and
+   the stylesheet then fails to parse. */
+@source "../prototypes/*.{ts,tsx}";
+@source "../prototypes/*/*.{ts,tsx}";
+@source "../prototypes/*/*/*.{ts,tsx}";
