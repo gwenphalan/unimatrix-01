@@ -254,6 +254,80 @@ else
   fail "case7-idempotent (a repeat run with no intervening change altered the file or sidecar)"
 fi
 
+# --- case 8: inline path:line in prose — reported, never rewritten ---------
+# The gap the References-only resolver can't see: a citation written inline
+# outside a References block, rather than as a lettered entry.
+
+dir=$(new_repo case8-inline-citation)
+mkdir -p "${dir}/.notes/01-todo"
+cat >"${dir}/.notes/01-todo/x.todo.md" <<'EOF'
+- **feat(x): thing**
+
+  - **Description:**
+    See `f.txt:3-5` for the details.
+EOF
+printf 'l1\nl2\nl3\nl4\nl5\n' >"${dir}/f.txt"
+(cd "${dir}" && git add -A && git commit -q -m init)
+todo_before_case8=$(cat "${dir}/.notes/01-todo/x.todo.md")
+
+check case8-inline-citation 0 "${dir}" <<'EOF'
+resolve-todo-citations: .notes/01-todo/x.todo.md
+
+  INLINE      f.txt:3-5  (line 4) — move to a References entry
+
+  1 inline
+EOF
+
+ran=$((ran + 1))
+if [ "$(cat "${dir}/.notes/01-todo/x.todo.md")" = "${todo_before_case8}" ]; then
+  printf '  ok    case8-inline-citation-file-unchanged\n'
+else
+  fail "case8-inline-citation-file-unchanged (inline citation was rewritten or annotated)"
+fi
+
+ran=$((ran + 1))
+if [ ! -e "${dir}/.notes/.todo-citations.json" ]; then
+  printf '  ok    case8-inline-citation-no-sidecar\n'
+else
+  fail "case8-inline-citation-no-sidecar (a sidecar record was created for an inline-only file)"
+fi
+
+# --- case 9: a URL with a port in a References entry — skipped, not read ---
+# as path `https://example.com`, line `8080`. Covers both the backticked
+# entry form (fails the URL-scheme guard) and the un-backticked form (never
+# even matches ENTRY_RE, since that requires a backticked token).
+
+dir=$(new_repo case9-url-with-port)
+mkdir -p "${dir}/.notes/01-todo"
+cat >"${dir}/.notes/01-todo/x.todo.md" <<'EOF'
+- **feat(x): thing**
+
+  - **References:**
+     a. `https://example.com:8080`
+     b. PR #208
+EOF
+(cd "${dir}" && git add -A && git commit -q -m init)
+
+check case9-url-with-port 0 "${dir}" <<'EOF'
+resolve-todo-citations: .notes/01-todo/x.todo.md
+
+  0 citations with line numbers
+EOF
+
+ran=$((ran + 1))
+if [ "$(todo_body "${dir}")" = "$(printf '\n  - **References:**\n     a. `https://example.com:8080`\n     b. PR #208')" ]; then
+  printf '  ok    case9-url-with-port-file-unchanged\n'
+else
+  fail "case9-url-with-port-file-unchanged (URL or PR entry was mistaken for a citation)"
+fi
+
+ran=$((ran + 1))
+if [ ! -e "${dir}/.notes/.todo-citations.json" ]; then
+  printf '  ok    case9-url-with-port-no-sidecar\n'
+else
+  fail "case9-url-with-port-no-sidecar (a sidecar record was created for a non-citation entry)"
+fi
+
 printf '\n'
 
 if ((ran == 0)); then

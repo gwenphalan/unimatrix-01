@@ -60,3 +60,8 @@ constraint that rules out the obvious alternative.
 the Description/Tasks prose at the point it's relevant. Add `:line` only when the line itself is
 the point rather than the file — every `:line` is one more citation `resolve-todo-citations.mjs`
 has to keep resolving.
+
+A citation lives only in a References entry, never inline as a backticked `path:line` in prose —
+the resolver only resolves entries inside a References block, and reports an inline one
+(`INLINE`) rather than fixing it. A References entry isn't only a path: it can also be a PR or a
+link — see `.notes/AGENTS.md` for the permitted forms.

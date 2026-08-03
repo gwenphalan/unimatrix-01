@@ -23,6 +23,12 @@
 // reserved for the tool failing to run at all (bad argument, not a git repo,
 // malformed sidecar).
 //
+// A citation written inline in prose, rather than as a References entry, is
+// invisible to all of the above — this only ever resolves entries inside a
+// References block. Inline ones are reported (`INLINE`) instead of fixed:
+// there is nowhere for a rewritten line number or a ` — STALE:` annotation to
+// go mid-sentence, and `.notes/AGENTS.md` already bans them.
+//
 // Known limitation: `git diff`'s `diff --git a/... b/...` header quotes a
 // path containing non-ASCII bytes under the default `core.quotepath`, which
 // would break the rename/delete detection below. Every git invocation here
@@ -44,7 +50,9 @@ const USAGE = `Usage:
 Rewrites <path-to-todo-file> in place: a citation whose cited line merely
 moved gets its line number updated; a citation whose file was renamed or
 deleted, or whose line cannot be found, is annotated \` — STALE: <reason>\`.
-Baseline state lives in <repo-root>/.notes/.todo-citations.json.
+A \`path:line\` written inline in prose instead of as a References entry is
+reported (\`INLINE\`) but never rewritten. Baseline state lives in
+<repo-root>/.notes/.todo-citations.json.
 
 Exits non-zero only when the tool itself failed to run (bad argument, target
 not inside a git repo, malformed sidecar) — never because a citation went
@@ -198,8 +206,27 @@ const REFERENCES_OPEN_RE = /^\s*-\s*(\(opt\)\s*)?\*\*References:\*\*/;
 const SECTION_RE = /^\s*-\s+\*\*/;
 const ENTRY_RE = /^(\s*)([a-z]+)\.\s+`([^`]*)`(.*)$/;
 const CITATION_RE = /^(.+):(\d+)(?:-(\d+))?$/;
+// A PR entry (`PR #208`) has no colon at all, so it never reaches this guard.
+// A link entry does, in its scheme (`https:`) — this is what stops
+// `https://example.com:8080` from reading as path `https://example.com`, line
+// `8080`, since a colon-then-port is otherwise indistinguishable from
+// colon-then-line-number.
+const URL_SCHEME_RE = /^[a-z][a-z0-9+.-]*:\/\//i;
+const BACKTICKED_TOKEN_RE = /`([^`]+)`/g;
 
-/** Entries inside a References block whose first backticked token ends in `:line` or `:start-end`. */
+/** Parses a bare token (no backticks) into a path:line/range citation, or null if it isn't one. */
+function parseCitationToken(token) {
+  if (URL_SCHEME_RE.test(token)) return null;
+  const match = CITATION_RE.exec(token);
+  if (!match) return null;
+  return {
+    path: match[1],
+    startLine: Number(match[2]),
+    endLine: match[3] !== undefined ? Number(match[3]) : null,
+  };
+}
+
+/** Entries inside a References block whose first backticked token is a path:line/range citation. */
 function parseCitationEntries(bodyLines) {
   const entries = [];
   let inBlock = false;
@@ -217,19 +244,47 @@ function parseCitationEntries(bodyLines) {
     const entryMatch = ENTRY_RE.exec(line);
     if (!entryMatch) continue;
     const [, indent, letter, token] = entryMatch;
-    const citationMatch = CITATION_RE.exec(token);
-    if (!citationMatch) continue;
+    const citation = parseCitationToken(token);
+    if (!citation) continue;
     entries.push({
       lineIndex: i,
       indent,
       letter,
-      path: citationMatch[1],
-      startLine: Number(citationMatch[2]),
-      endLine: citationMatch[3] !== undefined ? Number(citationMatch[3]) : null,
+      path: citation.path,
+      startLine: citation.startLine,
+      endLine: citation.endLine,
       citationKey: token,
     });
   }
   return entries;
+}
+
+/**
+ * Backticked path:line/range tokens found outside any References block.
+ * `resolve-todo-citations.mjs` only resolves entries inside one, so an inline
+ * citation in prose goes stale silently — this reports it rather than fixing
+ * it, since a References entry is where it belongs instead.
+ */
+function findInlineCitations(bodyLines) {
+  const found = [];
+  let inBlock = false;
+  for (let i = 0; i < bodyLines.length; i += 1) {
+    const line = bodyLines[i];
+    if (REFERENCES_OPEN_RE.test(line)) {
+      inBlock = true;
+      continue;
+    }
+    if (inBlock && SECTION_RE.test(line)) {
+      inBlock = false;
+      continue;
+    }
+    if (inBlock) continue;
+    for (const match of line.matchAll(BACKTICKED_TOKEN_RE)) {
+      const citation = parseCitationToken(match[1]);
+      if (citation) found.push({ lineIndex: i, ...citation });
+    }
+  }
+  return found;
 }
 
 function rangeText(start, end) {
@@ -421,6 +476,13 @@ function formatCandidate(candidate) {
   return candidate === null || candidate === undefined ? "line touched" : `:${candidate}`;
 }
 
+function formatInlineRow(citation) {
+  return reportRow(
+    "INLINE",
+    `${citation.path}:${rangeText(citation.startLine, citation.endLine)}  (line ${citation.lineIndex + 1}) — move to a References entry`,
+  );
+}
+
 // --- top-level file processing -----------------------------------------------
 
 function processFile(repoRoot, targetAbsPath) {
@@ -429,11 +491,22 @@ function processFile(repoRoot, targetAbsPath) {
   const hasTrailingNewline = original.endsWith("\n");
   const bodyLines = (hasTrailingNewline ? original.slice(0, -1) : original).split("\n");
   const entries = parseCitationEntries(bodyLines);
+  const inlineCitations = findInlineCitations(bodyLines);
 
   console.log(`resolve-todo-citations: ${todoRel}\n`);
 
+  // An inline citation is reported whether or not the file has any References
+  // entries at all. It is never rewritten, never annotated, and never
+  // touches the sidecar — the sidecar section below is skipped entirely when
+  // there are no References-block entries to baseline.
   if (entries.length === 0) {
-    console.log("  0 citations with line numbers");
+    if (inlineCitations.length > 0) {
+      for (const citation of inlineCitations) console.log(formatInlineRow(citation));
+      console.log("");
+      console.log(`  ${inlineCitations.length} inline`);
+    } else {
+      console.log("  0 citations with line numbers");
+    }
     return;
   }
 
@@ -446,7 +519,14 @@ function processFile(repoRoot, targetAbsPath) {
   const linesCache = new Map();
   const seenKeys = new Set();
   const reportRows = [];
-  const counts = { moved: 0, recovered: 0, baselined: 0, stale: 0 };
+  const counts = {
+    moved: 0,
+    recovered: 0,
+    baselined: 0,
+    stale: 0,
+    inline: inlineCitations.length,
+  };
+  for (const citation of inlineCitations) reportRows.push(formatInlineRow(citation));
 
   let changedFile = false;
 
@@ -526,6 +606,7 @@ function processFile(repoRoot, targetAbsPath) {
     if (counts.recovered > 0) summary.push(`${counts.recovered} recovered`);
     if (counts.baselined > 0) summary.push(`${counts.baselined} baselined`);
     if (counts.stale > 0) summary.push(`${counts.stale} needs attention`);
+    if (counts.inline > 0) summary.push(`${counts.inline} inline`);
     console.log(`  ${summary.join(", ")}`);
   } else {
     console.log(`  ${entries.length} citation(s) with line numbers, all confirmed fresh`);
