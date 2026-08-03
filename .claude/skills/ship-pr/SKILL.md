@@ -9,8 +9,10 @@ description: Take a task all the way to merged. Use at the start of any session 
 
 **The owner types this at the *start* of a session, not the end.** The argument is either the
 task in their own words, or a pointer to a `.notes/01-todo/*.todo.md` — sometimes just the file,
-meaning "the first unfinished item on it". Resolve that before doing anything: read the file, and if
-the target is ambiguous, name the line you are about to implement and say so rather than guessing.
+meaning "the first unfinished item on it". Resolve that before doing anything: if the target is a
+todo file, run `node infra/scripts/resolve-todo-citations.mjs <file>` and surface anything it
+reports as `STALE` rather than acting on that citation, then read the file. If the target is
+ambiguous, name the line you are about to implement and say so rather than guessing.
 
 Because you are invoked before the work exists, the whole arc is yours: plan, build, then ship. Take
 it to merged. Come back for the two stops below, for a decision that is theirs to make, or when
@@ -57,11 +59,14 @@ and a lack of objection is not approval.
 3. **Present it so it can be skimmed, then wait.** What becomes true, the files grouped by
    workspace, the reasoning that is not visible in a diff, what you rejected, and what would make it
    wrong — in that order, scannable. **Once the owner approves, build the task list.**
-4. **Dispatch `monorepo-implementer` with the approved plan.** It builds exactly that, commits in
-   logical steps, and stops rather than improvising if the plan turns out wrong. If the change
-   touches a browser surface, **dispatch `browser-verifier` before you report done** — it holds the
-   Chrome tooling so this context does not have to, which is what makes honouring that rule cheaper
-   than skipping it.
+4. **Dispatch `monorepo-implementer` with the approved plan, in a worktree unless the plan touches
+   `.claude/`.** A `.claude/` change stays in the main checkout — a worktree's own `.claude/` is
+   never scanned, so what governs a worktree session is the main checkout's working tree, not the
+   branch's (root `CLAUDE.md`, Workspace section, has the full mechanism). It builds exactly that,
+   commits in logical steps, and stops rather than improvising if the plan turns out wrong. If the
+   change touches a browser surface, **dispatch `browser-verifier` before you report done** — it
+   holds the Chrome tooling so this context does not have to, which is what makes honouring that
+   rule cheaper than skipping it.
 5. **Check in — in the owner's terms, not the code's.** What was done and why, the decisions the
    plan left open, what you ran and what it printed, what you could not verify. It must be
    understandable without opening the diff, because it will be read without opening the diff. Then

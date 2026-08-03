@@ -2,6 +2,10 @@ import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 import { bootstrapLocalEnvFiles, printBootstrapLocalEnvFiles } from "./setup-local.mjs";
+import {
+  linkGitignoredWorktreeDirs,
+  printLinkGitignoredWorktreeDirs,
+} from "./link-worktree-dirs.mjs";
 
 const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const PNPM_COMMAND = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
@@ -97,6 +101,9 @@ async function main() {
   const bootstrapResults = await bootstrapLocalEnvFiles();
   printBootstrapLocalEnvFiles(bootstrapResults);
   printSetupWarnings();
+
+  const linkResults = linkGitignoredWorktreeDirs();
+  printLinkGitignoredWorktreeDirs(linkResults);
 
   await runPnpmCommand(["db:migrate"], "pnpm db:migrate");
 
