@@ -6,13 +6,14 @@
 ## 2. Folder Structure
 - `src/app`: `AuthProvider`/query providers, router creation, and `app-shell.tsx`, which wraps `ToolShell` from `@unimatrix/chrome/tool`. No `homeLabel` and no `accountControl` are passed, so the shell renders no title bar — signing in is what this app is. Horizontal centring is the only layout this app owns. No header, nav, or `UserButton`; the `UserButton` lives on the services, not here.
 - `src/lib`: `config.ts` (runtime env validation — requires `VITE_CLERK_PUBLISHABLE_KEY`; `VITE_API_BASE_URL` defaults to `/api`; dev-only `VITE_API_TARGET` defaults to `http://127.0.0.1:3001` and is used by `vite.config.ts` to proxy `/api` during `pnpm --filter @unimatrix/auth-app dev`) and `query-client.ts`.
-- `src/features/auth`: `safe-redirect.ts` — the open-redirect allowlist for the inbound `redirect_url` param.
+- `src/features/auth`: `safe-redirect.ts` — the open-redirect allowlist for the inbound `redirect_url` param — plus `already-signed-in-redirect.tsx` and the `sign-in-card.tsx`/`sign-up-card.tsx` bodies the two lazy routes render. The cards take `redirectUrl` as a prop rather than reading route search themselves, which is what lets them be unit-tested without a router.
 - `src/routes`: file-based routes with paired `*.tsx` (route data / `validateSearch`) and `*.lazy.tsx` (components): `index` (sign-in/up card, or redirect to `/account` when signed in), `sign-in`, `sign-up`, `account`. `routeTree.gen.ts` is generated — never hand-edit it.
 - `src/styles.css`: app presentation layered on `@unimatrix/ui/styles.css`.
 
 ## 3. Core Behaviors & Patterns
 - **Session token, not templates**: the `permissions` claim rides the session token via Clerk's session-token customization (see `packages/auth/README.md`). This app mints no API client of its own.
 - **Redirect-back is validated**: `/sign-in` and `/sign-up` read an inbound `redirect_url`, pass it to Clerk's `forceRedirectUrl`, but only after `safeRedirectUrl` confirms it is a `*.unimatrix-01.dev` (https) or localhost origin — otherwise it falls back to the auth landing. Never widen this allowlist without care.
+- **`forceRedirectUrl` alone loses the return URL for a visitor who already has a session.** It applies when a sign-in flow *completes*, and someone arriving with a live session never runs one — they used to land on the auth app's own page with their `redirect_url` never consulted. `AlreadySignedInRedirect` covers that case, and it goes through `safeRedirectUrl` like everything else: the validated target is the only thing ever navigated to. It reads `isLoaded` before `isSignedIn`, because `isSignedIn` is `false` both while Clerk is still resolving and when there is genuinely no session.
 - **Clerk component routing** uses `routing="hash"` to keep sub-steps on one route without splat routes.
 
 ## 4. Conventions
