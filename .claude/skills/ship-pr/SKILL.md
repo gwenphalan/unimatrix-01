@@ -277,9 +277,11 @@ commit, so a fast third-party app answering first makes a partial list look comp
 non-required check would hold back a ping that should go out. A red required check, a `BEHIND` or
 `DIRTY` branch, and a draft PR each end the run without pinging.
 
-It stops watching the checks at the ping. A required check that goes red *after* auto-merge is armed
-means GitHub holds the merge indefinitely, and nothing reports that — so a PR that has been armed and
-has gone quiet is worth one look at.
+On a clean review it stops watching the checks at the ping. A required check that goes red *after*
+auto-merge is armed means GitHub holds the merge indefinitely, and nothing reports that — so a PR
+that has been armed and has gone quiet is worth one look at. On a review with findings it does not
+exit at the ping outcome — it waits for every thread to clear and re-checks required checks on the
+new head before arming, per `reference/coderabbit.md`.
 
 If a check fails for a reason unrelated to the diff (flake, infrastructure), say so explicitly rather
 than silently re-running.
@@ -323,7 +325,14 @@ is indistinguishable from a thread nobody read. Verify each claim against the co
 wrong, reply with the evidence rather than applying a change you cannot justify. If it is taste that
 contradicts a documented convention, the convention wins — link it.
 
-Do not let an unresolved advisory comment block a merge. Do let a real defect it surfaced block one.
+**A reply is not enough to unblock the merge — `watch-pr.sh` waits on `isResolved`, not on reply
+existence.** For anything fixed, CodeRabbit's own follow-up commit resolves the thread and the wait
+clears on its own. For anything refuted or deliberately not acted on, resolve the conversation by
+hand in GitHub's UI after replying, or the run waits out `SHIP_PR_THREAD_WAIT_TIMEOUT` (45m default)
+and stops rather than merging.
+
+Do not let an unresolved advisory comment's *substance* block a merge — refute it and resolve the
+thread. Do let a real defect it surfaced block one.
 
 ## Merging
 

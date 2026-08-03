@@ -126,16 +126,19 @@ window is long and the diff is trivial, or when the owner asks for an unreviewed
 which in the merge report.
 
 **Carry that out with `watch-pr.sh --no-review`, never with a merge you assemble yourself.** It waits
-for the required checks and then arms auto-merge with no ping and no review wait — and it still ends
-on a `BEHIND` or `DIRTY` branch, still declines on a draft PR, on unresolved review threads and on a
-PR state it could not read, and still pins the arm to the head sha it saw. A hand-rolled `gh pr
-merge` skips every one of those, which is the actual risk of leaving this path unsupported: the
-review gets skipped either way, and the improvised version drops the guards as well.
+for the required checks, then waits for every review thread to clear the same way the findings path
+does (below), then re-pins to the live head and arms — no ping, no review wait. It still ends on a
+`BEHIND` or `DIRTY` branch, still declines on a draft PR, on unresolved review threads left open past
+the wait, and on a PR state it could not read. A hand-rolled `gh pr merge` skips every one of those,
+which is the actual risk of leaving this path unsupported: the review gets skipped either way, and
+the improvised version drops the guards as well.
 
-So the flag is not a fifth case, and it excuses nothing. It is how the four above are done, and it
-prints `auto-merge armed UNREVIEWED on <sha>` rather than the clean-review line, because an
-unreviewed merge is unreviewed permanently. `SHIP_PR_AUTO_MERGE=0` outranks it, for when you want the
-wait skipped but the merge left to a person.
+So the flag is not a fifth case, and it excuses nothing. It is how the four above are done. **The
+armed line's wording now reflects whether this PR was ever actually reviewed, not whether this
+particular run skipped the ping**: `--no-review` checks `review-count.sh` live before arming, so a PR
+resumed with the flag after a real review already ran gets the ordinary armed line, and only a
+genuinely never-reviewed PR gets `auto-merge armed UNREVIEWED on <sha>`. `SHIP_PR_AUTO_MERGE=0`
+outranks it either way, for when you want the wait skipped but the merge left to a person.
 
 To wait: **arm a `Monitor` and carry on working.** This is the case `Monitor` is for — an outcome that
 arrives on someone else's schedule, with no way to know which of five endings it will be.
@@ -228,16 +231,37 @@ resting skip. And the vocabulary is **undocumented** — four descriptions acros
 the yaml reference, the commands guide and the plans page — so treat an absent context as "fall back
 to the summary comment", not as an answer.
 
-**The waiter can merge for you on the clean row, and only that row.** It arms GitHub's native
-auto-merge by default when the review comes back clean, pinned with `--match-head-commit` to the sha
-that was reviewed; GitHub then squashes once every required check passes, so nothing here re-verifies
-green or races a branch that goes `BEHIND`. A push landing between the review and the arm makes the
-arm fail outright — measured, see below — but a push landing *after* a successful arm is a case
-nothing here has established, so do not read this as a standing guarantee. It declines to arm on a
-draft PR, on any unresolved review
-thread, and on a PR state it could not read. `SHIP_PR_AUTO_MERGE=0` turns it off. No other row
-qualifies: a refusal read nothing, a review with findings is not clean, and `did not have any
-reviewable changes` is an unreviewed merge in a clean one's clothes.
+**The waiter can merge for you on the clean row — and, since it stopped exiting on findings, on that
+row too, on different terms.** On a clean review it arms GitHub's native auto-merge immediately,
+pinned with `--match-head-commit` to the sha that was actually reviewed; GitHub then squashes once
+every required check passes, so nothing here re-verifies green or races a branch that goes `BEHIND`.
+A push landing between the review and the arm makes the arm fail outright — measured, see below — but
+a push landing *after* a successful arm is a case nothing here has established, so do not read this
+as a standing guarantee.
+
+On a review **with findings**, it no longer exits at `reviewed: <base> -> <n>`. It waits for every
+review thread to clear (`unresolvedThreads`, `isResolved == false`, the same check the clean row's
+arm already used defensively — reused rather than duplicated, so the two can't disagree), then waits
+for required checks to go green again on whatever head that leaves, then re-reads the live head sha
+and arms on it. **Say this plainly, because it's a real weakening and not a rounding error: the sha
+this arms on was never reviewed by CodeRabbit.** One ping per PR, by design — see below — so a fix
+commit landing during this wait gets no second look from the bot. What stands in for that review is
+every thread having cleared plus checks being green on the sha that's about to merge, not a
+sha-equals-reviewed-sha guarantee. The final head-read-then-arm step only narrows the very last round
+trip to the same shape as the residual race already accepted elsewhere in this script (a push landing
+in that one round trip is unflagged); it does not make the whole wait race-free.
+
+**Because the thread check is `isResolved`, not "a reply exists," a refuted finding needs a manual
+GitHub step.** Replying with evidence and no code change does not itself clear the gate — either
+CodeRabbit marks the thread resolved on its own (observed once, for a *fixed* finding, not confirmed
+for a refutation) or you click "Resolve conversation" in GitHub's UI. Skip that and the run waits out
+`SHIP_PR_THREAD_WAIT_TIMEOUT` (2700s / 45m by default) and stops with a line telling you to reply and
+re-arm or resolve by hand — not a hang, but a real extra step this repo's workflow didn't have before.
+
+Both rows decline to arm on a draft PR, on any unresolved review thread left open past the wait, and
+on a PR state it could not read. `SHIP_PR_AUTO_MERGE=0` turns either off. No other outcome qualifies:
+a refusal read nothing, and `did not have any reviewable changes` is an unreviewed merge in a clean
+one's clothes.
 
 **That `--match-head-commit` pin is the whole safety argument for the default being on, and both its
 paths are now measured.** Controlled pair on PR #187 — same command, same PR state (checks pending,
@@ -253,9 +277,12 @@ Also unmeasured: whether GitHub's auto-merge updates an
 out-of-date branch by itself. Read as no, and the failure direction is benign either way — a
 self-update moves the head sha, which cancels the arm rather than merging anything.
 
-**And the watcher stops reading the checks at the ping.** Once auto-merge is armed, a required check
-going red leaves GitHub holding the merge indefinitely with nothing reporting it. An armed PR that
-has gone quiet for longer than a CI cycle is worth `gh pr checks` by hand.
+**On the clean row, the watcher stops reading the checks at the ping.** Once auto-merge is armed,
+a required check going red leaves GitHub holding the merge indefinitely with nothing reporting it. An
+armed PR that has gone quiet for longer than a CI cycle is worth `gh pr checks` by hand. On the
+findings row this gap is smaller but not closed: the post-review wait re-checks once, right before
+arming — a red check there is caught and reported (`— not arming`) — but nothing watches the checks
+again after that arm either.
 
 **A ping can be swallowed with no marker at all.** Observed here: `@coderabbitai review` drew no ack
 and no review, while the PR-open `Review skipped` notice sat above it looking like a reply. The
