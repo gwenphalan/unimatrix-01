@@ -137,6 +137,15 @@ cf() {
   printf '%s' "${out%:}"
 }
 
+# Post-review thread-wait payloads, colon-separated like `cf` — the wait
+# consumes SHIP_PR_THREADS_FIXTURES the same way phase 1 consumes
+# SHIP_PR_CHECKS_FIXTURES, one entry per poll.
+tf() {
+  local out="" name
+  for name in "$@"; do out+="$here/threads/$name:"; done
+  printf '%s' "${out%:}"
+}
+
 # The three-context gate, matching the names the checks-*.json payloads carry.
 three=SHIP_PR_BRANCH_RULES_FIXTURE=$here/branch-rules.json
 
@@ -211,36 +220,46 @@ EOF
 check partial-fixtures 1 "$(f quiet)" SHIP_PR_BRANCH_RULES_FIXTURE= <<'EOF'
 EOF
 
-# --- --no-review: phase 1, then straight to the arm -------------------------
+# --- --no-review: phase 1, a thread wait, then the arm ----------------------
 
-# The `quiet` fixture is a full phase-2 list, and its entries are what makes this
-# case say anything: consumed, they end the run with `FIXTURES EXHAUSTED`. That
-# line's absence is the proof phase 2 never ran — the ping itself is announced on
-# stderr offline, so a stray one would not show up here.
-check no-review-arms 0 "$(f quiet)" -- --no-review <<'EOF'
-offline: auto-merge not armed
+# `never-reviewed` carries an empty `reviews.json` and nothing else — it is the
+# baseline `--no-review`'s own count() read consumes, and a phase-2 run
+# reaching it at all would fail hard on the missing `comments.json` rather than
+# quietly printing `FIXTURES EXHAUSTED`, so this proves phase 2 never ran at
+# least as strongly as the fuller fixture it replaces did.
+check no-review-arms 0 "$(f never-reviewed)" -- --no-review <<'EOF'
+offline: auto-merge not armed (would be UNREVIEWED on fixture-head-sha)
 EOF
 
 # The off switch outranks the flag, and says so rather than leaving the run's
-# only output as `checks green` — which reads as a script that died.
-check no-review-auto-merge-off 0 "$(f quiet)" SHIP_PR_AUTO_MERGE=0 -- --no-review <<'EOF'
+# only output as `checks green` — which reads as a script that died. Exits
+# before the thread wait or the baseline read, so the fixture directory here
+# does not matter; `never-reviewed` is used for consistency with the other two.
+check no-review-auto-merge-off 0 "$(f never-reviewed)" SHIP_PR_AUTO_MERGE=0 -- --no-review <<'EOF'
 no review requested, and auto-merge is off — nothing armed
 EOF
 
 # Skipping the review does not skip the gate: the flag is read long after phase
 # 1 is over. The expectation is the `checks-red` case's, typed out again rather
 # than derived from it — so the two are equal by two copies, not by construction.
-check no-review-checks-red 0 "$(f quiet)" "$three" \
+check no-review-checks-red 0 "$(f never-reviewed)" "$three" \
   SHIP_PR_CHECKS_FIXTURES="$(cf checks-terminal.json)" -- --no-review <<'EOF'
 FAIL  Images (api)
 checks red: Images (api) — not pinging
+EOF
+
+# `quiet`'s baseline carries one bodied CodeRabbit review — a PR this run never
+# pinged but that CodeRabbit already read. The wording is about that history,
+# not about the flag: the ordinary armed line, not UNREVIEWED.
+check no-review-prior-review 0 "$(f quiet)" -- --no-review <<'EOF'
+offline: auto-merge not armed (would arm on fixture-head-sha)
 EOF
 
 # --- Phase 2: the review wait ----------------------------------------------
 
 check clean 0 "$(f clean)" <<'EOF'
 reviewed clean, count unchanged at 1
-offline: auto-merge not armed
+offline: auto-merge not armed (would arm on fixture-head-sha)
 EOF
 
 check head-changed 0 "$(f head-changed)" <<'EOF'
@@ -265,8 +284,64 @@ FIXTURES EXHAUSTED
 EOF
 
 # The baseline comes from the first entry, so the count only rises across two.
-check reviewed 0 "$(f quiet reviewed)" <<'EOF'
+# Findings now fall into the post-review wait rather than exiting: the default-
+# clear thread wait (no SHIP_PR_THREADS_FIXTURES) passes through immediately,
+# and the required-checks recheck consumes a *second* SHIP_PR_CHECKS_FIXTURES
+# entry — proving the fixture cursor really is the continuous stream `--help`
+# describes, since the default single-entry list would otherwise exhaust here.
+check reviewed 0 "$(f quiet reviewed)" \
+  SHIP_PR_CHECKS_FIXTURES="$(cf checks-green-one.json checks-green-one.json)" <<'EOF'
 reviewed: 1 -> 2
+offline: auto-merge not armed (would arm on fixture-head-sha)
+EOF
+
+# Same shape as `reviewed`, but SHIP_PR_HEAD_SHA_2 stands in for a push landing
+# during the wait. The armed line has to carry the NEW sha, not the sha the
+# transition originally pinned — this is the case that actually exercises
+# `re_pin_head_sha` rather than its no-op default.
+check reviewed-head-moved 0 "$(f quiet reviewed)" \
+  SHIP_PR_CHECKS_FIXTURES="$(cf checks-green-one.json checks-green-one.json)" \
+  SHIP_PR_HEAD_SHA_2=fixture-head-sha-2 <<'EOF'
+reviewed: 1 -> 2
+offline: auto-merge not armed (would arm on fixture-head-sha-2)
+EOF
+
+# Threads unresolved on the first poll, clear on the second — proves the wait
+# actually loops rather than reading the first entry and stopping regardless
+# of its content.
+check reviewed-threads-clear 0 "$(f quiet reviewed)" \
+  SHIP_PR_CHECKS_FIXTURES="$(cf checks-green-one.json checks-green-one.json)" \
+  SHIP_PR_THREADS_FIXTURES="$(tf one-unresolved.json clear.json)" <<'EOF'
+reviewed: 1 -> 2
+offline: auto-merge not armed (would arm on fixture-head-sha)
+EOF
+
+# Three unreadable thread counts in a row is the same ledger shape as phase 1's
+# own three-strikes abort, on its own counter.
+check reviewed-threads-three-strikes 2 "$(f quiet reviewed)" \
+  SHIP_PR_THREADS_FIXTURES="ERROR=a:ERROR=b:ERROR=c" <<'EOF'
+reviewed: 1 -> 2
+thread count API ERROR x3 — stopping rather than waiting blind
+EOF
+
+# 0 means the very first poll is the last one, the same idiom
+# SHIP_PR_CHECKS_TIMEOUT=0 uses in the phase-1 suite above. Terminal and exit 0
+# — a PR that needs a reply and a re-arm, not a script failure.
+check reviewed-threads-timeout 0 "$(f quiet reviewed)" \
+  SHIP_PR_THREAD_WAIT_TIMEOUT=0 SHIP_PR_THREADS_FIXTURES="$(tf one-unresolved.json)" <<'EOF'
+reviewed: 1 -> 2
+threads still unresolved after 0m — reply and re-arm, or resolve by hand
+EOF
+
+# The recheck's own red-check line ends `— not arming`, not phase 1's
+# `— not pinging` — the whole point of parameterising the suffix. Three
+# required contexts here, so `checks-terminal.json`'s red `Images (api)`
+# actually registers against the gate.
+check reviewed-checks-recheck-red 0 "$(f quiet reviewed)" "$three" \
+  SHIP_PR_CHECKS_FIXTURES="$(cf checks-green-three.json checks-terminal.json)" <<'EOF'
+reviewed: 1 -> 2
+FAIL  Images (api)
+checks red: Images (api) — not arming
 EOF
 
 # No comments fixture, so the cooldown arithmetic has nothing to read and the
@@ -281,7 +356,7 @@ stale rate-limit marker at arm time, deadline lapsed — pinging anyway
 cooling down 0m, re-pinging at <time>
 offline: re-ping suppressed, continuing as if posted
 reviewed clean, count unchanged at 1
-offline: auto-merge not armed
+offline: auto-merge not armed (would arm on fixture-head-sha)
 EOF
 
 # One retry and no more: the second refusal is the owner's call.
