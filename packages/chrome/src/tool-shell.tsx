@@ -245,9 +245,14 @@ export function ToolShell({
   // region keeps the centred, padded column — putting the whole layout in one
   // container insets the rail by the container's own gutter and makes it read
   // as a card on a page.
+  // `pl-16` is the gutter the fixed rail sits in, and it is deliberately the
+  // *collapsed* width rather than the expanded one. The rail is out of flow, so
+  // this is the only thing reserving space for it; pinning the gutter to one
+  // width is what stops expanding the rail from shoving the page sideways.
+  // Expanded, the rail spans onto the content instead.
   if (hasSections) {
     return (
-      <div className={cn("relative flex min-h-[100dvh] w-full", className)}>
+      <div className={cn("relative flex min-h-[100dvh] w-full pl-16", className)}>
         <GraphBackground />
         {skipLink}
 

@@ -61,17 +61,25 @@ export function ToolSectionRail({
       className={cn(
         // Flush to the viewport edge and full height: this is application
         // chrome, not a card on a page. Only the content region beside it gets
-        // the shell's centred, padded container. `relative` is load-bearing
-        // for the toggle below — it must not gain `overflow-hidden`, or the
-        // part of the toggle that overhangs the right edge is clipped.
+        // the shell's centred, padded container.
+        //
+        // `fixed`, so expanding the rail never reflows the page. The shell
+        // reserves a constant gutter the width of the *collapsed* rail, and an
+        // expanded rail spans that gutter onto the content rather than pushing
+        // it — content that jumped sideways every time the rail opened would
+        // cost the reader their place for no information.
+        //
+        // Being positioned also makes this the toggle's containing block, so
+        // it must never gain `overflow-hidden` or the part of the toggle that
+        // overhangs the right edge is clipped away.
+        //
         // `z-10` belongs on the rail, not only on the toggle inside it.
         // `backdrop-blur-sm` sets a `backdrop-filter`, which creates a
         // stacking context, so a `z-index` on a descendant is confined to the
         // rail and never competes with the page. Without it the toggle — which
-        // now hangs past the rail's edge — is painted over by
-        // `ToolPageContainer`, a later `relative` sibling, and stops being
-        // clickable while still looking perfectly fine.
-        "relative z-10 flex shrink-0 flex-col gap-4 border-r border-border/60 bg-background/70 p-3 backdrop-blur-sm",
+        // hangs past the rail's edge — is painted over by `ToolPageContainer`
+        // and stops being clickable while still looking perfectly fine.
+        "fixed top-0 left-0 z-10 flex h-[100dvh] shrink-0 flex-col gap-4 border-r border-border/60 bg-background/70 p-3 backdrop-blur-sm",
         collapsed ? "w-16" : "w-56",
       )}
     >
@@ -87,15 +95,15 @@ export function ToolSectionRail({
           expanded, and it does not depend on the button's own width either. */}
       <Button
         aria-label={collapsed ? "Expand sections" : "Collapse sections"}
-        className="absolute left-full top-3 z-10 ml-2 bg-background"
+        className="absolute top-3 left-full z-10 ml-2 text-muted-foreground hover:bg-transparent hover:text-foreground"
         onClick={onToggleCollapsed}
         size="icon"
-        variant="outline"
+        variant="ghost"
       >
         {collapsed ? (
-          <RiSidebarUnfoldLine aria-hidden="true" className="size-4" />
+          <RiSidebarUnfoldLine aria-hidden="true" className="size-5" />
         ) : (
-          <RiSidebarFoldLine aria-hidden="true" className="size-4" />
+          <RiSidebarFoldLine aria-hidden="true" className="size-5" />
         )}
       </Button>
 
