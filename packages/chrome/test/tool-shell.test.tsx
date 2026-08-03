@@ -95,6 +95,42 @@ describe("ToolShell", () => {
     expect(footer).toHaveTextContent(`${new Date().getFullYear()} Gwen Phalan`);
     expect(within(footer).queryByRole("link")).not.toBeInTheDocument();
   });
+
+  it("keeps the footer landmark, empty, when showCopyright is false and there is no other footer content", async () => {
+    await renderInRouter(
+      <ToolShell ownerName="Gwen Phalan" showCopyright={false}>
+        tool content
+      </ToolShell>,
+    );
+
+    // The `contentinfo` landmark count must not vary with `showCopyright` —
+    // the footer strip stays present in both ToolShell layouts regardless of
+    // its content, per packages/chrome/CLAUDE.md.
+    const footer = screen.getByRole("contentinfo");
+
+    expect(footer).not.toHaveTextContent(`${new Date().getFullYear()} Gwen Phalan`);
+    expect(within(footer).queryByRole("link")).not.toBeInTheDocument();
+  });
+
+  it("still renders the footer's tool attribution when showCopyright is false", async () => {
+    await renderInRouter(
+      <ToolShell
+        footerEnd={<ToolFooterLink href="https://example.test/src">Source</ToolFooterLink>}
+        ownerName="Gwen Phalan"
+        showCopyright={false}
+      >
+        tool content
+      </ToolShell>,
+    );
+
+    const footer = screen.getByRole("contentinfo");
+
+    expect(within(footer).getByRole("link", { name: "Source" })).toHaveAttribute(
+      "href",
+      "https://example.test/src",
+    );
+    expect(footer).not.toHaveTextContent(`${new Date().getFullYear()} Gwen Phalan`);
+  });
 });
 
 describe("ToolTitleBar", () => {

@@ -69,6 +69,8 @@ export type PublicShellProps = {
   navItems: PublicNavItem[];
   /** Name in the footer's copyright line. */
   ownerName?: string;
+  /** Renders the footer's "© year owner" line. Defaults to `true`; set to `false` to omit it. */
+  showCopyright?: boolean;
   /**
    * Rendered last, inside the page container and out of the column's flow.
    * Exists for app-owned overlays that must sit inside the shell rather than
@@ -108,18 +110,22 @@ export function PublicFooterLink({ className, ...props }: React.ComponentProps<"
 function PublicSiteFooter({
   links,
   ownerName,
+  showCopyright,
 }: {
   links: React.ReactNode | undefined;
   ownerName: string;
+  showCopyright: boolean;
 }) {
   const year = new Date().getFullYear();
 
   return (
     <footer className="site-panel site-shell overflow-hidden px-5 py-5 lg:px-8 lg:py-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-xs text-muted-foreground">
-          © {year} {ownerName}.
-        </p>
+        {showCopyright ? (
+          <p className="text-xs text-muted-foreground">
+            © {year} {ownerName}.
+          </p>
+        ) : null}
 
         {links === undefined ? null : (
           <div className="flex flex-wrap items-center gap-4">{links}</div>
@@ -258,12 +264,14 @@ function PublicShellContent({
   logoSrc,
   navItems,
   ownerName,
+  showCopyright,
   trailing,
 }: Required<Pick<PublicShellProps, "breadcrumbItems" | "children" | "navItems" | "ownerName">> & {
   accountControl: React.ReactNode | undefined;
   footerLinks: React.ReactNode | undefined;
   homeLabel: string;
   logoSrc: string;
+  showCopyright: boolean;
   trailing: React.ReactNode | undefined;
 }) {
   const headerRef = useRef<HTMLElement | null>(null);
@@ -407,7 +415,7 @@ function PublicShellContent({
         {children}
       </main>
 
-      <PublicSiteFooter links={footerLinks} ownerName={ownerName} />
+      <PublicSiteFooter links={footerLinks} ownerName={ownerName} showCopyright={showCopyright} />
 
       {/* Taken out of flow. A host that renders a zero-height element is still
           a zero-height *flex item*, and it earns the column's `gap-10` — which
@@ -427,6 +435,7 @@ export function PublicShell({
   logoSrc = "/logo.png",
   navItems,
   ownerName = DEFAULT_OWNER_NAME,
+  showCopyright = true,
   trailing,
 }: PublicShellProps) {
   return (
@@ -438,6 +447,7 @@ export function PublicShell({
       logoSrc={logoSrc}
       navItems={navItems}
       ownerName={ownerName}
+      showCopyright={showCopyright}
       trailing={trailing}
     >
       {children}

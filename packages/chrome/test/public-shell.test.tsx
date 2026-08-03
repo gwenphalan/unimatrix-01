@@ -144,6 +144,22 @@ describe("PublicShell", () => {
     );
   });
 
+  it("drops the owner's copyright while keeping footer links when showCopyright is false", async () => {
+    await renderShell({
+      footerLinks: <PublicFooterLink href="mailto:someone@example.test">Email</PublicFooterLink>,
+      ownerName: "Test Owner",
+      showCopyright: false,
+    });
+
+    const footer = screen.getByRole("contentinfo");
+
+    expect(footer).not.toHaveTextContent("Test Owner");
+    expect(within(footer).getByRole("link", { name: "Email" })).toHaveAttribute(
+      "href",
+      "mailto:someone@example.test",
+    );
+  });
+
   it("renders the trailing slot out of the column's flow", async () => {
     await renderShell({ trailing: <span data-testid="toaster" /> });
 
