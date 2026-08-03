@@ -44,7 +44,7 @@ export default defineConfig({
     // copied from a sibling: `@unimatrix/config-vitest` owns the provider,
     // reporters and exclusions, and each workspace supplies its own numbers.
     //
-    // Measured 2026-08-02 at 52.38% statements / 57.14% functions, rounded
+    // Measured 2026-08-02 at 53.84% statements / 57.14% functions, rounded
     // down. `src/main.tsx`, `src/routes/__root.tsx`, `createAppRouter`, and
     // every route's non-lazy file sit at zero — they are bootstrap and route
     // registration, exercised by the browser and by nothing else here. That is
@@ -52,7 +52,7 @@ export default defineConfig({
     // the CMS lands, the ratio moves and this number gets re-measured rather
     // than lowered.
     coverage: createCoverageConfig({
-      thresholds: { statements: 52, functions: 57 },
+      thresholds: { statements: 53, functions: 57 },
     }),
     environment: "jsdom",
     include: ["test/**/*.test.ts", "test/**/*.test.tsx"],

@@ -6,6 +6,11 @@ import { buildSignInHref } from "@/lib/config";
 type RequireSignedInProps = {
   authAppUrl: string;
   children: ReactNode;
+  /**
+   * Whether to redirect at all. Off in dev — see `main.tsx`, which is where
+   * that is decided and why.
+   */
+  enabled: boolean;
 };
 
 /**
@@ -27,8 +32,12 @@ type RequireSignedInProps = {
  * assignment rather than a router navigation — a `Link`/`navigate` call
  * cannot leave the SPA.
  */
-export function RequireSignedIn({ authAppUrl, children }: RequireSignedInProps) {
+export function RequireSignedIn({ authAppUrl, children, enabled }: RequireSignedInProps) {
   const { isLoaded, isSignedIn } = useAuth();
+
+  if (!enabled) {
+    return <>{children}</>;
+  }
 
   if (!isLoaded) {
     return null;

@@ -41,7 +41,7 @@ describe("RequireSignedIn", () => {
     const assign = stubLocationAssign();
 
     render(
-      <RequireSignedIn authAppUrl={AUTH_APP_URL}>
+      <RequireSignedIn authAppUrl={AUTH_APP_URL} enabled>
         <p>console body</p>
       </RequireSignedIn>,
     );
@@ -58,7 +58,7 @@ describe("RequireSignedIn", () => {
     const assign = stubLocationAssign();
 
     render(
-      <RequireSignedIn authAppUrl={AUTH_APP_URL}>
+      <RequireSignedIn authAppUrl={AUTH_APP_URL} enabled>
         <p>console body</p>
       </RequireSignedIn>,
     );
@@ -75,7 +75,25 @@ describe("RequireSignedIn", () => {
     const assign = stubLocationAssign();
 
     render(
-      <RequireSignedIn authAppUrl={AUTH_APP_URL}>
+      <RequireSignedIn authAppUrl={AUTH_APP_URL} enabled>
+        <p>console body</p>
+      </RequireSignedIn>,
+    );
+
+    expect(assign).not.toHaveBeenCalled();
+    expect(screen.getByText("console body")).toBeInTheDocument();
+  });
+
+  // Dev builds pass `enabled={false}`. The console has to stay reachable on a
+  // loopback port, where the hub can never issue a session and the redirect
+  // would therefore loop straight back out.
+  it("renders its children signed out when disabled", () => {
+    auth.isLoaded = true;
+    auth.isSignedIn = false;
+    const assign = stubLocationAssign();
+
+    render(
+      <RequireSignedIn authAppUrl={AUTH_APP_URL} enabled={false}>
         <p>console body</p>
       </RequireSignedIn>,
     );

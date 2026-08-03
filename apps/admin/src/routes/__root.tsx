@@ -19,7 +19,7 @@ function RootComponent() {
   const { runtimeConfig } = Route.useRouteContext();
 
   return (
-    <RequireSignedIn authAppUrl={runtimeConfig.authAppUrl}>
+    <RequireSignedIn authAppUrl={runtimeConfig.authAppUrl} enabled={runtimeConfig.requireSignIn}>
       <AppShell>
         <HeadContent />
         <Outlet />
