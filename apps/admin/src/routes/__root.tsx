@@ -5,6 +5,7 @@ import { Badge, Button, Card } from "@unimatrix/ui/public";
 
 import { AppShell } from "@/app/app-shell";
 import type { AppRouterContext } from "@/app/router";
+import { RequireSignedIn } from "@/app/require-signed-in";
 
 export const Route = createRootRouteWithContext<AppRouterContext>()({
   component: RootComponent,
@@ -18,10 +19,12 @@ function RootComponent() {
   const { runtimeConfig } = Route.useRouteContext();
 
   return (
-    <AppShell authAppUrl={runtimeConfig.authAppUrl}>
-      <HeadContent />
-      <Outlet />
-    </AppShell>
+    <RequireSignedIn authAppUrl={runtimeConfig.authAppUrl}>
+      <AppShell>
+        <HeadContent />
+        <Outlet />
+      </AppShell>
+    </RequireSignedIn>
   );
 }
 

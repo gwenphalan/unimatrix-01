@@ -6,7 +6,6 @@ import { AccountControl } from "@/features/auth/account-control";
 import { useAdminSections } from "./sections";
 
 type AppShellProps = {
-  authAppUrl: string;
   children: ReactNode;
 };
 
@@ -20,19 +19,20 @@ type AppShellProps = {
  * and an admin console is the clearest case on the tool side.
  *
  * `sections` is non-empty, so the shell renders the rail rather than a title
- * bar: the wordmark, `accountControl`, and copyright all move into it.
+ * bar: the wordmark and `accountControl` move into it, and the footer with
+ * the copyright link stays below the content, same as the title-bar layout.
  * `sectionsHomeHref="/"` sends the wordmark to the admin root, which is
  * same-origin — unlike `homeHref`, which stays the absolute public-site URL
  * because `admin.unimatrix-01.dev` is a separate origin and the copyright
  * link is the way back out to it (the root `AGENTS.md`'s "a way back to the
  * public site belongs in tool chrome").
  */
-export function AppShell({ authAppUrl, children }: AppShellProps) {
+export function AppShell({ children }: AppShellProps) {
   const sections = useAdminSections();
 
   return (
     <ToolShell
-      accountControl={<AccountControl authAppUrl={authAppUrl} />}
+      accountControl={<AccountControl />}
       homeHref="https://unimatrix-01.dev/"
       homeLabel="Unimatrix Admin"
       sections={sections}

@@ -6,18 +6,14 @@ import {
   createRouter,
 } from "@tanstack/react-router";
 import { render, screen, within } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
-// `SignedIn`/`SignedOut` need a mounted Clerk provider, and mounting a real one
-// would need live keys. The mock is a *switch* rather than a pair that both
-// render their children: with both rendering, swapping the two wrappers in the
-// shell leaves every assertion below green, so the two tests named after auth
-// gating would assert nothing about gating at all.
-const auth = vi.hoisted(() => ({ signedIn: true }));
-
+// `SignedIn` needs a mounted Clerk provider, and mounting a real one would
+// need live keys. `RequireSignedIn` is what gates a signed-out visitor out of
+// this component entirely (see require-signed-in.test.tsx) — by the time
+// `AppShell` mounts a session is guaranteed, so this mock always renders.
 vi.mock("@unimatrix/auth/react", () => ({
-  SignedIn: ({ children }: { children: ReactNode }) => (auth.signedIn ? <>{children}</> : null),
-  SignedOut: ({ children }: { children: ReactNode }) => (auth.signedIn ? null : <>{children}</>),
+  SignedIn: ({ children }: { children: ReactNode }) => <>{children}</>,
   UserButton: () => <button type="button">Account</button>,
 }));
 
@@ -25,7 +21,7 @@ const { AppShell } = await import("../src/app/app-shell.js");
 
 function renderShell(children: ReactNode) {
   const rootRoute = createRootRoute({
-    component: () => <AppShell authAppUrl="https://auth.example.test">{children}</AppShell>,
+    component: () => <AppShell>{children}</AppShell>,
   });
   const router = createRouter({
     history: createMemoryHistory({ initialEntries: ["/"] }),
@@ -36,10 +32,6 @@ function renderShell(children: ReactNode) {
 }
 
 describe("AppShell", () => {
-  beforeEach(() => {
-    auth.signedIn = true;
-  });
-
   it("renders its children inside the shared tool shell", async () => {
     renderShell(<p>console body</p>);
 
@@ -50,7 +42,7 @@ describe("AppShell", () => {
     expect(screen.getByRole("link", { name: "Skip to main content" })).toBeInTheDocument();
   });
 
-  it("carries a wordmark that stays on the admin origin, and a way back to the public site in the rail's footer", async () => {
+  it("carries a wordmark that stays on the admin origin, and a way back to the public site in the footer", async () => {
     renderShell(<p>console body</p>);
 
     // The wordmark: `sectionsHomeHref="/"` keeps it same-origin, unlike the
@@ -59,8 +51,8 @@ describe("AppShell", () => {
       "href",
       "/",
     );
-    // The way back out to the public site now lives in the rail's copyright
-    // link, still pointing off-origin.
+    // The way back out to the public site is the footer's copyright link,
+    // still pointing off-origin.
     expect(
       within(screen.getByRole("contentinfo")).getByRole("link", { name: /Gwen Phalan/u }),
     ).toHaveAttribute("href", "https://unimatrix-01.dev/");
@@ -101,25 +93,9 @@ describe("AppShell", () => {
     expect(screen.getByRole("contentinfo")).not.toHaveClass("site-shell");
   });
 
-  it("sends the signed-out visitor to the auth hub with a return address", async () => {
-    auth.signedIn = false;
-    renderShell(<p>console body</p>);
-
-    // jsdom's default location. Asserted through the built href rather than a
-    // hardcoded string so the encoding stays covered.
-    expect(await screen.findByRole("link", { name: "Sign in" })).toHaveAttribute(
-      "href",
-      `https://auth.example.test/sign-in?redirect_url=${encodeURIComponent(window.location.href)}`,
-    );
-    // The negative half is what makes this a gating test: the account control
-    // must be absent, not merely the sign-in link present.
-    expect(screen.queryByRole("button", { name: "Account" })).not.toBeInTheDocument();
-  });
-
-  it("shows the account control to a signed-in operator", async () => {
+  it("shows the account control", async () => {
     renderShell(<p>console body</p>);
 
     expect(await screen.findByRole("button", { name: "Account" })).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Sign in" })).not.toBeInTheDocument();
   });
 });
