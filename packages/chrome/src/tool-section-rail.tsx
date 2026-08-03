@@ -100,7 +100,11 @@ export function ToolSectionRail({
           to={sectionsHomeHref}
         >
           <img alt="" className="size-6 shrink-0" src={logoSrc} />
-          <span className={cn("truncate", collapsed && "sr-only")}>{homeLabel}</span>
+          {/* Collapsed, the logo is the whole affordance — the wordmark is not
+              hidden, it is not rendered. `aria-label` already carries the name,
+              so a screen reader loses nothing, and an `sr-only` copy of the
+              same string beside it would be dead markup either way. */}
+          {collapsed ? null : <span className="truncate">{homeLabel}</span>}
         </Link>
 
         <Button
