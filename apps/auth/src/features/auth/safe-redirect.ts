@@ -54,6 +54,20 @@ export function safeRedirectUrl(raw: string | undefined, fallback = "/"): string
 }
 
 /**
+ * True when `raw` is what actually produced `target` — i.e. `target` is a
+ * genuine validated redirect destination, not `safeRedirectUrl`'s fallback.
+ * `target !== "/"` is the tie-breaker for the one case equality alone can't
+ * resolve: a caller passing the literal string `"/"` as `raw` also fails
+ * `isAllowedRedirectUrl` (a bare path is never absolute) and falls back to
+ * `"/"`, which would otherwise equal `raw` by coincidence. Only meaningful
+ * against the default fallback — callers that pass a custom `fallback` to
+ * `safeRedirectUrl` need their own comparison.
+ */
+export function hasValidatedRedirectUrl(raw: string | undefined, target: string): boolean {
+  return raw !== undefined && target === raw && target !== "/";
+}
+
+/**
  * Appends a `redirect_url` query param to an in-app path so switching between
  * `/sign-in` and `/sign-up` preserves the originating destination. The value
  * is passed through unvalidated (it is re-validated by {@link safeRedirectUrl}
