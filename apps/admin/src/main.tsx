@@ -6,7 +6,7 @@ import { RouterProvider } from "@tanstack/react-router";
 import { AuthProvider } from "@unimatrix/auth/react";
 
 import { createAppRouter } from "@/app/router";
-import { buildSignInHref, loadAdminAppRuntimeConfig } from "@/lib/config";
+import { DEV_AUTH_APP_URL, buildSignInHref, loadAdminAppRuntimeConfig } from "@/lib/config";
 import "@/styles.css";
 
 const rootElement = document.getElementById("app");
@@ -21,15 +21,17 @@ document.documentElement.style.colorScheme = "dark";
 const runtimeConfig = {
   ...loadAdminAppRuntimeConfig({
     VITE_API_BASE_URL: import.meta.env.VITE_API_BASE_URL,
-    VITE_AUTH_APP_URL: import.meta.env.VITE_AUTH_APP_URL,
+    // An explicit value always wins; the dev fallback only fills the gap the
+    // production default would otherwise fill, which would bounce a dev server
+    // at the live hub and strand it there with a cookie it cannot read.
+    VITE_AUTH_APP_URL:
+      import.meta.env.VITE_AUTH_APP_URL ?? (import.meta.env.DEV ? DEV_AUTH_APP_URL : undefined),
     VITE_CLERK_PUBLISHABLE_KEY: import.meta.env.VITE_CLERK_PUBLISHABLE_KEY,
   }),
-  // Off in dev, and this is the only place that can decide it: the hub issues
-  // a session for `*.unimatrix-01.dev` and never for a loopback port, so a dev
-  // server sends you out and gets you straight back signed-out. The console
-  // would be unreachable locally for the sake of re-proving a redirect that
-  // production already exercises.
-  requireSignIn: !import.meta.env.DEV,
+  // On everywhere, dev included: the signed-out bounce is the first thing an
+  // admin surface does, so a dev server that skips it cannot exercise the
+  // permission gate behind it either.
+  requireSignIn: true,
 };
 
 const queryClient = new QueryClient();

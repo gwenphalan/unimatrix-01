@@ -19,10 +19,9 @@ export interface AdminAppRuntimeConfig {
    * not validated here — it is a property of the build, supplied by
    * `main.tsx`, which is the one file allowed to read `import.meta.env`.
    *
-   * It is off in dev because the hub only ever establishes a session for
-   * `*.unimatrix-01.dev`, never for a loopback port, so a dev server can only
-   * ever bounce straight back out again and the console is unreachable
-   * locally. Production builds always set it.
+   * On in every build, dev included. `apps/auth`'s `safe-redirect.ts` accepts
+   * a loopback return address, so a local hub issues a session a local console
+   * can read — cookies are host-scoped and ignore the port.
    */
   requireSignIn: boolean;
 }
@@ -71,6 +70,18 @@ export function loadAdminAppRuntimeConfig(
 export function loadAdminAppDevProxyConfig(env: AdminAppDevProxyEnv): AdminAppDevProxyConfig {
   return loadDevProxyConfig("admin app", env);
 }
+
+/**
+ * The auth hub's dev server (`apps/auth`, port 5175, `strictPort`).
+ *
+ * `VITE_AUTH_APP_URL` defaults to the production hub, which is right for a
+ * deployed build and wrong for a dev server: signing in there sets a cookie
+ * for `.unimatrix-01.dev` that a `localhost` console can never read, so the
+ * bounce is a one-way trip. `main.tsx` substitutes this in dev when the
+ * variable is unset, which is what lets the real signed-out flow be exercised
+ * locally instead of switched off.
+ */
+export const DEV_AUTH_APP_URL = "http://localhost:5175";
 
 /**
  * The public site, as an absolute URL. Every link from this origin to the site

@@ -1,10 +1,9 @@
 import { render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-// Both branches of the panel turn on `isSignedIn`, and the signed-out one is
-// only reachable where `requireSignIn` is off — so a rendered Clerk session is
-// the wrong tool here. Stubbing the hook is what lets both branches be asserted
-// without a live key.
+// Both branches of the panel turn on `isSignedIn`, and asserting either
+// against a real Clerk session would need a live key. Stubbing the hook is
+// what keeps this a unit test.
 const { mockUseAuth } = vi.hoisted(() => ({ mockUseAuth: vi.fn() }));
 
 vi.mock("@unimatrix/auth/react", () => ({ useAuth: mockUseAuth }));
