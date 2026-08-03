@@ -5,7 +5,7 @@ import {
   createRootRoute,
   createRouter,
 } from "@tanstack/react-router";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // `SignedIn`/`SignedOut` need a mounted Clerk provider, and mounting a real one
@@ -50,13 +50,38 @@ describe("AppShell", () => {
     expect(screen.getByRole("link", { name: "Skip to main content" })).toBeInTheDocument();
   });
 
-  it("carries a title bar with the way back to the public site", async () => {
+  it("carries a wordmark that stays on the admin origin, and a way back to the public site in the rail's footer", async () => {
     renderShell(<p>console body</p>);
 
-    expect(await screen.findByRole("link", { name: "Unimatrix" })).toHaveAttribute(
+    // The wordmark: `sectionsHomeHref="/"` keeps it same-origin, unlike the
+    // old title bar's `homeHref`.
+    expect(await screen.findByRole("link", { name: "Unimatrix Admin" })).toHaveAttribute(
       "href",
-      "https://unimatrix-01.dev/",
+      "/",
     );
+    // The way back out to the public site now lives in the rail's copyright
+    // link, still pointing off-origin.
+    expect(
+      within(screen.getByRole("contentinfo")).getByRole("link", { name: /Gwen Phalan/u }),
+    ).toHaveAttribute("href", "https://unimatrix-01.dev/");
+  });
+
+  it("renders the seven section links", async () => {
+    renderShell(<p>console body</p>);
+
+    const nav = await screen.findByRole("navigation", { name: "Sections" });
+
+    for (const label of [
+      "Overview",
+      "Content",
+      "Feedback",
+      "Deploys",
+      "Analytics",
+      "Social",
+      "Secrets",
+    ]) {
+      expect(within(nav).getByRole("link", { name: label })).toBeInTheDocument();
+    }
   });
 
   it("is a tool surface: no site nav tabs and no site footer", async () => {
@@ -68,10 +93,11 @@ describe("AppShell", () => {
       expect(screen.queryByRole("link", { name: label })).not.toBeInTheDocument();
     }
     // The other half of the name, and it is not "no `contentinfo` at all":
-    // `ToolShell` renders its own slim footer beside `main`, so one landmark is
-    // expected. What must not appear is `PublicSiteFooter`, the `site-shell`
-    // panel that only `PublicShell` mounts. `getByRole` throws on a second
-    // `contentinfo`, so this also catches the site footer arriving alongside.
+    // the section rail renders its own footer beside `main`, so one landmark
+    // is expected. What must not appear is `PublicSiteFooter`, the
+    // `site-shell` panel that only `PublicShell` mounts. `getByRole` throws on
+    // a second `contentinfo`, so this also catches the site footer arriving
+    // alongside.
     expect(screen.getByRole("contentinfo")).not.toHaveClass("site-shell");
   });
 

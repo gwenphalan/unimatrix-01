@@ -10,33 +10,115 @@
 
 import { Route as rootRouteImport } from './__root'
 import { Route as IndexRouteImport } from './index'
+import { Route as AnalyticsRouteImport } from './analytics'
+import { Route as ContentRouteImport } from './content'
+import { Route as DeploysRouteImport } from './deploys'
+import { Route as FeedbackRouteImport } from './feedback'
+import { Route as SecretsRouteImport } from './secrets'
+import { Route as SocialRouteImport } from './social'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any).lazy(() => import('./index.lazy').then((d) => d.Route))
+const AnalyticsRoute = AnalyticsRouteImport.update({
+  id: '/analytics',
+  path: '/analytics',
+  getParentRoute: () => rootRouteImport,
+} as any).lazy(() => import('./analytics.lazy').then((d) => d.Route))
+const ContentRoute = ContentRouteImport.update({
+  id: '/content',
+  path: '/content',
+  getParentRoute: () => rootRouteImport,
+} as any).lazy(() => import('./content.lazy').then((d) => d.Route))
+const DeploysRoute = DeploysRouteImport.update({
+  id: '/deploys',
+  path: '/deploys',
+  getParentRoute: () => rootRouteImport,
+} as any).lazy(() => import('./deploys.lazy').then((d) => d.Route))
+const FeedbackRoute = FeedbackRouteImport.update({
+  id: '/feedback',
+  path: '/feedback',
+  getParentRoute: () => rootRouteImport,
+} as any).lazy(() => import('./feedback.lazy').then((d) => d.Route))
+const SecretsRoute = SecretsRouteImport.update({
+  id: '/secrets',
+  path: '/secrets',
+  getParentRoute: () => rootRouteImport,
+} as any).lazy(() => import('./secrets.lazy').then((d) => d.Route))
+const SocialRoute = SocialRouteImport.update({
+  id: '/social',
+  path: '/social',
+  getParentRoute: () => rootRouteImport,
+} as any).lazy(() => import('./social.lazy').then((d) => d.Route))
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/analytics': typeof AnalyticsRoute
+  '/content': typeof ContentRoute
+  '/deploys': typeof DeploysRoute
+  '/feedback': typeof FeedbackRoute
+  '/secrets': typeof SecretsRoute
+  '/social': typeof SocialRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/analytics': typeof AnalyticsRoute
+  '/content': typeof ContentRoute
+  '/deploys': typeof DeploysRoute
+  '/feedback': typeof FeedbackRoute
+  '/secrets': typeof SecretsRoute
+  '/social': typeof SocialRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/analytics': typeof AnalyticsRoute
+  '/content': typeof ContentRoute
+  '/deploys': typeof DeploysRoute
+  '/feedback': typeof FeedbackRoute
+  '/secrets': typeof SecretsRoute
+  '/social': typeof SocialRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/analytics'
+    | '/content'
+    | '/deploys'
+    | '/feedback'
+    | '/secrets'
+    | '/social'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/analytics'
+    | '/content'
+    | '/deploys'
+    | '/feedback'
+    | '/secrets'
+    | '/social'
+  id:
+    | '__root__'
+    | '/'
+    | '/analytics'
+    | '/content'
+    | '/deploys'
+    | '/feedback'
+    | '/secrets'
+    | '/social'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AnalyticsRoute: typeof AnalyticsRoute
+  ContentRoute: typeof ContentRoute
+  DeploysRoute: typeof DeploysRoute
+  FeedbackRoute: typeof FeedbackRoute
+  SecretsRoute: typeof SecretsRoute
+  SocialRoute: typeof SocialRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +130,59 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/analytics': {
+      id: '/analytics'
+      path: '/analytics'
+      fullPath: '/analytics'
+      preLoaderRoute: typeof AnalyticsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/content': {
+      id: '/content'
+      path: '/content'
+      fullPath: '/content'
+      preLoaderRoute: typeof ContentRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/deploys': {
+      id: '/deploys'
+      path: '/deploys'
+      fullPath: '/deploys'
+      preLoaderRoute: typeof DeploysRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/feedback': {
+      id: '/feedback'
+      path: '/feedback'
+      fullPath: '/feedback'
+      preLoaderRoute: typeof FeedbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/secrets': {
+      id: '/secrets'
+      path: '/secrets'
+      fullPath: '/secrets'
+      preLoaderRoute: typeof SecretsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/social': {
+      id: '/social'
+      path: '/social'
+      fullPath: '/social'
+      preLoaderRoute: typeof SocialRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AnalyticsRoute: AnalyticsRoute,
+  ContentRoute: ContentRoute,
+  DeploysRoute: DeploysRoute,
+  FeedbackRoute: FeedbackRoute,
+  SecretsRoute: SecretsRoute,
+  SocialRoute: SocialRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

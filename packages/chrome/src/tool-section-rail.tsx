@@ -1,10 +1,23 @@
-import type { ComponentType, ReactNode, SVGProps } from "react";
+import type { ComponentType, ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { RiSidebarFoldLine, RiSidebarUnfoldLine } from "@remixicon/react";
 
 import { Button, cn } from "@unimatrix/ui/public";
 
 import { ToolFooterLink } from "./tool-shell.js";
+
+/**
+ * Narrower than the icon libraries' own prop types, same as `PublicNavIcon`
+ * in `./public-shell.tsx` and for the same two reasons: it is the only
+ * surface this file uses, and under `exactOptionalPropertyTypes` a class
+ * component's `defaultProps` — which is how Remix icons are typed — is
+ * checked against this shape, so a target without `| undefined` on every
+ * prop rejects them.
+ */
+export type ToolSectionIcon = ComponentType<{
+  "aria-hidden"?: boolean | "true" | "false" | undefined;
+  className?: string | undefined;
+}>;
 
 /**
  * One entry in a tool's section rail. `to` plus a plain `active` boolean,
@@ -14,7 +27,7 @@ import { ToolFooterLink } from "./tool-shell.js";
  */
 export type ToolSection = {
   active: boolean;
-  icon?: ComponentType<SVGProps<SVGSVGElement>>;
+  icon?: ToolSectionIcon;
   label: string;
   to: string;
 };
