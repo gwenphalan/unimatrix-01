@@ -5,9 +5,9 @@ usage() {
   cat <<'EOF'
 watch-pr.sh [--no-review] <owner/repo> <pr>
 
-Watches a pull request from "CI is still running" to "auto-merge is armed", in
-two sequential phases and one process. Arm it under `Monitor` and carry on
-working.
+Watches a pull request from "CI is still running" to "merged", in two
+sequential phases and the wait that follows a successful arm, all in one
+process. Arm it under `Monitor` and carry on working.
 
   Phase 1  every required status check reports, and every one is green
   Phase 2  CodeRabbit is pinged and the review is waited out. A clean review
@@ -15,6 +15,10 @@ working.
            exit — it stays up through the reply-and-fix cycle: every review
            thread has to clear, the required checks have to go green again on
            whatever head that produced, and only then does it arm
+
+Arming is not merging. GitHub still has to run every required check on its
+own clock before it squashes, so the script keeps running past a successful
+arm — see "After the arm" below.
 
 `--no-review` skips the ping and the review wait, but not the wait that
 follows one: it still waits for every review thread to clear before arming, on
@@ -201,6 +205,30 @@ to a silent failure, and a review that is genuinely running would trip it. It
 heartbeats on stderr instead, so silence carries its own elapsed time without
 costing the caller a notification per interval.
 
+=== After the arm ===
+
+Arming is not merging: `gh pr merge --auto` hands the decision to GitHub, which
+still waits for every required check on its own clock before it squashes. So a
+successful arm — on the clean row, the findings row, or `--no-review` — does
+not end the run. It polls instead, the same way phase 2 polls on a ping it
+posted rather than capping the wait: this waits on something the script itself
+just placed (the arm), and a cap here would let the merge complete unattended
+after the script had already given up watching it.
+
+It polls for: the PR reaching MERGED (reports the merge sha and stops), the PR
+reaching CLOSED without merging (terminal), and three consecutive API failures
+(terminal, same three-strikes shape as every other wait in this script). Two
+staleness cases are also caught, each reported with the exact `gh pr merge
+--match-head-commit` command to re-arm by hand, because GitHub's own docs name
+only two things that disable an armed auto-merge — a push from a user without
+write permission, and switching the base branch — and say nothing about either
+of these:
+
+  - A required check going red after the arm. GitHub's resume behaviour once
+    it goes green again is undocumented, so this does not guess at it.
+  - The head sha moving after the arm, caught by comparing the live head sha
+    against the sha the arm pinned on every poll.
+
 Arguments:
   <owner/repo>  e.g. gwenphalan/unimatrix-01
   <pr>          Pull request number
@@ -247,9 +275,10 @@ exercisable.
 === After the ping — findings, and the review budget is one, this flag is not
     a second one ===
 
-A clean review arms immediately, on the sha it was reviewed on, and stops
-there. A review with findings, and a `--no-review` resume, both keep the
-script running instead: reply-and-fix is a real workflow with real wall-clock
+A clean review arms immediately, on the sha it was reviewed on, and moves
+straight into the wait-for-merge phase (see "After the arm" above). A review
+with findings, and a `--no-review` resume, both keep the script running before
+they ever reach an arm: reply-and-fix is a real workflow with real wall-clock
 in it, and the alternative was ending the run at the ping and pushing that
 whole cycle onto a human running a second `watch-pr.sh --no-review` — which is
 exactly the flag this section exists to stop needing.
@@ -293,9 +322,11 @@ deliberately not a required check, so that re-verification says nothing about
 whether the arming sha was ever read.
 
 Environment:
-  SHIP_PR_POLL_SECONDS  Seconds between polls, in both phases. Default 30. Set
-                        it to 0 for a fixture run, which has nothing to wait for
-                        and would otherwise take 30s per entry.
+  SHIP_PR_POLL_SECONDS  Seconds between polls, in both phases and the
+                        wait-for-merge phase that follows a successful arm.
+                        Default 30. Set it to 0 for a fixture run, which has
+                        nothing to wait for and would otherwise take 30s per
+                        entry.
   SHIP_PR_AUTO_REPING   1 to ride out a rate limit and re-ping once (default),
                         0 to report the refusal and exit as before. Only
                         *acting* is gated; a live marker is reported either way.
@@ -426,15 +457,9 @@ Under --no-review, before any wait:
 Otherwise, from phase 2's own ping-and-wait, one line, whichever applies:
   reviewed: <base> -> <n>                     the count rose; the post-review wait starts next
   reviewed clean, count unchanged at <n>      it ran and found nothing, arms directly
-  review in progress                          said once, then carried by the heartbeat
-  live rate-limit marker at arm time, <n>m left
-  stale rate-limit marker at arm time, deadline lapsed — pinging anyway
-  rate-limit marker at arm time, countdown unreadable — pinging anyway
   auto-reping disabled — the ping is yours, nothing was posted
   cannot post the ping — nothing to wait for
   ping timestamp is unreadable — nothing to compare against
-  cooling down <n>m, [re-]pinging at <time>   riding out a rate limit, then one ping
-  pinged at <time> / re-pinged at <time>      the ping is posted; the wait goes on
   offline: [re-]ping suppressed, continuing as if posted
   refused: rate limited, and the [re-]ping could not be posted
   refused: rate limited                       cool down, recompute, re-ping
@@ -456,17 +481,27 @@ checks recheck, from `--no-review` once auto-merge is on — on stdout:
 
 Then the arm, on stdout — the same code and the same lines regardless of which
 of the three call sites (clean review, findings resolved, --no-review) reached
-it:
-  auto-merge armed on <sha> — GitHub squashes once the required checks pass
-  auto-merge armed UNREVIEWED on <sha> — nothing has read this diff
+it. Only the live `gh pr merge` call succeeding leads to the wait-for-merge
+phase below; every other line here is arm_auto_merge()'s own return of 1:
+  auto-merge is off — nothing armed, merge by hand
   auto-merge not armed — PR is a draft
   auto-merge not armed — <n> unresolved threads
   auto-merge not armed — the PR state could not be read
   auto-merge could NOT be armed — merge by hand
+  offline: auto-merge not armed (auto-merge is off)
   offline: auto-merge not armed (would arm on <sha>)
   offline: auto-merge not armed (would be UNREVIEWED on <sha>)
 
-Either phase, or the post-review wait, can also end on stdout with:
+The wait-for-merge phase, reached only from a successful arm — see "After the
+arm" above — on stdout:
+  merged <sha>                                terminal
+  PR closed without merging — nothing left to watch   terminal
+  required check red after arm: <names> — ...re-arm by hand: gh pr merge ...
+  head changed after arm, from <sha> to <sha> — re-arm by hand: gh pr merge ...
+  merge-wait API ERROR xN — stopping rather than waiting blind   three consecutive failures, exit 2
+
+Either phase, the post-review wait, or the wait-for-merge phase can also end
+on stdout with:
   checks API ERROR xN — <message>             three consecutive failures in phase 1 or the recheck
   API ERROR xN (count=<n>) — <message>        three consecutive failures in phase 2's own wait
   FIXTURES EXHAUSTED                          offline runs only
@@ -477,6 +512,7 @@ monitor's output file without waking a caller that only reads stdout:
   still waiting, review running, count=<n>, <m>m elapsed
   still waiting, nothing from CodeRabbit yet, count=<n>, <m>m elapsed
   still waiting, <n> unresolved review threads, <m>m elapsed
+  still waiting for the merge, <m>m elapsed   the wait-for-merge phase's own heartbeat
 
 Also on stderr, said once where they apply:
   cannot reach GitHub — no head sha, do not wait blind   terminal
@@ -487,6 +523,14 @@ Also on stderr, said once where they apply:
   checks green again on <sha>                  the recheck's own boundary
   re-pinned head to <sha>                       immediately before the arm; unchanged from the
                                                  original pin unless a push landed during the wait
+  review in progress                          said once, then carried by the heartbeat
+  live rate-limit marker at arm time, <n>m left
+  stale rate-limit marker at arm time, deadline lapsed — pinging anyway
+  rate-limit marker at arm time, countdown unreadable — pinging anyway
+  cooling down <n>m, [re-]pinging at <time>   riding out a rate limit, then one ping
+  pinged at <time> / re-pinged at <time>      the ping is posted; the wait goes on
+  auto-merge armed on <sha> — GitHub squashes once the required checks pass
+  auto-merge armed UNREVIEWED on <sha> — nothing has read this diff
 
 Exit codes:
   0  a terminal outcome in any wait was reached, or a fixture list ran out
@@ -496,8 +540,9 @@ Exit codes:
      a failed baseline, or a ping that would not post or came back with a
      timestamp nothing can compare against
   2  three consecutive API failures — required checks (either call), the
-     review-wait comment/status reads, or the thread-count read. Each ledger
-     counts separately: different calls, different failure modes.
+     review-wait comment/status reads, the thread-count read, or the
+     wait-for-merge phase's own PR read. Each ledger counts separately:
+     different calls, different failure modes.
 EOF
 }
 
@@ -641,6 +686,26 @@ if [ "${#required[@]}" -eq 0 ]; then
   exit 1
 fi
 required_json=$(printf '%s\n' "${required[@]}" | jq -Rsc 'split("\n") | map(select(length > 0))')
+
+# One-shot bucket read: red/green/outstanding per required context, given a
+# `gh pr checks --json name,bucket,description` payload. $required_json is
+# read from the enclosing scope, same as every other reference to it in this
+# file. Shared by wait_for_required_checks()'s own gate and by
+# wait_for_merge()'s post-arm check, so the bucket vocabulary lives in
+# exactly one place.
+required_gate() {
+  jq -r --argjson req "$required_json" '
+    . as $rows
+    | $req[]
+    | . as $ctx
+    | ([$rows[] | select(.name == $ctx) | .bucket]) as $b
+    | (if ($b | length) == 0 then "outstanding"
+       elif ($b | any(. == "fail" or . == "cancel")) then "red"
+       elif ($b | any(. != "pass" and . != "skipping")) then "outstanding"
+       else "green" end) as $s
+    | "\($s)\t\($ctx)"
+  ' <<<"$1"
+}
 
 # A function rather than an inline loop because phase 2 runs this a second
 # time, against whatever head a fix commit produced, before arming on a review
@@ -788,17 +853,7 @@ wait_for_required_checks() {
       # polling. A bucket vocabulary that grew a member has to stall rather than
       # satisfy the gate.
       local gate=()
-      mapfile -t gate < <(jq -r --argjson req "$required_json" '
-        . as $rows
-        | $req[]
-        | . as $ctx
-        | ([$rows[] | select(.name == $ctx) | .bucket]) as $b
-        | (if ($b | length) == 0 then "outstanding"
-           elif ($b | any(. == "fail" or . == "cancel")) then "red"
-           elif ($b | any(. != "pass" and . != "skipping")) then "outstanding"
-           else "green" end) as $s
-        | "\($s)\t\($ctx)"
-      ' <<<"$payload")
+      mapfile -t gate < <(required_gate "$payload")
 
       local checks_red=()
       outstanding=()
@@ -1016,9 +1071,20 @@ wait_for_threads_replied() {
 # Every path here says which one it took. One generic failure line covered five
 # different situations, and "merge by hand" is not what a reader needs to know
 # when the answer is that the PR is still a draft.
+# Return code is a real contract now, not just an echo: every branch returns 1
+# except the one where the live `gh pr merge` call actually succeeds, which
+# returns 0 via its trailing echo. `wait_for_merge` below is only ever entered
+# on that one true arm, never on "nothing to arm" or "arming failed".
 arm_auto_merge() {
   local unreviewed=$1
-  [ "$auto_merge" = 1 ] || return 0
+  if [ "$auto_merge" != 1 ]; then
+    if [ "$offline" -eq 1 ]; then
+      echo "offline: auto-merge not armed (auto-merge is off)"
+    else
+      echo "auto-merge is off — nothing armed, merge by hand"
+    fi
+    return 1
+  fi
   if [ "$offline" -eq 1 ]; then
     # Says what it would have done rather than only that it did nothing, so an
     # offline fixture run can assert the sha a re-pin produced and which of the
@@ -1030,7 +1096,7 @@ arm_auto_merge() {
     else
       echo "offline: auto-merge not armed (would arm on $head_sha)"
     fi
-    return 0
+    return 1
   fi
   local draft threads
   draft=$(gh pr view "$pr" --repo "$repo" --json isDraft --jq '.isDraft' 2>/dev/null) || draft=""
@@ -1039,28 +1105,114 @@ arm_auto_merge() {
   # unattended merge.
   if [ -z "$draft" ] || [ -z "$threads" ]; then
     echo "auto-merge not armed — the PR state could not be read"
-    return 0
+    return 1
   fi
   if [ "$draft" = "true" ]; then
     echo "auto-merge not armed — PR is a draft"
-    return 0
+    return 1
   fi
   if [ "$threads" -ne 0 ]; then
     echo "auto-merge not armed — $threads unresolved threads"
-    return 0
+    return 1
   fi
   if gh pr merge "$pr" --repo "$repo" --auto --squash --match-head-commit "$head_sha" >/dev/null 2>&1; then
     if [ "$unreviewed" -eq 1 ]; then
-      echo "auto-merge armed UNREVIEWED on $head_sha — nothing has read this diff"
+      echo "auto-merge armed UNREVIEWED on $head_sha — nothing has read this diff" >&2
     else
-      echo "auto-merge armed on $head_sha — GitHub squashes once the required checks pass"
+      echo "auto-merge armed on $head_sha — GitHub squashes once the required checks pass" >&2
     fi
   else
     # Never silent, and never phrased as though it merged. Arming fails for
     # reasons worth seeing: auto-merge disabled on the repo, a branch GitHub will
     # not fast-forward, missing permission.
     echo "auto-merge could NOT be armed — merge by hand"
+    return 1
   fi
+}
+
+# Reached only from a live, successful arm — never offline, never a decline.
+# Arming is not merging: GitHub still waits for every required check on its
+# own clock, so this keeps polling past the arm the same way phase 2 keeps
+# polling past its own ping — both wait on something this script itself set in
+# motion, so an uncapped wait here carries the same justification phase 2's
+# already does. A cap would let a merge complete unattended after the script
+# gave up watching it.
+wait_for_merge() {
+  local armed_sha=$1
+  [ "$offline" -eq 1 ] && return 0
+
+  local fails=0 i=0 started last_red="" push_reported=0
+  started=$(date +%s)
+
+  while true; do
+    local pr_json rc=0
+    pr_json=$(gh pr view "$pr" --repo "$repo" --json state,headRefOid,mergeCommit 2>/dev/null) || rc=1
+
+    if [ "$rc" -eq 0 ] && [ -n "$pr_json" ]; then
+      fails=0
+      local state cur_sha merged_sha
+      state=$(jq -r '.state // ""' <<<"$pr_json")
+      cur_sha=$(jq -r '.headRefOid // ""' <<<"$pr_json")
+      merged_sha=$(jq -r '.mergeCommit.oid // ""' <<<"$pr_json")
+
+      if [ "$state" = "MERGED" ]; then
+        echo "merged ${merged_sha:-$cur_sha}"
+        exit 0
+      fi
+      if [ "$state" = "CLOSED" ]; then
+        echo "PR closed without merging — nothing left to watch"
+        exit 0
+      fi
+
+      if [ "$push_reported" -eq 0 ] && [ -n "$cur_sha" ] && [ "$cur_sha" != "$armed_sha" ]; then
+        push_reported=1
+        # A push from a write-permission actor leaves GitHub's auto-merge armed
+        # (it disables only for an unprivileged pusher or a base-branch switch —
+        # see reference/coderabbit.md), so left alone this would still merge
+        # whatever landed, unreviewed, the moment checks pass. Disabling it here
+        # is what makes the re-arm command below correct: nothing merges until
+        # it's run again, deliberately, on the sha actually being reported.
+        gh pr merge "$pr" --repo "$repo" --disable-auto >/dev/null 2>&1 || true
+        echo "head changed after arm, from $armed_sha to $cur_sha — auto-merge disabled; re-arm by hand: gh pr merge $pr --repo $repo --auto --squash --match-head-commit $cur_sha"
+      fi
+
+      local checks_payload checks_rc=0
+      checks_payload=$(gh pr checks "$pr" --repo "$repo" --json name,bucket,description 2>/dev/null) || checks_rc=$?
+      if [ "$checks_rc" -eq 0 ] || [ "$checks_rc" -eq 8 ]; then
+        local red
+        red=$(required_gate "$checks_payload" | awk -F'\t' '$1=="red"{print $2}' | LC_ALL=C sort | tr '\n' ,)
+        if [ -n "$red" ] && [ "$red" != "$last_red" ]; then
+          last_red=$red
+          # $cur_sha, not $armed_sha: gh pr checks reads the PR's current head,
+          # and once a push has already been reported the two have diverged —
+          # printing the stale sha would hand back a --match-head-commit that
+          # no longer matches anything and fails outright.
+          echo "required check red after arm: ${red%,} — GitHub's resume behaviour here is undocumented; re-arm by hand: gh pr merge $pr --repo $repo --auto --squash --match-head-commit $cur_sha"
+        elif [ -z "$red" ]; then
+          last_red=""
+        fi
+      elif [ "$checks_rc" -ne 0 ]; then
+        # Not counted in $fails — that ledger belongs to the one read
+        # (gh pr view) that decides whether the wait is still alive. A
+        # degraded checks read is a secondary signal going dark, not the
+        # loop itself failing, but silence here would read as "nothing red"
+        # rather than "couldn't tell" — so it says so.
+        echo "checks read failed inside the merge wait (exit $checks_rc) — red-check detection is degraded until it recovers" >&2
+      fi
+    else
+      fails=$((fails + 1))
+      if [ "$fails" -ge 3 ]; then
+        printf 'merge-wait API ERROR x%s — stopping rather than waiting blind\n' "$fails"
+        exit 2
+      fi
+    fi
+
+    i=$((i + 1))
+    if [ $((i % 10)) -eq 0 ]; then
+      echo "still waiting for the merge, $((($(date +%s) - started) / 60))m elapsed" >&2
+    fi
+    sleep "$poll"
+  done
 }
 
 ########################################################################
@@ -1168,7 +1320,9 @@ post_review_wait() {
   wait_for_required_checks "— not arming"
   echo "checks green again on $head_sha" >&2
   re_pin_head_sha
-  arm_auto_merge 0
+  if arm_auto_merge 0; then
+    wait_for_merge "$head_sha"
+  fi
   exit 0
 }
 
@@ -1213,7 +1367,9 @@ if [ "$no_review" -eq 1 ]; then
   if [ -n "$count_now" ] && [ "$count_now" -gt 0 ]; then
     unreviewed=0
   fi
-  arm_auto_merge "$unreviewed"
+  if arm_auto_merge "$unreviewed"; then
+    wait_for_merge "$head_sha"
+  fi
   exit 0
 fi
 
@@ -1440,7 +1596,7 @@ ride_out_cooldown() {
   # edited, so pinging exactly on the boundary earns a second refusal and burns
   # the one retry.
   remaining=$((remaining + 15))
-  echo "cooling down $((remaining / 60))m, ${again}pinging at $(local_time $(($(date -u +%s) + remaining)))"
+  echo "cooling down $((remaining / 60))m, ${again}pinging at $(local_time $(($(date -u +%s) + remaining)))" >&2
   # Offline is the fixture harness, and it has to reach the arithmetic above —
   # that is the point of routing both entry points through one function. What it
   # must not do is sleep out a real countdown or post to a real PR, so it skips
@@ -1466,7 +1622,7 @@ ride_out_cooldown() {
   # matching on the very next poll.
   ping_at=$created
   adopt_ping_at
-  echo "$verb at $(local_time "$(date -u +%s)")"
+  echo "$verb at $(local_time "$(date -u +%s)")" >&2
   return 0
 }
 
@@ -1487,7 +1643,7 @@ startup_remaining=$(cooldown_remaining) && startup_rc=0 || startup_rc=$?
 case $startup_rc in
   0)
     if [ "$startup_remaining" -gt 0 ]; then
-      echo "live rate-limit marker at arm time, $((startup_remaining / 60))m left"
+      echo "live rate-limit marker at arm time, $((startup_remaining / 60))m left" >&2
       # Detection is not gated on auto_reping — only acting is. Gating the whole
       # block would make SHIP_PR_AUTO_REPING=0 silent about a live rate limit,
       # which is the same no-op this block exists to remove and would leave the
@@ -1509,14 +1665,14 @@ case $startup_rc in
       # open and the ping below is the right move. Said out loud rather than
       # passed over, because the marker is still sitting on the PR and a reader
       # who greps for it deserves to know it was read and judged dead.
-      echo "stale rate-limit marker at arm time, deadline lapsed — pinging anyway"
+      echo "stale rate-limit marker at arm time, deadline lapsed — pinging anyway" >&2
     fi
     ;;
   # Marker present, arithmetic unavailable — so there is no deadline to sleep
   # until. Ping anyway: if the window really is still live the ping comes back
   # refused, and that refusal is the one the retry below absorbs. Staying silent
   # and polling would be the no-op this block exists to remove.
-  2) echo "rate-limit marker at arm time, countdown unreadable — pinging anyway" ;;
+  2) echo "rate-limit marker at arm time, countdown unreadable — pinging anyway" >&2 ;;
 esac
 
 # The ping is the script's, always. There is no environment switch that hands it
@@ -1621,7 +1777,7 @@ while true; do
         "Review in progress"*)
           if [ "$in_progress" -eq 0 ]; then
             in_progress=1
-            echo "review in progress"
+            echo "review in progress" >&2
           fi
           ;;
       esac
@@ -1661,7 +1817,9 @@ while true; do
         # was still in it.
         *"No actionable comments were generated"*)
           echo "reviewed clean, count unchanged at $n"
-          arm_auto_merge 0
+          if arm_auto_merge 0; then
+            wait_for_merge "$head_sha"
+          fi
           exit 0
           ;;
         *"rate limited by coderabbit.ai"*)
@@ -1696,7 +1854,7 @@ while true; do
           # as long as the review takes.
           if [ "$in_progress" -eq 0 ]; then
             in_progress=1
-            echo "review in progress"
+            echo "review in progress" >&2
           fi
           break
           ;;
