@@ -4,6 +4,7 @@ import {
   Decoration,
   EditorView,
   ViewPlugin,
+  WidgetType,
   type DecorationSet,
   type ViewUpdate,
 } from "@codemirror/view";
@@ -62,6 +63,61 @@ const hiddenMark = Decoration.replace({});
  */
 const LINK_TARGET_PARENTS = new Set(["Link", "Image"]);
 
+/**
+ * The rendered form of `![alt](src)`.
+ *
+ * Without this an image is styled exactly like a link — marks and URL hidden,
+ * alt text left as plain words — so an uploaded picture read as its own
+ * filename and nothing else. `eq` compares both fields so a re-render reuses
+ * the DOM instead of refetching, which is what stops the image flickering on
+ * every keystroke elsewhere in the document.
+ */
+class ImageWidget extends WidgetType {
+  constructor(
+    private readonly src: string,
+    private readonly alt: string,
+  ) {
+    super();
+  }
+
+  override eq(other: ImageWidget): boolean {
+    return other.src === this.src && other.alt === this.alt;
+  }
+
+  override toDOM(): HTMLElement {
+    const image = document.createElement("img");
+
+    image.className = "cm-md-image";
+    image.src = this.src;
+    image.alt = this.alt;
+    // A failed load would otherwise collapse to a broken-image glyph with no
+    // hint of which file, and the source is hidden behind this widget.
+    image.title = this.alt;
+
+    return image;
+  }
+
+  /** The editor owns the caret; a click inside the widget must not steal it. */
+  override ignoreEvent(): boolean {
+    return false;
+  }
+}
+
+/**
+ * Splits `![alt](src)` into its two halves.
+ *
+ * Read off the source text rather than the syntax tree: the tree gives the
+ * `Image` node and a `URL` child, but the alt text has no node of its own, and
+ * a regex over the node's own slice is shorter than reassembling it from the
+ * children. Returns `null` for anything that does not match, which leaves the
+ * node to the ordinary link styling rather than rendering a broken widget.
+ */
+export function parseImage(source: string): { alt: string; src: string } | null {
+  const match = /^!\[([^\]]*)\]\(([^)\s]+)\)$/u.exec(source);
+
+  return match === null ? null : { alt: match[1] ?? "", src: match[2] ?? "" };
+}
+
 function buildDecorations(view: EditorView): DecorationSet {
   const decorations: Range<Decoration>[] = [];
   const { state } = view;
@@ -84,6 +140,23 @@ function buildDecorations(view: EditorView): DecorationSet {
       from,
       to,
       enter: (node) => {
+        // Before anything else: an image replaces its whole node, so the
+        // marks and URL inside it must not also be decorated. Returning
+        // `false` stops the walk descending into them.
+        if (node.name === "Image" && !activeLines.has(state.doc.lineAt(node.from).number)) {
+          const parts = parseImage(state.doc.sliceString(node.from, node.to));
+
+          if (parts !== null) {
+            decorations.push(
+              Decoration.replace({
+                widget: new ImageWidget(parts.src, parts.alt),
+              }).range(node.from, node.to),
+            );
+
+            return false;
+          }
+        }
+
         const inlineClass = STYLED_INLINE_NODES.get(node.name);
 
         if (inlineClass !== undefined && node.to > node.from) {
@@ -173,4 +246,15 @@ export const markdownLivePreviewTheme: Extension = EditorView.theme({
   },
   ".cm-md-link": { color: "var(--primary)" },
   ".cm-md-url": { color: "var(--muted-foreground)" },
+  // `block` so a wide image does not drag the line box to its own height, and
+  // capped so a full-resolution upload does not fill the whole editor before
+  // the next line is reachable. `auto` height keeps the aspect ratio.
+  ".cm-md-image": {
+    display: "block",
+    maxWidth: "100%",
+    maxHeight: "24rem",
+    height: "auto",
+    margin: "0.25rem 0",
+    borderRadius: "0",
+  },
 });
