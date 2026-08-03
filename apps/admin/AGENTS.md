@@ -3,7 +3,7 @@
 ## 1. Overview
 `apps/admin` (package `@unimatrix/admin`) is the Vite + React + TanStack Router SPA that serves the administration console at `admin.unimatrix-01.dev`. Today it is a scaffold: seven section routes on the shared tool shell, six of them placeholders. It is the origin the CMS moves onto (out of `apps/web`), and the home for future operator surfaces that have no relationship to the public site's route tree.
 
-It is a **tool** surface, not a content surface. The site header/nav-tabs/footer combo is for content; this app gets `@unimatrix/chrome`'s `./tool` shell in its sections layout — a collapsible section rail (wordmark, nav, account control, copyright), dense content region, no site nav, no site footer.
+It is a **tool** surface, not a content surface. The site header/nav-tabs/footer combo is for content; this app gets `@unimatrix/chrome`'s `./tool` shell in its sections layout — a collapsible section rail (wordmark, nav, account control), the footer strip below the content, dense content region, no site nav, no site footer.
 
 ## 2. Folder Structure
 - `src/app`: `app-shell.tsx` (the `ToolShell` composition) and `router.tsx` (`createAppRouter`). There is deliberately **no** module-level `router` singleton and no query provider — see Core Behaviors. `sections.ts` holds the section rail's data — labels, icons, paths — and `useAdminSections`, which computes each section's `active` flag from the router's current location. `require-signed-in.tsx` wraps the shell in `__root.tsx`.

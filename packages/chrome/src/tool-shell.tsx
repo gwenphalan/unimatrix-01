@@ -64,10 +64,10 @@ export type ToolShellProps = {
   /**
    * The tool's section rail. When given a non-empty list, the shell renders a
    * collapsible vertical rail in place of the title bar and footer strip —
-   * the wordmark, `accountControl`, and copyright all move into it. An empty
+   * the wordmark and `accountControl` both move into it. An empty
    * array is treated the same as omitting `sections` entirely, so a caller
    * computing sections from permissions falls back to today's layout instead
-   * of losing its wordmark, account control, and copyright to an empty rail.
+   * of losing its wordmark and account control to an empty rail.
    */
   sections?: readonly ToolSection[];
   /** Where the rail's wordmark links. Defaults to `"/"`. */
@@ -206,8 +206,7 @@ export function ToolShell({
 }: ToolShellProps) {
   // An empty array falls back to the no-sections layout, not a rail with
   // nothing in it — a caller computing `sections` from permissions must not
-  // lose its wordmark, account control, and copyright to a rail with no
-  // sections in it.
+  // lose its wordmark and account control to a rail with no sections in it.
   const hasSections = sections !== undefined && sections.length > 0;
   // A tool with neither an account control nor a wordmark has nothing to put in
   // a title bar, and an empty bar would only cost vertical space. `apps/cflop`

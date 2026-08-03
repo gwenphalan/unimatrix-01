@@ -31,6 +31,12 @@ export function useAdminSections(): ToolSection[] {
 
   return SECTION_DEFINITIONS.map((section) => ({
     ...section,
-    active: section.to === "/" ? pathname === "/" : pathname.startsWith(section.to),
+    // Segment boundary, not a bare prefix: `startsWith` would light `Content`
+    // up on a future `/contently`. No route collides today, so nothing would
+    // have caught this until one did.
+    active:
+      section.to === "/"
+        ? pathname === "/"
+        : pathname === section.to || pathname.startsWith(`${section.to}/`),
   }));
 }
