@@ -278,6 +278,7 @@ void test("assets are served inline, hash-addressed, and immutably cacheable", a
     assert.equal(response.headers["cache-control"], "public, max-age=31536000, immutable");
     assert.equal(response.headers["x-content-type-options"], "nosniff");
     assert.equal(response.headers["content-disposition"], `inline; filename="${hash}"`);
+    assert.equal(response.headers["cross-origin-resource-policy"], "cross-origin");
     assert.ok(response.rawPayload.equals(data));
 
     const revalidated = await app.inject({
