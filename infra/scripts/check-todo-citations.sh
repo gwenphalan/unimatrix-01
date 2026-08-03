@@ -12,6 +12,11 @@
 # exact bug.
 #
 # Fails closed: if no case actually ran, that is a failure, not a vacuous pass.
+#
+# shellcheck disable=SC2016
+# The expected-output strings are markdown: a References entry wraps its path in
+# backticks. Single quotes are what keeps those backticks literal, which is the
+# whole point — SC2016 reads them as an intended command substitution instead.
 
 set -uo pipefail
 
