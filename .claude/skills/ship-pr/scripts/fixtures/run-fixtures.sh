@@ -434,18 +434,22 @@ else
 fi
 
 # `review in progress` moved to stderr along with the phase-1 ledger and the
-# rate-limit progress lines; this is its own proof, the same shape as the two
-# assertions above.
-in_progress_run=$(env SHIP_PR_POLL_SECONDS=0 SHIP_PR_PING_AT="$ping" \
+# rate-limit progress lines. Captured separately, not combined with 2>&1 — the
+# two siblings above only prove the line is printed *somewhere*, which a
+# regression back onto stdout would still satisfy. This proves the stream.
+in_progress_out=$(env SHIP_PR_POLL_SECONDS=0 SHIP_PR_PING_AT="$ping" \
   SHIP_PR_BRANCH_RULES_FIXTURE="$here/branch-rules-one.json" \
   SHIP_PR_CHECKS_FIXTURES="$here/checks-green-one.json" \
-  SHIP_PR_FIXTURES="$(f in-progress)" "$script" fixture/repo 1 2>&1)
+  SHIP_PR_FIXTURES="$(f in-progress)" "$script" fixture/repo 1 2>/tmp/ship-pr-in-progress-err.$$)
+in_progress_err=$(cat /tmp/ship-pr-in-progress-err.$$)
+rm -f /tmp/ship-pr-in-progress-err.$$
 ran=$((ran + 1))
-if grep -q '^review in progress$' <<<"$in_progress_run"; then
+if ! grep -q '^review in progress$' <<<"$in_progress_out" \
+  && grep -q '^review in progress$' <<<"$in_progress_err"; then
   printf '  ok    in-progress-on-stderr\n'
 else
   failures=$((failures + 1))
-  printf '  FAIL  in-progress-on-stderr (the line is not printed on either stream)\n'
+  printf '  FAIL  in-progress-on-stderr (expected off stdout and on stderr)\n'
 fi
 
 printf '\n%s case(s), %s failure(s)\n' "$ran" "$failures"

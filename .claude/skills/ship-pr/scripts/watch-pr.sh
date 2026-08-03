@@ -1166,7 +1166,14 @@ wait_for_merge() {
 
       if [ "$push_reported" -eq 0 ] && [ -n "$cur_sha" ] && [ "$cur_sha" != "$armed_sha" ]; then
         push_reported=1
-        echo "head changed after arm, from $armed_sha to $cur_sha — re-arm by hand: gh pr merge $pr --repo $repo --auto --squash --match-head-commit $cur_sha"
+        # A push from a write-permission actor leaves GitHub's auto-merge armed
+        # (it disables only for an unprivileged pusher or a base-branch switch —
+        # see reference/coderabbit.md), so left alone this would still merge
+        # whatever landed, unreviewed, the moment checks pass. Disabling it here
+        # is what makes the re-arm command below correct: nothing merges until
+        # it's run again, deliberately, on the sha actually being reported.
+        gh pr merge "$pr" --repo "$repo" --disable-auto >/dev/null 2>&1 || true
+        echo "head changed after arm, from $armed_sha to $cur_sha — auto-merge disabled; re-arm by hand: gh pr merge $pr --repo $repo --auto --squash --match-head-commit $cur_sha"
       fi
 
       local checks_payload checks_rc=0
@@ -1176,10 +1183,21 @@ wait_for_merge() {
         red=$(required_gate "$checks_payload" | awk -F'\t' '$1=="red"{print $2}' | LC_ALL=C sort | tr '\n' ,)
         if [ -n "$red" ] && [ "$red" != "$last_red" ]; then
           last_red=$red
-          echo "required check red after arm: ${red%,} — GitHub's resume behaviour here is undocumented; re-arm by hand: gh pr merge $pr --repo $repo --auto --squash --match-head-commit $armed_sha"
+          # $cur_sha, not $armed_sha: gh pr checks reads the PR's current head,
+          # and once a push has already been reported the two have diverged —
+          # printing the stale sha would hand back a --match-head-commit that
+          # no longer matches anything and fails outright.
+          echo "required check red after arm: ${red%,} — GitHub's resume behaviour here is undocumented; re-arm by hand: gh pr merge $pr --repo $repo --auto --squash --match-head-commit $cur_sha"
         elif [ -z "$red" ]; then
           last_red=""
         fi
+      elif [ "$checks_rc" -ne 0 ]; then
+        # Not counted in $fails — that ledger belongs to the one read
+        # (gh pr view) that decides whether the wait is still alive. A
+        # degraded checks read is a secondary signal going dark, not the
+        # loop itself failing, but silence here would read as "nothing red"
+        # rather than "couldn't tell" — so it says so.
+        echo "checks read failed inside the merge wait (exit $checks_rc) — red-check detection is degraded until it recovers" >&2
       fi
     else
       fails=$((fails + 1))
