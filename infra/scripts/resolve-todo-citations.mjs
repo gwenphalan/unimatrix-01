@@ -39,7 +39,14 @@
 // under fixtures, this monorepo in normal use), so it is discovered from the
 // target path instead.
 
-import { existsSync, readFileSync, renameSync, writeFileSync, mkdirSync } from "node:fs";
+import {
+  existsSync,
+  readFileSync,
+  realpathSync,
+  renameSync,
+  writeFileSync,
+  mkdirSync,
+} from "node:fs";
 import { execFileSync } from "node:child_process";
 import { dirname, join, relative, resolve as resolvePath } from "node:path";
 
@@ -486,6 +493,13 @@ function formatInlineRow(citation) {
 // --- top-level file processing -----------------------------------------------
 
 function processFile(repoRoot, targetAbsPath) {
+  // targetAbsPath is already canonical (main.js resolves it once, up
+  // front), so todoRel is the same sidecar key regardless of whether the
+  // caller reached this file through a worktree symlink. The report header
+  // below prints this canonical path rather than whatever the caller
+  // typed: it is the path the sidecar actually keys on, so it is what a
+  // reader needs to find the matching entry in
+  // `.notes/.todo-citations.json`.
   const todoRel = relative(repoRoot, targetAbsPath).split("\\").join("/");
   const original = readFileSync(targetAbsPath, "utf8");
   const hasTrailingNewline = original.endsWith("\n");
@@ -663,10 +677,21 @@ function main() {
     throw new ToolError(`expected exactly one argument, got ${args.length} — ${USAGE}`);
   }
 
-  const targetAbsPath = resolvePath(process.cwd(), args[0]);
-  if (!existsSync(targetAbsPath)) {
-    throw new ToolError(`no such file: ${targetAbsPath}`);
+  const asTypedPath = resolvePath(process.cwd(), args[0]);
+  if (!existsSync(asTypedPath)) {
+    throw new ToolError(`no such file: ${asTypedPath}`);
   }
+
+  // Canonicalize once, up front, before anything else derives from the
+  // target path. `infra/scripts/link-worktree-dirs.mjs` symlinks `.notes/`
+  // into every new worktree, so the as-typed path and the real path
+  // disagree there. `discoverRepoRoot` already resolves symlinks (it
+  // shells out to git, which does), so deriving `todoRel` from the
+  // as-typed path instead of this same realpath is what produced two
+  // independent sidecar keys for one physical file. realpathSync throws on
+  // a missing path, but `existsSync` just above already guarantees the
+  // target exists.
+  const targetAbsPath = realpathSync(asTypedPath);
 
   const repoRoot = discoverRepoRoot(targetAbsPath);
   processFile(repoRoot, targetAbsPath);

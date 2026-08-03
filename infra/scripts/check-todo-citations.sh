@@ -389,6 +389,64 @@ else
   fail "case10-duplicate-citation-idempotent (a repeat run changed the file or sidecar)"
 fi
 
+# --- case 11: symlinked .notes/ (the worktree case) — one sidecar key -----
+# infra/scripts/link-worktree-dirs.mjs symlinks .notes/ into every new
+# worktree. `discoverRepoRoot` resolves that symlink (it shells out to git,
+# which does), but the unresolved path used to leak into the sidecar key via
+# `relative()`, producing a second, `../`-laden key for the same physical
+# file depending on which path the resolver was invoked through.
+
+dir=$(new_repo case11-symlinked-notes)
+printf 'l1\nl2\nl3\nl4\nl5\n' >"${dir}/f.txt"
+write_todo "${dir}" "f.txt:3"
+(cd "${dir}" && git add -A && git commit -q -m init)
+run_resolver "${dir}" >/dev/null
+
+worktree_dir="${work}/case11-worktree"
+mkdir -p "${worktree_dir}"
+ln -s "${dir}/.notes" "${worktree_dir}/.notes"
+
+sed -i '1i inserted' "${dir}/f.txt"
+
+check case11-symlinked-notes 0 "${worktree_dir}" <<'EOF'
+resolve-todo-citations: .notes/01-todo/x.todo.md
+
+  moved       f.txt:3 -> :4
+
+  1 rewritten
+EOF
+
+key_report=$(node -e '
+  const data = JSON.parse(require("node:fs").readFileSync(process.argv[1], "utf8"));
+  const keys = Object.keys(data.files);
+  console.log(keys.length + "|" + keys.join(","));
+' "${dir}/.notes/.todo-citations.json")
+ran=$((ran + 1))
+if [ "${key_report}" = "1|.notes/01-todo/x.todo.md" ]; then
+  printf '  ok    case11-symlinked-notes-one-clean-key\n'
+else
+  fail "case11-symlinked-notes-one-clean-key (sidecar keys: ${key_report})"
+fi
+
+# Invoking directly (through the main checkout, not the symlink) must land
+# on the same key and see it as already resolved, not re-baseline it.
+check case11-direct-after-symlink 0 "${dir}" <<'EOF'
+resolve-todo-citations: .notes/01-todo/x.todo.md
+
+  1 citation(s) with line numbers, all confirmed fresh
+EOF
+
+todo_before_case11=$(cat "${worktree_dir}/.notes/01-todo/x.todo.md")
+sidecar_before_case11=$(cat "${dir}/.notes/.todo-citations.json")
+run_resolver "${worktree_dir}" >/dev/null
+ran=$((ran + 1))
+if [ "$(cat "${worktree_dir}/.notes/01-todo/x.todo.md")" = "${todo_before_case11}" ] &&
+  [ "$(cat "${dir}/.notes/.todo-citations.json")" = "${sidecar_before_case11}" ]; then
+  printf '  ok    case11-symlinked-notes-idempotent\n'
+else
+  fail "case11-symlinked-notes-idempotent (a repeat run through the symlink changed the file or sidecar)"
+fi
+
 printf '\n'
 
 if ((ran == 0)); then
