@@ -101,9 +101,23 @@ export function ToolSectionRail({
         // `<a>` — trades it for a full document reload on a same-origin
         // route. Same trade the public shell's logo link already makes.
         aria-label={homeLabel}
+        // `pl-2` and `gap-1.5` here — instead of the section links' own
+        // `px-3` and `gap-2.5` below — are deliberate, not drift to tidy
+        // away: they're what puts this 24px logo and the section links'
+        // 16px icons on one centre column, and both labels on one left
+        // edge, despite the rail's uniform `p-3`. A section icon's centre
+        // sits at the rail's `p-3` (12px) + the link's own `px-3` (12px) +
+        // half the icon (8px) = 32px from the rail's edge. Centring the
+        // logo there needs its left edge at 32 - 12 (half the logo) = 20px,
+        // i.e. the rail's 12px plus this `pl-2` (8px). From that edge,
+        // `gap-1.5` (6px) lands the wordmark label at 20 + 24 + 6 = 50px —
+        // the same spot the section labels land at (24 + 16 + their
+        // `gap-2.5` [10px] = 50px). `gap-2.5` on the wider logo would miss
+        // that by 4px. Collapsed, this link centres itself instead
+        // (`justify-center`), so the padding is dropped rather than fighting it.
         className={cn(
-          "flex h-9 min-w-0 items-center gap-2.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground",
-          collapsed && "justify-center",
+          "flex h-9 min-w-0 items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground",
+          collapsed ? "justify-center" : "pl-2",
         )}
         to={sectionsHomeHref}
       >
