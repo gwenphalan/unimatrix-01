@@ -50,11 +50,11 @@ const ALLOWED_PACKAGE_IMPORTS = {
   // the whole reason its shells take the account control as a slot.
   "apps/cflop": ["chrome", "e2e-helpers", "ui"],
   "apps/auth": ["app-config", "auth", "chrome", "ui"],
-  // The admin scaffold, and deliberately as narrow as `apps/auth`. It is not
-  // the CMS yet: `api-client` and `shared` are the edges the content move will
-  // need, and they get added when code actually uses them rather than now, so
-  // this stays a statement of fact instead of a permission slip.
-  "apps/admin": ["app-config", "auth", "chrome", "ui"],
+  // `api-client` and `shared` were added when the CMS moved onto this origin:
+  // the content section calls the API through `@unimatrix/api-client` and
+  // shares its request/response types with `apps/web`'s public content
+  // routes through `@unimatrix/shared`.
+  "apps/admin": ["api-client", "app-config", "auth", "chrome", "shared", "ui"],
   "packages/api-client": ["shared"],
   // Env validation for the Vite apps' config boundaries. A leaf on purpose:
   // `zod` is its only dependency and stays its implementation detail — apps
