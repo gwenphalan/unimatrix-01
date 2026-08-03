@@ -426,15 +426,9 @@ Under --no-review, before any wait:
 Otherwise, from phase 2's own ping-and-wait, one line, whichever applies:
   reviewed: <base> -> <n>                     the count rose; the post-review wait starts next
   reviewed clean, count unchanged at <n>      it ran and found nothing, arms directly
-  review in progress                          said once, then carried by the heartbeat
-  live rate-limit marker at arm time, <n>m left
-  stale rate-limit marker at arm time, deadline lapsed — pinging anyway
-  rate-limit marker at arm time, countdown unreadable — pinging anyway
   auto-reping disabled — the ping is yours, nothing was posted
   cannot post the ping — nothing to wait for
   ping timestamp is unreadable — nothing to compare against
-  cooling down <n>m, [re-]pinging at <time>   riding out a rate limit, then one ping
-  pinged at <time> / re-pinged at <time>      the ping is posted; the wait goes on
   offline: [re-]ping suppressed, continuing as if posted
   refused: rate limited, and the [re-]ping could not be posted
   refused: rate limited                       cool down, recompute, re-ping
@@ -487,6 +481,12 @@ Also on stderr, said once where they apply:
   checks green again on <sha>                  the recheck's own boundary
   re-pinned head to <sha>                       immediately before the arm; unchanged from the
                                                  original pin unless a push landed during the wait
+  review in progress                          said once, then carried by the heartbeat
+  live rate-limit marker at arm time, <n>m left
+  stale rate-limit marker at arm time, deadline lapsed — pinging anyway
+  rate-limit marker at arm time, countdown unreadable — pinging anyway
+  cooling down <n>m, [re-]pinging at <time>   riding out a rate limit, then one ping
+  pinged at <time> / re-pinged at <time>      the ping is posted; the wait goes on
 
 Exit codes:
   0  a terminal outcome in any wait was reached, or a fixture list ran out
@@ -1440,7 +1440,7 @@ ride_out_cooldown() {
   # edited, so pinging exactly on the boundary earns a second refusal and burns
   # the one retry.
   remaining=$((remaining + 15))
-  echo "cooling down $((remaining / 60))m, ${again}pinging at $(local_time $(($(date -u +%s) + remaining)))"
+  echo "cooling down $((remaining / 60))m, ${again}pinging at $(local_time $(($(date -u +%s) + remaining)))" >&2
   # Offline is the fixture harness, and it has to reach the arithmetic above —
   # that is the point of routing both entry points through one function. What it
   # must not do is sleep out a real countdown or post to a real PR, so it skips
@@ -1466,7 +1466,7 @@ ride_out_cooldown() {
   # matching on the very next poll.
   ping_at=$created
   adopt_ping_at
-  echo "$verb at $(local_time "$(date -u +%s)")"
+  echo "$verb at $(local_time "$(date -u +%s)")" >&2
   return 0
 }
 
@@ -1487,7 +1487,7 @@ startup_remaining=$(cooldown_remaining) && startup_rc=0 || startup_rc=$?
 case $startup_rc in
   0)
     if [ "$startup_remaining" -gt 0 ]; then
-      echo "live rate-limit marker at arm time, $((startup_remaining / 60))m left"
+      echo "live rate-limit marker at arm time, $((startup_remaining / 60))m left" >&2
       # Detection is not gated on auto_reping — only acting is. Gating the whole
       # block would make SHIP_PR_AUTO_REPING=0 silent about a live rate limit,
       # which is the same no-op this block exists to remove and would leave the
@@ -1509,14 +1509,14 @@ case $startup_rc in
       # open and the ping below is the right move. Said out loud rather than
       # passed over, because the marker is still sitting on the PR and a reader
       # who greps for it deserves to know it was read and judged dead.
-      echo "stale rate-limit marker at arm time, deadline lapsed — pinging anyway"
+      echo "stale rate-limit marker at arm time, deadline lapsed — pinging anyway" >&2
     fi
     ;;
   # Marker present, arithmetic unavailable — so there is no deadline to sleep
   # until. Ping anyway: if the window really is still live the ping comes back
   # refused, and that refusal is the one the retry below absorbs. Staying silent
   # and polling would be the no-op this block exists to remove.
-  2) echo "rate-limit marker at arm time, countdown unreadable — pinging anyway" ;;
+  2) echo "rate-limit marker at arm time, countdown unreadable — pinging anyway" >&2 ;;
 esac
 
 # The ping is the script's, always. There is no environment switch that hands it
@@ -1621,7 +1621,7 @@ while true; do
         "Review in progress"*)
           if [ "$in_progress" -eq 0 ]; then
             in_progress=1
-            echo "review in progress"
+            echo "review in progress" >&2
           fi
           ;;
       esac
@@ -1696,7 +1696,7 @@ while true; do
           # as long as the review takes.
           if [ "$in_progress" -eq 0 ]; then
             in_progress=1
-            echo "review in progress"
+            echo "review in progress" >&2
           fi
           break
           ;;

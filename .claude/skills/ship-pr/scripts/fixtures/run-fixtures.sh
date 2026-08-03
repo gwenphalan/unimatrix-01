@@ -33,17 +33,18 @@
 # when its fixtures are unset: every case below would then claim a green gate it
 # never proved.
 #
-# stderr is dropped: it carries the heartbeats, the offline notices, and now the
-# whole phase-1 ledger (`PASS`/`SKIPPING` rows and `checks green on <sha>`), none
-# of which say anything about which arm was taken. Wall-clock times in the
-# output are normalised, since a cooldown line renders the reader's own clock.
+# stderr is dropped: it carries the heartbeats, the offline notices, the whole
+# phase-1 ledger (`PASS`/`SKIPPING` rows and `checks green on <sha>`), and now
+# `review in progress` and the rate-limit progress lines, none of which say
+# anything about which arm was taken. Wall-clock times in the output are
+# normalised, since a cooldown line renders the reader's own clock.
 #
 # That move costs coverage: `no-baseline`, `partial-fixtures` and
 # `checks-timeout-non-numeric` now share one expectation — empty stdout, exit 1
 # — and are distinguished only by which fixtures each sets, not by anything
-# `check()` diffs. The `phase-1-ledger-on-stderr` assertion below is what proves
-# the moved rows are still printed at all, since every `check()` case above now
-# proves only that they are off stdout.
+# `check()` diffs. The `phase-1-ledger-on-stderr` and `in-progress-on-stderr`
+# assertions below are what prove the moved rows are still printed at all,
+# since every `check()` case above now proves only that they are off stdout.
 #
 # Usage: run-fixtures.sh [name ...]   — no arguments runs every case.
 
@@ -267,7 +268,6 @@ refused: head commit changed mid-review, reviewed head was fixture-head-sha
 EOF
 
 check in-progress 0 "$(f in-progress)" <<'EOF'
-review in progress
 FIXTURES EXHAUSTED
 EOF
 
@@ -352,8 +352,6 @@ EOF
 
 check rate-limited-retry 0 "$(f rate-limited clean)" \
   SHIP_PR_COMMENTS_FIXTURE="$here/wait/rate-limited/comments.json" <<'EOF'
-stale rate-limit marker at arm time, deadline lapsed — pinging anyway
-cooling down 0m, re-pinging at <time>
 offline: re-ping suppressed, continuing as if posted
 reviewed clean, count unchanged at 1
 offline: auto-merge not armed (would arm on fixture-head-sha)
@@ -362,8 +360,6 @@ EOF
 # One retry and no more: the second refusal is the owner's call.
 check rate-limited-cap 0 "$(f rate-limited rate-limited)" \
   SHIP_PR_COMMENTS_FIXTURE="$here/wait/rate-limited/comments.json" <<'EOF'
-stale rate-limit marker at arm time, deadline lapsed — pinging anyway
-cooling down 0m, re-pinging at <time>
 offline: re-ping suppressed, continuing as if posted
 refused: rate limited again after one re-ping
 EOF
@@ -427,6 +423,21 @@ if grep -q '^SKIPPING  Verify$' <<<"$skipping"; then
 else
   failures=$((failures + 1))
   printf '  FAIL  skipping-row-on-stderr (the SKIPPING row is not printed on either stream)\n'
+fi
+
+# `review in progress` moved to stderr along with the phase-1 ledger and the
+# rate-limit progress lines; this is its own proof, the same shape as the two
+# assertions above.
+in_progress_run=$(env SHIP_PR_POLL_SECONDS=0 SHIP_PR_PING_AT="$ping" \
+  SHIP_PR_BRANCH_RULES_FIXTURE="$here/branch-rules-one.json" \
+  SHIP_PR_CHECKS_FIXTURES="$here/checks-green-one.json" \
+  SHIP_PR_FIXTURES="$(f in-progress)" "$script" fixture/repo 1 2>&1)
+ran=$((ran + 1))
+if grep -q '^review in progress$' <<<"$in_progress_run"; then
+  printf '  ok    in-progress-on-stderr\n'
+else
+  failures=$((failures + 1))
+  printf '  FAIL  in-progress-on-stderr (the line is not printed on either stream)\n'
 fi
 
 printf '\n%s case(s), %s failure(s)\n' "$ran" "$failures"
