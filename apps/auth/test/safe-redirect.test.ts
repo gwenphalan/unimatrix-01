@@ -1,10 +1,38 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  ALLOWED_REDIRECT_ORIGINS,
   hasValidatedRedirectUrl,
   safeRedirectUrl,
   withRedirectParam,
 } from "@/features/auth/safe-redirect";
+
+// Clerk applies `ALLOWED_REDIRECT_ORIGINS` inside its own widgets, entirely
+// separately from `safeRedirectUrl`, and a target only one of them accepts is
+// the failure that has no symptom: Clerk drops it and falls back to its
+// default redirect with nothing but a console warning, so a return address
+// silently stops working. This is what keeps the two in step.
+describe("ALLOWED_REDIRECT_ORIGINS", () => {
+  const cases = [
+    "https://unimatrix-01.dev/projects",
+    "https://admin.unimatrix-01.dev/secrets",
+    "https://auth.unimatrix-01.dev/",
+    "http://localhost:5176/secrets",
+    "http://127.0.0.1:5176/",
+    "http://unimatrix-01.dev/",
+    "https://evilunimatrix-01.dev/",
+    "https://unimatrix-01.dev.attacker.com/",
+    "https://attacker.com/",
+  ];
+
+  it.each(cases)("agrees with safeRedirectUrl on %s", (raw) => {
+    const clerkAllows = ALLOWED_REDIRECT_ORIGINS.some((pattern) =>
+      pattern.test(new URL(raw).origin),
+    );
+
+    expect(clerkAllows).toBe(safeRedirectUrl(raw) === raw);
+  });
+});
 
 describe("safeRedirectUrl", () => {
   it("honors the root domain over https", () => {

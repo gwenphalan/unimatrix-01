@@ -175,12 +175,19 @@ export function ToolSectionRail({
           signed-out button is text that does not. Without this the control
           escapes the rail on both sides and paints over the content region.
           `block` is doing real work: a slot rendering an inline `<a>` ignores
-          `max-width` entirely, so clipping it needs a block box first. */}
+          `max-width` entirely, so clipping it needs a block box first.
+
+          Expanded, `pl-2` is the same 8px the wordmark link above uses, and
+          for the same reason: it is what puts a 24px control's centre on the
+          32px column the section icons sit on. A slot that renders something
+          other than 24px wide will not land there — the shell cannot measure
+          the slot, so the app supplying it owns matching that size. Collapsed,
+          the rail centres it instead and the padding is dropped. */}
       {accountControl === undefined ? null : (
         <div
           className={cn(
             "flex min-w-0 items-center overflow-hidden border-t border-border/60 pt-3",
-            collapsed && "justify-center [&>*]:block [&>*]:max-w-full [&>*]:truncate",
+            collapsed ? "justify-center [&>*]:block [&>*]:max-w-full [&>*]:truncate" : "pl-2",
           )}
         >
           {accountControl}

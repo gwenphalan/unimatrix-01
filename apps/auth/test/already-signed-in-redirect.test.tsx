@@ -67,4 +67,37 @@ describe("AlreadySignedInRedirect", () => {
 
     expect(assign).not.toHaveBeenCalled();
   });
+
+  // The regression this component was reported for: a visitor who arrives
+  // signed out and then completes a sign-in must be landed by Clerk's own
+  // `forceRedirectUrl`, not by a second navigation from here racing it.
+  it("does nothing when a signed-out visitor signs in underneath it", () => {
+    auth.isLoaded = true;
+    auth.isSignedIn = false;
+    const assign = stubLocationAssign();
+
+    const { rerender } = render(<AlreadySignedInRedirect target={TARGET} />);
+
+    auth.isSignedIn = true;
+    rerender(<AlreadySignedInRedirect target={TARGET} />);
+
+    expect(assign).not.toHaveBeenCalled();
+  });
+
+  // The same arrival state must survive Clerk resolving late: `isLoaded`
+  // false first, then true with a session, is a visitor who arrived signed
+  // in — not one who signed in underneath the component.
+  it("still redirects when Clerk resolves an existing session late", () => {
+    auth.isLoaded = false;
+    auth.isSignedIn = false;
+    const assign = stubLocationAssign();
+
+    const { rerender } = render(<AlreadySignedInRedirect target={TARGET} />);
+
+    auth.isLoaded = true;
+    auth.isSignedIn = true;
+    rerender(<AlreadySignedInRedirect target={TARGET} />);
+
+    expect(assign).toHaveBeenCalledWith(TARGET);
+  });
 });
