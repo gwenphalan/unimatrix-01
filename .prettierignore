@@ -31,3 +31,7 @@ packages/db/local/
 # `pnpm check` red. Empty on `main`, so this line does nothing there — it earns
 # its keep on the branches where prototypes actually exist.
 lab/prototypes/
+
+# Google verification file — Google checks its exact bytes; formatting it
+# breaks the check with no visible symptom beyond verification silently failing.
+apps/cflop/public/google*.html
