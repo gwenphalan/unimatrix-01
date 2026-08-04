@@ -74,8 +74,11 @@ export type ToolShellProps = {
   sectionsHomeHref?: string;
   /** The rail `<nav>`'s `aria-label`. Defaults to `"Sections"`. */
   sectionsLabel?: string;
-  /** Renders the footer's "© year owner" line. Defaults to `true`; set to `false` to omit it. */
-  showCopyright?: boolean;
+  /**
+   * Renders the footer element. Defaults to `true`; set to `false` to omit
+   * the whole `<footer>`, including the `contentinfo` landmark.
+   */
+  showFooter?: boolean;
 };
 
 const DEFAULT_OWNER_NAME = "Gwen Phalan";
@@ -168,12 +171,10 @@ function ToolFooter({
   end,
   homeHref,
   ownerName,
-  showCopyright,
 }: {
   end: React.ReactNode | undefined;
   homeHref: string | undefined;
   ownerName: string;
-  showCopyright: boolean;
 }) {
   const year = new Date().getFullYear();
   const copyright = `${year} ${ownerName}`;
@@ -181,16 +182,14 @@ function ToolFooter({
   return (
     <footer className="py-1">
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-xs text-muted-foreground/70">
-        {showCopyright ? (
-          <p>
-            ©{" "}
-            {homeHref === undefined ? (
-              copyright
-            ) : (
-              <ToolFooterLink href={homeHref}>{copyright}</ToolFooterLink>
-            )}
-          </p>
-        ) : null}
+        <p>
+          ©{" "}
+          {homeHref === undefined ? (
+            copyright
+          ) : (
+            <ToolFooterLink href={homeHref}>{copyright}</ToolFooterLink>
+          )}
+        </p>
         {end === undefined ? null : <p>{end}</p>}
       </div>
     </footer>
@@ -209,7 +208,7 @@ export function ToolShell({
   sections,
   sectionsHomeHref = "/",
   sectionsLabel = "Sections",
-  showCopyright = true,
+  showFooter = true,
 }: ToolShellProps) {
   // An empty array falls back to the no-sections layout, not a rail with
   // nothing in it — a caller computing `sections` from permissions must not
@@ -277,12 +276,9 @@ export function ToolShell({
 
         <ToolPageContainer className="min-h-0 flex-1" wide>
           {main}
-          <ToolFooter
-            end={footerEnd}
-            homeHref={homeHref}
-            ownerName={ownerName}
-            showCopyright={showCopyright}
-          />
+          {showFooter ? (
+            <ToolFooter end={footerEnd} homeHref={homeHref} ownerName={ownerName} />
+          ) : null}
         </ToolPageContainer>
       </div>
     );
@@ -314,12 +310,7 @@ export function ToolShell({
 
       {main}
 
-      <ToolFooter
-        end={footerEnd}
-        homeHref={homeHref}
-        ownerName={ownerName}
-        showCopyright={showCopyright}
-      />
+      {showFooter ? <ToolFooter end={footerEnd} homeHref={homeHref} ownerName={ownerName} /> : null}
     </ToolPageContainer>
   );
 }
