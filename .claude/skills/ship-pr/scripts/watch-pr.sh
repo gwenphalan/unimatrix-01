@@ -480,6 +480,7 @@ startup baseline read finding the review count already > 0, and, minus the
 checks recheck, from `--no-review` once auto-merge is on — on stdout:
   checks red: <names> — not arming             terminal, the recheck's own call only
   checks timed out after <m>m — never reported: <names>   the recheck's own clock
+  findings: <n> unresolved review thread(s) — reply and fix   said once, the first non-zero count
   threads still unresolved after <m>m — reply and re-arm, or resolve by hand   terminal, exit 0
   thread count API ERROR xN — stopping rather than waiting blind   three consecutive failures, exit 2
 
@@ -994,7 +995,7 @@ wait_for_threads_replied() {
     return 0
   fi
 
-  local threads_fails=0 threads_i=0 threads_started
+  local threads_fails=0 threads_i=0 threads_started announced=0
   threads_started=$(date +%s)
 
   while true; do
@@ -1018,6 +1019,23 @@ wait_for_threads_replied() {
       threads_fails=0
       if [ "$threads" -eq 0 ]; then
         return 0
+      fi
+      # The one line saying the run is now waiting on a person, and the reason
+      # it is on stdout: the progress line below is stderr and every tenth
+      # poll, and `Monitor` — which `ship-pr` arms this script under — turns
+      # only stdout into a notification. Without this the next thing an
+      # operator sees is the timeout, and the silence before it is
+      # indistinguishable from progress.
+      #
+      # Separate from `reviewed: <base> -> <n>` rather than folded into it,
+      # because that line reports a count change and a bodied review can carry
+      # no inline comments at all — in which case this wait returns above and
+      # the run arms without ever printing this.
+      if [ "$announced" -eq 0 ]; then
+        announced=1
+        local noun="threads"
+        [ "$threads" -eq 1 ] && noun="thread"
+        echo "findings: $threads unresolved review $noun — reply and fix"
       fi
     else
       threads_fails=$((threads_fails + 1))
