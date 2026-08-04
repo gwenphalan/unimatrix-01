@@ -356,6 +356,20 @@ FAIL  Images (api)
 checks red: Images (api) — not arming
 EOF
 
+# The startup auto-skip: `already-reviewed`'s baseline is already > 0 before
+# the ping would ever post, so this never reaches the ping-and-wait arms above
+# at all — it goes straight to post_review_wait(), the same function the
+# findings row reaches, checks recheck included. Two SHIP_PR_CHECKS_FIXTURES
+# entries: one for phase 1's own gate, one for the recheck inside
+# post_review_wait(). Offline, arm_auto_merge() always returns 1 (it only ever
+# says what it *would* do), so the `if arm_auto_merge` guard never calls
+# wait_for_merge() here — this is as far as an offline run reaches, same as
+# the `reviewed` case above.
+check already-reviewed-skips-ping 0 "$(f already-reviewed)" "$three" \
+  SHIP_PR_CHECKS_FIXTURES="$(cf checks-green-three.json checks-green-three.json)" <<'EOF'
+offline: auto-merge not armed (would arm on fixture-head-sha)
+EOF
+
 # No comments fixture, so the cooldown arithmetic has nothing to read and the
 # refusal is reported rather than ridden out.
 check rate-limited 0 "$(f rate-limited)" <<'EOF'
@@ -454,6 +468,24 @@ if ! grep -q '^review in progress$' <<<"$in_progress_out" \
 else
   failures=$((failures + 1))
   printf '  FAIL  in-progress-on-stderr (expected off stdout and on stderr)\n'
+fi
+
+# The startup auto-skip's own notice, proven off stdout and on stderr the same
+# way in-progress-on-stderr proves its line — not covered by the terminal-line
+# case above, which only proves the stdout the notice leads to.
+already_reviewed_out=$(env SHIP_PR_POLL_SECONDS=0 SHIP_PR_PING_AT="$ping" \
+  SHIP_PR_BRANCH_RULES_FIXTURE="$here/branch-rules.json" \
+  SHIP_PR_CHECKS_FIXTURES="$(cf checks-green-three.json checks-green-three.json)" \
+  SHIP_PR_FIXTURES="$(f already-reviewed)" "$script" fixture/repo 1 2>/tmp/ship-pr-already-reviewed-err.$$)
+already_reviewed_err=$(cat /tmp/ship-pr-already-reviewed-err.$$)
+rm -f /tmp/ship-pr-already-reviewed-err.$$
+ran=$((ran + 1))
+if ! grep -q '^already reviewed' <<<"$already_reviewed_out" \
+  && grep -q '^already reviewed (count=1) — the ping is not needed$' <<<"$already_reviewed_err"; then
+  printf '  ok    already-reviewed-on-stderr\n'
+else
+  failures=$((failures + 1))
+  printf '  FAIL  already-reviewed-on-stderr (expected off stdout and on stderr)\n'
 fi
 
 printf '\n%s case(s), %s failure(s)\n' "$ran" "$failures"
