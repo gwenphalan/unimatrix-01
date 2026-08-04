@@ -451,6 +451,9 @@ On stderr, so a clean run does not wake a `Monitor` caller to be told nothing:
   <BUCKET>  <check-name>  — <desc>            same, for a check that carries one
   checks green on <sha>                       the phase boundary; the slot is about to be spent
 
+On the startup baseline read, before any ping:
+  already reviewed (count=<n>) — the ping is not needed   stderr; the post-review wait starts next
+
 Under --no-review, before any wait:
   no review requested, and auto-merge is off — nothing armed   terminal
 
@@ -472,7 +475,8 @@ Otherwise, from phase 2's own ping-and-wait, one line, whichever applies:
   refused: skipped — ping did not register    re-ping, nothing was spent
   nothing reviewable — that IS the review
 
-The post-review wait — reached from `reviewed: <base> -> <n>` and, minus the
+The post-review wait — reached from `reviewed: <base> -> <n>`, from the
+startup baseline read finding the review count already > 0, and, minus the
 checks recheck, from `--no-review` once auto-merge is on — on stdout:
   checks red: <names> — not arming             terminal, the recheck's own call only
   checks timed out after <m>m — never reported: <names>   the recheck's own clock
@@ -1306,9 +1310,15 @@ re_pin_head_sha() {
   echo "re-pinned head to $head_sha" >&2
 }
 
-# Reached from the findings row of phase 2's own wait ("reviewed: <base> ->
-# <n>") only — the clean-review row arms directly, above, and never reaches
-# this.
+# Reached from two places: the findings row of phase 2's own wait
+# ("reviewed: <base> -> <n>"), and the startup check below that finds the
+# review-count baseline already > 0 before ever posting a ping. Both get the
+# full treatment, checks recheck included — a restart resuming an
+# already-reviewed PR may have real wall-clock behind it since that review
+# ran, so the same "checks might be stale" reasoning that justifies the
+# findings row's recheck applies here too. `--no-review` is neither of these:
+# it never pings, so it runs its own lighter inline wait below instead of
+# calling this function — see its own comment for why.
 #
 # Threads first, then checks, then the re-pin, then the arm. A fix commit can
 # land after the thread reply that explains it, so checking checks ahead of
@@ -1386,6 +1396,11 @@ if [ "$offline" -eq 1 ]; then
   base=$(count "${fixtures[0]}/reviews.json") || no_baseline
 else
   base=$(count) || no_baseline
+fi
+
+if [ "$base" -gt 0 ]; then
+  echo "already reviewed (count=$base) — the ping is not needed" >&2
+  post_review_wait
 fi
 
 n=$base

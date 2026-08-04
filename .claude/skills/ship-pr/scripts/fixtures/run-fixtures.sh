@@ -249,17 +249,21 @@ FAIL  Images (api)
 checks red: Images (api) — not pinging
 EOF
 
-# `quiet`'s baseline carries one bodied CodeRabbit review — a PR this run never
-# pinged but that CodeRabbit already read. The wording is about that history,
-# not about the flag: the ordinary armed line, not UNREVIEWED.
-check no-review-prior-review 0 "$(f quiet)" -- --no-review <<'EOF'
+# `already-reviewed`'s baseline carries one bodied CodeRabbit review — a PR
+# this run never pinged but that CodeRabbit already read. The wording is about
+# that history, not about the flag: the ordinary armed line, not UNREVIEWED.
+# Not `quiet`, which ~10 phase-1-only cases above also consume for a fixture
+# list that never reaches the baseline read — those needed it zeroed to stay
+# clear of the new startup auto-skip, and reusing it here would have silently
+# flipped this case's own expectation along with them.
+check no-review-prior-review 0 "$(f already-reviewed)" -- --no-review <<'EOF'
 offline: auto-merge not armed (would arm on fixture-head-sha)
 EOF
 
 # --- Phase 2: the review wait ----------------------------------------------
 
 check clean 0 "$(f clean)" <<'EOF'
-reviewed clean, count unchanged at 1
+reviewed clean, count unchanged at 0
 offline: auto-merge not armed (would arm on fixture-head-sha)
 EOF
 
@@ -267,7 +271,7 @@ EOF
 # return code is what wait_for_merge() gates on — a non-zero return here must
 # not enter that wait.
 check clean-auto-merge-off 0 "$(f clean)" SHIP_PR_AUTO_MERGE=0 <<'EOF'
-reviewed clean, count unchanged at 1
+reviewed clean, count unchanged at 0
 offline: auto-merge not armed (auto-merge is off)
 EOF
 
@@ -299,7 +303,7 @@ EOF
 # describes, since the default single-entry list would otherwise exhaust here.
 check reviewed 0 "$(f quiet reviewed)" \
   SHIP_PR_CHECKS_FIXTURES="$(cf checks-green-one.json checks-green-one.json)" <<'EOF'
-reviewed: 1 -> 2
+reviewed: 0 -> 1
 offline: auto-merge not armed (would arm on fixture-head-sha)
 EOF
 
@@ -310,7 +314,7 @@ EOF
 check reviewed-head-moved 0 "$(f quiet reviewed)" \
   SHIP_PR_CHECKS_FIXTURES="$(cf checks-green-one.json checks-green-one.json)" \
   SHIP_PR_HEAD_SHA_2=fixture-head-sha-2 <<'EOF'
-reviewed: 1 -> 2
+reviewed: 0 -> 1
 offline: auto-merge not armed (would arm on fixture-head-sha-2)
 EOF
 
@@ -320,7 +324,7 @@ EOF
 check reviewed-threads-clear 0 "$(f quiet reviewed)" \
   SHIP_PR_CHECKS_FIXTURES="$(cf checks-green-one.json checks-green-one.json)" \
   SHIP_PR_THREADS_FIXTURES="$(tf one-unresolved.json clear.json)" <<'EOF'
-reviewed: 1 -> 2
+reviewed: 0 -> 1
 offline: auto-merge not armed (would arm on fixture-head-sha)
 EOF
 
@@ -328,7 +332,7 @@ EOF
 # own three-strikes abort, on its own counter.
 check reviewed-threads-three-strikes 2 "$(f quiet reviewed)" \
   SHIP_PR_THREADS_FIXTURES="ERROR=a:ERROR=b:ERROR=c" <<'EOF'
-reviewed: 1 -> 2
+reviewed: 0 -> 1
 thread count API ERROR x3 — stopping rather than waiting blind
 EOF
 
@@ -337,7 +341,7 @@ EOF
 # — a PR that needs a reply and a re-arm, not a script failure.
 check reviewed-threads-timeout 0 "$(f quiet reviewed)" \
   SHIP_PR_THREAD_WAIT_TIMEOUT=0 SHIP_PR_THREADS_FIXTURES="$(tf one-unresolved.json)" <<'EOF'
-reviewed: 1 -> 2
+reviewed: 0 -> 1
 threads still unresolved after 0m — reply and re-arm, or resolve by hand
 EOF
 
@@ -347,9 +351,23 @@ EOF
 # actually registers against the gate.
 check reviewed-checks-recheck-red 0 "$(f quiet reviewed)" "$three" \
   SHIP_PR_CHECKS_FIXTURES="$(cf checks-green-three.json checks-terminal.json)" <<'EOF'
-reviewed: 1 -> 2
+reviewed: 0 -> 1
 FAIL  Images (api)
 checks red: Images (api) — not arming
+EOF
+
+# The startup auto-skip: `already-reviewed`'s baseline is already > 0 before
+# the ping would ever post, so this never reaches the ping-and-wait arms above
+# at all — it goes straight to post_review_wait(), the same function the
+# findings row reaches, checks recheck included. Two SHIP_PR_CHECKS_FIXTURES
+# entries: one for phase 1's own gate, one for the recheck inside
+# post_review_wait(). Offline, arm_auto_merge() always returns 1 (it only ever
+# says what it *would* do), so the `if arm_auto_merge` guard never calls
+# wait_for_merge() here — this is as far as an offline run reaches, same as
+# the `reviewed` case above.
+check already-reviewed-skips-ping 0 "$(f already-reviewed)" "$three" \
+  SHIP_PR_CHECKS_FIXTURES="$(cf checks-green-three.json checks-green-three.json)" <<'EOF'
+offline: auto-merge not armed (would arm on fixture-head-sha)
 EOF
 
 # No comments fixture, so the cooldown arithmetic has nothing to read and the
@@ -361,7 +379,7 @@ EOF
 check rate-limited-retry 0 "$(f rate-limited clean)" \
   SHIP_PR_COMMENTS_FIXTURE="$here/wait/rate-limited/comments.json" <<'EOF'
 offline: re-ping suppressed, continuing as if posted
-reviewed clean, count unchanged at 1
+reviewed clean, count unchanged at 0
 offline: auto-merge not armed (would arm on fixture-head-sha)
 EOF
 
@@ -393,7 +411,7 @@ check no-baseline 1 "ERROR=boom" <<'EOF'
 EOF
 
 check three-strikes 2 "$(f quiet),ERROR=a,ERROR=b,ERROR=c" <<'EOF'
-API ERROR x3 (count=1) — stopping rather than waiting blind: c
+API ERROR x3 (count=0) — stopping rather than waiting blind: c
 EOF
 
 # An unreadable ping has no timestamp for either branch to compare against, so
@@ -437,12 +455,17 @@ fi
 # rate-limit progress lines. Captured separately, not combined with 2>&1 — the
 # two siblings above only prove the line is printed *somewhere*, which a
 # regression back onto stdout would still satisfy. This proves the stream.
+#
+# The capture file comes from mktemp, not from `$$`: a PID-derived name in a
+# world-writable directory is predictable, so another local process can
+# pre-create it as a symlink and have this redirection truncate the target.
+in_progress_err_file=$(mktemp "${TMPDIR:-/tmp}/ship-pr-in-progress-err.XXXXXX") || exit 1
 in_progress_out=$(env SHIP_PR_POLL_SECONDS=0 SHIP_PR_PING_AT="$ping" \
   SHIP_PR_BRANCH_RULES_FIXTURE="$here/branch-rules-one.json" \
   SHIP_PR_CHECKS_FIXTURES="$here/checks-green-one.json" \
-  SHIP_PR_FIXTURES="$(f in-progress)" "$script" fixture/repo 1 2>/tmp/ship-pr-in-progress-err.$$)
-in_progress_err=$(cat /tmp/ship-pr-in-progress-err.$$)
-rm -f /tmp/ship-pr-in-progress-err.$$
+  SHIP_PR_FIXTURES="$(f in-progress)" "$script" fixture/repo 1 2>"$in_progress_err_file")
+in_progress_err=$(cat "$in_progress_err_file")
+rm -f "$in_progress_err_file"
 ran=$((ran + 1))
 if ! grep -q '^review in progress$' <<<"$in_progress_out" \
   && grep -q '^review in progress$' <<<"$in_progress_err"; then
@@ -450,6 +473,26 @@ if ! grep -q '^review in progress$' <<<"$in_progress_out" \
 else
   failures=$((failures + 1))
   printf '  FAIL  in-progress-on-stderr (expected off stdout and on stderr)\n'
+fi
+
+# The startup auto-skip's own notice, proven off stdout and on stderr the same
+# way in-progress-on-stderr proves its line — not covered by the terminal-line
+# case above, which only proves the stdout the notice leads to. mktemp for the
+# capture file, for the same reason as in-progress-on-stderr above.
+already_reviewed_err_file=$(mktemp "${TMPDIR:-/tmp}/ship-pr-already-reviewed-err.XXXXXX") || exit 1
+already_reviewed_out=$(env SHIP_PR_POLL_SECONDS=0 SHIP_PR_PING_AT="$ping" \
+  SHIP_PR_BRANCH_RULES_FIXTURE="$here/branch-rules.json" \
+  SHIP_PR_CHECKS_FIXTURES="$(cf checks-green-three.json checks-green-three.json)" \
+  SHIP_PR_FIXTURES="$(f already-reviewed)" "$script" fixture/repo 1 2>"$already_reviewed_err_file")
+already_reviewed_err=$(cat "$already_reviewed_err_file")
+rm -f "$already_reviewed_err_file"
+ran=$((ran + 1))
+if ! grep -q '^already reviewed' <<<"$already_reviewed_out" \
+  && grep -q '^already reviewed (count=1) — the ping is not needed$' <<<"$already_reviewed_err"; then
+  printf '  ok    already-reviewed-on-stderr\n'
+else
+  failures=$((failures + 1))
+  printf '  FAIL  already-reviewed-on-stderr (expected off stdout and on stderr)\n'
 fi
 
 printf '\n%s case(s), %s failure(s)\n' "$ran" "$failures"
