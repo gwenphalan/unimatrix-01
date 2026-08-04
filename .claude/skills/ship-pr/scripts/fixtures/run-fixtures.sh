@@ -325,6 +325,19 @@ check reviewed-threads-clear 0 "$(f quiet reviewed)" \
   SHIP_PR_CHECKS_FIXTURES="$(cf checks-green-one.json checks-green-one.json)" \
   SHIP_PR_THREADS_FIXTURES="$(tf one-unresolved.json clear.json)" <<'EOF'
 reviewed: 0 -> 1
+findings: 1 unresolved review thread — reply and fix
+offline: auto-merge not armed (would arm on fixture-head-sha)
+EOF
+
+# The plural half of the findings line. Sibling to reviewed-threads-clear
+# rather than a replacement for it: that one covers the singular, and the noun
+# is the only thing that differs, so a regression would otherwise land on
+# whichever count the suite happens not to use.
+check reviewed-threads-plural 0 "$(f quiet reviewed)" \
+  SHIP_PR_CHECKS_FIXTURES="$(cf checks-green-one.json checks-green-one.json)" \
+  SHIP_PR_THREADS_FIXTURES="$(tf two-unresolved.json clear.json)" <<'EOF'
+reviewed: 0 -> 1
+findings: 2 unresolved review threads — reply and fix
 offline: auto-merge not armed (would arm on fixture-head-sha)
 EOF
 
@@ -342,6 +355,7 @@ EOF
 check reviewed-threads-timeout 0 "$(f quiet reviewed)" \
   SHIP_PR_THREAD_WAIT_TIMEOUT=0 SHIP_PR_THREADS_FIXTURES="$(tf one-unresolved.json)" <<'EOF'
 reviewed: 0 -> 1
+findings: 1 unresolved review thread — reply and fix
 threads still unresolved after 0m — reply and re-arm, or resolve by hand
 EOF
 

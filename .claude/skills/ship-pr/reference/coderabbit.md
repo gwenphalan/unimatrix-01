@@ -231,14 +231,15 @@ resting skip. And the vocabulary is **undocumented** — four descriptions acros
 the yaml reference, the commands guide and the plans page — so treat an absent context as "fall back
 to the summary comment", not as an answer.
 
-**The waiter can merge for you on the clean row — and, since it stopped exiting on findings, on that
-row too, on different terms.** On a clean review it arms GitHub's native auto-merge immediately,
+**The waiter can merge for you on the clean row, and on the findings row too, on different terms.** On a clean review it arms GitHub's native auto-merge immediately,
 pinned with `--match-head-commit` to the sha that was actually reviewed; GitHub then squashes once
 every required check passes, so nothing here re-verifies green or races a branch that goes `BEHIND`.
 A push landing between the review and the arm makes the arm fail outright — measured, see below — and
 a push landing *after* a successful arm is caught too, see below.
 
-On a review **with findings**, it no longer exits at `reviewed: <base> -> <n>`. It waits for every
+On a review **with findings**, it does not exit at `reviewed: <base> -> <n>`. It prints
+`findings: <n> unresolved review thread(s) — reply and fix` — on stdout, once, so it reaches a
+`Monitor` caller, which never sees the stderr heartbeats — and waits for every
 review thread to clear (`unresolvedThreads`, `isResolved == false`, the same check the clean row's
 arm already used defensively — reused rather than duplicated, so the two can't disagree), then waits
 for required checks to go green again on whatever head that leaves, then re-reads the live head sha
