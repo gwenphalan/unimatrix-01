@@ -304,19 +304,33 @@ check merge-wait-checks-red 0 "$(f never-reviewed)" "$three" \
   SHIP_PR_CHECKS_FIXTURES="$(cf checks-green-three.json checks-terminal.json)" \
   SHIP_PR_MERGE_FIXTURES="$here/merge-wait/open-same-head.json" -- --no-review <<'EOF'
 offline: auto-merge armed UNREVIEWED (would arm on fixture-head-sha) — merge-wait fixtures follow
-required check red after arm: Images (api) — GitHub's resume behaviour here is undocumented; re-arm by hand: gh pr merge 1 --repo fixture/repo --auto --squash --match-head-commit fixture-head-sha
+required check red after arm: Images (api) — the arm survives; GitHub retries when it goes green on fixture-head-sha
 FIXTURES EXHAUSTED
 EOF
 
 # The head moving after the arm — a push landing while this wait is polling.
 # Disables auto-merge and names the sha to re-arm on, which is the current
 # head (`fixture-head-sha-2`), not the one the arm pinned.
+#
+# Terminal, which is what the absent `FIXTURES EXHAUSTED` asserts: one merge
+# fixture is supplied and the run ends on it rather than polling for a second.
+# Falling through instead would reach the red-check line, whose "the arm
+# survives" wording is only true while the live head still matches the arm.
 check merge-wait-head-moved 0 "$(f never-reviewed)" \
   SHIP_PR_CHECKS_FIXTURES="$(cf checks-green-one.json checks-green-one.json)" \
   SHIP_PR_MERGE_FIXTURES="$here/merge-wait/head-moved.json" -- --no-review <<'EOF'
 offline: auto-merge armed UNREVIEWED (would arm on fixture-head-sha) — merge-wait fixtures follow
 head changed after arm, from fixture-head-sha to fixture-head-sha-2 — auto-merge disabled; re-arm by hand: gh pr merge 1 --repo fixture/repo --auto --squash --match-head-commit fixture-head-sha-2
-FIXTURES EXHAUSTED
+EOF
+
+# A base switch with the head sha untouched — invisible to the head comparison,
+# and GitHub disables the arm on it. Two merge fixtures: the first baselines the
+# base branch, the second switches it.
+check merge-wait-base-switched 0 "$(f never-reviewed)" \
+  SHIP_PR_CHECKS_FIXTURES="$(cf checks-green-one.json checks-green-one.json checks-green-one.json)" \
+  SHIP_PR_MERGE_FIXTURES="$(mf open-same-head.json base-switched.json)" -- --no-review <<'EOF'
+offline: auto-merge armed UNREVIEWED (would arm on fixture-head-sha) — merge-wait fixtures follow
+base branch changed after arm, from main to release-2 — GitHub disables the arm on a base switch; re-arm by hand: gh pr merge 1 --repo fixture/repo --auto --squash --match-head-commit fixture-head-sha
 EOF
 
 # --- Phase 2: the review wait ----------------------------------------------

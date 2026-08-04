@@ -1,1 +1,6 @@
-{ "state": "OPEN", "headRefOid": "fixture-head-sha", "mergeCommit": null }
+{
+  "state": "OPEN",
+  "headRefOid": "fixture-head-sha",
+  "baseRefName": "main",
+  "mergeCommit": null
+}

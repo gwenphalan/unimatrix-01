@@ -270,18 +270,25 @@ is not mergeable`, with `autoMergeRequest` left `null`; pinned to the **current*
 `expectedHeadOid` is enforced when auto-merge is *enabled*, and an arm attempted after a push simply
 does not take.
 
-Enable-time enforcement says nothing about what happens after: GitHub's own docs name only two things
+Enable-time enforcement says nothing about what happens after, and GitHub's docs name only two things
 that disable an armed auto-merge — a push from a user **without** write permission, and switching the
-base branch — and say nothing about a required check going red and later recovering. **On both rows,
-the watcher settles this itself by polling past every successful arm** rather than leaning on GitHub's
-silence. It watches required checks and the live head sha, reports `merged <sha>` once GitHub squashes,
-and reports a required check going red or the head moving with the exact `gh pr merge
---match-head-commit` command to re-arm by hand. On the findings row this sits alongside the pre-arm
-recheck: the post-review wait still re-checks required checks once, right before arming, and a red
-check there is caught and reported (`— not arming`) before the arm is even attempted. Also unmeasured:
-whether GitHub's auto-merge updates an out-of-date branch by itself. Read as no, and the failure
-direction is benign either way — a self-update moves the head sha, which the watcher's polling catches
-the same as any other post-arm push.
+base branch. **A required check going red is not one of them: the arm survives it and fires on its own
+once that context reports green again on the same head sha.** Measured on a scratch repo — one required
+context, armed while it was already red (which GitHub accepts, so arm order does not matter), then
+flipped red to green with no new commit, and the squash landed two seconds later. Two caveats on the
+measurement: the required context was a hand-posted commit status rather than an Actions check run, and
+there was one of them rather than eight.
+
+**On both rows the watcher polls past every successful arm** rather than leaning on GitHub's silence. It
+watches required checks and the live head sha, reports `merged <sha>` once GitHub squashes, reports a
+red required check as survivable, and reports the head moving — which genuinely does break the arm —
+with the exact `gh pr merge --match-head-commit` command to re-arm. On the findings row this sits
+alongside the pre-arm recheck: the post-review wait re-checks required checks once, right before
+arming, and a red check there is caught and reported (`— not arming`) before the arm is attempted.
+
+Unmeasured: whether GitHub's auto-merge updates an out-of-date branch by itself. Read as no, and the
+failure direction is benign either way — a self-update moves the head sha, which the watcher's polling
+catches the same as any other post-arm push.
 
 **A ping can be swallowed with no marker at all.** Observed here: `@coderabbitai review` drew no ack
 and no review, while the PR-open `Review skipped` notice sat above it looking like a reply. The
