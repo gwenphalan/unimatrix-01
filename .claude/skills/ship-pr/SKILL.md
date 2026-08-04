@@ -43,8 +43,11 @@ and a lack of objection is not approval.
    problem, and going straight to a plan produces a confident answer to the wrong question. When
    unsure, it is a problem.
 1. **Dispatch `monorepo-planner` to investigate and report.** It reads the code rather than
-   remembering it, and it cannot edit. Give it the task in the owner's words plus anything settled
-   verbally — not your own theory of the fix, which is the thing that would contaminate it.
+   remembering it, and it cannot edit. When the task is a `.notes/01-todo/*.todo.md` item, give it
+   the item verbatim in that file's format, not a re-typed summary — reflowing it loses the inline
+   `[a]` citations, which resolve only against the original References list. Anything settled
+   verbally goes alongside, clearly separated from the verbatim block, never merged into it or used
+   to reword it. Not your own theory of the fix, which is the thing that would contaminate it.
 2. **Attack the plan before believing it.** A plan you only read is a plan you approved, and you
    framed the task the planner worked from — so auditing it yourself is the same self-review this
    skill forbids for code.
