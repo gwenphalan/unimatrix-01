@@ -42,20 +42,17 @@ describe("AppShell", () => {
     expect(screen.getByRole("link", { name: "Skip to main content" })).toBeInTheDocument();
   });
 
-  it("carries a wordmark that stays on the admin origin, and a way back to the public site in the footer", async () => {
+  it("carries a wordmark that stays on the admin origin, with no footer link back to the public site", async () => {
     renderShell(<p>console body</p>);
 
-    // The wordmark: `sectionsHomeHref="/"` keeps it same-origin, unlike the
-    // old title bar's `homeHref`.
+    // The wordmark: `sectionsHomeHref="/"` keeps it same-origin.
     expect(await screen.findByRole("link", { name: "Unimatrix Admin" })).toHaveAttribute(
       "href",
       "/",
     );
-    // The way back out to the public site is the footer's copyright link,
-    // still pointing off-origin.
-    expect(
-      within(screen.getByRole("contentinfo")).getByRole("link", { name: /Gwen Phalan/u }),
-    ).toHaveAttribute("href", "https://unimatrix-01.dev/");
+    // `showFooter={false}` means there is no footer, and so no copyright link
+    // back to the public site at all — see `app-shell.tsx`'s doc comment.
+    expect(screen.queryByRole("contentinfo")).not.toBeInTheDocument();
   });
 
   it("renders the seven section links", async () => {
@@ -84,13 +81,10 @@ describe("AppShell", () => {
     for (const label of ["Home", "Projects", "Blog", "About"]) {
       expect(screen.queryByRole("link", { name: label })).not.toBeInTheDocument();
     }
-    // The other half of the name, and it is not "no `contentinfo` at all":
-    // the section rail renders its own footer beside `main`, so one landmark
-    // is expected. What must not appear is `PublicSiteFooter`, the
-    // `site-shell` panel that only `PublicShell` mounts. `getByRole` throws on
-    // a second `contentinfo`, so this also catches the site footer arriving
-    // alongside.
-    expect(screen.getByRole("contentinfo")).not.toHaveClass("site-shell");
+    // `showFooter={false}` means no `contentinfo` landmark at all, which also
+    // catches `PublicSiteFooter` (the `site-shell` panel only `PublicShell`
+    // mounts) arriving alongside — there is nothing for it to hide behind.
+    expect(screen.queryByRole("contentinfo")).not.toBeInTheDocument();
   });
 
   it("shows the account control", async () => {
