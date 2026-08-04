@@ -182,11 +182,18 @@ export function ToolSectionRail({
           32px column the section icons sit on. A slot that renders something
           other than 24px wide will not land there — the shell cannot measure
           the slot, so the app supplying it owns matching that size. Collapsed,
-          the rail centres it instead and the padding is dropped. */}
+          the rail centres it instead and the padding is dropped.
+
+          `border-y` frames the control with a rule on both sides, matching
+          the top one already separating it from the nav. `mb-2` nudges it up
+          from the rail's bottom edge; it lives on this div rather than on the
+          rail's own `p-3` because other comments in this file key the
+          toggle button's `top-3` offset and the wordmark's `pl-2` centering
+          off that value, and growing it would misalign both. */}
       {accountControl === undefined ? null : (
         <div
           className={cn(
-            "flex min-w-0 items-center overflow-hidden border-t border-border/60 pt-3",
+            "mb-2 flex min-w-0 items-center overflow-hidden border-y border-border/60 py-3",
             collapsed ? "justify-center [&>*]:block [&>*]:max-w-full [&>*]:truncate" : "pl-2",
           )}
         >
