@@ -218,18 +218,24 @@ after the script had already given up watching it.
 It polls for: the PR reaching MERGED (reports the merge sha and stops), the PR
 reaching CLOSED without merging (terminal), and three consecutive API failures
 (terminal, same three-strikes shape as every other wait in this script). It also
-reports two post-arm changes, which differ in whether anything is asked of you:
+reports three post-arm changes, which differ in whether anything is asked of you:
 
-  - A required check going red after the arm. Reported, no action: the arm
-    survives this and GitHub retries once the same context reports green on the
-    same head sha — measured, two seconds on a scratch repo.
+  - A required check going red after the arm. Reported, nothing asked, and the
+    wait continues: the arm survives this and GitHub retries once the same
+    context reports green on the same head sha — measured, two seconds on a
+    scratch repo. That claim holds only while the live head still equals the
+    armed sha, which is why the two cases below are terminal rather than
+    letting the wait carry on past them.
   - The head sha moving after the arm, caught by comparing the live head sha
-    against the sha the arm pinned on every poll. This one does break the arm,
-    so it carries the exact `gh pr merge --match-head-commit` command to re-arm.
-    GitHub's docs name a push from a user without write permission and switching
-    the base branch as the two things that disable an arm; a push from someone
-    with write permission does not disable it, but it does move the sha the arm
-    is pinned to, which is why this is caught here rather than trusted.
+    against the sha the arm pinned on every poll. A push from someone with write
+    permission does not disable the arm, so this disables it here — otherwise
+    whatever just landed would merge unreviewed the moment checks pass. If that
+    disable fails, the line says so instead, because an arm still live on an
+    unreviewed head is the one state here that needs a hand on it immediately.
+  - The base branch switching after the arm. GitHub disables the arm itself on a
+    base switch, and `headRefOid` does not move, so the head comparison cannot
+    see it. Baselined on the first poll, which leaves a switch inside the
+    arm-to-first-poll gap unseen — the same residual race the arm already has.
 
 Arguments:
   <owner/repo>  e.g. gwenphalan/unimatrix-01
@@ -522,8 +528,10 @@ The wait-for-merge phase, reached from a successful arm — see "After the
 arm" above — on stdout:
   merged <sha>                                terminal
   PR closed without merging — nothing left to watch   terminal
-  required check red after arm: <names> — the arm survives; GitHub retries when it goes green on <sha>
-  head changed after arm, from <sha> to <sha> — re-arm by hand: gh pr merge ...
+  required check red after arm: <names> — the arm survives; GitHub retries when it goes green on <sha>   not terminal
+  head changed after arm, from <sha> to <sha> — auto-merge disabled; re-arm by hand: gh pr merge ...   terminal
+  head changed after arm, from <sha> to <sha> — auto-merge could NOT be disabled ...disable it by hand now: gh pr merge ...   terminal
+  base branch changed after arm, from <name> to <name> — ...re-arm by hand: gh pr merge ...   terminal
   merge-wait API ERROR xN — stopping rather than waiting blind   three consecutive failures, exit 2
 
 Either phase, the post-review wait, or the wait-for-merge phase can also end
@@ -1235,7 +1243,7 @@ wait_for_merge() {
     return 0
   fi
 
-  local fails=0 i=0 started last_red="" push_reported=0
+  local fails=0 i=0 started last_red="" push_reported=0 armed_base=""
   started=$(date +%s)
 
   while true; do
@@ -1258,7 +1266,7 @@ wait_for_merge() {
           ;;
       esac
     else
-      pr_json=$(gh pr view "$pr" --repo "$repo" --json state,headRefOid,mergeCommit 2>/dev/null) || rc=1
+      pr_json=$(gh pr view "$pr" --repo "$repo" --json state,headRefOid,baseRefName,mergeCommit 2>/dev/null) || rc=1
     fi
 
     if [ "$rc" -eq 0 ] && [ -n "$pr_json" ]; then
@@ -1267,6 +1275,8 @@ wait_for_merge() {
       state=$(jq -r '.state // ""' <<<"$pr_json")
       cur_sha=$(jq -r '.headRefOid // ""' <<<"$pr_json")
       merged_sha=$(jq -r '.mergeCommit.oid // ""' <<<"$pr_json")
+      local base_ref
+      base_ref=$(jq -r '.baseRefName // ""' <<<"$pr_json")
 
       if [ "$state" = "MERGED" ]; then
         echo "merged ${merged_sha:-$cur_sha}"
@@ -1274,6 +1284,18 @@ wait_for_merge() {
       fi
       if [ "$state" = "CLOSED" ]; then
         echo "PR closed without merging — nothing left to watch"
+        exit 0
+      fi
+
+      # A base switch is the other thing GitHub's docs say disables an arm, and
+      # it leaves headRefOid untouched — so the head comparison below cannot see
+      # it. Baselined on the first poll rather than passed in, which leaves a
+      # switch inside the arm-to-first-poll gap unseen: the same one-round-trip
+      # residual race the arm itself already accepts.
+      if [ -z "$armed_base" ]; then
+        armed_base=$base_ref
+      elif [ -n "$base_ref" ] && [ "$base_ref" != "$armed_base" ]; then
+        echo "base branch changed after arm, from $armed_base to $base_ref — GitHub disables the arm on a base switch; re-arm by hand: gh pr merge $pr --repo $repo --auto --squash --match-head-commit $cur_sha"
         exit 0
       fi
 
@@ -1285,12 +1307,27 @@ wait_for_merge() {
         # whatever landed, unreviewed, the moment checks pass. Disabling it here
         # is what makes the re-arm command below correct: nothing merges until
         # it's run again, deliberately, on the sha actually being reported.
+        #
+        # The disable is checked rather than swallowed: if it fails, the arm is
+        # still live and still pointing at a head nothing reviewed, which is the
+        # one state in this function that needs a hand on it immediately — so it
+        # says that instead of claiming a disable that did not happen.
+        local disabled=1
         if [ "$offline" -eq 1 ]; then
           : # offline: no live PR to disable auto-merge on
-        else
-          gh pr merge "$pr" --repo "$repo" --disable-auto >/dev/null 2>&1 || true
+        elif ! gh pr merge "$pr" --repo "$repo" --disable-auto >/dev/null 2>&1; then
+          disabled=0
         fi
-        echo "head changed after arm, from $armed_sha to $cur_sha — auto-merge disabled; re-arm by hand: gh pr merge $pr --repo $repo --auto --squash --match-head-commit $cur_sha"
+        if [ "$disabled" -eq 1 ]; then
+          echo "head changed after arm, from $armed_sha to $cur_sha — auto-merge disabled; re-arm by hand: gh pr merge $pr --repo $repo --auto --squash --match-head-commit $cur_sha"
+        else
+          echo "head changed after arm, from $armed_sha to $cur_sha — auto-merge could NOT be disabled and is still armed on an unreviewed head; disable it by hand now: gh pr merge $pr --repo $repo --disable-auto"
+        fi
+        # Terminal. The arm this wait exists to watch is gone either way, and
+        # falling through would reach the red-check line below, whose "the arm
+        # survives" claim holds only while the live head still equals the armed
+        # sha — which is exactly what just stopped being true.
+        exit 0
       fi
 
       # The existing checks_fixtures cursor, offline — a third consumer of the

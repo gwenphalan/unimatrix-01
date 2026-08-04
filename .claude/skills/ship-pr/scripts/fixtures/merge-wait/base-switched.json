@@ -1,6 +1,6 @@
 {
-  "state": "CLOSED",
+  "state": "OPEN",
   "headRefOid": "fixture-head-sha",
-  "baseRefName": "main",
+  "baseRefName": "release-2",
   "mergeCommit": null
 }

@@ -1,5 +1,8 @@
 {
   "state": "MERGED",
   "headRefOid": "fixture-head-sha",
-  "mergeCommit": { "oid": "fixture-merge-sha" }
+  "baseRefName": "main",
+  "mergeCommit": {
+    "oid": "fixture-merge-sha"
+  }
 }
