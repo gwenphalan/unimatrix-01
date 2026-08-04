@@ -249,17 +249,21 @@ FAIL  Images (api)
 checks red: Images (api) — not pinging
 EOF
 
-# `quiet`'s baseline carries one bodied CodeRabbit review — a PR this run never
-# pinged but that CodeRabbit already read. The wording is about that history,
-# not about the flag: the ordinary armed line, not UNREVIEWED.
-check no-review-prior-review 0 "$(f quiet)" -- --no-review <<'EOF'
+# `already-reviewed`'s baseline carries one bodied CodeRabbit review — a PR
+# this run never pinged but that CodeRabbit already read. The wording is about
+# that history, not about the flag: the ordinary armed line, not UNREVIEWED.
+# Not `quiet`, which ~10 phase-1-only cases above also consume for a fixture
+# list that never reaches the baseline read — those needed it zeroed to stay
+# clear of the new startup auto-skip, and reusing it here would have silently
+# flipped this case's own expectation along with them.
+check no-review-prior-review 0 "$(f already-reviewed)" -- --no-review <<'EOF'
 offline: auto-merge not armed (would arm on fixture-head-sha)
 EOF
 
 # --- Phase 2: the review wait ----------------------------------------------
 
 check clean 0 "$(f clean)" <<'EOF'
-reviewed clean, count unchanged at 1
+reviewed clean, count unchanged at 0
 offline: auto-merge not armed (would arm on fixture-head-sha)
 EOF
 
@@ -267,7 +271,7 @@ EOF
 # return code is what wait_for_merge() gates on — a non-zero return here must
 # not enter that wait.
 check clean-auto-merge-off 0 "$(f clean)" SHIP_PR_AUTO_MERGE=0 <<'EOF'
-reviewed clean, count unchanged at 1
+reviewed clean, count unchanged at 0
 offline: auto-merge not armed (auto-merge is off)
 EOF
 
@@ -299,7 +303,7 @@ EOF
 # describes, since the default single-entry list would otherwise exhaust here.
 check reviewed 0 "$(f quiet reviewed)" \
   SHIP_PR_CHECKS_FIXTURES="$(cf checks-green-one.json checks-green-one.json)" <<'EOF'
-reviewed: 1 -> 2
+reviewed: 0 -> 1
 offline: auto-merge not armed (would arm on fixture-head-sha)
 EOF
 
@@ -310,7 +314,7 @@ EOF
 check reviewed-head-moved 0 "$(f quiet reviewed)" \
   SHIP_PR_CHECKS_FIXTURES="$(cf checks-green-one.json checks-green-one.json)" \
   SHIP_PR_HEAD_SHA_2=fixture-head-sha-2 <<'EOF'
-reviewed: 1 -> 2
+reviewed: 0 -> 1
 offline: auto-merge not armed (would arm on fixture-head-sha-2)
 EOF
 
@@ -320,7 +324,7 @@ EOF
 check reviewed-threads-clear 0 "$(f quiet reviewed)" \
   SHIP_PR_CHECKS_FIXTURES="$(cf checks-green-one.json checks-green-one.json)" \
   SHIP_PR_THREADS_FIXTURES="$(tf one-unresolved.json clear.json)" <<'EOF'
-reviewed: 1 -> 2
+reviewed: 0 -> 1
 offline: auto-merge not armed (would arm on fixture-head-sha)
 EOF
 
@@ -328,7 +332,7 @@ EOF
 # own three-strikes abort, on its own counter.
 check reviewed-threads-three-strikes 2 "$(f quiet reviewed)" \
   SHIP_PR_THREADS_FIXTURES="ERROR=a:ERROR=b:ERROR=c" <<'EOF'
-reviewed: 1 -> 2
+reviewed: 0 -> 1
 thread count API ERROR x3 — stopping rather than waiting blind
 EOF
 
@@ -337,7 +341,7 @@ EOF
 # — a PR that needs a reply and a re-arm, not a script failure.
 check reviewed-threads-timeout 0 "$(f quiet reviewed)" \
   SHIP_PR_THREAD_WAIT_TIMEOUT=0 SHIP_PR_THREADS_FIXTURES="$(tf one-unresolved.json)" <<'EOF'
-reviewed: 1 -> 2
+reviewed: 0 -> 1
 threads still unresolved after 0m — reply and re-arm, or resolve by hand
 EOF
 
@@ -347,7 +351,7 @@ EOF
 # actually registers against the gate.
 check reviewed-checks-recheck-red 0 "$(f quiet reviewed)" "$three" \
   SHIP_PR_CHECKS_FIXTURES="$(cf checks-green-three.json checks-terminal.json)" <<'EOF'
-reviewed: 1 -> 2
+reviewed: 0 -> 1
 FAIL  Images (api)
 checks red: Images (api) — not arming
 EOF
@@ -361,7 +365,7 @@ EOF
 check rate-limited-retry 0 "$(f rate-limited clean)" \
   SHIP_PR_COMMENTS_FIXTURE="$here/wait/rate-limited/comments.json" <<'EOF'
 offline: re-ping suppressed, continuing as if posted
-reviewed clean, count unchanged at 1
+reviewed clean, count unchanged at 0
 offline: auto-merge not armed (would arm on fixture-head-sha)
 EOF
 
@@ -393,7 +397,7 @@ check no-baseline 1 "ERROR=boom" <<'EOF'
 EOF
 
 check three-strikes 2 "$(f quiet),ERROR=a,ERROR=b,ERROR=c" <<'EOF'
-API ERROR x3 (count=1) — stopping rather than waiting blind: c
+API ERROR x3 (count=0) — stopping rather than waiting blind: c
 EOF
 
 # An unreadable ping has no timestamp for either branch to compare against, so
