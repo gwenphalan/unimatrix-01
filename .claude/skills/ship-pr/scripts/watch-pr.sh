@@ -393,10 +393,11 @@ Environment:
                         ERROR=<message>, standing in for a failed call. No entry
                         may contain a colon, which is the separator. A
                         multi-entry list is how the pending -> green transition is
-                        exercised. Consumed twice per run when phase 2 reaches
-                        the post-review recheck: the cursor is a continuous
-                        stream across both calls, matching every other
-                        fixture-cursor idiom in this file.
+                        exercised. Read by three consumers sharing one
+                        continuous cursor, matching every other fixture-cursor
+                        idiom in this file: phase 1's own gate, the
+                        post-review recheck, and wait_for_merge()'s own
+                        post-arm checks read.
   SHIP_PR_THREADS_FIXTURES
                         Colon-separated entries consumed one per post-review
                         poll in place of the `unresolved_threads()` GraphQL
@@ -416,6 +417,20 @@ Environment:
   SHIP_PR_CHECKS_FIXTURES and SHIP_PR_BRANCH_RULES_FIXTURE requires the other
   two: a partial fixture run would quietly hit the network for the half nobody
   supplied, and the offline branches below all key off the same flag.
+  SHIP_PR_MERGE_FIXTURES
+                        Colon-separated entries consumed one per wait_for_merge()
+                        poll in place of the `gh pr view
+                        --json state,headRefOid,mergeCommit` call. An entry is
+                        either a path to a JSON file holding that shape, or the
+                        form ERROR=<message>, standing in for a failed call.
+                        Unset offline, wait_for_merge() reads as nothing left
+                        to watch and returns immediately, so every fixture
+                        case that does not set this is unaffected by the wait
+                        existing at all. Reaching this wait offline also
+                        requires SHIP_PR_AUTO_MERGE to stay at its default and
+                        a review baseline that arms — see the merge-wait cases
+                        in fixtures/run-fixtures.sh for the shortest path,
+                        --no-review with an empty reviews.json.
   SHIP_PR_PING_AT       ISO-8601 UTC timestamp standing in for the ping a
                         fixture run does not post. Offline only. Defaults to the
                         epoch, which puts the ping before every fixture
@@ -486,8 +501,10 @@ checks recheck, from `--no-review` once auto-merge is on — on stdout:
 
 Then the arm, on stdout — the same code and the same lines regardless of which
 of the three call sites (clean review, findings resolved, --no-review) reached
-it. Only the live `gh pr merge` call succeeding leads to the wait-for-merge
-phase below; every other line here is arm_auto_merge()'s own return of 1:
+it. The live `gh pr merge` call succeeding leads to the wait-for-merge phase
+below, and so, offline only, does either "armed" line when
+SHIP_PR_MERGE_FIXTURES supplies cases for that phase to consume; every other
+line here is arm_auto_merge()'s own return of 1:
   auto-merge is off — nothing armed, merge by hand
   auto-merge not armed — PR is a draft
   auto-merge not armed — <n> unresolved threads
@@ -496,8 +513,10 @@ phase below; every other line here is arm_auto_merge()'s own return of 1:
   offline: auto-merge not armed (auto-merge is off)
   offline: auto-merge not armed (would arm on <sha>)
   offline: auto-merge not armed (would be UNREVIEWED on <sha>)
+  offline: auto-merge armed (would arm on <sha>) — merge-wait fixtures follow
+  offline: auto-merge armed UNREVIEWED (would arm on <sha>) — merge-wait fixtures follow
 
-The wait-for-merge phase, reached only from a successful arm — see "After the
+The wait-for-merge phase, reached from a successful arm — see "After the
 arm" above — on stdout:
   merged <sha>                                terminal
   PR closed without merging — nothing left to watch   terminal
