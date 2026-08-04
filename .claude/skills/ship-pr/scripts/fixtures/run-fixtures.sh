@@ -333,9 +333,14 @@ EOF
 # rather than a replacement for it: that one covers the singular, and the noun
 # is the only thing that differs, so a regression would otherwise land on
 # whichever count the suite happens not to use.
+#
+# Two non-zero polls before the clear, not one, so the single findings line
+# below is also the assertion that it is said once rather than per poll — the
+# only thing holding it to once is an `announced` flag, and a suite that never
+# polls twice while unresolved cannot tell that flag from a no-op.
 check reviewed-threads-plural 0 "$(f quiet reviewed)" \
   SHIP_PR_CHECKS_FIXTURES="$(cf checks-green-one.json checks-green-one.json)" \
-  SHIP_PR_THREADS_FIXTURES="$(tf two-unresolved.json clear.json)" <<'EOF'
+  SHIP_PR_THREADS_FIXTURES="$(tf two-unresolved.json two-unresolved.json clear.json)" <<'EOF'
 reviewed: 0 -> 1
 findings: 2 unresolved review threads — reply and fix
 offline: auto-merge not armed (would arm on fixture-head-sha)
