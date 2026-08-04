@@ -304,7 +304,7 @@ check merge-wait-checks-red 0 "$(f never-reviewed)" "$three" \
   SHIP_PR_CHECKS_FIXTURES="$(cf checks-green-three.json checks-terminal.json)" \
   SHIP_PR_MERGE_FIXTURES="$here/merge-wait/open-same-head.json" -- --no-review <<'EOF'
 offline: auto-merge armed UNREVIEWED (would arm on fixture-head-sha) — merge-wait fixtures follow
-required check red after arm: Images (api) — GitHub's resume behaviour here is undocumented; re-arm by hand: gh pr merge 1 --repo fixture/repo --auto --squash --match-head-commit fixture-head-sha
+required check red after arm: Images (api) — the arm survives; GitHub retries when it goes green on fixture-head-sha
 FIXTURES EXHAUSTED
 EOF
 

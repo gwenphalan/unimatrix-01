@@ -297,9 +297,11 @@ non-required check would hold back a ping that should go out. A red required che
 `DIRTY` branch, and a draft PR each end the run without pinging.
 
 On a clean review it stops watching the checks at the ping. A successful arm does not end the run
-either way — the watcher polls past it, reports `merged <sha>` once GitHub squashes, and if a
-required check goes red or the head moves after the arm, reports that too with the exact
-`gh pr merge --match-head-commit` command to re-arm by hand. On a review with findings it does not
+either way — the watcher polls past it and reports `merged <sha>` once GitHub squashes. A required
+check going red after the arm is reported but needs nothing from you: the arm survives it and GitHub
+retries when that context goes green again on the same sha. The head moving is the one that breaks
+the arm, and it carries the exact `gh pr merge --match-head-commit` command to re-arm. On a review
+with findings it does not
 exit at the ping outcome — it waits for every thread to clear and re-checks required checks on the
 new head before arming, per `reference/coderabbit.md`.
 

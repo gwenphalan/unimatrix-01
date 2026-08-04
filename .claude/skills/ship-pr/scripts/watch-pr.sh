@@ -217,17 +217,19 @@ after the script had already given up watching it.
 
 It polls for: the PR reaching MERGED (reports the merge sha and stops), the PR
 reaching CLOSED without merging (terminal), and three consecutive API failures
-(terminal, same three-strikes shape as every other wait in this script). Two
-staleness cases are also caught, each reported with the exact `gh pr merge
---match-head-commit` command to re-arm by hand, because GitHub's own docs name
-only two things that disable an armed auto-merge — a push from a user without
-write permission, and switching the base branch — and say nothing about either
-of these:
+(terminal, same three-strikes shape as every other wait in this script). It also
+reports two post-arm changes, which differ in whether anything is asked of you:
 
-  - A required check going red after the arm. GitHub's resume behaviour once
-    it goes green again is undocumented, so this does not guess at it.
+  - A required check going red after the arm. Reported, no action: the arm
+    survives this and GitHub retries once the same context reports green on the
+    same head sha — measured, two seconds on a scratch repo.
   - The head sha moving after the arm, caught by comparing the live head sha
-    against the sha the arm pinned on every poll.
+    against the sha the arm pinned on every poll. This one does break the arm,
+    so it carries the exact `gh pr merge --match-head-commit` command to re-arm.
+    GitHub's docs name a push from a user without write permission and switching
+    the base branch as the two things that disable an arm; a push from someone
+    with write permission does not disable it, but it does move the sha the arm
+    is pinned to, which is why this is caught here rather than trusted.
 
 Arguments:
   <owner/repo>  e.g. gwenphalan/unimatrix-01
@@ -520,7 +522,7 @@ The wait-for-merge phase, reached from a successful arm — see "After the
 arm" above — on stdout:
   merged <sha>                                terminal
   PR closed without merging — nothing left to watch   terminal
-  required check red after arm: <names> — ...re-arm by hand: gh pr merge ...
+  required check red after arm: <names> — the arm survives; GitHub retries when it goes green on <sha>
   head changed after arm, from <sha> to <sha> — re-arm by hand: gh pr merge ...
   merge-wait API ERROR xN — stopping rather than waiting blind   three consecutive failures, exit 2
 
@@ -1301,11 +1303,16 @@ wait_for_merge() {
         red=$(required_gate "$checks_payload" | awk -F'\t' '$1=="red"{print $2}' | LC_ALL=C sort | tr '\n' ,)
         if [ -n "$red" ] && [ "$red" != "$last_red" ]; then
           last_red=$red
-          # $cur_sha, not $armed_sha: gh pr checks reads the PR's current head,
-          # and once a push has already been reported the two have diverged —
-          # printing the stale sha would hand back a --match-head-commit that
-          # no longer matches anything and fails outright.
-          echo "required check red after arm: ${red%,} — GitHub's resume behaviour here is undocumented; re-arm by hand: gh pr merge $pr --repo $repo --auto --squash --match-head-commit $cur_sha"
+          # Reports, and asks for nothing: an armed auto-merge survives a
+          # required check going red and fires on its own once that same
+          # context reports green again on this same head sha. Measured on a
+          # scratch repo — armed while already red (which GitHub accepts), then
+          # the one required context flipped red to green with no new commit,
+          # and the squash landed two seconds later. So re-arming by hand here
+          # would be redundant work, and the earlier wording asking for it was
+          # wrong. The head moving is the case that really does break the arm,
+          # and it has its own line above.
+          echo "required check red after arm: ${red%,} — the arm survives; GitHub retries when it goes green on $cur_sha"
         elif [ -z "$red" ]; then
           last_red=""
         fi
