@@ -2,7 +2,6 @@ import type { ReactNode } from "react";
 import { ToolShell } from "@unimatrix/chrome/tool";
 
 import { AccountControl } from "@/features/auth/account-control";
-import { PUBLIC_SITE_URL } from "@/lib/config";
 
 import { useAdminSections } from "./sections";
 
@@ -20,13 +19,12 @@ type AppShellProps = {
  * and an admin console is the clearest case on the tool side.
  *
  * `sections` is non-empty, so the shell renders the rail rather than a title
- * bar: the wordmark and `accountControl` move into it, and the footer with
- * the copyright link stays below the content, same as the title-bar layout.
- * `sectionsHomeHref="/"` sends the wordmark to the admin root, which is
- * same-origin — unlike `homeHref`, which stays the absolute public-site URL
- * because `admin.unimatrix-01.dev` is a separate origin and the copyright
- * link is the way back out to it (the root `AGENTS.md`'s "a way back to the
- * public site belongs in tool chrome").
+ * bar: the wordmark and `accountControl` move into it. `showFooter={false}`
+ * turns off the footer entirely, which was the only place `homeHref` (the
+ * absolute public-site URL) reached the page in this layout — the rail's
+ * wordmark links `sectionsHomeHref` instead, so there is deliberately no way
+ * back to the public site from admin chrome; `homeHref` is omitted rather
+ * than passed and unused.
  */
 export function AppShell({ children }: AppShellProps) {
   const sections = useAdminSections();
@@ -34,10 +32,10 @@ export function AppShell({ children }: AppShellProps) {
   return (
     <ToolShell
       accountControl={({ collapsed }) => <AccountControl collapsed={collapsed} />}
-      homeHref={PUBLIC_SITE_URL}
       homeLabel="Unimatrix Admin"
       sections={sections}
       sectionsHomeHref="/"
+      showFooter={false}
     >
       {children}
     </ToolShell>
