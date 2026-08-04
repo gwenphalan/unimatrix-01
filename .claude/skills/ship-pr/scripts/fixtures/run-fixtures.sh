@@ -455,12 +455,17 @@ fi
 # rate-limit progress lines. Captured separately, not combined with 2>&1 — the
 # two siblings above only prove the line is printed *somewhere*, which a
 # regression back onto stdout would still satisfy. This proves the stream.
+#
+# The capture file comes from mktemp, not from `$$`: a PID-derived name in a
+# world-writable directory is predictable, so another local process can
+# pre-create it as a symlink and have this redirection truncate the target.
+in_progress_err_file=$(mktemp "${TMPDIR:-/tmp}/ship-pr-in-progress-err.XXXXXX") || exit 1
 in_progress_out=$(env SHIP_PR_POLL_SECONDS=0 SHIP_PR_PING_AT="$ping" \
   SHIP_PR_BRANCH_RULES_FIXTURE="$here/branch-rules-one.json" \
   SHIP_PR_CHECKS_FIXTURES="$here/checks-green-one.json" \
-  SHIP_PR_FIXTURES="$(f in-progress)" "$script" fixture/repo 1 2>/tmp/ship-pr-in-progress-err.$$)
-in_progress_err=$(cat /tmp/ship-pr-in-progress-err.$$)
-rm -f /tmp/ship-pr-in-progress-err.$$
+  SHIP_PR_FIXTURES="$(f in-progress)" "$script" fixture/repo 1 2>"$in_progress_err_file")
+in_progress_err=$(cat "$in_progress_err_file")
+rm -f "$in_progress_err_file"
 ran=$((ran + 1))
 if ! grep -q '^review in progress$' <<<"$in_progress_out" \
   && grep -q '^review in progress$' <<<"$in_progress_err"; then
@@ -472,13 +477,15 @@ fi
 
 # The startup auto-skip's own notice, proven off stdout and on stderr the same
 # way in-progress-on-stderr proves its line — not covered by the terminal-line
-# case above, which only proves the stdout the notice leads to.
+# case above, which only proves the stdout the notice leads to. mktemp for the
+# capture file, for the same reason as in-progress-on-stderr above.
+already_reviewed_err_file=$(mktemp "${TMPDIR:-/tmp}/ship-pr-already-reviewed-err.XXXXXX") || exit 1
 already_reviewed_out=$(env SHIP_PR_POLL_SECONDS=0 SHIP_PR_PING_AT="$ping" \
   SHIP_PR_BRANCH_RULES_FIXTURE="$here/branch-rules.json" \
   SHIP_PR_CHECKS_FIXTURES="$(cf checks-green-three.json checks-green-three.json)" \
-  SHIP_PR_FIXTURES="$(f already-reviewed)" "$script" fixture/repo 1 2>/tmp/ship-pr-already-reviewed-err.$$)
-already_reviewed_err=$(cat /tmp/ship-pr-already-reviewed-err.$$)
-rm -f /tmp/ship-pr-already-reviewed-err.$$
+  SHIP_PR_FIXTURES="$(f already-reviewed)" "$script" fixture/repo 1 2>"$already_reviewed_err_file")
+already_reviewed_err=$(cat "$already_reviewed_err_file")
+rm -f "$already_reviewed_err_file"
 ran=$((ran + 1))
 if ! grep -q '^already reviewed' <<<"$already_reviewed_out" \
   && grep -q '^already reviewed (count=1) — the ping is not needed$' <<<"$already_reviewed_err"; then
