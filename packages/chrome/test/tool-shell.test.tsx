@@ -10,22 +10,30 @@ import {
 import { act } from "react";
 import { describe, expect, it, vi } from "vitest";
 
+import type { ToolSection } from "../src/tool.js";
 import { ToolFooterLink, ToolShell, ToolTitleBar } from "../src/tool.js";
 
+function StubIcon({ className }: { className?: string | undefined }) {
+  return <svg className={className} data-testid="section-icon" />;
+}
+
+const SECTIONS: ToolSection[] = [
+  { active: true, icon: StubIcon, label: "Content", to: "/content" },
+];
+
 /**
- * Mounts `ui` under a real router. `ToolTitleBar`'s `to` form renders a `Link`,
- * which needs one, so every case here goes through this.
+ * Mounts `ui` under a real router with every path a rendered `Link` (the
+ * title bar's `to` form, or a section rail's wordmark and section links)
+ * might target registered as a child route.
  */
 async function renderInRouter(ui: ReactNode) {
   const rootRoute = createRootRoute();
-  const indexRoute = createRoute({
-    component: () => ui,
-    getParentRoute: () => rootRoute,
-    path: "/",
-  });
+  const childRoutes = ["/", "/content"].map((path) =>
+    createRoute({ component: () => ui, getParentRoute: () => rootRoute, path }),
+  );
   const router = createRouter({
     history: createMemoryHistory({ initialEntries: ["/"] }),
-    routeTree: rootRoute.addChildren([indexRoute]),
+    routeTree: rootRoute.addChildren(childRoutes),
   });
 
   render(<RouterProvider router={router as never} />);
@@ -96,40 +104,35 @@ describe("ToolShell", () => {
     expect(within(footer).queryByRole("link")).not.toBeInTheDocument();
   });
 
-  it("keeps the footer landmark, empty, when showCopyright is false and there is no other footer content", async () => {
-    await renderInRouter(
-      <ToolShell ownerName="Gwen Phalan" showCopyright={false}>
-        tool content
-      </ToolShell>,
-    );
-
-    // The `contentinfo` landmark count must not vary with `showCopyright` —
-    // the footer strip stays present in both ToolShell layouts regardless of
-    // its content, per packages/chrome/CLAUDE.md.
-    const footer = screen.getByRole("contentinfo");
-
-    expect(footer).not.toHaveTextContent(`${new Date().getFullYear()} Gwen Phalan`);
-    expect(within(footer).queryByRole("link")).not.toBeInTheDocument();
-  });
-
-  it("still renders the footer's tool attribution when showCopyright is false", async () => {
+  it("omits the whole footer in the no-sections layout when showFooter is false", async () => {
     await renderInRouter(
       <ToolShell
         footerEnd={<ToolFooterLink href="https://example.test/src">Source</ToolFooterLink>}
         ownerName="Gwen Phalan"
-        showCopyright={false}
+        showFooter={false}
       >
         tool content
       </ToolShell>,
     );
 
-    const footer = screen.getByRole("contentinfo");
+    expect(screen.queryByRole("contentinfo")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Source" })).not.toBeInTheDocument();
+  });
 
-    expect(within(footer).getByRole("link", { name: "Source" })).toHaveAttribute(
-      "href",
-      "https://example.test/src",
+  it("omits the whole footer in the sections/rail layout when showFooter is false", async () => {
+    await renderInRouter(
+      <ToolShell
+        footerEnd={<ToolFooterLink href="https://example.test/src">Source</ToolFooterLink>}
+        ownerName="Gwen Phalan"
+        sections={SECTIONS}
+        showFooter={false}
+      >
+        tool content
+      </ToolShell>,
     );
-    expect(footer).not.toHaveTextContent(`${new Date().getFullYear()} Gwen Phalan`);
+
+    expect(screen.queryByRole("contentinfo")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Source" })).not.toBeInTheDocument();
   });
 });
 
