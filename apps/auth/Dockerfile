@@ -22,7 +22,7 @@ COPY . .
 RUN find . -name '*.tsbuildinfo' -delete && pnpm install --frozen-lockfile
 RUN pnpm --filter @unimatrix/auth-app build
 
-FROM nginx:1.31-alpine@sha256:4a73073bd557c65b759505da037898b61f1be6cbcc3c2c3aeac22d2a470c1752 AS runtime
+FROM nginxinc/nginx-unprivileged:1.31-alpine@sha256:a6c3ec0c0d249d68b0682df854d4a9e222b90fb607dc3fcf2f1d2fcbc85d347e AS runtime
 COPY apps/auth/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /workspace/apps/auth/dist /usr/share/nginx/html
 EXPOSE 8080
