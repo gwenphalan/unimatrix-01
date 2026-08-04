@@ -393,10 +393,11 @@ Environment:
                         ERROR=<message>, standing in for a failed call. No entry
                         may contain a colon, which is the separator. A
                         multi-entry list is how the pending -> green transition is
-                        exercised. Consumed twice per run when phase 2 reaches
-                        the post-review recheck: the cursor is a continuous
-                        stream across both calls, matching every other
-                        fixture-cursor idiom in this file.
+                        exercised. Read by three consumers sharing one
+                        continuous cursor, matching every other fixture-cursor
+                        idiom in this file: phase 1's own gate, the
+                        post-review recheck, and wait_for_merge()'s own
+                        post-arm checks read.
   SHIP_PR_THREADS_FIXTURES
                         Colon-separated entries consumed one per post-review
                         poll in place of the `unresolved_threads()` GraphQL
@@ -416,6 +417,20 @@ Environment:
   SHIP_PR_CHECKS_FIXTURES and SHIP_PR_BRANCH_RULES_FIXTURE requires the other
   two: a partial fixture run would quietly hit the network for the half nobody
   supplied, and the offline branches below all key off the same flag.
+  SHIP_PR_MERGE_FIXTURES
+                        Colon-separated entries consumed one per wait_for_merge()
+                        poll in place of the `gh pr view
+                        --json state,headRefOid,mergeCommit` call. An entry is
+                        either a path to a JSON file holding that shape, or the
+                        form ERROR=<message>, standing in for a failed call.
+                        Unset offline, wait_for_merge() reads as nothing left
+                        to watch and returns immediately, so every fixture
+                        case that does not set this is unaffected by the wait
+                        existing at all. Reaching this wait offline also
+                        requires SHIP_PR_AUTO_MERGE to stay at its default and
+                        a review baseline that arms — see the merge-wait cases
+                        in fixtures/run-fixtures.sh for the shortest path,
+                        --no-review with an empty reviews.json.
   SHIP_PR_PING_AT       ISO-8601 UTC timestamp standing in for the ping a
                         fixture run does not post. Offline only. Defaults to the
                         epoch, which puts the ping before every fixture
@@ -486,8 +501,10 @@ checks recheck, from `--no-review` once auto-merge is on — on stdout:
 
 Then the arm, on stdout — the same code and the same lines regardless of which
 of the three call sites (clean review, findings resolved, --no-review) reached
-it. Only the live `gh pr merge` call succeeding leads to the wait-for-merge
-phase below; every other line here is arm_auto_merge()'s own return of 1:
+it. The live `gh pr merge` call succeeding leads to the wait-for-merge phase
+below, and so, offline only, does either "armed" line when
+SHIP_PR_MERGE_FIXTURES supplies cases for that phase to consume; every other
+line here is arm_auto_merge()'s own return of 1:
   auto-merge is off — nothing armed, merge by hand
   auto-merge not armed — PR is a draft
   auto-merge not armed — <n> unresolved threads
@@ -496,8 +513,10 @@ phase below; every other line here is arm_auto_merge()'s own return of 1:
   offline: auto-merge not armed (auto-merge is off)
   offline: auto-merge not armed (would arm on <sha>)
   offline: auto-merge not armed (would be UNREVIEWED on <sha>)
+  offline: auto-merge armed (would arm on <sha>) — merge-wait fixtures follow
+  offline: auto-merge armed UNREVIEWED (would arm on <sha>) — merge-wait fixtures follow
 
-The wait-for-merge phase, reached only from a successful arm — see "After the
+The wait-for-merge phase, reached from a successful arm — see "After the
 arm" above — on stdout:
   merged <sha>                                terminal
   PR closed without merging — nothing left to watch   terminal
@@ -626,12 +645,21 @@ threads_fixtures=()
 if [ "$offline" -eq 1 ] && [ -n "${SHIP_PR_THREADS_FIXTURES:-}" ]; then
   IFS=: read -r -a threads_fixtures <<<"$SHIP_PR_THREADS_FIXTURES"
 fi
-# Three indices and three ledgers, one per wait. Sharing any would make two
+# Same shape again for wait_for_merge()'s own `gh pr view` cursor. Unset, that
+# function's guard below returns immediately and every fixture case that does
+# not set this is unaffected by the wait existing at all — the same
+# non-effect SHIP_PR_THREADS_FIXTURES has when unset.
+merge_fixtures=()
+if [ "$offline" -eq 1 ] && [ -n "${SHIP_PR_MERGE_FIXTURES:-}" ]; then
+  IFS=: read -r -a merge_fixtures <<<"$SHIP_PR_MERGE_FIXTURES"
+fi
+# Four indices and four ledgers, one per wait. Sharing any would make two
 # fixture lists fight over one cursor, and would fire a three-strikes abort
 # after fewer than three consecutive failures within a single wait.
 step=0
 checks_step=0
 threads_step=0
+merge_step=0
 
 count() {
   if [ -n "${1:-}" ]; then
@@ -712,6 +740,96 @@ required_gate() {
   ' <<<"$1"
 }
 
+# One read of the checks cursor — a live `gh pr checks` call, or, offline, the
+# next SHIP_PR_CHECKS_FIXTURES entry — normalized the same way regardless of
+# which consumer called it. Sets script-scope checks_payload / checks_rc /
+# checks_err, the idiom read_bodies() and re_pin_head_sha() already use rather
+# than returning through a caller's local scope.
+#
+# Two normalizations happen here, not just a raw read: an empty checks list is
+# `gh pr checks` exit 1 with `no checks reported on the '<branch>' branch` on
+# stderr — the state for the first minutes after a PR opens — and status 8 is
+# `gh pr checks` for "something is still pending", alongside valid JSON. Both
+# collapse to checks_rc=0 so a caller's three-strike ledger does not count
+# either as a failed read.
+#
+# Three consumers share this cursor: wait_for_required_checks()'s own call,
+# its post-review recheck, and wait_for_merge()'s post-arm red-check read — a
+# third consumer of the one continuous stream --help already documents.
+# Offline with the fixture list exhausted, this prints FIXTURES EXHAUSTED and
+# exits 0 directly, the same terminal behaviour every fixture cursor in this
+# file has always had.
+#
+# Giving wait_for_merge() this normalization is a real behaviour change: that
+# call used to treat an empty checks list or a pending status 8 as an outright
+# read failure, counted toward its own three-strike ledger. Small, and
+# defensible — both are ordinary transient states, not evidence the API is
+# down — but not a pure move.
+read_checks_payload() {
+  checks_payload=""
+  checks_rc=0
+  checks_err=""
+  local entry
+  # The fixture index has to advance in this shell: a `checks_payload=$(...)`
+  # command substitution runs in a subshell, so the increment would be lost and
+  # the loop would reread entry 0 forever. `checks_fixtures`/`checks_step` stay
+  # module-level and are not reset per call: every consumer continues
+  # consuming the same colon-separated list, the "fixture cursor is a
+  # continuous stream" idiom every other fixture list in this file follows.
+  if [ "$offline" -eq 1 ]; then
+    if [ "$checks_step" -ge "${#checks_fixtures[@]}" ]; then
+      echo "FIXTURES EXHAUSTED"
+      exit 0
+    fi
+    entry=${checks_fixtures[$checks_step]}
+    checks_step=$((checks_step + 1))
+    case $entry in
+      ERROR=*)
+        checks_err=${entry#ERROR=}
+        checks_rc=1
+        ;;
+      EXIT8=*)
+        entry=${entry#EXIT8=}
+        checks_rc=8
+        if [ -r "$entry" ]; then
+          checks_payload=$(cat "$entry")
+        else
+          checks_err="fixture not readable: $entry"
+          checks_rc=1
+        fi
+        ;;
+      *)
+        if [ -r "$entry" ]; then
+          checks_payload=$(cat "$entry")
+        else
+          checks_err="fixture not readable: $entry"
+          checks_rc=1
+        fi
+        ;;
+    esac
+  else
+    local checks_err_file
+    checks_err_file=$(mktemp)
+    checks_payload=$(gh pr checks "$pr" --repo "$repo" --json name,bucket,description 2>"$checks_err_file") && checks_rc=0 || checks_rc=$?
+    checks_err=$(cat "$checks_err_file")
+    rm -f "$checks_err_file"
+  fi
+
+  if [ "$checks_rc" -ne 0 ] && [ "$checks_rc" -ne 8 ]; then
+    case $checks_err in
+      *"no checks reported"*)
+        checks_rc=0
+        checks_payload='[]'
+        checks_err=""
+        ;;
+    esac
+  fi
+
+  if [ "$checks_rc" -eq 8 ]; then
+    checks_rc=0
+  fi
+}
+
 # A function rather than an inline loop because phase 2 runs this a second
 # time, against whatever head a fix commit produced, before arming on a review
 # that had findings. `$1` is the only difference between the two calls: phase
@@ -730,83 +848,11 @@ wait_for_required_checks() {
   local outstanding=("${required[@]}")
 
   while true; do
-    local rc=0
-    # Two variables, because the two streams answer different questions. stdout is
-    # the JSON the gate parses; stderr carries the `no checks reported` wording the
-    # normalisation below keys on. Merged into one, any line gh writes to stderr —
-    # a debug trace, a warning — lands inside a status-8 payload that is otherwise
-    # valid JSON and fails the array check, so an ordinary pending poll is counted
-    # as a failed read and three of them exit 2 before anything is pinged.
-    local checks_err=""
-    local entry payload
-
-    # The fixture index has to advance in this shell: a `payload=$(helper)`
-    # command substitution runs in a subshell, so the increment would be lost and
-    # the loop would reread entry 0 forever. `checks_fixtures`/`checks_step` stay
-    # module-level and are not reset per call: the second call continues
-    # consuming the same colon-separated list, the same "fixture cursor is a
-    # continuous stream" idiom every other fixture list in this file follows.
-    if [ "$offline" -eq 1 ]; then
-      if [ "$checks_step" -ge "${#checks_fixtures[@]}" ]; then
-        echo "FIXTURES EXHAUSTED"
-        exit 0
-      fi
-      entry=${checks_fixtures[$checks_step]}
-      checks_step=$((checks_step + 1))
-      payload=""
-      case $entry in
-        ERROR=*)
-          checks_err=${entry#ERROR=}
-          rc=1
-          ;;
-        EXIT8=*)
-          entry=${entry#EXIT8=}
-          rc=8
-          if [ -r "$entry" ]; then
-            payload=$(cat "$entry")
-          else
-            checks_err="fixture not readable: $entry"
-            rc=1
-          fi
-          ;;
-        *)
-          if [ -r "$entry" ]; then
-            payload=$(cat "$entry")
-          else
-            checks_err="fixture not readable: $entry"
-            rc=1
-          fi
-          ;;
-      esac
-    else
-      local checks_err_file
-      checks_err_file=$(mktemp)
-      payload=$(gh pr checks "$pr" --repo "$repo" --json name,bucket,description 2>"$checks_err_file") && rc=0 || rc=$?
-      checks_err=$(cat "$checks_err_file")
-      rm -f "$checks_err_file"
-    fi
-
-    # An empty checks list is an *error*, not an empty list: status 1 with
-    # `no checks reported on the '<branch>' branch` on stderr. That is the state
-    # for the first minutes after a PR opens, which is exactly when this is armed
-    # — counted as a failure it exits 2 three polls later, before anything is
-    # pinged, and the ledger cannot tell it from an expired token.
-    if [ "$rc" -ne 0 ] && [ "$rc" -ne 8 ]; then
-      case $checks_err in
-        *"no checks reported"*)
-          rc=0
-          payload='[]'
-          checks_err=""
-          ;;
-      esac
-    fi
-
-    # 8 is `gh pr checks` for "something is still pending", alongside valid JSON —
-    # the normal state of a PR whose checks have not all reported. Treated as a
-    # failure it trips the three-strike abort on every ordinary run.
-    if [ "$rc" -eq 8 ]; then
-      rc=0
-    fi
+    # read_checks_payload() sets script-scope checks_payload / checks_rc /
+    # checks_err; copied into local rc/payload here so the rest of this loop
+    # reads exactly as it did before the extraction.
+    read_checks_payload
+    local rc=$checks_rc payload=$checks_payload
 
     # A payload that will not parse must not read as "no required context has
     # reported yet". That would poll to the cap on garbage; it is a failed read and
@@ -1093,10 +1139,12 @@ wait_for_threads_replied() {
 # Every path here says which one it took. One generic failure line covered five
 # different situations, and "merge by hand" is not what a reader needs to know
 # when the answer is that the PR is still a draft.
-# Return code is a real contract now, not just an echo: every branch returns 1
-# except the one where the live `gh pr merge` call actually succeeds, which
-# returns 0 via its trailing echo. `wait_for_merge` below is only ever entered
-# on that one true arm, never on "nothing to arm" or "arming failed".
+# Return code is a real contract: every branch returns 1 except the live
+# `gh pr merge` call succeeding, and — offline only, and only when
+# SHIP_PR_MERGE_FIXTURES is set — the "would arm" branch below, which returns
+# 0 so `wait_for_merge` below has an offline path to enter at all. Left unset,
+# every offline branch here still returns 1, unchanged from before that
+# fixture list existed.
 arm_auto_merge() {
   local unreviewed=$1
   if [ "$auto_merge" != 1 ]; then
@@ -1113,6 +1161,19 @@ arm_auto_merge() {
     # two wordings a `--no-review` baseline read actually earned — neither is
     # otherwise observable without a live `gh pr merge` call this branch
     # deliberately never makes.
+    #
+    # Returns 0 only when SHIP_PR_MERGE_FIXTURES supplied cases for
+    # wait_for_merge() to consume — every existing fixture case leaves it
+    # unset and gets the unconditional "would arm, return 1" behaviour back
+    # unchanged.
+    if [ "${#merge_fixtures[@]}" -gt 0 ]; then
+      if [ "$unreviewed" -eq 1 ]; then
+        echo "offline: auto-merge armed UNREVIEWED (would arm on $head_sha) — merge-wait fixtures follow"
+      else
+        echo "offline: auto-merge armed (would arm on $head_sha) — merge-wait fixtures follow"
+      fi
+      return 0
+    fi
     if [ "$unreviewed" -eq 1 ]; then
       echo "offline: auto-merge not armed (would be UNREVIEWED on $head_sha)"
     else
@@ -1152,23 +1213,51 @@ arm_auto_merge() {
   fi
 }
 
-# Reached only from a live, successful arm — never offline, never a decline.
 # Arming is not merging: GitHub still waits for every required check on its
 # own clock, so this keeps polling past the arm the same way phase 2 keeps
 # polling past its own ping — both wait on something this script itself set in
 # motion, so an uncapped wait here carries the same justification phase 2's
 # already does. A cap would let a merge complete unattended after the script
 # gave up watching it.
+#
+# Offline with no SHIP_PR_MERGE_FIXTURES reads as nothing left to watch and
+# returns immediately, printing nothing — every fixture case that does not
+# set that variable is unaffected by this wait existing at all, the same
+# non-effect SHIP_PR_THREADS_FIXTURES has on wait_for_threads_replied(). Set,
+# an entry is a path to a JSON file holding `gh pr view --json
+# state,headRefOid,mergeCommit`'s shape, or ERROR=<message>, standing in for a
+# failed call — the same idiom every other fixture list in this file uses.
 wait_for_merge() {
   local armed_sha=$1
-  [ "$offline" -eq 1 ] && return 0
+  if [ "$offline" -eq 1 ] && [ "${#merge_fixtures[@]}" -eq 0 ]; then
+    return 0
+  fi
 
   local fails=0 i=0 started last_red="" push_reported=0
   started=$(date +%s)
 
   while true; do
-    local pr_json rc=0
-    pr_json=$(gh pr view "$pr" --repo "$repo" --json state,headRefOid,mergeCommit 2>/dev/null) || rc=1
+    local pr_json="" rc=0
+    if [ "$offline" -eq 1 ]; then
+      if [ "$merge_step" -ge "${#merge_fixtures[@]}" ]; then
+        echo "FIXTURES EXHAUSTED"
+        exit 0
+      fi
+      local entry=${merge_fixtures[$merge_step]}
+      merge_step=$((merge_step + 1))
+      case $entry in
+        ERROR=*) rc=1 ;;
+        *)
+          if [ -r "$entry" ]; then
+            pr_json=$(cat "$entry")
+          else
+            rc=1
+          fi
+          ;;
+      esac
+    else
+      pr_json=$(gh pr view "$pr" --repo "$repo" --json state,headRefOid,mergeCommit 2>/dev/null) || rc=1
+    fi
 
     if [ "$rc" -eq 0 ] && [ -n "$pr_json" ]; then
       fails=0
@@ -1194,13 +1283,20 @@ wait_for_merge() {
         # whatever landed, unreviewed, the moment checks pass. Disabling it here
         # is what makes the re-arm command below correct: nothing merges until
         # it's run again, deliberately, on the sha actually being reported.
-        gh pr merge "$pr" --repo "$repo" --disable-auto >/dev/null 2>&1 || true
+        if [ "$offline" -eq 1 ]; then
+          : # offline: no live PR to disable auto-merge on
+        else
+          gh pr merge "$pr" --repo "$repo" --disable-auto >/dev/null 2>&1 || true
+        fi
         echo "head changed after arm, from $armed_sha to $cur_sha — auto-merge disabled; re-arm by hand: gh pr merge $pr --repo $repo --auto --squash --match-head-commit $cur_sha"
       fi
 
-      local checks_payload checks_rc=0
-      checks_payload=$(gh pr checks "$pr" --repo "$repo" --json name,bucket,description 2>/dev/null) || checks_rc=$?
-      if [ "$checks_rc" -eq 0 ] || [ "$checks_rc" -eq 8 ]; then
+      # The existing checks_fixtures cursor, offline — a third consumer of the
+      # one continuous stream, alongside wait_for_required_checks()'s own call
+      # and its post-review recheck. See read_checks_payload()'s own comment
+      # for the normalization this now inherits.
+      read_checks_payload
+      if [ "$checks_rc" -eq 0 ]; then
         local red
         red=$(required_gate "$checks_payload" | awk -F'\t' '$1=="red"{print $2}' | LC_ALL=C sort | tr '\n' ,)
         if [ -n "$red" ] && [ "$red" != "$last_red" ]; then
@@ -1213,7 +1309,7 @@ wait_for_merge() {
         elif [ -z "$red" ]; then
           last_red=""
         fi
-      elif [ "$checks_rc" -ne 0 ]; then
+      else
         # Not counted in $fails — that ledger belongs to the one read
         # (gh pr view) that decides whether the wait is still alive. A
         # degraded checks read is a secondary signal going dark, not the

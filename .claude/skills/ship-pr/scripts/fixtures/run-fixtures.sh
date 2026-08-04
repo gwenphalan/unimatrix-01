@@ -147,6 +147,13 @@ tf() {
   printf '%s' "${out%:}"
 }
 
+# wait_for_merge()'s own `gh pr view` payloads, colon-separated like `cf`/`tf`.
+mf() {
+  local out="" name
+  for name in "$@"; do out+="$here/merge-wait/$name:"; done
+  printf '%s' "${out%:}"
+}
+
 # The three-context gate, matching the names the checks-*.json payloads carry.
 three=SHIP_PR_BRANCH_RULES_FIXTURE=$here/branch-rules.json
 
@@ -258,6 +265,58 @@ EOF
 # flipped this case's own expectation along with them.
 check no-review-prior-review 0 "$(f already-reviewed)" -- --no-review <<'EOF'
 offline: auto-merge not armed (would arm on fixture-head-sha)
+EOF
+
+# --- The merge-wait phase ---------------------------------------------------
+#
+# All four reach the arm via `never-reviewed` + --no-review, which needs
+# nothing from the review-wait fixtures above — the shortest path to an armed
+# merge_fixtures[@] non-empty return. SHIP_PR_MERGE_FIXTURES is the only new
+# variable; the checks_fixtures cursor these consume is the existing one,
+# read a second time here the same way the post-review recheck reads it a
+# second time in the `reviewed` case above.
+
+# `state: MERGED` is terminal on the poll it appears, printing the merge
+# commit's own sha rather than the armed one — the two can differ once
+# GitHub squashes.
+check merge-wait-merged 0 "$(f never-reviewed)" \
+  SHIP_PR_MERGE_FIXTURES="$here/merge-wait/merged.json" -- --no-review <<'EOF'
+offline: auto-merge armed UNREVIEWED (would arm on fixture-head-sha) — merge-wait fixtures follow
+merged fixture-merge-sha
+EOF
+
+# `state: CLOSED` is the other terminal state `gh pr view` can report — closed
+# without a merge commit at all.
+check merge-wait-closed 0 "$(f never-reviewed)" \
+  SHIP_PR_MERGE_FIXTURES="$here/merge-wait/closed.json" -- --no-review <<'EOF'
+offline: auto-merge armed UNREVIEWED (would arm on fixture-head-sha) — merge-wait fixtures follow
+PR closed without merging — nothing left to watch
+EOF
+
+# A required check going red after the arm, on an unmoved head. `three` and
+# `checks-green-three.json` bring in all three required contexts so
+# `checks-terminal.json`'s red `Images (api)` actually registers against the
+# gate — the same reason `reviewed-checks-recheck-red` above uses them. The
+# second SHIP_PR_CHECKS_FIXTURES entry is read_checks_payload()'s third
+# consumer of the cursor: one for phase 1's own gate, one for this wait's own
+# checks read.
+check merge-wait-checks-red 0 "$(f never-reviewed)" "$three" \
+  SHIP_PR_CHECKS_FIXTURES="$(cf checks-green-three.json checks-terminal.json)" \
+  SHIP_PR_MERGE_FIXTURES="$here/merge-wait/open-same-head.json" -- --no-review <<'EOF'
+offline: auto-merge armed UNREVIEWED (would arm on fixture-head-sha) — merge-wait fixtures follow
+required check red after arm: Images (api) — GitHub's resume behaviour here is undocumented; re-arm by hand: gh pr merge 1 --repo fixture/repo --auto --squash --match-head-commit fixture-head-sha
+FIXTURES EXHAUSTED
+EOF
+
+# The head moving after the arm — a push landing while this wait is polling.
+# Disables auto-merge and names the sha to re-arm on, which is the current
+# head (`fixture-head-sha-2`), not the one the arm pinned.
+check merge-wait-head-moved 0 "$(f never-reviewed)" \
+  SHIP_PR_CHECKS_FIXTURES="$(cf checks-green-one.json checks-green-one.json)" \
+  SHIP_PR_MERGE_FIXTURES="$here/merge-wait/head-moved.json" -- --no-review <<'EOF'
+offline: auto-merge armed UNREVIEWED (would arm on fixture-head-sha) — merge-wait fixtures follow
+head changed after arm, from fixture-head-sha to fixture-head-sha-2 — auto-merge disabled; re-arm by hand: gh pr merge 1 --repo fixture/repo --auto --squash --match-head-commit fixture-head-sha-2
+FIXTURES EXHAUSTED
 EOF
 
 # --- Phase 2: the review wait ----------------------------------------------
