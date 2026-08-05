@@ -374,7 +374,12 @@ fi
 
 record_count=$(node -e '
   const data = JSON.parse(require("node:fs").readFileSync(process.argv[1], "utf8"));
-  console.log(Object.keys(data.files[".notes/01-todo/x.todo.md"]).length);
+  // String(), because console.log of a bare number goes through util.inspect
+  // and colorizes it wherever colors are enabled — FORCE_COLOR is set in some
+  // interactive shells, so the captured value arrives as "\e[33m1\e[39m" and
+  // the string compare below fails against "1". CI has no FORCE_COLOR, so the
+  // unfixed version fails only on a developer machine.
+  console.log(String(Object.keys(data.files[".notes/01-todo/x.todo.md"]).length));
 ' "${dir}/.notes/.todo-citations.json")
 ran=$((ran + 1))
 if [ "${record_count}" = "1" ]; then
