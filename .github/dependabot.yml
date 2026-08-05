@@ -18,11 +18,11 @@ updates:
     cooldown:
       default-days: 14
 
-    # Five packages are held below `latest` on purpose, each for a reason
-    # recorded in the root AGENTS.md under "Dependency Ceilings". Without these
-    # rules Dependabot re-proposes all five every day, and a standing pile of
-    # PRs that must always be closed is how a PR that should NOT be closed gets
-    # closed with them.
+    # Every package in the `ignore:` block below is held under `latest` on
+    # purpose, each for a reason recorded in the root AGENTS.md under
+    # "Dependency Ceilings". Without these rules Dependabot re-proposes each of
+    # them every day, and a standing pile of PRs that must always be closed is
+    # how a PR that should NOT be closed gets closed with them.
     #
     # Only the major is ignored in every case. Minor and patch keep flowing, so
     # a security fix on the current line still arrives normally — the point is
@@ -123,10 +123,10 @@ updates:
           - minor
           - patch
 
-  # Base images live in `apps/*/Dockerfile`, NOT in `infra/docker/`. The four
-  # compose files there declare no `image:` at all — only `build:` plus a
-  # Dockerfile path — and Dependabot's `docker-compose` ecosystem parses only
-  # `image:` (or an inline `dockerfile_inline`), never a referenced Dockerfile.
+  # Base images live in `apps/*/Dockerfile`, NOT in `infra/docker/`. Every
+  # `infra/docker/*-compose.yaml` declares no `image:` at all — only `build:`
+  # plus a Dockerfile path — and Dependabot's `docker-compose` ecosystem parses
+  # only `image:` (or an inline `dockerfile_inline`), never a referenced Dockerfile.
   # A `docker-compose` block would fetch those files and find nothing, forever.
   # Do not add one.
   #
