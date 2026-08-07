@@ -42,6 +42,13 @@ consequences:
   add the branch.
 
 ## 5. The pre-commit hook's partial-stage refusal, and its known gaps
+`infra/scripts/install-git-hooks.mjs`, run by the root `prepare` script, writes the pre-commit hook
+that invokes `generate-deploy-config.mjs --stage`. It resolves the hooks directory with
+`git rev-parse --git-path hooks` rather than joining the working directory with `.git/hooks`, so the
+hook installs correctly from a linked git worktree as well as the main checkout — in a worktree,
+`.git` is a file holding a `gitdir:` pointer rather than a directory, and the naive join throws
+`ENOTDIR` against it.
+
 Before writing, `generate-deploy-config.mjs --stage` refuses to run while any `deploy.config.ts` has
 unstaged changes (`git diff --name-only`), so a generated Dockerfile/compose pair always matches what
 is about to be committed. Two ways around it, both measured rather than theoretical:

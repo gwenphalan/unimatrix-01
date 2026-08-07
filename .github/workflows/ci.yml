@@ -72,15 +72,6 @@ jobs:
       - name: Doc script references
         run: bash ./infra/scripts/check-doc-script-refs.sh
 
-      # Same placement rationale — plain Node, no `node_modules` (it imports
-      # `apps/api/src/config.ts` through type stripping). The compose files are
-      # the only deploy artifact nothing else in this workflow reads: `Images`
-      # builds each Dockerfile directly, so a compose file that fails to pass
-      # env into a working image is green everywhere until production
-      # restart-loops.
-      - name: Compose env
-        run: node ./infra/scripts/check-compose-env.mjs
-
       # Same placement rationale. This repo is public, so a runner on the
       # owner's hardware would execute fork-PR code on the home lab.
       - name: Runner labels
@@ -121,6 +112,17 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      # Unlike the gates above, this needs node_modules: it imports
+      # @unimatrix/deploy-config and apps/api/src/config.ts by absolute path,
+      # and generate-deploy-config.mjs --check formats through prettier's
+      # API. It is the only thing that reads apps/*/Dockerfile and
+      # infra/docker/*-compose.yaml at all — Images (*) builds each
+      # Dockerfile directly and never opens a compose file, so one that stops
+      # passing env into a perfectly good image is green everywhere until
+      # production restart-loops.
+      - name: Deploy config
+        run: pnpm check:deploy-config
 
       - name: Install Playwright Chromium
         run: |
