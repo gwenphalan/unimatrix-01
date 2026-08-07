@@ -326,6 +326,16 @@ more, not less. `--help` for the script's outputs and exit codes:
 .claude/skills/ship-pr/scripts/watch-pr.sh <owner/repo> <pr>
 ```
 
+**Arm it exactly as written — no `2>&1`.** Rows a caller must act on go to stdout and everything else
+to stderr, and under `Monitor` only stdout becomes a notification. Merging the two turns every green
+check into a wake-up, and each wake-up is one main-loop turn over the whole session context: nine of
+them on PR #222, none actionable. `Monitor`'s own tool description tells you to "merge stderr with
+`2>&1` so its failures reach your filter" — right for a command with no such split, wrong for this
+one, and it is in context at the moment you arm this while a rule stated only here is not. So the
+script refuses to run when its two streams point at one destination rather than leaving that to be
+remembered; a non-tty run with no redirect at all is refused for the same reason, since one pipe for
+both streams has already collapsed the split. An interactive run is exempt.
+
 **The checks come before the ping, and that is the script's property rather than your instruction.**
 A ping fired while CI is still running spends a slot on code a red check is about to change, so
 `watch-pr.sh` refuses to post one until every context `required-checks.sh` names has reported green.
