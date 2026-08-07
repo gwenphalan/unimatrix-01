@@ -60,6 +60,11 @@ const ALLOWED_PACKAGE_IMPORTS = {
   // `zod` is its only dependency and stays its implementation detail — apps
   // compose schemas through `envSchema` instead of importing zod themselves.
   "packages/app-config": [],
+  // The Dockerfile/compose generator's config types and archetype builders.
+  // A leaf with zero runtime dependencies, same reasoning as `e2e-helpers`
+  // below: `default` is "disallow", so a workspace with no policy of its own
+  // cannot even resolve its own relative imports.
+  "packages/deploy-config": [],
   // The shared chrome composes `ui` primitives and nothing else. It must never
   // gain `auth`: both of its shells take the account control as a `ReactNode`
   // slot precisely so a sign-in-free tool can import one without pulling Clerk

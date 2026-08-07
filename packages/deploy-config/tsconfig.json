@@ -1,0 +1,16 @@
+{
+  "extends": "@unimatrix/config-typescript/base.json",
+  "compilerOptions": {
+    // Plain Node loads this package directly (see AGENTS.md): `infra/scripts/*`
+    // import it by absolute path with no build step, and Node's type-stripping
+    // refuses an `enum`, a `namespace`, or a parameter property. Every export
+    // in `src/index.ts` must stay erasable.
+    "erasableSyntaxOnly": true
+  },
+  // Not `library.json`: consumers resolve this package's raw source through
+  // the `exports` map (Node) or a vite alias (an app's `deploy.config.ts`
+  // pulls it in through its own tsconfig `include`), the same source-only
+  // arrangement as `@unimatrix/app-config`. A `dist` here would be dead weight
+  // nothing reads.
+  "include": ["src/**/*.ts", "test/**/*.ts", "vitest.config.ts"]
+}

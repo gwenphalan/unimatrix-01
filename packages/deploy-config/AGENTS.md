@@ -1,0 +1,41 @@
+# AGENTS.md
+
+## 1. Overview
+`packages/deploy-config` holds the typed per-app config that drives the Dockerfile/compose
+generator: each `apps/<app>/deploy.config.ts` builds a `DeployAppConfig` from `staticSpaApp()` or
+`nodeApiApp()`, and a generator script under `infra/scripts/` reads it to write
+`apps/<app>/Dockerfile` and `infra/docker/<app>-compose.yaml`. Edit the config, not the generated
+files — see the root `AGENTS.md` for the generated-files rule.
+
+## 2. Shape
+- **Single-file package.** Everything lives in `src/index.ts`, not split across `types.ts` /
+  `archetypes.ts` / etc. Splitting it breaks typecheck in every app that adds `deploy.config.ts` to
+  its `include`: a `.ts`-extension relative import needs `allowImportingTsExtensions`, which is this
+  package's own tsconfig setting and does not travel with the file into a consuming app's program
+  under that app's tsconfig.
+- **No `zod`, no runtime dependencies at all.** `validateAppConfig(config)` returns
+  `readonly string[]` of failure messages instead.
+- **Base images stay out of this config.** The generator reads the Dockerfile's own `FROM` lines
+  and re-emits them verbatim (`DeployDockerfileFromLines`), so a Dependabot nginx digest bump never
+  touches a `deploy.config.ts` or reddens the generator's drift check.
+- **No subdomain or Dokploy metadata.** Only fields that generate output. The
+  subdomain/container-port duplication with `infra/deployment/README.md` is not collapsed here.
+
+## 3. Loading mechanics
+Plain Node (24.18.0) strips this package's TypeScript with no build step and no flag, the same
+arrangement as `@unimatrix/app-config`: pnpm symlinks the workspace dependency, so the stripped file
+sits outside `node_modules` and `ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING` never engages. Two
+consequences:
+- A script under `infra/scripts/` must import this package **by absolute path**, not the bare
+  `@unimatrix/deploy-config` specifier — there is no `node_modules/@unimatrix` at the repo root for
+  a bare specifier to resolve through.
+- An app's `deploy.config.ts` needs the `workspace:*` dependency edge in that app's
+  `devDependencies`, so it resolves only after `pnpm install`.
+
+## 4. Conventions
+- `nodeApiApp()` is a parameterised template with exactly one call site (`apps/api`) — it takes the
+  API's env and volume data as arguments, but do not generalise its shape into something that reads
+  as anticipating a second Node service.
+- If two apps' Dockerfiles cannot both be expressed by `staticSpaApp()`/`nodeApiApp()` without a
+  generator branch keyed on app name, that is a signal the archetype split is wrong, not licence to
+  add the branch.

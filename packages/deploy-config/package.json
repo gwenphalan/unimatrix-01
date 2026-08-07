@@ -1,0 +1,21 @@
+{
+  "name": "@unimatrix/deploy-config",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Typed per-app deploy config the Dockerfile/compose generator reads instead of hand-edited deploy artifacts.",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@unimatrix/config-eslint": "workspace:*",
+    "@unimatrix/config-typescript": "workspace:*",
+    "eslint": "^10.0.0",
+    "typescript": "^6.0.3"
+  }
+}

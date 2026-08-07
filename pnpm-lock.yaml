@@ -819,6 +819,21 @@ importers:
         specifier: ^4.1.10
         version: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@24.13.3)(@vitest/coverage-v8@4.1.10)(jsdom@29.1.1)(msw@2.12.10(@types/node@24.13.3)(typescript@6.0.3))(vite@8.1.5(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.1)(yaml@2.9.0))
 
+  packages/deploy-config:
+    devDependencies:
+      '@unimatrix/config-eslint':
+        specifier: workspace:*
+        version: link:../config-eslint
+      '@unimatrix/config-typescript':
+        specifier: workspace:*
+        version: link:../config-typescript
+      eslint:
+        specifier: ^10.0.0
+        version: 10.8.0(jiti@2.7.0)
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
   packages/e2e-helpers:
     devDependencies:
       '@axe-core/playwright':
