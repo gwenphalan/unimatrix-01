@@ -20,7 +20,7 @@ something is actually wrong — not for progress reports.
 
 ## The rules that are irreversible if forgotten
 
-Everything else in this file is mechanics you can re-read. These five cost something you cannot get
+Everything else in this file is mechanics you can re-read. These cost something you cannot get
 back, so they are stated here, first, where a truncated copy still carries them.
 
 - **Two real stops: the plan before anything is built, and a check-in before the PR is opened.**
@@ -32,6 +32,9 @@ back, so they are stated here, first, where a truncated copy still carries them.
   what it printed. Anything that renders in a browser gets `browser-verifier` before the PR opens.
 - **Strike the shipped line from `.notes/` after the merge, not before** — and only what the merge
   actually finished.
+- **`ExitWorktree` force-removes the worktree directory and deletes the placeholder branch it was
+  opened on — never the branch you switched to inside it.** Every uncommitted file in the worktree
+  is gone with it, unrecoverable, so never close one before the merge is confirmed.
 
 ## The steps
 
@@ -42,13 +45,35 @@ and a lack of objection is not approval.
    choose the pool" is a change. "Why does the drill list go stale" or "how should we handle X" is a
    problem, and going straight to a plan produces a confident answer to the wrong question. When
    unsure, it is a problem.
-1. **Dispatch `monorepo-planner` to investigate and report.** It reads the code rather than
+1. **Open a named worktree before dispatching the planner — unless the task touches `.claude/`, in
+   which case do not open one at all, and branch in the main checkout instead.** A worktree's own
+   `.claude/` is never scanned, so what governs a worktree session is the main checkout's working
+   tree, not the branch's (root `AGENTS.md`, Workspace section — `CLAUDE.md` is a symlink to it).
+
+   Pick the branch name once and use it for both calls. `EnterWorktree({name: "<branch name>"})`
+   creates `.claude/worktrees/<name>` (`/` rewritten to `+`) on a placeholder branch
+   `worktree-<name with / → +>`, without prompting when created by `name` alone; it errors if that
+   directory already exists, and a reused name comes back "Reused" or "Resumed" — the latter may
+   carry an earlier session's commits. `worktree.baseRef` is unset in both settings files and
+   defaults to `fresh`, so the worktree starts from `origin/main`, not local `main`. Inside it,
+   `git switch -c <that same name>` puts the PR head on the chosen name rather than the placeholder,
+   which stays behind at base — that is what `ExitWorktree` deletes at the end, so it self-cleans.
+
+   Then run `pnpm setup:worktree`, with `--with-playwright` if the change has a browser surface.
+   **This is not optional.** A worktree is populated from tracked files only, so it starts with no
+   `node_modules` — the full dependency install is the real cost of this step, not overhead around
+   it.
+   `infra/scripts/setup-worktree.mjs` runs `pnpm install --frozen-lockfile`, env bootstrap,
+   `linkGitignoredWorktreeDirs()`, and `pnpm db:migrate`; `infra/scripts/link-worktree-dirs.mjs` is
+   what symlinks `.notes/` in from the main checkout, and without that symlink the last step below —
+   striking the shipped line from `.notes/` — has nothing to edit.
+2. **Dispatch `monorepo-planner` to investigate and report.** It reads the code rather than
    remembering it, and it cannot edit. When the task is a `.notes/01-todo/*.todo.md` item, give it
    the item verbatim in that file's format, not a re-typed summary — reflowing it loses the inline
    `[a]` citations, which resolve only against the original References list. Anything settled
    verbally goes alongside, clearly separated from the verbatim block, never merged into it or used
    to reword it. Not your own theory of the fix, which is the thing that would contaminate it.
-2. **Attack the plan before believing it.** A plan you only read is a plan you approved, and you
+3. **Attack the plan before believing it.** A plan you only read is a plan you approved, and you
    framed the task the planner worked from — so auditing it yourself is the same self-review this
    skill forbids for code.
 
@@ -58,33 +83,37 @@ and a lack of objection is not approval.
    claims yourself — a one-file constant change does not repay a round trip. Either way, call
    `advisor` when the *shape* of the change is in doubt rather than its details.
 
-   A `DO NOT PROCEED` goes back to step 1 with the finding, not around it.
-3. **Present it so it can be skimmed, then wait.** What becomes true, the files grouped by
+   A `DO NOT PROCEED` goes back to step 2 with the finding, not around it.
+4. **Present it so it can be skimmed, then wait.** What becomes true, the files grouped by
    workspace, the reasoning that is not visible in a diff, what you rejected, and what would make it
    wrong — in that order, scannable. **Once the owner approves, build the task list.**
-4. **Dispatch `monorepo-implementer` with the approved plan, in a worktree unless the plan touches
-   `.claude/`.** A `.claude/` change stays in the main checkout — a worktree's own `.claude/` is
-   never scanned, so what governs a worktree session is the main checkout's working tree, not the
-   branch's (root `CLAUDE.md`, Workspace section, has the full mechanism). It builds exactly that,
-   commits in logical steps, and stops rather than improvising if the plan turns out wrong. If the
-   change touches a browser surface, **dispatch `browser-verifier` before you report done** — it
-   holds the Chrome tooling so this context does not have to, which is what makes honouring that
-   rule cheaper than skipping it.
-5. **Check in — in the owner's terms, not the code's.** What was done and why, the decisions the
+5. **Dispatch `monorepo-implementer` with the approved plan.** Do not pass `isolation: "worktree"` —
+   the session already opened one in step 1, and passing it again opens a *second* worktree beside
+   the first, on its own branch, where the commits land outside the PR. Left unset, the subagent
+   inherits the session's cwd, which is the worktree step 1 opened — the tool reads the process-global
+   cwd `EnterWorktree` wrote there, corroborated by `ExitWorktree`'s own error text about mutating
+   "the parent session's process-wide working directory". It builds exactly the approved plan, commits
+   in logical steps, and stops rather than improvising if the plan turns out wrong. If the change
+   touches a browser surface, **dispatch `browser-verifier` before you report done** — it holds the
+   Chrome tooling so this context does not have to, which is what makes honouring that rule cheaper
+   than skipping it.
+6. **Check in — in the owner's terms, not the code's.** What was done and why, the decisions the
    plan left open, what you ran and what it printed, what you could not verify. It must be
    understandable without opening the diff, because it will be read without opening the diff. Then
    stop, unless they have said not to.
-6. **Once they are satisfied, open the PR.** Body per the section below.
-7. **Arm `watch-pr.sh`** — it waits for every required check, pings CodeRabbit once they are green,
+7. **Once they are satisfied, open the PR.** Body per the section below.
+8. **Arm `watch-pr.sh`** — it waits for every required check, pings CodeRabbit once they are green,
    and arms auto-merge once the review clears: immediately on a clean one, or after the reply-and-fix
    cycle on one with findings. **Wait for the watcher to report before handing the
    PR to a fresh reader** — it runs under `Monitor`, so it is still working while you read this
    line, and a reader dispatched now gets a branch whose checks have not reported. If that fresh
    reader *is* the pre-merge review, run with `SHIP_PR_AUTO_MERGE=0`, or the PR can merge out from
    under it.
-8. **Merge once everything clears,** then strike the shipped line from `.notes/`.
+9. **Merge once everything clears,** then strike the shipped line from `.notes/`.
+10. **Close the worktree and sweep dead branches, from the main checkout** — see "Closing the
+    worktree and sweeping branches" below.
 
-Steps 1 and 4 are delegated on purpose: a fresh context re-derives from the code, where you would
+Steps 2 and 5 are delegated on purpose: a fresh context re-derives from the code, where you would
 re-derive from your own earlier reasoning. Skip them only on the fast lane below. Dispatch and keep
 working: the synchronous form is almost never the right one, because checking the planner's claims
 against the code and reading what it reports on both run alongside it.
@@ -111,7 +140,7 @@ subagent replies with its fixed refusal and does nothing, rather than doing the 
 
 ### The fast lane, for a change too small to pay for the flow
 
-Step 2's thresholds decide whether a plan needs an adversary. These are tighter, and decide whether
+Step 3's thresholds decide whether a plan needs an adversary. These are tighter, and decide whether
 the flow runs at all. On a one-line fix, the three dispatches and the signal pass above cost more
 than the work. Take the fast lane when **all four** hold, and say in the check-in that you took it:
 
@@ -119,6 +148,9 @@ than the work. Take the fast lane when **all four** hold, and say in the check-i
 - about two files or fewer
 - no runtime, build, auth, data or CI behaviour change
 - no browser surface
+
+**The fast lane still opens the named worktree step 1 describes, and still closes it and sweeps
+branches at the end** — only the planning, implementation and review ceremony in between compresses.
 
 Then: plan inline, in a few lines, under every rule in `monorepo-planner`'s own file — read the code
 rather than remember it, label what you did not verify — and present it: **stop 1 stays**, it is
@@ -403,6 +435,46 @@ Scope rules:
 - `.notes/` is gitignored, so this is a local scratch edit with nothing to commit or push. Do not
   add it to the PR and do not stage it.
 - Name the exact line(s) you removed or annotated in your final report.
+
+## Closing the worktree and sweeping branches
+
+`.claude/worktrees/` does not accumulate — every `ExitWorktree` removes the directory it opened.
+What accumulates is branches: nothing deletes the local copy of a branch GitHub deleted server-side
+on merge, and a Workflow fan-out or a stray `Agent` isolation call can leave dozens of `worktree-*`
+ones behind on top of that. This step is what removes both — the worktree this session opened, and
+the backlog of branches nothing else ever swept.
+
+**`ExitWorktree` first, then the sweep — never the other way round.** `git branch -D` refuses a
+branch checked out in *any* worktree, including the one the sweep is running from, and the refusal
+is stderr-only — stdout still reads as a clean run. Sweeping before closing the worktree leaves
+behind exactly the branch this run meant to clean, reporting that it cleaned it. `watch-pr.sh:1145`
+documents the same trap for `--delete-branch`. `git switch main` from inside a worktree fails the
+same way: `fatal: 'main' is already used by worktree at ...`, exit 128.
+
+1. **Close the worktree step 1 opened**, once the merge is confirmed the same way "Merging" above
+   already established: read `gh pr view <pr> --json state` and proceed only on `MERGED`.
+   Every other terminal state `watch-pr.sh --help` documents (auto-merge off, a draft PR,
+   unresolved threads, a state read that failed, a broken arm, a checks timeout, three-strikes) is
+   an unmerged PR, and this step is a no-op on one — the worktree stays. `ExitWorktree` with
+   `action: "remove"` needs `discard_changes: true`: it counts every commit made since entry as work
+   about to be lost and refuses without it. If step 1 opened no worktree (a `.claude/` change),
+   there is nothing to close and the sweep below still runs.
+
+   `ExitWorktree` only ever touches the one `EnterWorktree` opened *this session* — it is a no-op on
+   a worktree from an earlier one, so it is not a way to sweep stale worktrees generally.
+
+2. **Sweep dead branches, from the main checkout**: `cleanup-branches.sh --dry-run` first, read
+   what it would do, then run it for real.
+
+   ```sh
+   .claude/skills/ship-pr/scripts/cleanup-branches.sh --dry-run
+   .claude/skills/ship-pr/scripts/cleanup-branches.sh
+   ```
+
+3. **`git switch main && git pull --ff-only`.** After this change `gh pr merge` can no longer
+   advance local `main` — the merge lands on `origin/main` from inside a worktree, and nothing else
+   in this flow ever checks `main` back out in the main checkout. Skipping this leaves `main` behind
+   by one merge every run, which matters the next time a `.claude/` change branches from it.
 
 ## When to stop and ask
 
