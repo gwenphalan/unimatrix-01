@@ -42,13 +42,19 @@ nothing tells this clone — the local branch just sits there, and its
 
 Every failure direction here is "keep, and say why": a missing merge-base,
 a `git commit-tree` that errors, an unreadable `git cherry` — all fall to
-the kept-and-unconfirmed bucket rather than to deletion. An offline or
-failing `git fetch --prune` makes the squash sweep select nothing, not
-everything.
+the kept-and-unconfirmed bucket rather than to deletion.
 
-`--dry-run` prints exactly what would happen without deleting anything,
-including running the fetch (`git fetch --prune` is not destructive to a
-branch, so it still runs).
+A failed `git fetch --prune` is the one that cannot fall to "keep", so it
+exits instead. `%(upstream:track)` is recorded state, not a live read: a
+branch some earlier run pruned still reads `[gone]` long after the remote
+became unreachable, so an offline sweep is not an empty sweep — it is a
+sweep against whatever the last successful fetch happened to see. Only a
+clone that has never pruned selects nothing, and that is the first run and
+no other.
+
+`--dry-run` prints exactly what would happen without deleting anything. It
+still runs the fetch, and still exits on a failed one — a preview built on
+a stale view is the same wrong answer, just not acted on yet.
 
 Recoverable: `git branch -D` prints `Deleted branch X (was <sha>).`, and
 `git branch X <sha>` brings it back as long as nothing has since garbage-
@@ -59,7 +65,9 @@ Arguments:
 
 Exit codes:
   0  the sweep ran to completion, whether or not anything was deleted
-  1  bad usage
+  1  bad usage, or not inside a git repository
+  2  `git fetch --prune` failed — nothing was swept, and nothing should be
+     until the remote is reachable again
 EOF
 }
 
@@ -86,7 +94,9 @@ if ! git rev-parse --git-dir >/dev/null 2>&1; then
 fi
 
 if ! git fetch --prune; then
-  echo "cleanup-branches.sh: git fetch --prune failed — continuing offline, nothing will read as [gone]" >&2
+  echo "cleanup-branches.sh: git fetch --prune failed — refusing to sweep on a stale view of the remote" >&2
+  echo "cleanup-branches.sh: \`[gone]\` survives a failed fetch, so any branch an earlier run pruned still reads gone and the squash sweep would delete against last-known-good state" >&2
+  exit 2
 fi
 
 ancestor_deleted=0

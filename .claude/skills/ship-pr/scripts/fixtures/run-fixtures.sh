@@ -616,7 +616,8 @@ cleanup_branches_case_wanted() {
   return 1
 }
 
-if cleanup_branches_case_wanted cleanup-branches-dry-run-deletes-nothing \
+if cleanup_branches_case_wanted cleanup-branches-refuses-a-failed-fetch \
+  || cleanup_branches_case_wanted cleanup-branches-dry-run-deletes-nothing \
   || cleanup_branches_case_wanted cleanup-branches-sweeps-ancestor-quote-and-squash-keeps-unmerged; then
   cleanup_branches_dir=$(mktemp -d "${TMPDIR:-/tmp}/ship-pr-cleanup-branches.XXXXXX") || exit 1
   cleanup_branches_origin="$cleanup_branches_dir/origin.git"
@@ -671,6 +672,35 @@ if cleanup_branches_case_wanted cleanup-branches-dry-run-deletes-nothing \
     git push -q origin --delete wip/never-merged
     git switch main -q
   ) >/dev/null 2>&1
+
+  # Ordered first, because the two cases below delete. A failed fetch has to
+  # stop the sweep rather than fall through to it: `%(upstream:track)` is
+  # recorded state, not a live read, so the `push --delete` above already left
+  # `squash/feature` and `wip/never-merged` reading `[gone]` and an unreachable
+  # remote does not clear that. An offline run is therefore a run against
+  # whatever the last successful fetch saw — never the empty selection it looks
+  # like. Only a clone that has never pruned selects nothing, which is the first
+  # run and no other.
+  if cleanup_branches_case_wanted cleanup-branches-refuses-a-failed-fetch; then
+    ran=$((ran + 1))
+    cleanup_branches_offline_before=$(cd "$cleanup_branches_work" && git branch --format='%(refname:short)' | sort)
+    (cd "$cleanup_branches_work" && git remote set-url origin "$cleanup_branches_dir/unreachable.git") >/dev/null 2>&1
+    cleanup_branches_offline_out=$(cd "$cleanup_branches_work" && bash "$cleanup_branches_script" 2>&1)
+    cleanup_branches_offline_rc=$?
+    cleanup_branches_offline_after=$(cd "$cleanup_branches_work" && git branch --format='%(refname:short)' | sort)
+    # Restore it, or every case below sweeps against the broken remote too.
+    (cd "$cleanup_branches_work" && git remote set-url origin "$cleanup_branches_origin") >/dev/null 2>&1
+    if [ "$cleanup_branches_offline_rc" -eq 2 ] \
+      && [ "$cleanup_branches_offline_after" = "$cleanup_branches_offline_before" ] \
+      && grep -qF "refusing to sweep on a stale view of the remote" <<<"$cleanup_branches_offline_out" \
+      && ! grep -qF "Deleted branch" <<<"$cleanup_branches_offline_out"; then
+      printf '  ok    cleanup-branches-refuses-a-failed-fetch\n'
+    else
+      failures=$((failures + 1))
+      printf '  FAIL  cleanup-branches-refuses-a-failed-fetch (rc=%s)\n' "$cleanup_branches_offline_rc"
+      printf '%s\n' "$cleanup_branches_offline_out" | sed 's/^/        /'
+    fi
+  fi
 
   if cleanup_branches_case_wanted cleanup-branches-dry-run-deletes-nothing; then
     ran=$((ran + 1))

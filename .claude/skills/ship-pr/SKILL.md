@@ -59,6 +59,12 @@ and a lack of objection is not approval.
    `git switch -c <that same name>` puts the PR head on the chosen name rather than the placeholder,
    which stays behind at base — that is what `ExitWorktree` deletes at the end, so it self-cleans.
 
+   **On a "Reused" or "Resumed" worktree that branch already exists**, left there by the session that
+   made it, and `git switch -c` refuses rather than reusing it — so switch to it instead of creating
+   it. `git switch -c <name> 2>/dev/null || git switch <name>` covers both without a check that can
+   answer wrongly. Read what it lands on before building: a resumed branch carries the earlier
+   session's commits, and they will be in the PR.
+
    Then run `pnpm setup:worktree`, with `--with-playwright` if the change has a browser surface.
    **This is not optional.** A worktree is populated from tracked files only, so it starts with no
    `node_modules` — the full dependency install is the real cost of this step, not overhead around
