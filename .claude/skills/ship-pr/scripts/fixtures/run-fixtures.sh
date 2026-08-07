@@ -515,10 +515,19 @@ EOF
 # The rows moved to stderr, not away. Every case above proves they are off
 # stdout; this proves they are still printed at all, which nothing else now
 # asserts.
+#
+# Captured into two files and joined afterwards rather than with `2>&1`: the
+# script refuses to run with its streams pointing at one destination, so a
+# merged capture here would assert nothing but the refusal. This still only
+# proves the rows are printed *somewhere* — `in-progress-on-stderr` below is
+# what proves which stream.
+ledger_err_file=$(mktemp "${TMPDIR:-/tmp}/ship-pr-ledger-err.XXXXXX") || exit 1
 combined=$(env SHIP_PR_POLL_SECONDS=0 SHIP_PR_PING_AT="$ping" \
   SHIP_PR_BRANCH_RULES_FIXTURE="$here/branch-rules-one.json" \
   SHIP_PR_CHECKS_FIXTURES="$here/checks-green-one.json" \
-  SHIP_PR_FIXTURES="$(f quiet)" "$script" fixture/repo 1 2>&1)
+  SHIP_PR_FIXTURES="$(f quiet)" "$script" fixture/repo 1 2>"$ledger_err_file")
+combined=$(printf '%s\n%s\n' "$combined" "$(cat "$ledger_err_file")")
+rm -f "$ledger_err_file"
 ran=$((ran + 1))
 if grep -q '^PASS  Verify$' <<<"$combined" \
   && grep -q '^checks green on fixture-head-sha$' <<<"$combined"; then
@@ -531,16 +540,44 @@ fi
 # `SKIPPING` takes the same stderr arm as `PASS` but a different `case` branch,
 # so asserting only `PASS` above would let a misrouted or dropped `SKIPPING` row
 # through the whole suite.
+skipping_err_file=$(mktemp "${TMPDIR:-/tmp}/ship-pr-skipping-err.XXXXXX") || exit 1
 skipping=$(env SHIP_PR_POLL_SECONDS=0 SHIP_PR_PING_AT="$ping" \
   SHIP_PR_BRANCH_RULES_FIXTURE="$here/branch-rules-one.json" \
   SHIP_PR_CHECKS_FIXTURES="$here/checks-skipping.json" \
-  SHIP_PR_FIXTURES="$(f quiet)" "$script" fixture/repo 1 2>&1)
+  SHIP_PR_FIXTURES="$(f quiet)" "$script" fixture/repo 1 2>"$skipping_err_file")
+skipping=$(printf '%s\n%s\n' "$skipping" "$(cat "$skipping_err_file")")
+rm -f "$skipping_err_file"
 ran=$((ran + 1))
 if grep -q '^SKIPPING  Verify$' <<<"$skipping"; then
   printf '  ok    skipping-row-on-stderr\n'
 else
   failures=$((failures + 1))
   printf '  FAIL  skipping-row-on-stderr (the SKIPPING row is not printed on either stream)\n'
+fi
+
+# The refusal itself, with genuinely merged streams — the one case that must not
+# use the two-file capture above. `$(...)` makes stdout a pipe and `2>&1` puts
+# stderr on the same one, which is exactly the shape an agent produces by arming
+# this under `Monitor` with a redirect it did not need.
+#
+# The fixture variables are set even though nothing reads them: the guard runs
+# before the first fixture or network read, so a placement regression that let
+# the run get past it shows up here as a hang against the live API rather than
+# as a pass.
+merged_out=$(env SHIP_PR_POLL_SECONDS=0 SHIP_PR_PING_AT="$ping" \
+  SHIP_PR_BRANCH_RULES_FIXTURE="$here/branch-rules-one.json" \
+  SHIP_PR_CHECKS_FIXTURES="$here/checks-green-one.json" \
+  SHIP_PR_FIXTURES="$(f quiet)" "$script" fixture/repo 1 2>&1)
+merged_rc=$?
+ran=$((ran + 1))
+if [ "$merged_rc" = 1 ] \
+  && grep -q '^watch-pr.sh: stdout and stderr are the same destination.$' <<<"$merged_out" \
+  && grep -qF "watch-pr.sh fixture/repo 1" <<<"$merged_out"; then
+  printf '  ok    merged-streams-refused\n'
+else
+  failures=$((failures + 1))
+  printf '  FAIL  merged-streams-refused (exit %s, wanted 1 and the refusal naming the fixed command)\n' "$merged_rc"
+  printf '%s\n' "$merged_out" | sed 's/^/        /'
 fi
 
 # `review in progress` moved to stderr along with the phase-1 ledger and the
