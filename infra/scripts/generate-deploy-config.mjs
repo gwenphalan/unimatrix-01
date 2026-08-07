@@ -46,16 +46,26 @@ const { dockerfileFor, composeFor } = await import(
  * external `FROM` lines are expected (the base image, then the runtime
  * image), and a different count is a hard error rather than a guess.
  */
+function readFileIfPresent(path) {
+  try {
+    return readFileSync(path, "utf8");
+  } catch (error) {
+    if (error.code === "ENOENT") return null;
+    throw error;
+  }
+}
+
 function readFromLines(app) {
   const dockerfilePath = join(appsDir, app, "Dockerfile");
-  if (!existsSync(dockerfilePath)) {
+  const dockerfile = readFileIfPresent(dockerfilePath);
+  if (dockerfile === null) {
     throw new Error(
       `apps/${app}/Dockerfile does not exist yet, so there is nothing to read its base images ` +
         `from. Create the Dockerfile once by hand (or copy a sibling app's) before generating.`,
     );
   }
 
-  const externalFromLines = readFileSync(dockerfilePath, "utf8")
+  const externalFromLines = dockerfile
     .split("\n")
     .filter((line) => /^FROM\s+\S/u.test(line) && !/^FROM\s+base\s+AS\s+/iu.test(line));
 
@@ -172,7 +182,10 @@ async function main() {
 
   for (const app of apps) {
     for (const { path, content } of await renderApp(app)) {
-      const existing = existsSync(path) ? readFileSync(path, "utf8") : null;
+      // Read straight through rather than testing existsSync first: a missing
+      // file and a file deleted between the two calls are the same case here,
+      // and the check-then-read pair is a race CodeQL flags (js/file-system-race).
+      const existing = readFileIfPresent(path);
       if (existing === content) continue;
 
       if (mode === "check") {

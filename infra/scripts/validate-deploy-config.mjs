@@ -27,7 +27,7 @@
 //
 // Fails closed on zero configs discovered, matching `check-watch-paths.mjs`
 // and `check-coverage-drift.mjs`.
-import { readFileSync, readdirSync, existsSync } from "node:fs";
+import { readdirSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 

@@ -17,7 +17,7 @@
 // `pnpm install --frozen-lockfile`), and a non-zero exit there fails the
 // image.
 import { execFileSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -57,8 +57,17 @@ function main() {
   mkdirSync(hooksDir, { recursive: true });
   const hookPath = resolve(hooksDir, "pre-commit");
 
-  if (existsSync(hookPath)) {
-    const existing = readFileSync(hookPath, "utf8");
+  // Read straight through rather than testing existsSync first: "no hook yet"
+  // and "hook deleted between the two calls" are the same case, and the
+  // check-then-read pair is a race CodeQL flags (js/file-system-race).
+  let existing = null;
+  try {
+    existing = readFileSync(hookPath, "utf8");
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+  }
+
+  if (existing !== null) {
     if (existing === HOOK_BODY) {
       return;
     }
