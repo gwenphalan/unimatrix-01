@@ -23,8 +23,9 @@ step; it never means choosing the shape of the change.
 
 ## Solo by default
 
-Investigate the whole item and write it in one pass. An item the owner has already specified spends
-several turns confirming what was said in the first message.
+Investigate the whole item and write it in one pass. Stopping between the steps costs a turn each
+time, and on an item the owner has already specified those turns only confirm what their first
+message said.
 
 What sends it to the loop instead is **discovered, not judged up front** — so investigate first,
 then decide. Investigation answers questions of *fact* from the code. What it cannot answer is a
