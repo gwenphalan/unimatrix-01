@@ -64,17 +64,19 @@ this file holds the mechanics, each of which was learned the hard way.
   fails when a floor sits more than 5 points under the measurement — `packages/auth` gated at 26
   while measuring 73.84. The 5 points are deliberate: V8 re-attributes functions between Node
   majors, so a floor pinned to the exact figure reddens on the next runtime bump for no real reason.
-  `check-compose-env.mjs` (`Compose env`, pre-install, plain Node) is the only thing that reads the
-  compose files at all: `Images (*)` builds each Dockerfile directly and never opens one, so a
-  compose file that stops passing env into a perfectly good image is green everywhere until the
-  deployed container restart-loops — the API once shipped with no `CLERK_*` under `environment:` and
-  every required check passed. It pairs each `apps/*/Dockerfile` with its
-  `infra/docker/<app>-compose.yaml`, asserts the declared `build.dockerfile` and `build.context`,
-  requires a non-empty value to reach every `ARG VITE_*` that has no Dockerfile default, and feeds
-  the effective API env — Dockerfile `ENV` overlaid by the compose block — to the real
-  `loadApiRuntimeConfig`, so it cannot drift from the parser it is checking against. That import
-  goes through Node type stripping, which needs `apps/api/src/config.ts` to stay
-  erasable-syntax-only. `check-runner-labels.mjs` (`Runner labels`) allowlists every `runs-on:`
+  `Deploy config` (`check:deploy-config`, **after** `Install dependencies`, unlike the other bash/
+  plain-Node gates above) is the only thing that reads `apps/*/Dockerfile` and
+  `infra/docker/*-compose.yaml` at all: `Images (*)` builds each Dockerfile directly and never opens
+  a compose file, so one that stops passing env into a perfectly good image is green everywhere until
+  the deployed container restart-loops — the API once shipped with no `CLERK_*` under `environment:`
+  and every required check passed. It runs `infra/scripts/validate-deploy-config.mjs` (pairing in
+  both directions between `apps/*/deploy.config.ts` and the generated files, plus the API env probe
+  against the real `loadApiRuntimeConfig`) and then `infra/scripts/generate-deploy-config.mjs --check`
+  (regenerates in memory and diffs against what is committed) — see `packages/deploy-config/AGENTS.md`.
+  It needs `node_modules` (it imports `@unimatrix/deploy-config` and `apps/api/src/config.ts` by
+  absolute path, and `generate-deploy-config.mjs --check` formats through prettier's API), which is
+  why it runs after install rather than in the pre-install band the check it replaced used.
+  `check-runner-labels.mjs` (`Runner labels`) allowlists every `runs-on:`
   value rather than grepping for `self-hosted`, because a runner is targeted by label and
   `runs-on: my-homelab` reaches one without the string ever appearing; it enforces naming only and
   cannot see what hardware a label routes to, and a *remote* reusable workflow carries a `runs-on:`

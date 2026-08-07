@@ -29,6 +29,7 @@
     "@unimatrix/config-eslint": "workspace:*",
     "@unimatrix/config-typescript": "workspace:*",
     "@unimatrix/config-vitest": "workspace:*",
+    "@unimatrix/deploy-config": "workspace:*",
     "@unimatrix/e2e-helpers": "workspace:*",
     "@vitejs/plugin-react": "^6.0.4",
     "@vitest/coverage-v8": "^4.1.10",

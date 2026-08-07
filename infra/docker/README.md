@@ -4,6 +4,17 @@ Dokploy plus Traefik is the primary production target. The Dockerfiles and
 Compose files here are the secondary, manual deployment path and the local
 validation path for containerized builds.
 
+## Generated — edit the config, not these files
+
+Every `apps/*/Dockerfile` and every compose file in this directory is generated from
+`apps/<app>/deploy.config.ts` by `infra/scripts/generate-deploy-config.mjs`. Edit the config and run
+`node ./infra/scripts/generate-deploy-config.mjs` (or let the pre-commit hook do it), not the
+generated file directly — `check:deploy-config` in `pnpm check`/`pnpm verify` reruns the generator in
+`--check` mode and fails on drift. The one exception is each app's own `FROM` lines: the generator
+reads those off the file already on disk and re-emits them verbatim, which is what lets a Dependabot
+nginx digest bump land as a normal PR (see "Base image updates" below) without ever touching a
+`deploy.config.ts` or reddening the drift check. `nginx.conf` is not generated at all.
+
 ## Monorepo build rules
 
 Build all five images from the repo root, not from an individual app
@@ -280,7 +291,7 @@ container port (`8080` for web, `3001` for api, `8080` for cflop,
 `8080` for auth, `8080` for admin) there, and Dokploy wires Traefik itself. Don't hand-add
 Traefik labels to these files. Point the cflop Dokploy app's domain at
 `cflop.unimatrix-01.dev` (plus `cube.unimatrix-01.dev` as a redirect-only entry —
-see `infra/deployment/README.md`), the auth Dokploy app's domain at
+see `docs/deployment.md`), the auth Dokploy app's domain at
 `auth.unimatrix-01.dev`, and the admin Dokploy app's domain at
 `admin.unimatrix-01.dev`.
 
@@ -293,7 +304,7 @@ environment-dependent values to set. `auth-compose.yaml` reads
 `admin-compose.yaml` reads those two plus an optional `VITE_AUTH_APP_URL`.
 
 Previews cannot be enabled on these apps — Dokploy supports them only on
-Application-type services. See `infra/deployment/README.md` for the full
+Application-type services. See `docs/deployment.md` for the full
 Dokploy service setup, including how previews are configured instead.
 
 ## Base image updates
@@ -315,3 +326,10 @@ to update":
   `node-version-file` rather than gaining a second, competing owner.
 - Base-image PRs auto-merge on the same terms as any other minor/patch: the
   required `Images` checks build every `apps/*/Dockerfile`.
+
+That auto-merge is why base images are not a field in `deploy.config.ts` (see "Generated" above).
+`dockerfileFor()` takes the `FROM` lines as an explicit argument and re-emits them verbatim instead
+of deriving them, so a Dependabot digest bump touches only the Dockerfile it already targets. If the
+digest were config-owned instead, every such PR would need a second commit syncing the config back —
+and `.github/workflows/dependabot-auto-merge.yml` forbids exactly that: no checkout step and no PAT,
+so nothing in that workflow could make the sync-back commit even if it wanted to.

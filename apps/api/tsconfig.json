@@ -9,12 +9,15 @@
       "@unimatrix/content": ["../../packages/content/src/index.ts"],
       "@unimatrix/content/node": ["../../packages/content/src/node.ts"],
       "@unimatrix/db": ["../../packages/db/src/index.ts"],
+      "@unimatrix/deploy-config": ["../../packages/deploy-config/src/index.ts"],
       "@unimatrix/shared": ["../../packages/shared/src/index.ts"]
     },
     "types": ["node"]
   },
-  // `scripts/` is checked but deliberately absent from `tsconfig.build.json`:
-  // the seed script is a maintenance tool run through tsx, not part of the
-  // deployable server build.
-  "include": ["scripts/**/*.ts", "src/**/*.ts", "test/**/*.ts"]
+  // `scripts/` and `deploy.config.ts` are checked but deliberately absent
+  // from `tsconfig.build.json`: neither is part of the deployable server
+  // build — the seed script is a maintenance tool run through tsx, and
+  // `deploy.config.ts` is read by infra/scripts through Node type stripping,
+  // never imported by app code.
+  "include": ["deploy.config.ts", "scripts/**/*.ts", "src/**/*.ts", "test/**/*.ts"]
 }

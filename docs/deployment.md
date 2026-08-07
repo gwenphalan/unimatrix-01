@@ -9,6 +9,12 @@ production deployment.
 is not the production web server for `apps/web/dist/`,
 `apps/cflop/dist/`, or `apps/auth/dist/`.
 
+Every `apps/*/Dockerfile` and `infra/docker/*-compose.yaml` referenced below is generated from
+`apps/<app>/deploy.config.ts` — see `infra/docker/README.md`. The subdomain and container-port
+listed per service in this document is **not** sourced from that config and stays hand-maintained
+duplication for now; it is not read by anything until the Dokploy auto-deployment work that would
+read it directly.
+
 ## Default production topology
 
 The default production shape is separate-origin:

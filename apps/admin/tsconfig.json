@@ -6,6 +6,7 @@
       "@/*": ["./src/*"],
       "@unimatrix/api-client": ["../../packages/api-client/src/index.ts"],
       "@unimatrix/app-config": ["../../packages/app-config/src/index.ts"],
+      "@unimatrix/deploy-config": ["../../packages/deploy-config/src/index.ts"],
       "@unimatrix/chrome/tool": ["../../packages/chrome/src/tool.ts"],
       "@unimatrix/auth/react": ["../../packages/auth/src/react.tsx"],
       "@unimatrix/auth": ["../../packages/auth/src/index.ts"],
@@ -17,6 +18,7 @@
     "types": ["vite/client", "node"]
   },
   "include": [
+    "deploy.config.ts",
     "src/**/*.ts",
     "src/**/*.tsx",
     "test/**/*.ts",

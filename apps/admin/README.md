@@ -48,7 +48,7 @@ workspace files control the frozen pnpm install used by the Docker build.
 
 When adding a workspace dependency or another build input, add its path here
 and to the Dokploy service's watch-path configuration. See
-[`infra/deployment/README.md`](../../infra/deployment/README.md) for the
+[`docs/deployment.md`](../../docs/deployment.md) for the
 repository-wide convention.
 
 ## Security headers

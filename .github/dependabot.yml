@@ -123,6 +123,15 @@ updates:
           - minor
           - patch
 
+  # `apps/*/Dockerfile` is generated (infra/scripts/generate-deploy-config.mjs,
+  # from apps/<app>/deploy.config.ts — see packages/deploy-config/AGENTS.md),
+  # except for the FROM lines a base-image bump here touches: the generator
+  # reads them off the file already on disk and re-emits them verbatim rather
+  # than owning them as config, specifically so a PR like this one never needs
+  # a second commit syncing deploy.config.ts back to match. The generator's own
+  # drift check (`check:deploy-config`) stays green through this bump for that
+  # reason.
+  #
   # Base images live in `apps/*/Dockerfile`, NOT in `infra/docker/`. Every
   # `infra/docker/*-compose.yaml` declares no `image:` at all — only `build:`
   # plus a Dockerfile path — and Dependabot's `docker-compose` ecosystem parses
