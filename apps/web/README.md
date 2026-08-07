@@ -41,7 +41,7 @@ and to the Dokploy service's watch-path configuration. Removing one is the same
 two edits: `check-watch-paths.mjs` is one-directional on purpose and fails only
 on a *missing* entry, so a path left behind after its import goes away costs
 nothing but rebuilds and is invisible to every check. See
-[`infra/deployment/README.md`](../../infra/deployment/README.md) for the
+[`docs/deployment.md`](../../docs/deployment.md) for the
 repository-wide convention.
 
 Watch paths apply to `push` events only. Dokploy's pull request handler does

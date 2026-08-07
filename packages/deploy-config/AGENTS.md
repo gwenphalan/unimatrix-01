@@ -20,7 +20,7 @@ generated-files rule.
   and re-emits them verbatim (`DeployDockerfileFromLines`), so a Dependabot nginx digest bump never
   touches a `deploy.config.ts` or reddens the generator's drift check.
 - **No subdomain or Dokploy metadata.** Only fields that generate output. The
-  subdomain/container-port duplication with `infra/deployment/README.md` is not collapsed here.
+  subdomain/container-port duplication with `docs/deployment.md` is not collapsed here.
 
 ## 3. Loading mechanics
 Plain Node (24.18.0) strips this package's TypeScript with no build step and no flag, the same

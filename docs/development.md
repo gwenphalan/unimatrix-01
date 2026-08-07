@@ -101,7 +101,7 @@ The app-local env contract is intentionally narrow and predictable.
   `CLERK_JWT_KEY`) is optional in development and test: the API boots with
   auth disabled when they are unset, and is required only in production.
 
-Use [deployment docs](../infra/deployment/README.md) for deployment-specific
+Use [deployment docs](./deployment.md) for deployment-specific
 environment rules instead of duplicating them here.
 
 ## Canonical commands

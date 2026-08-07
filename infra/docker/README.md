@@ -291,7 +291,7 @@ container port (`8080` for web, `3001` for api, `8080` for cflop,
 `8080` for auth, `8080` for admin) there, and Dokploy wires Traefik itself. Don't hand-add
 Traefik labels to these files. Point the cflop Dokploy app's domain at
 `cflop.unimatrix-01.dev` (plus `cube.unimatrix-01.dev` as a redirect-only entry —
-see `infra/deployment/README.md`), the auth Dokploy app's domain at
+see `docs/deployment.md`), the auth Dokploy app's domain at
 `auth.unimatrix-01.dev`, and the admin Dokploy app's domain at
 `admin.unimatrix-01.dev`.
 
@@ -304,7 +304,7 @@ environment-dependent values to set. `auth-compose.yaml` reads
 `admin-compose.yaml` reads those two plus an optional `VITE_AUTH_APP_URL`.
 
 Previews cannot be enabled on these apps — Dokploy supports them only on
-Application-type services. See `infra/deployment/README.md` for the full
+Application-type services. See `docs/deployment.md` for the full
 Dokploy service setup, including how previews are configured instead.
 
 ## Base image updates

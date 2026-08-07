@@ -10,7 +10,7 @@ It is the third top-level workspace entry, alongside `apps/*` and `packages/*`, 
 
 `pnpm --filter @unimatrix/lab dev` and nothing else. **No `build` script, no Dockerfile, no compose file, no domain, no CI `Images` entry, and no route in any deployed app.** This is what makes the whole security question disappear: prototype code has no production surface to leak onto. If a change here creates a deploy artifact of any kind, it has misread what this workspace is.
 
-Why not a `lab.unimatrix-01.dev` subdomain, since that was the obvious alternative: `infra/deployment/README.md` documents Clerk sessions as shared across **all** `*.unimatrix-01.dev` subdomains, and API CORS allows `https://*.unimatrix-01.dev`. A prototype served from such a subdomain would receive the admin's Clerk cookie *and* be an allowed CORS origin against the API — a credentialed path to admin routes from the least-reviewed code in the repo. A cross-origin iframe is not a boundary when the origins share a cookie parent.
+Why not a `lab.unimatrix-01.dev` subdomain, since that was the obvious alternative: `docs/deployment.md` documents Clerk sessions as shared across **all** `*.unimatrix-01.dev` subdomains, and API CORS allows `https://*.unimatrix-01.dev`. A prototype served from such a subdomain would receive the admin's Clerk cookie *and* be an allowed CORS origin against the API — a credentialed path to admin routes from the least-reviewed code in the repo. A cross-origin iframe is not a boundary when the origins share a cookie parent.
 
 ## 3. Folder Structure
 

@@ -38,6 +38,6 @@ database (`pnpm --filter @unimatrix/api seed:content`).
 - Operating model: [docs/operating-model.md](docs/operating-model.md)
 - Development workflow: [docs/development.md](docs/development.md)
 - Content workflow: [docs/content.md](docs/content.md)
-- Deployment contract: [infra/deployment/README.md](infra/deployment/README.md)
+- Deployment contract: [docs/deployment.md](docs/deployment.md)
 - Local container posture: [infra/docker/README.md](infra/docker/README.md)
 - Agent contract: [AGENTS.md](AGENTS.md)
