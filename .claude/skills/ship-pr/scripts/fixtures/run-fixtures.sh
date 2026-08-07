@@ -587,5 +587,129 @@ else
   printf '  FAIL  already-reviewed-on-stderr (expected off stdout and on stderr)\n'
 fi
 
+# --- cleanup-branches.sh -----------------------------------------------
+#
+# cleanup-branches.sh talks to plain git, not `gh`, so a JSON payload cannot
+# stand in for its input the way it does above — the input IS a git history.
+# Each case here builds one throwaway repo (a bare "origin" plus a working
+# clone, both under a fresh mktemp directory) and runs the script against it.
+# Nothing reaches the network: fetching from a local bare repo by filesystem
+# path is exactly as offline as reading a fixture file.
+#
+# One repo carries all five things the plan calls out as the bar this script
+# has to clear: a plain ancestor of origin/main, a branch name containing a
+# single quote (the xargs trap this script must not reproduce), a genuinely
+# squash-merged branch with a `[gone]` upstream that the patch-id probe can
+# confirm, and an unrelated `[gone]` branch the probe cannot — which must be
+# kept, not deleted, because "the test could not confirm it" is not the same
+# claim as "unmerged". `main` and its own history are the fifth case: nothing
+# below ever touches it.
+cleanup_branches_script="$here/../cleanup-branches.sh"
+
+cleanup_branches_case_wanted() {
+  local name=$1
+  [ "${#wanted[@]}" -eq 0 ] && return 0
+  local entry
+  for entry in "${wanted[@]}"; do
+    [ "$entry" = "$name" ] && return 0
+  done
+  return 1
+}
+
+if cleanup_branches_case_wanted cleanup-branches-dry-run-deletes-nothing \
+  || cleanup_branches_case_wanted cleanup-branches-sweeps-ancestor-quote-and-squash-keeps-unmerged; then
+  cleanup_branches_dir=$(mktemp -d "${TMPDIR:-/tmp}/ship-pr-cleanup-branches.XXXXXX") || exit 1
+  cleanup_branches_origin="$cleanup_branches_dir/origin.git"
+  cleanup_branches_work="$cleanup_branches_dir/work"
+
+  (
+    git init --bare -q "$cleanup_branches_origin"
+    git init -q "$cleanup_branches_work"
+    cd "$cleanup_branches_work" || exit 1
+    git config user.email fixture@example.invalid
+    git config user.name fixture
+    echo one >f.txt
+    git add f.txt
+    git commit -q -m init
+    git branch -M main
+    git remote add origin "$cleanup_branches_origin"
+    git push -q -u origin main
+
+    # A plain ancestor: branched off main, main then advances past it.
+    git branch merged/ancestor-one
+    echo two >>f.txt
+    git commit -qam "advance main"
+    git push -q origin main
+
+    # Also an ancestor (no divergence at all) — the quote-name case.
+    git branch "feat/quote's-branch"
+
+    # A genuine squash merge: diverges on its own branch, main gets a single
+    # squash commit, the remote branch is deleted the way deleteBranchOnMerge
+    # would have done it server-side.
+    git switch -c squash/feature -q
+    echo alpha >alpha.txt
+    git add alpha.txt
+    git commit -qam "add alpha"
+    echo beta >beta.txt
+    git add beta.txt
+    git commit -qam "add beta"
+    git push -q -u origin squash/feature
+    git switch main -q
+    git merge --squash squash/feature -q
+    git commit -q -m "feat: squash of feature"
+    git push -q origin main
+    git push -q origin --delete squash/feature
+
+    # `[gone]` upstream like the squash-merged branch, but its content was
+    # never folded into main — the probe must not confirm this one.
+    git switch -c wip/never-merged -q
+    echo gamma >gamma.txt
+    git add gamma.txt
+    git commit -qam "add gamma, never merged"
+    git push -q -u origin wip/never-merged
+    git push -q origin --delete wip/never-merged
+    git switch main -q
+  ) >/dev/null 2>&1
+
+  if cleanup_branches_case_wanted cleanup-branches-dry-run-deletes-nothing; then
+    ran=$((ran + 1))
+    cleanup_branches_dry_out=$(cd "$cleanup_branches_work" && bash "$cleanup_branches_script" --dry-run 2>/dev/null)
+    cleanup_branches_dry_branches=$(cd "$cleanup_branches_work" && git branch --format='%(refname:short)' | sort)
+    cleanup_branches_dry_expected=$(printf '%s\n' "feat/quote's-branch" main merged/ancestor-one squash/feature wip/never-merged | sort)
+    if [ "$cleanup_branches_dry_branches" = "$cleanup_branches_dry_expected" ] \
+      && grep -qF "would delete (ancestor of origin/main): feat/quote's-branch" <<<"$cleanup_branches_dry_out" \
+      && grep -qF "would delete (ancestor of origin/main): merged/ancestor-one" <<<"$cleanup_branches_dry_out" \
+      && grep -qF "would delete (squash-merged into origin/main): squash/feature" <<<"$cleanup_branches_dry_out" \
+      && grep -qF "kept (squash probe did not match origin/main — test could not confirm this was merged): wip/never-merged" <<<"$cleanup_branches_dry_out"; then
+      printf '  ok    cleanup-branches-dry-run-deletes-nothing\n'
+    else
+      failures=$((failures + 1))
+      printf '  FAIL  cleanup-branches-dry-run-deletes-nothing\n'
+      printf '%s\n' "$cleanup_branches_dry_out" | sed 's/^/        /'
+    fi
+  fi
+
+  if cleanup_branches_case_wanted cleanup-branches-sweeps-ancestor-quote-and-squash-keeps-unmerged; then
+    ran=$((ran + 1))
+    cleanup_branches_real_out=$(cd "$cleanup_branches_work" && bash "$cleanup_branches_script" 2>/dev/null)
+    cleanup_branches_real_branches=$(cd "$cleanup_branches_work" && git branch --format='%(refname:short)' | sort)
+    cleanup_branches_real_expected=$(printf '%s\n' main wip/never-merged | sort)
+    if [ "$cleanup_branches_real_branches" = "$cleanup_branches_real_expected" ] \
+      && grep -qF "Deleted branch feat/quote's-branch" <<<"$cleanup_branches_real_out" \
+      && grep -qF "Deleted branch merged/ancestor-one" <<<"$cleanup_branches_real_out" \
+      && grep -qF "Deleted branch squash/feature" <<<"$cleanup_branches_real_out" \
+      && grep -qF "kept (squash probe did not match origin/main — test could not confirm this was merged): wip/never-merged" <<<"$cleanup_branches_real_out"; then
+      printf '  ok    cleanup-branches-sweeps-ancestor-quote-and-squash-keeps-unmerged\n'
+    else
+      failures=$((failures + 1))
+      printf '  FAIL  cleanup-branches-sweeps-ancestor-quote-and-squash-keeps-unmerged\n'
+      printf '%s\n' "$cleanup_branches_real_out" | sed 's/^/        /'
+    fi
+  fi
+
+  rm -rf "$cleanup_branches_dir"
+fi
+
 printf '\n%s case(s), %s failure(s)\n' "$ran" "$failures"
 [ "$failures" -eq 0 ]
