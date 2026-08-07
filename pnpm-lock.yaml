@@ -116,6 +116,9 @@ importers:
       '@unimatrix/config-vitest':
         specifier: workspace:*
         version: link:../../packages/config-vitest
+      '@unimatrix/deploy-config':
+        specifier: workspace:*
+        version: link:../../packages/deploy-config
       '@vitejs/plugin-react':
         specifier: ^6.0.4
         version: 6.0.4(vite@8.1.5(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.1)(yaml@2.9.0))
@@ -192,6 +195,9 @@ importers:
       '@unimatrix/content':
         specifier: workspace:*
         version: link:../../packages/content
+      '@unimatrix/deploy-config':
+        specifier: workspace:*
+        version: link:../../packages/deploy-config
       eslint:
         specifier: ^10.0.0
         version: 10.8.0(jiti@2.7.0)
@@ -265,6 +271,9 @@ importers:
       '@unimatrix/config-vitest':
         specifier: workspace:*
         version: link:../../packages/config-vitest
+      '@unimatrix/deploy-config':
+        specifier: workspace:*
+        version: link:../../packages/deploy-config
       '@vitejs/plugin-react':
         specifier: ^6.0.4
         version: 6.0.4(vite@8.1.5(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.1)(yaml@2.9.0))
@@ -353,6 +362,9 @@ importers:
       '@unimatrix/config-vitest':
         specifier: workspace:*
         version: link:../../packages/config-vitest
+      '@unimatrix/deploy-config':
+        specifier: workspace:*
+        version: link:../../packages/deploy-config
       '@unimatrix/e2e-helpers':
         specifier: workspace:*
         version: link:../../packages/e2e-helpers
@@ -456,6 +468,9 @@ importers:
       '@unimatrix/config-vitest':
         specifier: workspace:*
         version: link:../../packages/config-vitest
+      '@unimatrix/deploy-config':
+        specifier: workspace:*
+        version: link:../../packages/deploy-config
       '@unimatrix/e2e-helpers':
         specifier: workspace:*
         version: link:../../packages/e2e-helpers

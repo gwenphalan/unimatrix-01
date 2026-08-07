@@ -26,12 +26,19 @@ const ALLOWED_PACKAGE_IMPORTS = {
   // request/response types, and those live in `@unimatrix/shared` by rule
   // ("shared request/response shapes belong in @unimatrix/shared"). The vite
   // alias and tsconfig path for it predate this entry.
+  // `deploy-config` is granted to every app below for the same reason: each
+  // app's own `deploy.config.ts` imports the archetype builders. It is a
+  // devDependency, never shipped, so it is listed once here rather than
+  // folded into `SHARED_CONFIG_PACKAGES` — that set is for build tooling with
+  // no runtime shape of its own, and this package's exported types are a real
+  // (if deploy-time-only) contract each app opts into explicitly.
   "apps/web": [
     "api-client",
     "app-config",
     "auth",
     "chrome",
     "content",
+    "deploy-config",
     "e2e-helpers",
     "shared",
     "ui",
@@ -42,19 +49,19 @@ const ALLOWED_PACKAGE_IMPORTS = {
   // granularity, so this grant is workspace-wide even though only that script
   // uses it; `@unimatrix/content` stays a devDependency of `apps/api` so it is
   // absent from the deployable image.
-  "apps/api": ["auth", "content", "db", "shared"],
+  "apps/api": ["auth", "content", "db", "deploy-config", "shared"],
   // Deliberately narrow. AGENTS.md: cflop must not gain
   // `@unimatrix/api-client`, `@unimatrix/shared`, or `@unimatrix/content`
   // unless a real server-backed feature is added. `chrome` does not widen that:
   // it carries no auth, transport, or content dependency of its own, which is
   // the whole reason its shells take the account control as a slot.
-  "apps/cflop": ["chrome", "e2e-helpers", "ui"],
-  "apps/auth": ["app-config", "auth", "chrome", "ui"],
+  "apps/cflop": ["chrome", "deploy-config", "e2e-helpers", "ui"],
+  "apps/auth": ["app-config", "auth", "chrome", "deploy-config", "ui"],
   // `api-client` and `shared` were added when the CMS moved onto this origin:
   // the content section calls the API through `@unimatrix/api-client` and
   // shares its request/response types with `apps/web`'s public content
   // routes through `@unimatrix/shared`.
-  "apps/admin": ["api-client", "app-config", "auth", "chrome", "shared", "ui"],
+  "apps/admin": ["api-client", "app-config", "auth", "chrome", "deploy-config", "shared", "ui"],
   "packages/api-client": ["shared"],
   // Env validation for the Vite apps' config boundaries. A leaf on purpose:
   // `zod` is its only dependency and stays its implementation detail — apps

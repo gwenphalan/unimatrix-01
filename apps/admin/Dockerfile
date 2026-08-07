@@ -1,4 +1,5 @@
 # syntax=docker/dockerfile:1.7
+# GENERATED — edit apps/admin/deploy.config.ts and run `node ./infra/scripts/generate-deploy-config.mjs`, not this file.
 
 ARG NODE_VERSION=24.18.0
 
@@ -10,7 +11,9 @@ RUN corepack enable
 
 FROM base AS build
 ARG VITE_API_BASE_URL=/api
+ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
 ARG VITE_AUTH_APP_URL=https://auth.unimatrix-01.dev
+ENV VITE_AUTH_APP_URL=${VITE_AUTH_APP_URL}
 # The Clerk publishable key is public (safe to ship in a browser bundle),
 # but it is still an ARG->ENV pair rather than a hardcoded default: Vite
 # inlines `import.meta.env.VITE_*` values at build time, so this image
@@ -20,8 +23,6 @@ ARG VITE_AUTH_APP_URL=https://auth.unimatrix-01.dev
 # one, so an image built without it fails loudly in the browser rather than
 # rendering an admin console that can never sign anyone in.
 ARG VITE_CLERK_PUBLISHABLE_KEY
-ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
-ENV VITE_AUTH_APP_URL=${VITE_AUTH_APP_URL}
 ENV VITE_CLERK_PUBLISHABLE_KEY=${VITE_CLERK_PUBLISHABLE_KEY}
 COPY . .
 RUN find . -name '*.tsbuildinfo' -delete && pnpm install --frozen-lockfile

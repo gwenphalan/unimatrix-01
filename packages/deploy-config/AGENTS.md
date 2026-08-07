@@ -3,9 +3,10 @@
 ## 1. Overview
 `packages/deploy-config` holds the typed per-app config that drives the Dockerfile/compose
 generator: each `apps/<app>/deploy.config.ts` builds a `DeployAppConfig` from `staticSpaApp()` or
-`nodeApiApp()`, and a generator script under `infra/scripts/` reads it to write
-`apps/<app>/Dockerfile` and `infra/docker/<app>-compose.yaml`. Edit the config, not the generated
-files — see the root `AGENTS.md` for the generated-files rule.
+`nodeApiApp()`. `infra/scripts/generate-deploy-config.mjs` reads it and writes
+`apps/<app>/Dockerfile` and `infra/docker/<app>-compose.yaml`; `infra/scripts/validate-deploy-config.mjs`
+checks it. Edit the config, not the generated files — see the root `AGENTS.md` for the
+generated-files rule.
 
 ## 2. Shape
 - **Single-file package.** Everything lives in `src/index.ts`, not split across `types.ts` /
@@ -39,3 +40,16 @@ consequences:
 - If two apps' Dockerfiles cannot both be expressed by `staticSpaApp()`/`nodeApiApp()` without a
   generator branch keyed on app name, that is a signal the archetype split is wrong, not licence to
   add the branch.
+
+## 5. The pre-commit hook's partial-stage refusal, and its known gaps
+Before writing, `generate-deploy-config.mjs --stage` refuses to run while any `deploy.config.ts` has
+unstaged changes (`git diff --name-only`), so a generated Dockerfile/compose pair always matches what
+is about to be committed. Two ways around it, both measured rather than theoretical:
+- **`git commit -m x -- apps/web/deploy.config.ts`** (a pathspec commit): the refusal check reads an
+  index that already holds the working-tree copy, so it finds nothing dirty and never fires. The
+  generated file lands in the commit, but the main index is left stale — `git status` afterwards
+  shows a spurious `MM apps/web/Dockerfile`. Self-heals on the next commit.
+- **`git merge --no-ff` and `git rebase` run no pre-commit hook at all** (`git commit --amend` does).
+  A conflict resolution that takes the config from one side and the Dockerfile from the other commits
+  an inconsistent pair with nothing local to catch it — only the CI drift check (`check:deploy-config`)
+  does.

@@ -1,4 +1,5 @@
 # syntax=docker/dockerfile:1.7
+# GENERATED — edit apps/api/deploy.config.ts and run `node ./infra/scripts/generate-deploy-config.mjs`, not this file.
 
 ARG NODE_VERSION=24.18.0
 

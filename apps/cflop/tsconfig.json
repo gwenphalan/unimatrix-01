@@ -4,6 +4,7 @@
     "jsx": "react-jsx",
     "paths": {
       "@/*": ["./src/*"],
+      "@unimatrix/deploy-config": ["../../packages/deploy-config/src/index.ts"],
       // Load-bearing, and it does not degrade gracefully. Playwright refuses to
       // transpile any file whose path contains `/node_modules/`, so without this
       // mapping the import resolves through the pnpm symlink to raw TypeScript
@@ -17,6 +18,7 @@
     "types": ["vite/client", "node"]
   },
   "include": [
+    "deploy.config.ts",
     "e2e/**/*.ts",
     "playwright.config.ts",
     "prerender/**/*.ts",
