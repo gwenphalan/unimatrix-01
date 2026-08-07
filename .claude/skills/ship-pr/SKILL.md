@@ -463,18 +463,21 @@ same way: `fatal: 'main' is already used by worktree at ...`, exit 128.
    `ExitWorktree` only ever touches the one `EnterWorktree` opened *this session* — it is a no-op on
    a worktree from an earlier one, so it is not a way to sweep stale worktrees generally.
 
-2. **Sweep dead branches, from the main checkout**: `cleanup-branches.sh --dry-run` first, read
+2. **`git switch main && git pull --ff-only`, before the sweep, not after.** On the worktree arm the
+   main checkout is already on `main` once `ExitWorktree` has run, so this is a no-op; on the
+   `.claude/` arm nothing ever opened a worktree, so the main checkout is still standing on the
+   branch that was just merged, and `git branch -d`/`-D` refuses to delete the branch it is
+   currently on — the next step would fail on exactly the branch it most needs to remove. Switching
+   first also fixes the reason this step exists on its own: `gh pr merge` can no longer advance local
+   `main`, so skipping it leaves `main` one merge behind every run, which matters the next time a
+   `.claude/` change branches from it.
+3. **Sweep dead branches, from the main checkout**: `cleanup-branches.sh --dry-run` first, read
    what it would do, then run it for real.
 
    ```sh
    .claude/skills/ship-pr/scripts/cleanup-branches.sh --dry-run
    .claude/skills/ship-pr/scripts/cleanup-branches.sh
    ```
-
-3. **`git switch main && git pull --ff-only`.** After this change `gh pr merge` can no longer
-   advance local `main` — the merge lands on `origin/main` from inside a worktree, and nothing else
-   in this flow ever checks `main` back out in the main checkout. Skipping this leaves `main` behind
-   by one merge every run, which matters the next time a `.claude/` change branches from it.
 
 ## When to stop and ask
 
