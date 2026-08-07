@@ -279,13 +279,16 @@ function nodeApiDockerfileBody(
 
   lines.push("COPY --from=build --chown=node:node /prod/api/ ./");
 
-  const [volume] = config.volumes;
-  if (volume !== undefined) {
+  // Every volume, not just the first: composeFor() mounts all of them, so a
+  // second one here would mount root-owned and be unwritable by `node`.
+  if (config.volumes.length > 0) {
     lines.push(
-      "# Create /data owned by the non-root runtime user before the volume mounts, so",
-      "# a fresh named volume inherits node ownership and stays writable.",
-      `RUN mkdir -p ${volume.mountPath} && chown node:node ${volume.mountPath}`,
+      "# Create each mount path owned by the non-root runtime user before the volumes",
+      "# mount, so a fresh named volume inherits node ownership and stays writable.",
     );
+    for (const volume of config.volumes) {
+      lines.push(`RUN mkdir -p ${volume.mountPath} && chown node:node ${volume.mountPath}`);
+    }
   }
 
   lines.push(

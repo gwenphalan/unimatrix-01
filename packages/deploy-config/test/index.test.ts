@@ -168,6 +168,30 @@ describe("nodeApiApp / dockerfileFor / composeFor", () => {
     expect(compose).toContain("    volumes:\n      - api-data:/data");
     expect(compose).toMatch(/\nvolumes:\n {2}api-data:\n?$/u);
   });
+
+  // The Dockerfile and the compose file are rendered separately from one
+  // config, so a volume the compose file mounts but the Dockerfile never
+  // chowns would mount root-owned and be unwritable by `node`.
+  it("initializes every volume mount path, not just the first", () => {
+    const twoVolumes = nodeApiApp({
+      appDir: "api",
+      packageName: "@unimatrix/api",
+      dockerfileEnv: [],
+      composeEnv: [],
+      volumes: [
+        { name: "api-data", mountPath: "/data" },
+        { name: "api-uploads", mountPath: "/uploads" },
+      ],
+    });
+
+    const dockerfile = dockerfileFor(twoVolumes, API_FROM_LINES);
+    expect(dockerfile).toContain("RUN mkdir -p /data && chown node:node /data");
+    expect(dockerfile).toContain("RUN mkdir -p /uploads && chown node:node /uploads");
+
+    const compose = composeFor(twoVolumes);
+    expect(compose).toContain("- api-data:/data");
+    expect(compose).toContain("- api-uploads:/uploads");
+  });
 });
 
 describe("validateAppConfig", () => {

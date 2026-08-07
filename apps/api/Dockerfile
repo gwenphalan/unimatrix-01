@@ -32,8 +32,8 @@ ENV LOG_LEVEL=info
 # migrations are applied against that volume at boot.
 ENV DATABASE_URL=/data/unimatrix.sqlite
 COPY --from=build --chown=node:node /prod/api/ ./
-# Create /data owned by the non-root runtime user before the volume mounts, so
-# a fresh named volume inherits node ownership and stays writable.
+# Create each mount path owned by the non-root runtime user before the volumes
+# mount, so a fresh named volume inherits node ownership and stays writable.
 RUN mkdir -p /data && chown node:node /data
 USER node
 EXPOSE 3001

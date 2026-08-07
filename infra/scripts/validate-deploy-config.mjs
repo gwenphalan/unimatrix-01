@@ -113,7 +113,10 @@ for (const app of appsWithConfig) {
   const mod = await import(pathToFileURL(configPath).href);
   const config = mod.default;
 
-  if (config === undefined || typeof config !== "object") {
+  // `typeof null === "object"`, so null has to be rejected by name or a
+  // `export default null` reaches config.appDir below and throws a raw
+  // TypeError instead of reporting this failure.
+  if (config === null || typeof config !== "object") {
     fail(`apps/${app}/deploy.config.ts must have a default export.`);
     continue;
   }
@@ -126,9 +129,15 @@ for (const app of appsWithConfig) {
     );
   }
 
-  for (const message of validateAppConfig(config)) {
+  const schemaFailures = validateAppConfig(config);
+  for (const message of schemaFailures) {
     fail(`apps/${app}/deploy.config.ts — ${message}`);
   }
+
+  // Stop here when the shape is already wrong: the probe below reads
+  // config.dockerfileEnv and config.composeEnv directly, so a malformed config
+  // would throw a TypeError and bury the failures just reported.
+  if (schemaFailures.length > 0) continue;
 
   if (config.kind !== "node-api") continue;
   sawNodeApiConfig = true;

@@ -40,11 +40,10 @@ const { dockerfileFor, composeFor } = await import(
 );
 
 /**
- * The Dockerfile's own external-image `FROM` lines, read off the file
- * already on disk. `FROM base AS <stage>` is a local-stage reference the
- * generator always emits itself, so it is excluded here — exactly two
- * external `FROM` lines are expected (the base image, then the runtime
- * image), and a different count is a hard error rather than a guess.
+ * Reads a file, returning `null` when it does not exist. Reading straight
+ * through rather than testing `existsSync` first keeps this off the
+ * check-then-read race CodeQL flags (`js/file-system-race`); a missing file
+ * and one deleted between the two calls are the same case at every caller.
  */
 function readFileIfPresent(path) {
   try {
@@ -55,6 +54,13 @@ function readFileIfPresent(path) {
   }
 }
 
+/**
+ * The Dockerfile's own external-image `FROM` lines, read off the file
+ * already on disk. `FROM base AS <stage>` is a local-stage reference the
+ * generator always emits itself, so it is excluded here — exactly two
+ * external `FROM` lines are expected (the base image, then the runtime
+ * image), and a different count is a hard error rather than a guess.
+ */
 function readFromLines(app) {
   const dockerfilePath = join(appsDir, app, "Dockerfile");
   const dockerfile = readFileIfPresent(dockerfilePath);
