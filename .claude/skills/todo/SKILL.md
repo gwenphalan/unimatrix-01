@@ -1,6 +1,6 @@
 ---
 name: todo
-description: Compose a `.notes/01-todo/*.todo.md` item with the owner, turn by turn. Use when asked to add or extend a todo item. Carries the collaborative loop — scaffold, investigate, bring options, owner decides, write the task — what a task may and may not contain, and the citation convention and its resolver.
+description: Compose a `.notes/01-todo/*.todo.md` item. Use when asked to add or extend a todo item. Carries when to write the item solo and when to compose it with the owner turn by turn, what a task may and may not contain, and the citation convention and its resolver.
 ---
 
 # Compose a todo item
@@ -15,21 +15,36 @@ file already exists, run
 `node infra/scripts/resolve-todo-citations.mjs <file>` first and surface anything it reports as
 `STALE` verbatim before writing anything else.
 
-## The loop
+## Never pick the architecture, and never write a task the owner hasn't settled
 
-Composition is collaborative and turn-by-turn, not a one-shot authoring pass.
+Both fail silently — a task written from a guess reads exactly like one the owner chose. This holds
+on both paths below. Composing solo means investigating and drafting without a stop between each
+step; it never means choosing the shape of the change.
+
+## Solo by default
+
+Investigate the whole item and write it in one pass. An item the owner has already specified spends
+several turns confirming what was said in the first message.
+
+What sends it to the loop instead is **discovered, not judged up front** — so investigate first,
+then decide. Investigation answers questions of *fact* from the code. What it cannot answer is a
+*requirement*: something the code has no opinion on and the owner hasn't settled — two viable
+designs, a dependency to pick, a boundary to move. One live requirement is enough. When unsure which
+of the two something is, it's a requirement.
+
+The owner can also ask for the loop outright — `/todo --collab`, or in any other words — and owes no
+reason for it.
+
+## The loop, when a requirement is live
 
 1. **Scaffold.** Title, empty Description, empty Tasks. Stop.
 2. **Investigate the whole item.** What shape this change is, not how to build it: current state,
-   answers to whatever the owner attached, and *options* for anything that's a requirement rather
-   than a fact. Bring it back. Stop.
+   answers to whatever the owner attached, and options for every live requirement. Bring it back.
+   Stop.
 3. **Per task, repeat:** the owner names the next task; investigate scoped to that task only; bring
    options; the owner chooses; write the task.
 
-**Never pick the architecture, and never write a task the owner hasn't settled.** Both fail
-silently — a task written from a guess reads exactly like one the owner chose.
-
-## The owner's own words, first four turns
+## The loop in the owner's own words, first four turns
 
     me: /todo setup automatic dokploy instance management and deployment per-image
     agent: *scaffolds*
@@ -41,8 +56,8 @@ silently — a task written from a guess reads exactly like one the owner chose.
            specifics of the task (json files in apps directory, single file with all apps,
            etc.)*
 
-Keep this shape: the agent stops after scaffolding, and again after every investigation — no rule
-stated elsewhere reliably transmits that.
+Once on this path, keep that shape: stop after scaffolding, and again after every investigation — no
+rule stated elsewhere reliably transmits that.
 
 ## What a task is
 
