@@ -319,12 +319,21 @@ minutes later — you sit on a fixable red the whole time. **Arm this under `Mon
 `run_in_background`** — background Bash notifies once, when the script exits, which is the same
 blindness by a different route. `Monitor` is a deferred tool, so its own guidance on which to pick is
 not in context until you fetch it; that is why the choice is stated here rather than left to it. One
-stream now carries both the check results and the review outcome, which makes that choice matter
+watch now carries both the check results and the review outcome, which makes that choice matter
 more, not less. `--help` for the script's outputs and exit codes:
 
 ```sh
 .claude/skills/ship-pr/scripts/watch-pr.sh <owner/repo> <pr>
 ```
+
+**Arm it exactly as written — no `2>&1`.** Rows a caller must act on go to stdout and everything else
+to stderr, and under `Monitor` only stdout becomes a notification — one main-loop turn each, over the
+whole session context. Merging the two makes every green check a wake-up: nine on PR #222, none
+actionable. `Monitor`'s own tool description tells you to "merge stderr with `2>&1` so its failures
+reach your filter" — right for a command with no such split, wrong for this one, and in context at
+the moment you arm this while a rule stated only here is not. So the script refuses rather than
+relying on being remembered: exit 1 when fd 1 and fd 2 resolve to one destination. A `Bash` tool call
+does that on its own, which is a second reason the answer is `Monitor`. An interactive tty is exempt.
 
 **The checks come before the ping, and that is the script's property rather than your instruction.**
 A ping fired while CI is still running spends a slot on code a red check is about to change, so

@@ -7,7 +7,11 @@ watch-pr.sh [--no-review] <owner/repo> <pr>
 
 Watches a pull request from "CI is still running" to "merged", in two
 sequential phases and the wait that follows a successful arm, all in one
-process. Arm it under `Monitor` and carry on working.
+process. Arm it under `Monitor` and carry on working — without `2>&1`. Rows are
+split by whether a caller must act on them, only stdout becomes a notification
+there, and merging the two makes every passing check a wake-up. This refuses to
+run when fd 1 and fd 2 resolve to one destination, which a `Bash` tool call does
+on its own. An interactive tty is exempt.
 
   Phase 1  every required status check reports, and every one is green
   Phase 2  CodeRabbit is pinged and the review is waited out. A clean review
@@ -568,7 +572,8 @@ Also on stderr, said once where they apply:
 
 Exit codes:
   0  a terminal outcome in any wait was reached, or a fixture list ran out
-  1  bad usage, a partial fixture set, a non-numeric SHIP_PR_CHECKS_TIMEOUT or
+  1  bad usage, stdout and stderr pointing at the same destination on a
+     non-tty run, a partial fixture set, a non-numeric SHIP_PR_CHECKS_TIMEOUT or
      SHIP_PR_THREAD_WAIT_TIMEOUT, an empty or unreadable required-context list,
      an unreadable base branch or head sha (including the re-pin's own read),
      a failed baseline, or a ping that would not post or came back with a
@@ -610,6 +615,37 @@ fi
 here=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 repo=${args[0]}
 pr=${args[1]}
+
+# Every row a caller does not have to act on goes to stderr, and under `Monitor`
+# only stdout becomes a notification — one main-loop turn each, over the whole
+# session context. Merging the streams collapses that split and every green
+# check becomes a wake-up: nine on PR #222, none actionable.
+#
+# Refusing rather than warning, because a warning printed into merged streams is
+# one more line in the noise it is warning about. It sits after `--help` so
+# `watch-pr.sh --help | less` still works, and before any fixture or network
+# read so nothing is spent before the refusal.
+#
+# `-t 1` exempts an interactive run, where both descriptors are the same tty by
+# construction and there is no notification budget to protect. Everything else
+# is judged on where the descriptors land rather than on how they got there: a
+# `Bash` tool call hands the script one output file for both and is refused
+# without anyone writing `2>&1`, while stdout piped with stderr left alone
+# resolves to two destinations and runs.
+if [ ! -t 1 ] && [ /dev/stdout -ef /dev/stderr ]; then
+  fixed=".claude/skills/ship-pr/scripts/watch-pr.sh"
+  if [ "$no_review" = 1 ]; then fixed="$fixed --no-review"; fi
+  {
+    echo "watch-pr.sh: stdout and stderr are the same destination."
+    echo
+    echo "Rows you must act on go to stdout; everything else goes to stderr. Merging the two"
+    echo "makes every passing check a notification, which is what the split exists to prevent."
+    echo
+    echo "Arm it without the redirect:"
+    echo "  $fixed $repo $pr"
+  } >&2
+  exit 1
+fi
 poll=${SHIP_PR_POLL_SECONDS:-30}
 checks_timeout=${SHIP_PR_CHECKS_TIMEOUT:-2700}
 thread_wait_timeout=${SHIP_PR_THREAD_WAIT_TIMEOUT:-2700}
