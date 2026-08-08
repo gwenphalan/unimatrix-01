@@ -6,6 +6,8 @@ import {
   type SecretsHealthResponse,
 } from "@unimatrix/shared";
 
+import { HEALTH_RATE_LIMIT_OPTIONS } from "../../plugins/rate-limit.js";
+
 const healthResponse: SecretsHealthResponse = {
   service: "secrets",
   status: "ok",
@@ -15,6 +17,9 @@ export const healthModule: FastifyPluginAsync = (app) => {
   app.withTypeProvider<ZodTypeProvider>().route({
     method: secretsHealthContract.method,
     url: secretsHealthContract.path,
+    // The only route an unauthenticated caller can drive to a handler, so the
+    // only one whose ceiling is not a second line of defence.
+    config: { rateLimit: HEALTH_RATE_LIMIT_OPTIONS },
     schema: {
       querystring: healthQuerySchema,
       response: {

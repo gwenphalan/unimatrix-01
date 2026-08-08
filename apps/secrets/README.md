@@ -4,6 +4,10 @@ The secrets service is a Fastify service deployed from `apps/secrets/Dockerfile`
 through `infra/docker/secrets-compose.yaml`. It ships only `/health` — no
 route in this workspace serves a secret value.
 
+Every request except `GET /health` carries a bearer service token or is
+answered 401, including a request to a URL matching no route. Reaching this
+service over the network is not authorization.
+
 ## Dokploy redeploy watch paths
 
 Configure the secrets Dokploy service to watch these repository paths. A
