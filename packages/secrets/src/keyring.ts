@@ -75,15 +75,60 @@ export class SecretsKeyring {
   readonly #keys: Map<number, KeyObject>;
 
   /**
-   * Not the intended construction path — {@link loadSecretsKeyring} is,
-   * since it is the only place `SECRETS_KEKS` validation runs. This stays a
-   * plain constructor rather than a private one because `loadSecretsKeyring`
-   * builds the validated `keys` map itself and needs to call it from outside
-   * the class body.
+   * Private: `#keys` and `#activeVersion` can only be built together, by
+   * {@link SecretsKeyring.load}, which is the only place `SECRETS_KEKS`
+   * validation runs. That is what makes `seal()`'s lookup of the active key
+   * provably safe rather than merely documented as safe — `new
+   * SecretsKeyring(5, new Map())` is not reachable from outside this file.
    */
-  constructor(activeVersion: number, keys: Map<number, KeyObject>) {
+  private constructor(activeVersion: number, keys: Map<number, KeyObject>) {
     this.#activeVersion = activeVersion;
     this.#keys = keys;
+  }
+
+  /**
+   * The package never reads `process.env` itself — the encoded string is
+   * always an argument, same rule as `packages/auth`. There is no "boot"
+   * here: this throws, and a future `apps/secrets` turns that into a failed
+   * start.
+   */
+  static load(encodedKeys: string | undefined): SecretsKeyring {
+    if (encodedKeys === undefined || encodedKeys.trim().length === 0) {
+      throw new SecretsError({ code: "KEK_MISSING", message: "No KEK material was provided." });
+    }
+
+    const entries = parseKeks(encodedKeys);
+    const keys = new Map(entries.map((entry) => [entry.version, entry.key]));
+
+    let activeVersion = 0;
+    let highestVersion = 0;
+    let isFirstEntry = true;
+
+    for (const entry of entries) {
+      if (isFirstEntry) {
+        activeVersion = entry.version;
+        isFirstEntry = false;
+      }
+
+      if (entry.version > highestVersion) {
+        highestVersion = entry.version;
+      }
+    }
+
+    // The active (first-listed) key otherwise decides which key seals new
+    // writes by paste order in an env var, and nothing observes it — so an
+    // env var written in ascending order (the order a human sorts into)
+    // would silently seal every new write under the *older* key. Requiring
+    // the active version to be the highest present makes that misordering a
+    // load error instead of a silent downgrade.
+    if (activeVersion !== highestVersion) {
+      throw new SecretsError({
+        code: "KEK_NOT_NEWEST",
+        message: `The active KEK (version ${activeVersion}, listed first) is not the highest version present (version ${highestVersion}). Put the highest version first.`,
+      });
+    }
+
+    return new SecretsKeyring(activeVersion, keys);
   }
 
   get activeVersion(): number {
@@ -95,11 +140,11 @@ export class SecretsKeyring {
   }
 
   seal(options: { context: SecretContext; value: SecretValue }): string {
-    // `#keys` is built from the same parsed entries that produced
-    // `#activeVersion` (see `loadSecretsKeyring`), so this key is always present —
-    // an invariant of this class's construction, not something external
-    // input can violate, and so not a case `noUncheckedIndexedAccess`'s
-    // usual "destructure and narrow" guidance can be tested against.
+    // The constructor is private, so `#keys` and `#activeVersion` can only
+    // be built together by `static load` — this key is always present, an
+    // invariant no external input can violate, and so not a case
+    // `noUncheckedIndexedAccess`'s usual "destructure and narrow" guidance
+    // can be tested against.
     const activeKey = this.#keys.get(this.#activeVersion)!;
 
     return sealSecretEnvelope({
@@ -131,46 +176,6 @@ export class SecretsKeyring {
   }
 }
 
-/**
- * The package never reads `process.env` itself — the encoded string is
- * always an argument, same rule as `packages/auth`. There is no "boot" here:
- * this throws, and a future `apps/secrets` turns that into a failed start.
- */
 export function loadSecretsKeyring(encodedKeys: string | undefined): SecretsKeyring {
-  if (encodedKeys === undefined || encodedKeys.trim().length === 0) {
-    throw new SecretsError({ code: "KEK_MISSING", message: "No KEK material was provided." });
-  }
-
-  const entries = parseKeks(encodedKeys);
-  const keys = new Map(entries.map((entry) => [entry.version, entry.key]));
-
-  let activeVersion = 0;
-  let highestVersion = 0;
-  let isFirstEntry = true;
-
-  for (const entry of entries) {
-    if (isFirstEntry) {
-      activeVersion = entry.version;
-      isFirstEntry = false;
-    }
-
-    if (entry.version > highestVersion) {
-      highestVersion = entry.version;
-    }
-  }
-
-  // The active (first-listed) key otherwise decides which key seals new
-  // writes by paste order in an env var, and nothing observes it — so an
-  // env var written in ascending order (the order a human sorts into) would
-  // silently seal every new write under the *older* key. Requiring the
-  // active version to be the highest present makes that misordering a load
-  // error instead of a silent downgrade.
-  if (activeVersion !== highestVersion) {
-    throw new SecretsError({
-      code: "KEK_NOT_NEWEST",
-      message: `The active KEK (version ${activeVersion}, listed first) is not the highest version present (version ${highestVersion}). Put the highest version first.`,
-    });
-  }
-
-  return new SecretsKeyring(activeVersion, keys);
+  return SecretsKeyring.load(encodedKeys);
 }
