@@ -36,8 +36,8 @@ In this shape:
   `VITE_CLERK_PUBLISHABLE_KEY` for the shared Clerk application
 - Traefik owns TLS termination and hostname routing
 - the secrets service gets no hostname and no Domains entry at all — it is
-  deliberately unrouted, reachable only from inside the Dokploy network by
-  other services that need it
+  deliberately unrouted. That makes it unreachable from the internet; it does
+  not make it private. See "Secrets service" below
 
 ## Dokploy service layout
 
@@ -210,6 +210,25 @@ and sets `DB_MIGRATE_ON_START=true`, so pending migrations are applied against
 that volume automatically at container startup. As with the API service,
 confirm the volume is mapped to persistent host storage (Advanced → Volumes)
 so it survives redeploys.
+
+**No Domains entry is not isolation.** Dokploy attaches every Compose stack to
+the shared overlay `dokploy-network` by default, which is what lets Traefik
+reach a stack that does have a domain. Measured on the host 2026-08-08: 12 of
+13 Compose services sit on it, including two PR previews and unrelated
+third-party stacks, so any container on the host can open a socket to this
+one. That is why the service authenticates every caller rather than trusting
+its network position.
+
+Dokploy's **Advanced → Isolated Deployment** toggle is the documented way off
+that shared network: it creates a network named after the stack's `appName`,
+attaches the stack's services to it, and connects Traefik to *that* network
+instead. Turning it on for this service is worth doing — a single-service
+stack with no domain cannot hit the sibling-DNS breakage reported upstream
+(Dokploy issues #3525 and #3562), so it costs nothing here. Unverified: the
+one stack on this host with the flag set has no containers deployed, so the
+behaviour is read from Dokploy's docs and the `compose.isolatedDeployment`
+column on v0.29.13, not observed. Defence in depth either way — the
+authentication in the next item is what actually carries the boundary.
 
 ## Traefik expectations
 

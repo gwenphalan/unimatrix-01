@@ -333,7 +333,10 @@ Traefik labels to these files. Point the cflop Dokploy app's domain at
 see `docs/deployment.md`), the auth Dokploy app's domain at
 `auth.unimatrix-01.dev`, and the admin Dokploy app's domain at
 `admin.unimatrix-01.dev`. The secrets Dokploy app gets no Domains entry at all — it is
-deliberately unrouted, reachable only from inside the Dokploy network by other services that need it.
+deliberately unrouted. That keeps it off the internet; it does not make it private, because
+Dokploy attaches every Compose stack to the shared `dokploy-network` by default. See
+`docs/deployment.md`'s "Secrets service" section for what that means and for the Isolated
+Deployment toggle.
 
 `web-compose.yaml` and `api-compose.yaml` read their environment-dependent
 values (`VITE_API_BASE_URL`, `CORS_ALLOWED_ORIGINS`) from compose variable
