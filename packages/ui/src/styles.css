@@ -149,6 +149,30 @@
     position: relative;
     overflow-x: hidden;
     background-color: color-mix(in srgb, var(--background) 88%, var(--primary) 12%);
+  }
+
+  /* `position: fixed` (not `background-attachment: fixed`) pins the lattice
+     to the viewport — some mobile engines mishandle a fixed background-
+     attachment on scroll, so the layer is pinned by layout instead. The
+     `-1` z-index paints it behind `.grid-backdrop`'s own background-color
+     only because that element is not a stacking context (relative, z-index
+     auto); the color-mix fill on the class, not here, is what covers an iOS
+     rubber-band over-scroll region that a viewport-sized layer can't reach.
+     Each tiled layer is phased so one of its lines lands exactly on the
+     page's centerline: the 240px tier (bold lines + intersection dots) by
+     `--grid-bold-phase-*`, the 40px tier by `--grid-phase-*`. Both are
+     written by `GraphBackground`, which is the only reader/writer of them;
+     the two tiers stay seam-locked because 240 is a whole multiple of 40.
+     The last layer is the full-size vignette, which has no lattice. Falls
+     back to the plain `0 0` origin without JS — visibly off-center against
+     centered content, which is why the component is mounted in both
+     shells. */
+  .grid-backdrop::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
     background-image:
       radial-gradient(
         circle 2px at 0 0,
@@ -188,15 +212,6 @@
       40px 40px,
       40px 40px,
       100% 100%;
-    /* Each tiled layer is phased so one of its lines lands exactly on the
-       page's centerline: the 240px tier (bold lines + intersection dots) by
-       `--grid-bold-phase-*`, the 40px tier by `--grid-phase-*`. Both are
-       written by `GraphBackground`, which is the only reader/writer of them;
-       the two tiers stay seam-locked because 240 is a whole multiple of 40.
-       The last layer is the full-size vignette, which has no lattice. Falls
-       back to the plain `0 0` origin without JS — visibly off-center against
-       centered content, which is why the component is mounted in both
-       shells. */
     background-position:
       var(--grid-bold-phase-x, 0px) var(--grid-bold-phase-y, 0px),
       var(--grid-bold-phase-x, 0px) var(--grid-bold-phase-y, 0px),
@@ -204,7 +219,6 @@
       var(--grid-phase-x, 0px) var(--grid-phase-y, 0px),
       var(--grid-phase-x, 0px) var(--grid-phase-y, 0px),
       0 0;
-    background-attachment: fixed;
   }
 
   .site-panel {
