@@ -36,6 +36,19 @@ describe("SecretValue#mask", () => {
       new SecretValue(fourThousandChars).mask().length,
     );
   });
+
+  it("never emits a lone surrogate when the prefix boundary falls inside an astral character", () => {
+    // "a" plus emoji puts the 4th UTF-16 code unit mid-surrogate-pair, which
+    // is what a code-unit slice would split. `maskedPrefix` is a response
+    // field, so a lone surrogate here would cross the API boundary.
+    const masked = new SecretValue(`a${"\u{1F525}".repeat(11)}`).mask();
+
+    expect(masked).toBe("a\u{1F525}\u{1F525}\u{1F525}********");
+    // A lone surrogate is not encodable as UTF-8, so it comes back as U+FFFD.
+    // Round-tripping is the boundary this actually has to survive: the mask
+    // is serialized into a JSON response body.
+    expect(Buffer.from(masked, "utf8").toString("utf8")).toBe(masked);
+  });
 });
 
 describe("SecretValue redaction", () => {

@@ -38,10 +38,16 @@ export class SecretValue {
    * `secretMetadataSchema.maskedPrefix`. The masked form crosses into
    * `@unimatrix/shared` as `secretMaskedPrefixSchema`, whose `.max(32)` is a
    * loose upper bound rather than a mirror of this width.
+   *
+   * Counts and slices by code point, not by UTF-16 code unit: slicing a
+   * string like `a🔥🔥` at 4 code units would cut the second emoji in half
+   * and put a lone surrogate into `maskedPrefix`, which is a response field.
    */
   mask(): string {
-    if (this.#plaintext.length >= MASK_WIDTH) {
-      return this.#plaintext.slice(0, MASK_PREFIX_LENGTH) + "*".repeat(MASK_STAR_COUNT);
+    const codePoints = [...this.#plaintext];
+
+    if (codePoints.length >= MASK_WIDTH) {
+      return codePoints.slice(0, MASK_PREFIX_LENGTH).join("") + "*".repeat(MASK_STAR_COUNT);
     }
 
     return "*".repeat(MASK_WIDTH);
