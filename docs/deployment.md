@@ -216,8 +216,10 @@ the shared overlay `dokploy-network` by default, which is what lets Traefik
 reach a stack that does have a domain. Measured on the host 2026-08-08: 12 of
 13 Compose services sit on it, including two PR previews and unrelated
 third-party stacks, so any container on the host can open a socket to this
-one. That is why the service authenticates every caller rather than trusting
-its network position.
+one. Nothing authenticates those callers yet — this item ships `/health` and no
+other route, so there is nothing behind it to reach. Authenticating every
+caller is a prerequisite for the first route that returns a value, not
+something already in place.
 
 Dokploy's **Advanced → Isolated Deployment** toggle is the documented way off
 that shared network: it creates a network named after the stack's `appName`,

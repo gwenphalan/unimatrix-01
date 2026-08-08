@@ -229,7 +229,7 @@ docker build -f apps/secrets/Dockerfile -t unimatrix-secrets:local .
 Example run:
 
 ```bash
-docker run --rm -p 3002:3001 -e SECRETS_KEKS=1:<base64-32-bytes> unimatrix-secrets:local
+docker run --rm -p 3002:3001 -e SECRETS_KEKS="1:$(openssl rand -base64 32)" unimatrix-secrets:local
 ```
 
 ## Compose workflow
@@ -245,7 +245,7 @@ VITE_API_BASE_URL=http://localhost:3001 \
 VITE_CLERK_PUBLISHABLE_KEY=pk_test_xxx \
 VITE_AUTH_APP_URL=http://localhost:8082 \
 CORS_ALLOWED_ORIGINS=http://localhost:8080,http://127.0.0.1:8080 \
-SECRETS_KEKS=1:<base64-32-bytes> \
+SECRETS_KEKS="1:<base64-32-bytes>" \
 docker compose \
   -f infra/docker/api-compose.yaml \
   -f infra/docker/web-compose.yaml \

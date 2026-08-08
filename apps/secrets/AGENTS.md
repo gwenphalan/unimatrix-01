@@ -43,7 +43,8 @@ items (auth, read/write routes, KEK rotation) this workspace does not yet implem
   `@unimatrix/*` with no import parsing, so a comment naming the package this service deliberately
   does not depend on would demand `packages/db/**` in the README watch-path block. Reference it as a
   path (`packages/db/src/client.ts`) instead.
-- **No route may ever serve a secret value.** `/health` is the only route in this item.
+- **No route in this item may serve a secret value** — `/health` is the only route here. The scoped
+  read route in a later item is the one exception this service will ever have; see §1.
 - **The audit table (`secret_audit_log`) has no foreign keys, deliberately.** The client runs
   `foreign_keys = ON` (`src/db/client.ts`); an FK to `secrets(name)` with `onDelete: "cascade"` would
   erase the audit trail of exactly the deletion it exists to record.
