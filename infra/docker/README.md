@@ -211,8 +211,12 @@ rather than `@unimatrix/db`.
 ### Secrets service runtime contract
 
 - entrypoint: `node dist/server.js`
+- second in-container entry point: `node dist/cli/service-token.js` — token
+  issuance, revocation and listing, run through `docker exec` against the
+  mounted volume. The container never invokes it itself.
 - container port: `3001`
-- healthcheck path: `/health`
+- healthcheck path: `/health` — the only route that answers without a bearer
+  service token
 - runtime env that has to be supplied: `SECRETS_KEKS` — the service refuses to
   start without it. `NODE_ENV`, `HOST`, `PORT`, `LOG_LEVEL` and
   `SECRETS_DATABASE_URL` (default `/data/secrets.sqlite`) have image defaults

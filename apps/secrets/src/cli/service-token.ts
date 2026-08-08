@@ -11,6 +11,7 @@
 // It also lives under `src/` rather than `scripts/`: `tsconfig.build.json`
 // excludes `scripts/`, and the production image ships built output with `tsx`
 // absent, so a CLI there could not run in the container at all.
+import { recordAuditEntry } from "../audit/index.js";
 import { resolveSecretsDatabaseFilePath } from "../config.js";
 import { createSecretsDatabase, type SecretsDatabaseInstance } from "../db/client.js";
 import {
@@ -67,6 +68,13 @@ function runIssue(argv: readonly string[], deps: ServiceTokenCliDeps): void {
     capability,
   });
 
+  recordAuditEntry(deps.db, {
+    action: "service_token.issued",
+    actorKind: "host-cli",
+    outcome: "success",
+    serviceTokenId: issued.record.id,
+  });
+
   deps.write(`Issued service token ${JSON.stringify(issued.record.name)}.`);
   deps.write(`  scope:      ${issued.record.scopePrefix}`);
   deps.write(`  capability: ${issued.record.capability}`);
@@ -82,6 +90,13 @@ function runRevoke(argv: readonly string[], deps: ServiceTokenCliDeps): void {
   if (revoked === null) {
     throw new Error(`No active service token named ${JSON.stringify(name)}.`);
   }
+
+  recordAuditEntry(deps.db, {
+    action: "service_token.revoked",
+    actorKind: "host-cli",
+    outcome: "success",
+    serviceTokenId: revoked.id,
+  });
 
   deps.write(`Revoked service token ${JSON.stringify(revoked.name)}.`);
 }
