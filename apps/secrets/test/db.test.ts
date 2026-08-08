@@ -37,6 +37,39 @@ void test("createSecretsDatabase enables foreign_keys and WAL, and migrations cr
   }
 });
 
+// The 0001 columns are added by `ALTER TABLE … ADD COLUMN`, and the two
+// `NOT NULL` ones carry no default — which SQLite only accepts while the table
+// is empty. A migration that silently stopped applying would leave the schema
+// one release behind with nothing else to say so.
+void test("migrations add the actor and capability columns", () => {
+  const directory = mkdtempSync(join(tmpdir(), "unimatrix-secrets-db-"));
+  const filePath = join(directory, "secrets.sqlite");
+
+  try {
+    const instance = createSecretsDatabase({ filePath });
+
+    try {
+      migrateSecretsDatabase(instance);
+
+      const columnNames = (table: string): string[] =>
+        instance.client
+          .prepare(`PRAGMA table_info(${table})`)
+          .all()
+          .map((column) => (column as { name: string }).name);
+
+      for (const column of ["actor_kind", "actor_user_id", "service_token_id"]) {
+        assert.ok(columnNames("secret_audit_log").includes(column), `missing ${column}`);
+      }
+
+      assert.ok(columnNames("service_tokens").includes("capability"));
+    } finally {
+      instance.client.close();
+    }
+  } finally {
+    rmSync(directory, { force: true, recursive: true });
+  }
+});
+
 void test("migrateSecretsDatabase is idempotent", () => {
   const directory = mkdtempSync(join(tmpdir(), "unimatrix-secrets-db-"));
   const filePath = join(directory, "secrets.sqlite");
