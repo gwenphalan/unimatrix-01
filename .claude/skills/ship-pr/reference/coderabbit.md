@@ -147,6 +147,9 @@ arrives on someone else's schedule, with no way to know which of five endings it
 .claude/skills/ship-pr/scripts/watch-pr.sh <owner/repo> <pr>
 ```
 
+No `2>&1` — the script exits 1 rather than run with its streams merged, for the reason under
+"Watching the checks" in `SKILL.md`.
+
 **Arm it and do not ping — it pings for you.** It waits for the required checks first, then pins the
 head sha and takes the review-count baseline, then posts `@coderabbitai full review` and records
 GitHub's own timestamp for it. The baseline is taken after the wait rather than at arm time, so a

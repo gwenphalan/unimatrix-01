@@ -7,13 +7,11 @@ watch-pr.sh [--no-review] <owner/repo> <pr>
 
 Watches a pull request from "CI is still running" to "merged", in two
 sequential phases and the wait that follows a successful arm, all in one
-process. Arm it under `Monitor` and carry on working — without `2>&1`, which
-this refuses to run under. Only stdout becomes a notification there, and the
-two streams are split by whether a caller must act on the row; merging them
-makes every passing check a wake-up. A non-tty run with no redirect at all is
-the same fault, since one pipe for both streams has already collapsed the
-split. An interactive run is exempt: both descriptors are the same tty by
-construction and there are no notifications to protect.
+process. Arm it under `Monitor` and carry on working — without `2>&1`. Rows are
+split by whether a caller must act on them, only stdout becomes a notification
+there, and merging the two makes every passing check a wake-up. This refuses to
+run when fd 1 and fd 2 resolve to one destination, which a `Bash` tool call does
+on its own. An interactive tty is exempt.
 
   Phase 1  every required status check reports, and every one is green
   Phase 2  CodeRabbit is pinged and the review is waited out. A clean review
@@ -629,10 +627,11 @@ pr=${args[1]}
 # read so nothing is spent before the refusal.
 #
 # `-t 1` exempts an interactive run, where both descriptors are the same tty by
-# construction and there is no notification budget to protect. It deliberately
-# does not exempt a non-tty run with no redirect at all, which also tests
-# MERGED: a caller handing the script one pipe for both streams has collapsed
-# the split already, just without writing `2>&1` to do it.
+# construction and there is no notification budget to protect. Everything else
+# is judged on where the descriptors land rather than on how they got there: a
+# `Bash` tool call hands the script one output file for both and is refused
+# without anyone writing `2>&1`, while stdout piped with stderr left alone
+# resolves to two destinations and runs.
 if [ ! -t 1 ] && [ /dev/stdout -ef /dev/stderr ]; then
   fixed=".claude/skills/ship-pr/scripts/watch-pr.sh"
   if [ "$no_review" = 1 ]; then fixed="$fixed --no-review"; fi

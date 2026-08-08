@@ -560,10 +560,10 @@ fi
 # stderr on the same one, which is exactly the shape an agent produces by arming
 # this under `Monitor` with a redirect it did not need.
 #
-# The fixture variables are set even though nothing reads them: the guard runs
-# before the first fixture or network read, so a placement regression that let
-# the run get past it shows up here as a hang against the live API rather than
-# as a pass.
+# The fixture variables are set so that a placement regression stays offline:
+# with the guard moved below them, this run reaches the fixtures instead of the
+# network and fails as an ordinary assertion — exit 0 and no refusal — rather
+# than hanging against the live API.
 merged_out=$(env SHIP_PR_POLL_SECONDS=0 SHIP_PR_PING_AT="$ping" \
   SHIP_PR_BRANCH_RULES_FIXTURE="$here/branch-rules-one.json" \
   SHIP_PR_CHECKS_FIXTURES="$here/checks-green-one.json" \
