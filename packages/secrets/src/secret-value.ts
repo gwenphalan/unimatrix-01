@@ -1,10 +1,10 @@
-const REDACTED = "[REDACTED]";
-
 /**
  * Same censor string as `apps/api/src/lib/http/logging.ts`'s pino `redact`
  * config. Two spellings of "redacted" in one log stream is the drift this
  * avoids.
  */
+const REDACTED = "[REDACTED]";
+
 const MASK_WIDTH = 12;
 const MASK_PREFIX_LENGTH = 4;
 const MASK_STAR_COUNT = MASK_WIDTH - MASK_PREFIX_LENGTH;
