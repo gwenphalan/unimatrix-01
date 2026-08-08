@@ -35,6 +35,9 @@ In this shape:
 - the auth image is built with `VITE_API_BASE_URL=https://api.example.com` and
   `VITE_CLERK_PUBLISHABLE_KEY` for the shared Clerk application
 - Traefik owns TLS termination and hostname routing
+- the secrets service gets no hostname and no Domains entry at all — it is
+  deliberately unrouted, reachable only from inside the Dokploy network by
+  other services that need it
 
 ## Dokploy service layout
 
@@ -190,6 +193,24 @@ Access control is Cloudflare Access on the proxied hostname, not app code —
 `unimatrix-01.cloudflareaccess.com`. That is what makes the scaffold's ungated
 placeholder route safe; see `apps/admin/AGENTS.md`.
 
+### Secrets service
+
+- application type: Compose
+- compose path: `infra/docker/secrets-compose.yaml`
+- no Domains page entry — this service is deliberately unrouted, with no
+  public hostname and no container port exposed through Traefik
+- required environment variable (set in Dokploy's UI, not in the file):
+  `SECRETS_KEKS` (see `packages/secrets/AGENTS.md` for its format; there is no
+  default, so a missing value fails the service at startup rather than
+  silently sealing values under a placeholder key)
+
+**Persistent storage:** `secrets-compose.yaml` declares a `secrets-data`
+volume mounted at `/data` (where the DB defaults to `/data/secrets.sqlite`)
+and sets `DB_MIGRATE_ON_START=true`, so pending migrations are applied against
+that volume automatically at container startup. As with the API service,
+confirm the volume is mapped to persistent host storage (Advanced → Volumes)
+so it survives redeploys.
+
 ## Traefik expectations
 
 Traefik is the public edge proxy in Dokploy, and Dokploy's Domains page is the
@@ -269,6 +290,7 @@ Each live app owns the canonical list for its Dokploy service:
 - `apps/cflop/README.md`
 - `apps/auth/README.md`
 - `apps/admin/README.md`
+- `apps/secrets/README.md`
 
 Copy each list exactly into that service's Dokploy watch-path configuration.
 The lists include the app directory, directly imported workspace packages,

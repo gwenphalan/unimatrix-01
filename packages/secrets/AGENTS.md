@@ -1,7 +1,7 @@
 # AGENTS.md
 
 ## 1. Overview
-`packages/secrets` is pure, I/O-free AES-256-GCM value sealing under a versioned key ring, plus redaction. Node-only, zero runtime dependencies, no `@unimatrix/db`, no persistence. Nothing in this repo imports it yet — storage, routes, and the service that will use it are later items.
+`packages/secrets` is pure, I/O-free AES-256-GCM value sealing under a versioned key ring, plus redaction. Node-only, zero runtime dependencies, no `@unimatrix/db`, no persistence. `apps/secrets` is its only consumer — that service owns storage and, once later items land, the routes that use it.
 
 ## 2. Folder Structure
 - `src/errors.ts`: `SecretsError` and every `SecretsErrorCode` this package can raise.

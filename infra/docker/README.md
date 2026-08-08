@@ -17,14 +17,14 @@ nginx digest bump land as a normal PR (see "Base image updates" below) without e
 
 ## Monorepo build rules
 
-Build all five images from the repo root, not from an individual app
+Build all six images from the repo root, not from an individual app
 directory.
 
 Each app resolves workspace source aliases from its own `vite.config.ts` and
 `tsconfig.json` and reads files outside its own directory, so an app-directory
-build context cannot resolve them. `apps/api` needs the repo root at runtime as
-well as at build time: the compiled output still imports `@unimatrix/shared` by
-workspace name.
+build context cannot resolve them. `apps/api` and `apps/secrets` need the repo
+root at runtime as well as at build time: the compiled output still imports
+`@unimatrix/shared` by workspace name.
 
 The checked-in images assume these repo-root build contexts:
 
@@ -34,6 +34,7 @@ docker build -f apps/api/Dockerfile .
 docker build -f apps/cflop/Dockerfile .
 docker build -f apps/auth/Dockerfile .
 docker build -f apps/admin/Dockerfile .
+docker build -f apps/secrets/Dockerfile .
 ```
 
 ## Dokploy watch-path convention
@@ -47,6 +48,7 @@ Each live app README is the canonical service-specific list:
 - `apps/cflop/README.md`
 - `apps/auth/README.md`
 - `apps/admin/README.md`
+- `apps/secrets/README.md`
 
 Every list includes the service directory, workspace source imported by its
 build, root pnpm manifests, `.dockerignore`, and the service-specific Compose
@@ -199,11 +201,43 @@ docker build \
   .
 ```
 
+## Secrets service image
+
+The secrets image builds `@unimatrix/shared`, compiles `apps/secrets`, then
+uses `pnpm deploy` to package the runtime with production dependencies — the
+same shape as the API image, but with its own Drizzle schema and SQLite file
+rather than `@unimatrix/db`.
+
+### Secrets service runtime contract
+
+- entrypoint: `node dist/server.js`
+- container port: `3001`
+- healthcheck path: `/health`
+- runtime env that has to be supplied: `SECRETS_KEKS` — the service refuses to
+  start without it. `NODE_ENV`, `HOST`, `PORT`, `LOG_LEVEL` and
+  `SECRETS_DATABASE_URL` (default `/data/secrets.sqlite`) have image defaults
+  in `apps/secrets/Dockerfile`; `DB_MIGRATE_ON_START` defaults to `"true"` in
+  `secrets-compose.yaml`.
+- **no domain**: this service is deliberately unrouted — see `docs/deployment.md`.
+
+Example build:
+
+```bash
+docker build -f apps/secrets/Dockerfile -t unimatrix-secrets:local .
+```
+
+Example run:
+
+```bash
+docker run --rm -p 3002:3001 -e SECRETS_KEKS=1:<base64-32-bytes> unimatrix-secrets:local
+```
+
 ## Compose workflow
 
 `infra/docker/web-compose.yaml`, `infra/docker/api-compose.yaml`,
 `infra/docker/cflop-compose.yaml`, `infra/docker/auth-compose.yaml`,
-and `infra/docker/admin-compose.yaml` are each single-service files. Run them together from the repo root for local
+`infra/docker/admin-compose.yaml`, and `infra/docker/secrets-compose.yaml` are each
+single-service files. Run them together from the repo root for local
 combined validation:
 
 ```bash
@@ -211,12 +245,14 @@ VITE_API_BASE_URL=http://localhost:3001 \
 VITE_CLERK_PUBLISHABLE_KEY=pk_test_xxx \
 VITE_AUTH_APP_URL=http://localhost:8082 \
 CORS_ALLOWED_ORIGINS=http://localhost:8080,http://127.0.0.1:8080 \
+SECRETS_KEKS=1:<base64-32-bytes> \
 docker compose \
   -f infra/docker/api-compose.yaml \
   -f infra/docker/web-compose.yaml \
   -f infra/docker/cflop-compose.yaml \
   -f infra/docker/auth-compose.yaml \
   -f infra/docker/admin-compose.yaml \
+  -f infra/docker/secrets-compose.yaml \
   up --build
 ```
 
@@ -257,31 +293,34 @@ curl -I http://localhost:8083/
 Then confirm a deep route in each SPA renders after both a normal navigation
 and a refresh — that is what exercises the nginx `index.html` fallback.
 
-## Current database posture
+## Database posture
 
-`apps/api` stores per-user settings and files in SQLite through
-`@unimatrix/db`. The container workflow persists that data:
+Two services store data in SQLite, each on its own volume — `apps/api` through
+`@unimatrix/db`, `apps/secrets` through its own Drizzle schema
+(`apps/secrets/src/db`). The container workflow persists both:
 
-- **SQLite volume**: the API Dockerfile defaults `DATABASE_URL` to
-  `/data/unimatrix.sqlite` and creates `/data` owned by the non-root `node`
-  user; `api-compose.yaml` mounts a named `api-data` volume there, so data
-  survives container recreation once the volume is mapped to durable host
-  storage.
-- **Migrations**: `api-compose.yaml` sets `DB_MIGRATE_ON_START=true`, so the
-  API applies any pending Drizzle migrations against the volume at startup
-  (idempotent — a no-op when the schema is current). No separate migration
-  service or one-off command is required in this workflow.
+- **SQLite volumes**: the API Dockerfile defaults `DATABASE_URL` to
+  `/data/unimatrix.sqlite` (`api-compose.yaml` mounts `api-data` there); the
+  secrets Dockerfile defaults `SECRETS_DATABASE_URL` to `/data/secrets.sqlite`
+  (`secrets-compose.yaml` mounts `secrets-data` there). Both Dockerfiles create
+  `/data` owned by the non-root `node` user, so data survives container
+  recreation once each volume is mapped to durable host storage.
+- **Migrations**: both compose files set `DB_MIGRATE_ON_START=true`, so each
+  service applies its own pending Drizzle migrations against its volume at
+  startup (idempotent — a no-op when the schema is current). No separate
+  migration service or one-off command is required in this workflow.
 
-Remaining caveat: SQLite is single-writer, so this shape assumes a single API
-instance. Horizontal scaling would need a different database or a shared
-storage strategy.
+Remaining caveat: SQLite is single-writer, so each shape assumes a single
+instance of its service. Horizontal scaling would need a different database or
+a shared storage strategy.
 
 ## Dokploy Compose deployment
 
 `infra/docker/web-compose.yaml`, `infra/docker/api-compose.yaml`,
 `infra/docker/cflop-compose.yaml`, `infra/docker/auth-compose.yaml`,
-and `infra/docker/admin-compose.yaml` are single-service compose files meant to be used as Dokploy's "Compose"
-application type, one Dokploy app per file. They intentionally have:
+`infra/docker/admin-compose.yaml`, and `infra/docker/secrets-compose.yaml` are single-service compose
+files meant to be used as Dokploy's "Compose" application type, one Dokploy app per file. They
+intentionally have:
 
 - no `ports:` host publishing
 - no Traefik labels
@@ -293,7 +332,8 @@ Traefik labels to these files. Point the cflop Dokploy app's domain at
 `cflop.unimatrix-01.dev` (plus `cube.unimatrix-01.dev` as a redirect-only entry —
 see `docs/deployment.md`), the auth Dokploy app's domain at
 `auth.unimatrix-01.dev`, and the admin Dokploy app's domain at
-`admin.unimatrix-01.dev`.
+`admin.unimatrix-01.dev`. The secrets Dokploy app gets no Domains entry at all — it is
+deliberately unrouted, reachable only from inside the Dokploy network by other services that need it.
 
 `web-compose.yaml` and `api-compose.yaml` read their environment-dependent
 values (`VITE_API_BASE_URL`, `CORS_ALLOWED_ORIGINS`) from compose variable
@@ -310,7 +350,7 @@ Dokploy service setup, including how previews are configured instead.
 ## Base image updates
 
 Dependabot watches base images through the `docker` ecosystem, pointed at the
-five `apps/*` directories — **not** at this one. The compose files here declare
+six `apps/*` directories — **not** at this one. The compose files here declare
 no `image:` at all, only `build:` plus a Dockerfile path, and Dependabot's
 `docker-compose` parser reads only `image:` (or an inline `dockerfile_inline`).
 It never follows `build.dockerfile`, so a `docker-compose` block would scan

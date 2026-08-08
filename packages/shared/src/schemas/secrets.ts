@@ -1,11 +1,11 @@
 import { z } from "zod";
 
 /**
- * These shapes back a secrets store that does not exist yet — `@unimatrix/secrets`
- * (crypto, no I/O) has no persistence layer or routes behind it. Which service
- * serves them (`apps/api` proxying, or `apps/admin` gaining its own backend) is
- * an open question the routes item decides; committing paths now would bet on
- * an undecided question, so only shapes ship here.
+ * These shapes back the secrets store served by `apps/secrets` — a Fastify
+ * service with its own Drizzle schema, distinct from `@unimatrix/secrets`
+ * (crypto, no I/O) and from `@unimatrix/db`. It ships only `/health` today;
+ * the routes these shapes describe (list, create, rotate, delete, and the
+ * scoped service-read) are later items — see `.notes/01-todo/secrets.todo.md`.
  */
 
 /**
