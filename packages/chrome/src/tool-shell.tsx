@@ -181,7 +181,7 @@ function ToolFooter({
 
   return (
     <footer className="py-1">
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-xs text-muted-foreground/70">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-xs text-muted-foreground/85">
         <p>
           ©{" "}
           {homeHref === undefined ? (
