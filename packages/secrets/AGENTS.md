@@ -8,12 +8,11 @@
 - `src/secret-value.ts`: `SecretValue`, the plaintext wrapper that refuses to serialize itself.
 - `src/keyring.ts`: `SecretsKeyring` and `loadSecretsKeyring`, the `SECRETS_KEKS` parser and validator.
 - `src/envelope.ts`: the AES-256-GCM envelope format and its AAD.
-- `src/index.ts`: barrel re-exporting all four.
+- `src/index.ts`: barrel re-exporting every module.
 
 ## 3. Core Behaviors & Patterns
 - **Never reads `process.env`.** `loadSecretsKeyring` takes the encoded key string as an argument, same rule `packages/auth` follows. This package never boots anything and never calls `process.exit`; a caller decides what a thrown `SecretsError` means for its own startup.
-- **The AAD binds `name` and `versionId`, not just `name`.** Every envelope authenticates `v1.<kekVersion>.<name>.<versionId>` without encrypting it. That third field is why restoring a superseded version over the live row fails to open rather than silently succeeding — a rotation store keeps every version by design, and without `versionId` in the AAD a rollback would verify perfectly and reintroduce the old credential. This granularity is fixed the moment the first row is sealed under it; changing it means re-encrypting the whole store, so it is not a place to improvise later.
-- **Release-of-unverified-plaintext**: `decipher.update()` returns the full decrypted plaintext *before* the GCM tag is checked (measured against this Node build). `openSecretEnvelope` decrypts as a single `Buffer.concat([decipher.update(...), decipher.final()])` expression so a failed tag check throws before any plaintext is ever bound to a variable. Never split that into a separate `update()` statement with a try around `final()` — it silently reintroduces the leak.
+- **AAD and plaintext-release**: see `envelope.ts`'s `buildAad` and `openSecretEnvelope` for what the AAD binds and why decryption has to happen as one expression — both are load-bearing comments on the lines that matter. The one thing worth repeating here: the AAD's granularity (binding `versionId`, not just `name`) is fixed the moment the first row is sealed under it; changing it means re-encrypting the whole store.
 - **Redaction bounds logs and serialization, not memory.** A JS string cannot be zeroized. `SecretValue`'s `toString`/`toJSON`/inspect override stop a value from leaking into a log line or a `JSON.stringify`; they say nothing about a value already scraped from process memory. Do not describe this package as protecting against the stronger property.
 - **Contract shapes live in `@unimatrix/shared`**, not here — `secretMetadataSchema` and friends in `packages/shared/src/schemas/secrets.ts`. This package owns crypto and redaction only.
 

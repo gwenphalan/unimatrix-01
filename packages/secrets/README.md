@@ -15,5 +15,3 @@ Each key must decode to exactly 32 bytes. **The first entry is the active (writi
 ```
 SECRETS_KEKS=2:Zm9v...,1:YmFy...
 ```
-
-Export and restore commands are a later package's concern, not this one's.
