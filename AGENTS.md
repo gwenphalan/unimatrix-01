@@ -78,7 +78,7 @@ The packages below sit deliberately below `latest`. Each has a reason that is no
 
 ## Key Conventions
 - TypeScript only; keep strict typing, named exports, and small composable modules
-- Validate every external input boundary with Zod
+- Validate every external input boundary with Zod — **except process env read once at boot**, which both backend apps parse by hand (`apps/api/src/config.ts`, `apps/secrets/src/config.ts`). Those loaders throw on every malformed field, and `infra/scripts/validate-deploy-config.mjs` runs each one against its app's compose env on every `pnpm check`, so the boundary is covered without a schema. Convert both or neither; one of each is the outcome to avoid
 - Shared request/response shapes belong in `@unimatrix/shared`; do not redefine them in apps or transport code
 - API routes should be contract-driven via `@unimatrix/shared`; keep handlers thin and error formatting centralized
 - Use explicit exported types at boundaries instead of anonymous inline shapes
