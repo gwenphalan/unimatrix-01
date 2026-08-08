@@ -34,9 +34,9 @@ consequences:
   `devDependencies`, so it resolves only after `pnpm install`.
 
 ## 4. Conventions
-- `nodeApiApp()` is a parameterised template with exactly one call site (`apps/api`) — it takes the
-  API's env and volume data as arguments, but do not generalise its shape into something that reads
-  as anticipating a second Node service.
+- `nodeApiApp()` is a parameterised template with two call sites (`apps/api`, `apps/secrets`) — each
+  supplies its own env and volume data as arguments, and the generator's Dockerfile/compose body stays
+  identical between them.
 - If two apps' Dockerfiles cannot both be expressed by `staticSpaApp()`/`nodeApiApp()` without a
   generator branch keyed on app name, that is a signal the archetype split is wrong, not licence to
   add the branch.

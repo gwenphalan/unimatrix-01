@@ -5,10 +5,10 @@
 //
 // `packages/deploy-config`'s own `validateAppConfig()` covers what a config
 // can fail on its own — see that package's `AGENTS.md`. This script adds
-// everything that needs the filesystem or `apps/api/src/config.ts`, neither
-// of which that package may import (a pkg -> app edge is a lint error under
-// `boundaries.mjs`, and this script sits in no workspace, so it imports both
-// by absolute path instead):
+// everything that needs the filesystem or a `node-api` app's own runtime
+// config loader, neither of which that package may import (a pkg -> app edge
+// is a lint error under `boundaries.mjs`, and this script sits in no
+// workspace, so it imports both by absolute path instead):
 //
 //   1. Pairing, both directions. Every `apps/*/Dockerfile` needs a
 //      `deploy.config.ts`, and so does every `infra/docker/*-compose.yaml` —
@@ -18,15 +18,18 @@
 //      directory it actually lives in: `build.dockerfile`/`build.context`
 //      and the compose filename are derived from `appDir` inside the
 //      generator, so a mismatch here is what would let them drift.
-//   2. The API probe. Builds the effective env — the config's own
-//      `dockerfileEnv` overlaid by `composeEnv` — and feeds it to the real
-//      `loadApiRuntimeConfig`, so this cannot drift from the parser it is
-//      checking against. `NODE_ENV` is checked first: `parseClerkConfig`
-//      returns `null` instead of throwing outside production, so probing a
-//      non-production effective env would measure nothing.
+//   2. The node-api runtime-config probe. Builds the effective env — the
+//      config's own `dockerfileEnv` overlaid by `composeEnv` — and feeds it to
+//      that app's real runtime config loader (`NODE_API_CONFIG_PROBES` below),
+//      so this cannot drift from the parser it is checking against. `NODE_ENV`
+//      is checked first: outside production `apps/api`'s loader returns `null`
+//      for Clerk instead of throwing, so probing a non-production effective
+//      env would measure nothing.
 //
 // Fails closed on zero configs discovered, matching `check-watch-paths.mjs`
-// and `check-coverage-drift.mjs`.
+// and `check-coverage-drift.mjs`, and on a `node-api` config with no probe
+// entry — the smaller fix of skipping the probe when there is no entry would
+// fail *open* for every future node-api app, which this script must never do.
 import { readdirSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -37,13 +40,32 @@ const composeDir = join(repoRoot, "infra", "docker");
 
 /**
  * Placeholders for a compose `${VAR}` reference with no default, used only to
- * build the env the API config parser is probed with. A var whose parser
- * validates a format needs an entry here that satisfies it.
+ * build the env each `node-api` config's runtime-config loader is probed
+ * with. A var whose parser validates a format needs an entry here that
+ * satisfies it.
  */
 const PLACEHOLDERS = {
   CORS_ALLOWED_ORIGINS: "https://placeholder.example",
+  // `<version>:<base64key>`; the key is 32 zero bytes base64-encoded — long
+  // enough to pass `KEK_LENGTH` in packages/secrets/src/keyring.ts, obviously
+  // not a real key.
+  SECRETS_KEKS: "1:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
 };
 const DEFAULT_PLACEHOLDER = "placeholder";
+
+/**
+ * Every `node-api` app's own runtime-config loader, keyed by `appDir`. A
+ * `node-api` config with no entry here fails closed (see below) rather than
+ * silently skipping the probe — the smaller fix of probing only a hardcoded
+ * `app === "api"` would fail *open* for every future node-api app.
+ */
+const NODE_API_CONFIG_PROBES = {
+  api: { configPath: ["apps", "api", "src", "config.ts"], loaderName: "loadApiRuntimeConfig" },
+  secrets: {
+    configPath: ["apps", "secrets", "src", "config.ts"],
+    loaderName: "loadSecretsRuntimeConfig",
+  },
+};
 
 let failures = 0;
 const fail = (msg) => {
@@ -142,6 +164,16 @@ for (const app of appsWithConfig) {
   if (config.kind !== "node-api") continue;
   sawNodeApiConfig = true;
 
+  const probe = NODE_API_CONFIG_PROBES[app];
+  if (probe === undefined) {
+    fail(
+      `apps/${app}/deploy.config.ts declares kind "node-api" but has no entry in ` +
+        `NODE_API_CONFIG_PROBES (infra/scripts/validate-deploy-config.mjs) — add one rather than ` +
+        `skipping the probe, or a broken runtime config for this app ships unnoticed.`,
+    );
+    continue;
+  }
+
   const effectiveEnv = {};
   for (const entry of config.dockerfileEnv) effectiveEnv[entry.name] = entry.value;
   for (const entry of config.composeEnv)
@@ -150,25 +182,25 @@ for (const app of appsWithConfig) {
   if (effectiveEnv.NODE_ENV !== "production") {
     fail(
       `apps/${app}/deploy.config.ts — the effective NODE_ENV is ${effectiveEnv.NODE_ENV ?? "unset"}, ` +
-        `not production. Outside production the API config parser tolerates missing CLERK_* ` +
-        `variables, so the probe below would measure nothing.`,
+        `not production. Outside production this app's runtime config loader may tolerate fields ` +
+        `that are required in production, so the probe below would measure nothing.`,
     );
     continue;
   }
 
-  const { loadApiRuntimeConfig } = await import(
-    pathToFileURL(join(repoRoot, "apps", "api", "src", "config.ts")).href
+  const { [probe.loaderName]: loadRuntimeConfig } = await import(
+    pathToFileURL(join(repoRoot, ...probe.configPath)).href
   );
 
   try {
-    loadApiRuntimeConfig(effectiveEnv);
+    loadRuntimeConfig(effectiveEnv);
   } catch (error) {
     fail(`apps/${app}/deploy.config.ts — ${error.message}`);
   }
 }
 
 if (!sawNodeApiConfig) {
-  console.log("  note  no node-api config found — the API probe did not run this time");
+  console.log("  note  no node-api config found — the node-api probe did not run this time");
 }
 
 console.log("");

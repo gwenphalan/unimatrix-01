@@ -17,7 +17,7 @@
 
 ## Workspace
 - Monorepo: `apps/*`, `packages/*`, and `lab` from `pnpm-workspace.yaml`; root scripts fan out through Turbo. The roster is the filesystem — read it there rather than from a list here that drifts
-- Apps are Vite + React + TanStack Router except `apps/api` (Fastify). **`apps/auth` is the package `@unimatrix/auth-app`** — the one workspace whose package name does not follow its directory
+- Apps are Vite + React + TanStack Router except `apps/api` and `apps/secrets` (both Fastify). **`apps/auth` is the package `@unimatrix/auth-app` and `apps/secrets` is the package `@unimatrix/secrets-app`** — the two workspaces whose package name does not follow their directory (`@unimatrix/secrets` is already taken by `packages/secrets`)
 - `lab` (package `@unimatrix/lab`) is a **local-dev-only** UX prototyping harness: `pnpm --filter @unimatrix/lab dev` and nothing else — no build script, no Dockerfile, no domain, no CI `Images` entry. See `lab/AGENTS.md`
 - `packages/config-vitest` owns the coverage provider, reporters and exclusions, while each workspace supplies its own thresholds. Per-package rules for everything else are in Boundaries below
 - A path named in a doc, a comment or a plan but absent from the tree is not a runtime surface — never describe one as active. Absence is the discriminator, not `pnpm-workspace.yaml`, which globs `apps/*`, `packages/*` and `lab` and so omits live paths like `content/blog`
@@ -29,13 +29,14 @@
 | Task | Command |
 | --- | --- |
 | Lint one file | `pnpm exec eslint path/to/file.ts` |
-| Test one file (all workspaces except api) | `pnpm --filter <package> exec vitest run path/to/test.ts` |
+| Test one file (all workspaces except api, secrets) | `pnpm --filter <package> exec vitest run path/to/test.ts` |
 | API test one file | `pnpm --filter @unimatrix/api exec node --import tsx --test path/to/test.ts` |
+| Secrets service test one file | `pnpm --filter @unimatrix/secrets-app exec node --import tsx --test path/to/test.ts` |
 | Typecheck a workspace | `pnpm --filter <package> typecheck` |
 | Whole-package test (auth, user-data) | `pnpm --filter <package> test` |
 
 ## Runtime And Bootstrap
-- `pnpm dev` starts only `@unimatrix/api` and `@unimatrix/web`; run `pnpm --filter @unimatrix/cflop dev`, `pnpm --filter @unimatrix/auth-app dev` and `pnpm --filter @unimatrix/admin dev` separately. Each app pins its own dev and preview port in its `vite.config.ts` with `strictPort: true`, so a collision refuses to start instead of silently moving to the next free port and answering on an origin the API's CORS allowlist rejects
+- `pnpm dev` starts only `@unimatrix/api` and `@unimatrix/web`; run `pnpm --filter @unimatrix/cflop dev`, `pnpm --filter @unimatrix/auth-app dev`, `pnpm --filter @unimatrix/admin dev` and `pnpm --filter @unimatrix/secrets-app dev` (needs `SECRETS_KEKS`; see `apps/secrets/README.md`) separately. Each Vite app pins its own dev and preview port in its `vite.config.ts` with `strictPort: true`, so a collision refuses to start instead of silently moving to the next free port and answering on an origin the API's CORS allowlist rejects
 - `pnpm dev` creates missing `apps/api/.env` and `apps/web/.env` from example files
 - `pnpm setup:local` only copies missing env files; it never overwrites existing local env
 - `pnpm setup:worktree` runs frozen install, env bootstrap, and default DB migrations; use it for fresh worktrees
@@ -50,6 +51,7 @@
 - `apps/web`: keep route data in non-lazy route files and UI in paired `*.lazy.tsx`; `src/routes/routeTree.gen.ts` is generated
 - `apps/web`: prefer `@unimatrix/ui/public`; keep public-site compositions in `src/features/public-site`; keep site-only styling in `src/styles.css`. The site chrome itself is **not** app-owned: header, nav tabs, breadcrumbs, and the site footer come from `@unimatrix/chrome/public`. What stays in the app is the knowledge the package refuses to hold — the route-to-tab mapping and the breadcrumb trail. The app passes no `accountControl` at all (same as `apps/cflop`) — the public site is anonymous, and the CMS that once lived here moved onto `apps/admin`
 - `apps/api`: keep `buildApp()` wiring in `src/app.ts`, cross-cutting setup in `src/plugins`, feature routes in `src/modules`, reusable HTTP helpers in `src/lib/http`; verify Clerk tokens networklessly via the `@unimatrix/auth/server` plugin/guards and read the acting user only from the verified session (`getAuthUserId`), never from client input
+- `apps/secrets`: same `app.ts`/`plugins`/`modules` layout as `apps/api`; owns its own Drizzle schema and migration set and never imports `@unimatrix/db` — its SQLite volume is separate from the API's. Never serve a secret value over an unauthenticated route (today it ships `/health` only). The KEK lives only in `SECRETS_KEKS` and only ever as a `SecretsKeyring` — never store the raw string on a config object. See `apps/secrets/AGENTS.md`
 - `apps/cflop`: keep the same non-lazy/`*.lazy.tsx` route split as `apps/web`; do not add `@unimatrix/api-client`, `@unimatrix/shared`, `@unimatrix/content`, or `@tanstack/react-query` dependencies unless a real server-backed feature is added
 - `apps/auth`: same non-lazy/`*.lazy.tsx` route split as `apps/web`; consume Clerk only through `@unimatrix/auth/react` (never `@clerk/clerk-react` directly); validate any inbound `redirect_url` against the same-family allowlist before use
 - `apps/admin`: same non-lazy/`*.lazy.tsx` route split; Clerk only through `@unimatrix/auth/react`; the shell is `@unimatrix/chrome/tool`, never the public shell — this is a tool surface, so no site nav tabs and no site footer. Every admin section gates on `canAccessAdminSection` from `@unimatrix/auth` rather than open-coding a permission check; the scaffold's one placeholder route is deliberately ungated because it has nothing to guard. No `@tanstack/react-query` until something actually fetches. Runtime config travels through the router context — `src/main.tsx` is the only file that reads `import.meta.env`, because `loadAdminAppRuntimeConfig` throws on a missing Clerk key and a module-level router singleton would move that throw to import time
@@ -76,7 +78,7 @@ The packages below sit deliberately below `latest`. Each has a reason that is no
 
 ## Key Conventions
 - TypeScript only; keep strict typing, named exports, and small composable modules
-- Validate every external input boundary with Zod
+- Validate every external input boundary with Zod — **except process env read once at boot**, which both backend apps parse by hand (`apps/api/src/config.ts`, `apps/secrets/src/config.ts`). Those loaders throw on every malformed field, and `infra/scripts/validate-deploy-config.mjs` runs each one against its app's compose env on every `pnpm check`, so the boundary is covered without a schema. Convert both or neither; one of each is the outcome to avoid
 - Shared request/response shapes belong in `@unimatrix/shared`; do not redefine them in apps or transport code
 - API routes should be contract-driven via `@unimatrix/shared`; keep handlers thin and error formatting centralized
 - Use explicit exported types at boundaries instead of anonymous inline shapes
@@ -97,6 +99,7 @@ The packages below sit deliberately below `latest`. Each has a reason that is no
 - Deeper checks (web, cflop): `pnpm --filter <package> test:unit`, `pnpm --filter <package> test:smoke`
 - Auth app deeper checks: `pnpm --filter @unimatrix/auth-app test` (unit only), `pnpm --filter @unimatrix/auth-app build`
 - Admin app deeper checks: `pnpm --filter @unimatrix/admin test` (unit only — no smoke suite, same reason as the auth app), `pnpm --filter @unimatrix/admin build`
+- Secrets service checks: `pnpm --filter @unimatrix/secrets-app test`, `pnpm --filter @unimatrix/secrets-app build`
 - Auth / user-data package checks: `pnpm --filter @unimatrix/auth test`, `pnpm --filter @unimatrix/user-data test`
 - **Anything that renders in a browser must be live-tested in one before it is reported done** — automated tests verify correctness, not that the feature works on screen. That is any workspace with a `vite.config.ts`, plus `packages/ui` and `packages/chrome`, which have no browser of their own and are only ever seen through someone else's. Dispatch `browser-verifier`, which owns how — including getting a browser up and choosing between the two routes in
 - **Never report work as done, working, or verified on the strength of the code looking correct** — run the check and report what it actually printed. This binds hardest on explanations of *why* something behaves as it does: a plausible mechanism reached quickly is still a guess. Test it, or label it a hypothesis
@@ -105,7 +108,7 @@ The packages below sit deliberately below `latest`. Each has a reason that is no
 - State plainly what you could not verify rather than omitting it; an unmentioned gap reads as a confirmed result
 
 ## CI And Automation
-- `main` accepts changes by pull request only. `Verify`, the five `Images (*)` matrix checks, `Review dependency changes`, `Analyze`, and `CodeQL` are required status checks; merges are squash-only with required linear history; work on a branch and open a PR
+- `main` accepts changes by pull request only. `Verify`, the six `Images (*)` matrix checks, `Review dependency changes`, `Analyze`, and `CodeQL` are required status checks; merges are squash-only with required linear history; work on a branch and open a PR
 - **Never add self-hosted Actions runners on the owner's hardware** — this repo is public, so fork PRs would execute untrusted code on the home lab. A third-party managed runner is not that, and every workflow uses one: `blacksmith-4vcpu-ubuntu-2404`. `check-runner-labels.mjs` allowlists it by name and fails any other label
 - Pin third-party actions to a commit SHA with the version in a trailing comment
 - Adding a Dockerfile means adding it to CI's `Images` matrix **and** to the required checks, or it is unverified

@@ -156,6 +156,7 @@ updates:
       - /apps/api
       - /apps/auth
       - /apps/cflop
+      - /apps/secrets
       - /apps/web
     schedule:
       interval: daily

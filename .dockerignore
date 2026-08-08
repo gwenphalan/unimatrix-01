@@ -25,6 +25,9 @@ yarn-error.log*
 packages/db/local/*.sqlite
 packages/db/local/*.sqlite-*
 
+apps/secrets/local/*.sqlite
+apps/secrets/local/*.sqlite-*
+
 apps/*/.env
 apps/*/.env.local
 

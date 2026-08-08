@@ -218,7 +218,7 @@ jobs:
       # check also has to be armed as required on `main`, or the image is built
       # and its result ignored.
       matrix:
-        app: [admin, api, auth, cflop, web]
+        app: [admin, api, auth, cflop, secrets, web]
 
     steps:
       - name: Check out repository

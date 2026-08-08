@@ -22,6 +22,7 @@ apps/cflop/vendor/
 pnpm-lock.yaml
 **/routeTree.gen.ts
 packages/db/drizzle/
+apps/secrets/drizzle/
 
 # Local SQLite artifacts and their directory.
 packages/db/local/
