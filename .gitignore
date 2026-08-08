@@ -58,8 +58,14 @@ Thumbs.db
 !.claude/agents/
 !.claude/settings.json
 
-# issue workflow artifacts
-.notes/
+# issue workflow artifacts.
+# No trailing slash on purpose: a trailing slash matches directories only, and
+# `setup:worktree` links `.notes` into each worktree as a *symlink*. That symlink
+# was not a directory, so `.notes/` never ignored it, `git add -A` in a worktree
+# staged it, and checking the resulting commit out in the main checkout replaced
+# the real directory with a symlink to itself — silently, because git overwrites
+# ignored paths without warning.
+.notes
 
 # design-sync (claude.ai/design)
 .ds-sync/
