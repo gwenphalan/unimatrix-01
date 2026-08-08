@@ -14,7 +14,14 @@ items (auth, read/write routes, KEK rotation) this workspace does not yet implem
   artifact this service exists to avoid multiplying. Local dev supplies `SECRETS_KEKS` on the command
   line; see `README.md`.
 - `src/config.ts`: runtime config loading, hand-written parsers mirroring `apps/api/src/config.ts`.
-  Stores a `SecretsKeyring` instance, never the raw `SECRETS_KEKS` string.
+  Deliberately imports no workspace package — `infra/scripts/validate-deploy-config.mjs` imports this
+  module directly, before anything has been built, and a `@unimatrix/secrets` import here would
+  resolve through its `dist` export map and fail closed in exactly that probe. It checks that
+  `SECRETS_KEKS` is set but does not parse it or return it; see `src/keyring.ts`.
+- `src/keyring.ts`: the one file allowed to import `@unimatrix/secrets`. Loads the `SecretsKeyring`
+  from `SECRETS_KEKS` and defines the composed runtime config type (config.ts's shape plus the
+  keyring) — never the raw string. `src/server.ts` composes the two loaders into one object before
+  building the app; nothing here returns them pre-composed.
 - `src/plugins`: `index.ts` wires only the Zod type-provider compilers and the database — no CORS, no
   rate limiting, no security headers, no request-id/observability plugin. This service has no browser
   caller and no public surface yet for any of that to protect; the auth item brings a rate-limit

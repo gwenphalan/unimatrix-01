@@ -1,26 +1,24 @@
 import { fileURLToPath } from "node:url";
 
-import { loadSecretsKeyring, type SecretsKeyring } from "@unimatrix/secrets";
-
 export const SECRETS_NODE_ENVS = ["development", "test", "production"] as const;
 export const SECRETS_LOG_LEVELS = ["debug", "info", "warn", "error"] as const;
 
 export type SecretsNodeEnv = (typeof SECRETS_NODE_ENVS)[number];
 export type SecretsLogLevel = (typeof SECRETS_LOG_LEVELS)[number];
 
-export interface SecretsRuntimeConfig {
+/**
+ * Everything about this service's runtime configuration except the keyring. Deliberately excludes
+ * it, and deliberately imports no workspace package: `infra/scripts/validate-deploy-config.mjs`
+ * imports this module directly, before anything has been built, and `@unimatrix/secrets`'s exports
+ * map points at `dist` — see `src/keyring.ts` for where the keyring (and the import) actually live.
+ */
+export interface SecretsRuntimeConfigBase {
   host: string;
   port: number;
   nodeEnv: SecretsNodeEnv;
   logLevel: SecretsLogLevel;
   databaseFilePath: string;
   runDatabaseMigrations: boolean;
-  /**
-   * The loaded keyring, never the raw `SECRETS_KEKS` string. `SecretsKeyring`
-   * redacts itself on `toString`/`toJSON`/inspect (`@unimatrix/secrets`); a raw
-   * string field here would be one `JSON.stringify(config)` away from a log line.
-   */
-  keyring: SecretsKeyring;
 }
 
 export interface SecretsRuntimeEnv {
@@ -175,6 +173,18 @@ function parseDatabaseFilePath(value: string | undefined): string {
 }
 
 /**
+ * A presence-and-non-empty check only — the KEK format itself is validated by
+ * `loadSecretsKeyringFromEnv` (`src/keyring.ts`), which this module cannot import (see
+ * {@link SecretsRuntimeConfigBase}). Kept here anyway so a compose file that forgot to name the
+ * variable still fails `validate-deploy-config.mjs`'s probe of this module, not just a live boot.
+ */
+function assertSecretsKeksIsSet(value: string | undefined): void {
+  if (value === undefined || value.trim().length === 0) {
+    throw createSecretsConfigError("SECRETS_KEKS must be set.");
+  }
+}
+
+/**
  * The database file path alone, with no keyring requirement. `drizzle.config.ts`
  * calls this directly (never {@link loadSecretsRuntimeConfig}) so that
  * `db:generate`/`db:migrate` work without `SECRETS_KEKS` ever being set.
@@ -184,17 +194,18 @@ export function resolveSecretsDatabaseFilePath(env: SecretsRuntimeEnv = process.
 }
 
 /**
- * Fails loud with no KEK — the same fail-loud shape as `loadApiRuntimeConfig`
- * (`apps/api/src/config.ts`) failing loud with no Clerk keys in production.
- * `loadSecretsKeyring` throws its own `SecretsError` (carrying a
- * `SecretsErrorCode`) rather than the generic `Error` every other field here
- * throws; that is deliberate, not an inconsistency — wrapping it would
- * discard a code a caller might want to branch on.
+ * Fails loud with no `SECRETS_KEKS` — the same fail-loud shape as `loadApiRuntimeConfig`
+ * (`apps/api/src/config.ts`) failing loud with no Clerk keys in production. This function only
+ * checks that the variable is set (see {@link assertSecretsKeksIsSet}); it does not parse or return
+ * it. The caller — `src/server.ts` — composes this with `loadSecretsKeyringFromEnv`
+ * (`src/keyring.ts`) into the full runtime config before building the app.
  */
 export function loadSecretsRuntimeConfig(
   env: SecretsRuntimeEnv = process.env,
-): SecretsRuntimeConfig {
+): SecretsRuntimeConfigBase {
   const nodeEnv = parseNodeEnv(env.NODE_ENV);
+
+  assertSecretsKeksIsSet(env.SECRETS_KEKS);
 
   return {
     host: readOptionalString("HOST", env.HOST, DEFAULT_HOST),
@@ -203,6 +214,5 @@ export function loadSecretsRuntimeConfig(
     logLevel: parseLogLevel(env.LOG_LEVEL, nodeEnv),
     databaseFilePath: resolveSecretsDatabaseFilePath(env),
     runDatabaseMigrations: parseRunDatabaseMigrations(env.DB_MIGRATE_ON_START),
-    keyring: loadSecretsKeyring(env.SECRETS_KEKS),
   };
 }

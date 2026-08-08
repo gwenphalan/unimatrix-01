@@ -3,19 +3,23 @@ import test from "node:test";
 
 import { buildApp } from "../src/app.js";
 import { loadSecretsRuntimeConfig, type SecretsRuntimeEnv } from "../src/config.js";
+import { loadSecretsKeyringFromEnv } from "../src/keyring.js";
 
 const TEST_KEK = `1:${Buffer.alloc(32, 7).toString("base64")}`;
 
 function createTestApp(env: SecretsRuntimeEnv = {}) {
-  return buildApp(
-    loadSecretsRuntimeConfig({
-      LOG_LEVEL: "error",
-      NODE_ENV: "test",
-      SECRETS_KEKS: TEST_KEK,
-      SECRETS_DATABASE_URL: ":memory:",
-      ...env,
-    }),
-  );
+  const mergedEnv = {
+    LOG_LEVEL: "error",
+    NODE_ENV: "test",
+    SECRETS_KEKS: TEST_KEK,
+    SECRETS_DATABASE_URL: ":memory:",
+    ...env,
+  };
+
+  return buildApp({
+    ...loadSecretsRuntimeConfig(mergedEnv),
+    keyring: loadSecretsKeyringFromEnv(mergedEnv),
+  });
 }
 
 void test("GET /health returns the expected health payload and cache headers", async () => {

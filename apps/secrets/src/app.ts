@@ -1,7 +1,7 @@
 import Fastify, { type FastifyInstance, type FastifyServerOptions } from "fastify";
 
-import type { SecretsRuntimeConfig } from "./config.js";
 import type { SecretsDatabaseInstance } from "./db/client.js";
+import type { SecretsRuntimeConfig } from "./keyring.js";
 import { registerModules } from "./modules/index.js";
 import { setupCorePlugins } from "./plugins/index.js";
 

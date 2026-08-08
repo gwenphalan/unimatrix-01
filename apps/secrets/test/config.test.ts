@@ -14,7 +14,6 @@ void test("loadSecretsRuntimeConfig uses documented defaults", () => {
   assert.equal(config.logLevel, "debug");
   assert.equal(config.runDatabaseMigrations, false);
   assert.ok(config.databaseFilePath.endsWith("apps/secrets/local/secrets.sqlite"));
-  assert.equal(config.keyring.activeVersion, 1);
 });
 
 void test("loadSecretsRuntimeConfig trims and validates explicit values", () => {
@@ -44,12 +43,19 @@ void test("loadSecretsRuntimeConfig defaults LOG_LEVEL to info outside developme
 });
 
 void test("loadSecretsRuntimeConfig throws with no SECRETS_KEKS", () => {
-  assert.throws(() => loadSecretsRuntimeConfig({}));
+  assert.throws(() => loadSecretsRuntimeConfig({}), /SECRETS_KEKS must be set/);
 });
 
-void test("loadSecretsRuntimeConfig throws on a malformed SECRETS_KEKS", () => {
-  assert.throws(() => loadSecretsRuntimeConfig({ SECRETS_KEKS: "not-a-kek" }));
+void test("loadSecretsRuntimeConfig throws with a blank SECRETS_KEKS", () => {
+  assert.throws(
+    () => loadSecretsRuntimeConfig({ SECRETS_KEKS: "   " }),
+    /SECRETS_KEKS must be set/,
+  );
 });
+
+// A malformed-but-present SECRETS_KEKS (e.g. "not-a-kek") is not this loader's concern — it only
+// checks presence, so the compose file's env var is caught even before a build exists. The format
+// itself is validated by `loadSecretsKeyringFromEnv`; see test/keyring.test.ts.
 
 void test("loadSecretsRuntimeConfig rejects invalid PORT values", () => {
   assert.throws(
@@ -137,17 +143,5 @@ void test("loadSecretsRuntimeConfig rejects a blank DB_MIGRATE_ON_START", () => 
   );
 });
 
-void test("JSON.stringify of the returned config contains no key material", () => {
-  const config = loadSecretsRuntimeConfig({ SECRETS_KEKS: TEST_KEK });
-  const serialized = JSON.stringify(config);
-
-  assert.ok(!serialized.includes(TEST_KEK));
-  assert.ok(!serialized.includes(TEST_KEK.split(":")[1] ?? ""));
-  assert.ok(serialized.includes("REDACTED"));
-});
-
-void test("String(config.keyring) and inspecting it are also redacted", () => {
-  const config = loadSecretsRuntimeConfig({ SECRETS_KEKS: TEST_KEK });
-
-  assert.equal(String(config.keyring), "[REDACTED keyring]");
-});
+// The composed-config redaction assertion (base config + keyring, as src/server.ts builds it) lives
+// in test/keyring.test.ts, since composing them is what src/keyring.ts's exports are for.

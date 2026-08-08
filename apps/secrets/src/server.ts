@@ -1,11 +1,15 @@
 import { buildApp } from "./app.js";
 import { loadSecretsRuntimeConfig } from "./config.js";
+import { loadSecretsKeyringFromEnv } from "./keyring.js";
 
 // No .env file loading here (contrast apps/api/src/env.ts): porting it would
 // put a plaintext KEK on a developer's disk, the exact artifact this service
 // exists to avoid multiplying. Local dev supplies SECRETS_KEKS on the command
 // line — see README.md.
-const config = loadSecretsRuntimeConfig();
+//
+// Composed from two loaders rather than one (see src/config.ts and src/keyring.ts) — boot still
+// fails loud on a missing or malformed KEK exactly as it did as a single call.
+const config = { ...loadSecretsRuntimeConfig(), keyring: loadSecretsKeyringFromEnv() };
 const app = buildApp(config);
 
 let closeAppPromise: Promise<void> | null = null;
