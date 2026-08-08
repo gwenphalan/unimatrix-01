@@ -1,5 +1,5 @@
-import type { HealthResponse } from "../schemas/health.js";
-import { healthResponseSchema } from "../schemas/health.js";
+import type { HealthResponse, SecretsHealthResponse } from "../schemas/health.js";
+import { healthResponseSchema, secretsHealthResponseSchema } from "../schemas/health.js";
 import { defineApiContract } from "./api-contract.js";
 
 export const healthContract = defineApiContract({
@@ -8,5 +8,12 @@ export const healthContract = defineApiContract({
   responseSchema: healthResponseSchema,
 });
 
+export const secretsHealthContract = defineApiContract({
+  method: "GET",
+  path: "/health",
+  responseSchema: secretsHealthResponseSchema,
+});
+
 export type HealthContract = typeof healthContract;
-export type { HealthResponse };
+export type SecretsHealthContract = typeof secretsHealthContract;
+export type { HealthResponse, SecretsHealthResponse };

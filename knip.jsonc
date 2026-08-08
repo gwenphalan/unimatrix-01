@@ -39,6 +39,11 @@
       "ignoreDependencies": ["pino-pretty"],
     },
 
+    "apps/secrets": {
+      "entry": ["test/**/*.test.ts"],
+      "project": ["src/**/*.ts", "test/**/*.ts"],
+    },
+
     // The four Vite apps share a shape: `src/main.tsx` is found by the Vite
     // plugin via index.html, so only the test entries are declared here. Each
     // one also carries a generated TanStack Router tree that must never be
