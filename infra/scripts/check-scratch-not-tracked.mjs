@@ -42,14 +42,30 @@ function git(args) {
 }
 
 function main() {
+  // "No repository" is established by its own call, so it is the only condition
+  // that skips. Wrapping the `ls-files` calls in the same catch would turn any
+  // git or index error into a silent pass — the opposite of what a guard is for.
+  try {
+    if (git(["rev-parse", "--is-inside-work-tree"]).trim() !== "true") {
+      console.log("check-scratch-not-tracked: no git repository here, skipping.");
+      return;
+    }
+  } catch {
+    console.log("check-scratch-not-tracked: no git repository here, skipping.");
+    return;
+  }
+
   let trackedScratch;
   let trackedAndIgnored;
   try {
     trackedScratch = git(["ls-files", "--", ...SCRATCH_ROOTS]).trim();
     trackedAndIgnored = git(["ls-files", "-i", "-c", "--exclude-standard"]).trim();
-  } catch {
-    console.log("check-scratch-not-tracked: no git repository here, skipping.");
-    return;
+  } catch (error) {
+    console.error(
+      `check-scratch-not-tracked: FAILED — git could not be queried in a repository it ` +
+        `reported being inside: ${error.message}`,
+    );
+    process.exit(1);
   }
 
   const failures = [];
