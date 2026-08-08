@@ -37,9 +37,7 @@ export type SecretPlaintext = z.output<typeof secretValueSchema>;
 
 /**
  * The redacted display form. `SecretValue#mask()` in `@unimatrix/secrets` is
- * its only producer and always returns exactly 12 characters — the two
- * packages deliberately cannot import each other, so keep both in sync by
- * hand if that width changes.
+ * its only producer.
  */
 export const secretMaskedPrefixSchema = z.string().min(1).max(32);
 

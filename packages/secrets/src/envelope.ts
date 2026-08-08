@@ -3,13 +3,7 @@ import { createCipheriv, createDecipheriv, randomBytes, type KeyObject } from "n
 import { SecretsError } from "./errors.js";
 import { SecretValue } from "./secret-value.js";
 
-/**
- * The GCM literal type, not `: string` — verified against this repo's
- * tsconfig: annotating this `string` fails `TS2769` because the literal type
- * is what selects `createCipheriv`/`createDecipheriv`'s GCM-specific
- * overload (the one carrying `setAAD`/`getAuthTag`). A convenience note, not
- * a trap: the wrong annotation fails to compile.
- */
+// Literal type, not `string`: it selects the GCM overload carrying setAAD/getAuthTag.
 const ALGORITHM = "aes-256-gcm";
 
 const IV_LENGTH = 12;
@@ -23,10 +17,7 @@ export const SECRET_ENVELOPE_FORMAT_VERSION = "v1";
 
 /**
  * What a sealed value is bound to. Both fields are authenticated as part of
- * the envelope's AAD (see `buildAad`), so `open` must be given the identical
- * context or the GCM tag fails to verify — copying one secret's ciphertext
- * onto another's row, or restoring a superseded version over the live row,
- * both fail to open rather than silently succeeding.
+ * the envelope's AAD — see `buildAad` for what that buys.
  */
 export interface SecretContext {
   readonly name: string;
@@ -62,13 +53,14 @@ function assertValidContext(context: SecretContext): void {
 
 /**
  * Binds the KEK version and the context into the ciphertext's authentication
- * tag without encrypting them. Three properties fall out: the stored KEK
- * version is authenticated rather than an attacker-steerable lookup hint;
- * copying one secret's ciphertext onto another's row fails to open; and
- * restoring a superseded version over the live row fails to open, because
- * `versionId` — not just `name` — is bound in. This granularity is fixed
- * once the first row is sealed under it; changing it requires re-encrypting
- * the whole store.
+ * tag without encrypting them. Three properties fall out: the version field
+ * selects the key before anything is verified (see `openSecretEnvelope`), so
+ * binding it in means a rewritten field cannot open even if two versions
+ * were ever loaded with the same key bytes; copying one secret's ciphertext
+ * onto another's row fails to open; and restoring a superseded version over
+ * the live row fails to open, because `versionId` — not just `name` — is
+ * bound in. This granularity is fixed once the first row is sealed under
+ * it; changing it requires re-encrypting the whole store.
  */
 function buildAad(kekVersion: number, context: SecretContext): Buffer {
   return Buffer.from(

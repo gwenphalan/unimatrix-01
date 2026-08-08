@@ -4,7 +4,7 @@ import { openSecretEnvelope, sealSecretEnvelope, type SecretContext } from "./en
 import { SecretsError } from "./errors.js";
 import type { SecretValue } from "./secret-value.js";
 
-/** `<version>:<base64key>`, alphabet-only so `KEK_LENGTH` stays reachable. */
+/** `<version>:<base64key>`. */
 const KEK_ENTRY_PATTERN = /^([1-9][0-9]{0,3}):([A-Za-z0-9+/]+={0,2})$/;
 const KEK_KEY_BYTE_LENGTH = 32;
 const KEK_ENTRY_SEPARATOR = ",";
@@ -19,9 +19,9 @@ interface ParsedKekEntry {
  * validation (the regex) runs before decoding on purpose — measured:
  * `Buffer.from("not a real key!!!!", "base64")` returns 8 bytes instead of
  * throwing, because Node's decoder silently skips non-alphabet characters.
- * Decoding first would accept prose as key material and would also make
- * `KEK_LENGTH` unreachable, since a malformed string could coincidentally
- * decode to something other than 32 bytes for the wrong reason.
+ * Decoding first would let prose that was never a key reach `KEK_LENGTH` as
+ * a plausible-looking length complaint instead of failing as
+ * `KEK_MALFORMED`, which is what it actually is.
  */
 function parseKeks(encodedKeys: string): ParsedKekEntry[] {
   const entries: ParsedKekEntry[] = [];

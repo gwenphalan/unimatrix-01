@@ -30,10 +30,14 @@ export class SecretValue {
   }
 
   /**
-   * Fixed-width mask so the output never leaks the value's length. The
-   * width (12) is duplicated as `.max()` on `secretMaskedPrefixSchema` in
-   * `packages/shared/src/schemas/secrets.ts` — the two packages deliberately
-   * cannot import each other, so keep both in sync by hand if this changes.
+   * Fixed-width, but not leak-free: a value under 12 characters is still
+   * distinguishable from one at or above it, since only the latter shows a
+   * prefix. That prefix is a disclosure budget, not a display preference —
+   * it is the first 4 characters of every credential, handed to anyone who
+   * can list metadata, since this is the only producer of
+   * `secretMetadataSchema.maskedPrefix`. The masked form crosses into
+   * `@unimatrix/shared` as `secretMaskedPrefixSchema`, whose `.max(32)` is a
+   * loose upper bound rather than a mirror of this width.
    */
   mask(): string {
     if (this.#plaintext.length >= MASK_WIDTH) {
