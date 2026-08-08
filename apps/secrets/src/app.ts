@@ -1,12 +1,14 @@
 import Fastify, { type FastifyInstance, type FastifyServerOptions } from "fastify";
 
 import type { SecretsRuntimeConfig } from "./config.js";
+import type { SecretsDatabaseInstance } from "./db/client.js";
 import { registerModules } from "./modules/index.js";
 import { setupCorePlugins } from "./plugins/index.js";
 
 declare module "fastify" {
   interface FastifyInstance {
     runtimeConfig: SecretsRuntimeConfig;
+    db: SecretsDatabaseInstance["db"];
   }
 }
 

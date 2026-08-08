@@ -33,6 +33,10 @@ packages/db/local/*.sqlite
 packages/db/local/*.sqlite-shm
 packages/db/local/*.sqlite-wal
 packages/db/local/*.sqlite-journal
+apps/secrets/local/*.sqlite
+apps/secrets/local/*.sqlite-shm
+apps/secrets/local/*.sqlite-wal
+apps/secrets/local/*.sqlite-journal
 
 # editor and OS files
 .DS_Store
