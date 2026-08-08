@@ -6,9 +6,9 @@ import { SecretValue } from "./secret-value.js";
 /**
  * The GCM literal type, not `: string` — verified against this repo's
  * tsconfig: annotating this `string` fails `TS2769` because the literal type
- * is what selects `createCipheriv`/`createDecipheriv`'s `CipherGCM` overload
- * (which carries `setAAD`/`getAuthTag`). A convenience note, not a trap: the
- * wrong annotation fails to compile.
+ * is what selects `createCipheriv`/`createDecipheriv`'s GCM-specific
+ * overload (the one carrying `setAAD`/`getAuthTag`). A convenience note, not
+ * a trap: the wrong annotation fails to compile.
  */
 const ALGORITHM = "aes-256-gcm";
 
