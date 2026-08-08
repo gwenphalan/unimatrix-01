@@ -24,10 +24,17 @@ import { fileURLToPath } from "node:url";
 const SKIP_ENV_VAR = "UNIMATRIX_SKIP_GIT_HOOKS";
 const MARKER =
   "# unimatrix-01 pre-commit hook (infra/scripts/install-git-hooks.mjs) — do not hand-edit";
+// The scratch guard runs here as well as in `pnpm check` because the commit it
+// exists to stop is made in a worktree, where `.notes` is a symlink — and a
+// commit reaches `main` without anyone running `pnpm check` in that worktree.
+// Blocking at commit time is the only layer between the mistake and a merge.
 const HOOK_BODY = `#!/bin/sh
 ${MARKER}
 if [ -f infra/scripts/generate-deploy-config.mjs ]; then
   node ./infra/scripts/generate-deploy-config.mjs --stage
+fi
+if [ -f infra/scripts/check-scratch-not-tracked.mjs ]; then
+  node ./infra/scripts/check-scratch-not-tracked.mjs || exit 1
 fi
 `;
 

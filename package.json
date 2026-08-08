@@ -35,9 +35,10 @@
     "check:coverage-drift": "node ./infra/scripts/check-coverage-drift.mjs",
     "check:ship-pr-fixtures": "bash ./.claude/skills/ship-pr/scripts/fixtures/run-fixtures.sh",
     "check:todo-citations": "bash ./infra/scripts/check-todo-citations.sh",
-    "check": "pnpm format:check && pnpm deps:check && pnpm check:app-wiring && pnpm check:agents-md && pnpm check:watch-paths && pnpm check:stale-comments && pnpm check:doc-script-refs && pnpm check:deploy-config && pnpm check:runner-labels && pnpm check:ship-pr-fixtures && pnpm check:todo-citations && turbo run lint typecheck test && pnpm check:coverage-drift",
+    "check:scratch-untracked": "node ./infra/scripts/check-scratch-not-tracked.mjs",
+    "check": "pnpm format:check && pnpm deps:check && pnpm check:app-wiring && pnpm check:agents-md && pnpm check:watch-paths && pnpm check:stale-comments && pnpm check:doc-script-refs && pnpm check:deploy-config && pnpm check:runner-labels && pnpm check:ship-pr-fixtures && pnpm check:todo-citations && pnpm check:scratch-untracked && turbo run lint typecheck test && pnpm check:coverage-drift",
     "knip": "knip",
-    "verify": "pnpm format:check && pnpm deps:check && pnpm check:app-wiring && pnpm check:agents-md && pnpm check:watch-paths && pnpm check:stale-comments && pnpm check:doc-script-refs && pnpm check:deploy-config && pnpm check:runner-labels && pnpm check:ship-pr-fixtures && pnpm check:todo-citations && turbo run build lint typecheck test && pnpm check:coverage-drift"
+    "verify": "pnpm format:check && pnpm deps:check && pnpm check:app-wiring && pnpm check:agents-md && pnpm check:watch-paths && pnpm check:stale-comments && pnpm check:doc-script-refs && pnpm check:deploy-config && pnpm check:runner-labels && pnpm check:ship-pr-fixtures && pnpm check:todo-citations && pnpm check:scratch-untracked && turbo run build lint typecheck test && pnpm check:coverage-drift"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^7.0.0",
