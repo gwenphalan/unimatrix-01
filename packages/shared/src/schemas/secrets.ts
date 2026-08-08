@@ -33,7 +33,7 @@ export const SECRET_VALUE_MAX_LENGTH = 8_192;
 
 export const secretValueSchema = z.string().min(1).max(SECRET_VALUE_MAX_LENGTH);
 
-export type SecretValue = z.output<typeof secretValueSchema>;
+export type SecretPlaintext = z.output<typeof secretValueSchema>;
 
 /**
  * The redacted display form. `SecretValue#mask()` in `@unimatrix/secrets` is
