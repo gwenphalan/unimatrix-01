@@ -53,7 +53,7 @@ const ALLOWED_PACKAGE_IMPORTS = {
   // Never `db`: this service's SQLite file lives on its own volume, not
   // packages/db's (single-writer, already owned by the API container) — see
   // apps/secrets/AGENTS.md.
-  "apps/secrets": ["secrets", "shared"],
+  "apps/secrets": ["deploy-config", "secrets", "shared"],
   // Deliberately narrow. AGENTS.md: cflop must not gain
   // `@unimatrix/api-client`, `@unimatrix/shared`, or `@unimatrix/content`
   // unless a real server-backed feature is added. `chrome` does not widen that:

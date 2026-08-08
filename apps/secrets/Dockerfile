@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.7
-# GENERATED — edit apps/api/deploy.config.ts and run `node ./infra/scripts/generate-deploy-config.mjs`, not this file.
+# GENERATED — edit apps/secrets/deploy.config.ts and run `node ./infra/scripts/generate-deploy-config.mjs`, not this file.
 
 ARG NODE_VERSION=24.18.0
 
@@ -16,8 +16,8 @@ RUN find . -name '*.tsbuildinfo' -delete && pnpm install --frozen-lockfile
 # topological order. It compiles with tsc and resolves them from their
 # built dist (not source, unlike the Vite apps), so they must be built
 # first; the "..." selector keeps this correct as the dependency set changes.
-RUN pnpm --filter "@unimatrix/api..." build
-RUN pnpm --filter @unimatrix/api --prod deploy --legacy /prod/app
+RUN pnpm --filter "@unimatrix/secrets-app..." build
+RUN pnpm --filter @unimatrix/secrets-app --prod deploy --legacy /prod/app
 
 FROM node:${NODE_VERSION}-alpine AS runtime
 WORKDIR /app
@@ -25,11 +25,12 @@ ENV NODE_ENV=production
 ENV HOST=0.0.0.0
 ENV PORT=3001
 ENV LOG_LEVEL=info
-# The SQLite database (user settings + files) lives under /data so it can be
-# backed by a persistent volume — without one, all user data is lost on
-# redeploy. Set DB_MIGRATE_ON_START=true (see api-compose.yaml) so pending
-# migrations are applied against that volume at boot.
-ENV DATABASE_URL=/data/unimatrix.sqlite
+# Sealed secret versions, service tokens and the audit log live under
+# /data so they survive a redeploy — without a durable volume this
+# store loses everything it exists to keep. Set DB_MIGRATE_ON_START=true
+# (see secrets-compose.yaml) so pending migrations are applied against
+# that volume at boot.
+ENV SECRETS_DATABASE_URL=/data/secrets.sqlite
 COPY --from=build --chown=node:node /prod/app/ ./
 # Create each mount path owned by the non-root runtime user before the volumes
 # mount, so a fresh named volume inherits node ownership and stays writable.

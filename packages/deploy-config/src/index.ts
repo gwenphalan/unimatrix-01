@@ -1,5 +1,5 @@
 /**
- * Typed deploy config for the five apps' Dockerfile/compose generator.
+ * Typed deploy config for the apps' Dockerfile/compose generator.
  *
  * A `deploy.config.ts` at each app root builds one {@link DeployAppConfig}
  * through {@link staticSpaApp} or {@link nodeApiApp}. `infra/scripts/generate-deploy-config.mjs`
@@ -100,7 +100,7 @@ export function staticSpaApp(config: Omit<StaticSpaAppConfig, "kind">): StaticSp
   return { kind: "static-spa", ...config };
 }
 
-/** One call site (`apps/api`) — see the package `AGENTS.md` before adding a second. */
+/** Two call sites (`apps/api`, `apps/secrets`) — see the package `AGENTS.md` §4. */
 export function nodeApiApp(config: Omit<NodeApiAppConfig, "kind">): NodeApiAppConfig {
   return { kind: "node-api", ...config };
 }
@@ -260,13 +260,12 @@ function nodeApiDockerfileBody(
     "FROM base AS build",
     "COPY . .",
     "RUN find . -name '*.tsbuildinfo' -delete && pnpm install --frozen-lockfile",
-    "# Build the API together with its workspace dependencies (@unimatrix/shared,",
-    "# @unimatrix/db, @unimatrix/auth) in topological order. apps/api compiles with",
-    "# tsc and resolves these from their built dist (not source, unlike the Vite",
-    '# apps), so they must be built first; the "..." selector keeps this correct as',
-    "# the dependency set changes.",
+    "# Build this service together with its workspace dependencies, in",
+    "# topological order. It compiles with tsc and resolves them from their",
+    "# built dist (not source, unlike the Vite apps), so they must be built",
+    '# first; the "..." selector keeps this correct as the dependency set changes.',
     `RUN pnpm --filter "${config.packageName}..." build`,
-    `RUN pnpm --filter ${config.packageName} --prod deploy --legacy /prod/api`,
+    `RUN pnpm --filter ${config.packageName} --prod deploy --legacy /prod/app`,
     "",
     fromLines.runtime,
     "WORKDIR /app",
@@ -277,7 +276,7 @@ function nodeApiDockerfileBody(
     lines.push(`ENV ${env.name}=${env.value}`);
   }
 
-  lines.push("COPY --from=build --chown=node:node /prod/api/ ./");
+  lines.push("COPY --from=build --chown=node:node /prod/app/ ./");
 
   // Every volume, not just the first: composeFor() mounts all of them, so a
   // second one here would mount root-owned and be unwritable by `node`.
