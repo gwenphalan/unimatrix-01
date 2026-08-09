@@ -1,25 +1,25 @@
 name: Lab
 
-# The lightweight check for prototype branches.
+# The lightweight check for a scratch branch carrying harness changes.
 #
 # Deliberately NOT `Verify`. That job builds every workspace, runs every test
-# suite, and gates on per-workspace coverage thresholds — on a branch whose only
-# new code is a throwaway UX sketch, it fails on coverage and burns minutes for
-# nothing. What is actually worth knowing on a `lab/*` branch is that the
-# *harness* still compiles, so this runs lint and typecheck against `lab/src`
-# and stops there.
+# suite, and gates on per-workspace coverage thresholds — on a branch that only
+# touches the lab, it fails on coverage and burns minutes for nothing. What is
+# actually worth knowing here is that the harness still compiles, so this runs
+# lint and typecheck against `lab/src` and stops there.
 #
 # `lab/prototypes/` is excluded from both by construction: lab's `lint` script
 # is `eslint src` and its tsconfig `include` covers `src/**` only. A
 # half-finished prototype must not be a red check.
 #
-# Nothing here is (or should be) a required status check. It reports on branches
-# that never merge.
+# Nothing here is (or should be) a required status check. A harness change that
+# is meant to land opens a pull request and meets `Verify` there.
 
 on:
   push:
     # `lab/**`, not `lab/*` — GitHub's branch filter treats `*` as matching a
-    # single path segment, so `lab/*` would skip `lab/admin/section-nav`.
+    # single path segment, so `lab/*` would skip a branch named
+    # `lab/mocks/asset-listing`.
     branches: ["lab/**"]
   workflow_dispatch:
 
@@ -56,8 +56,8 @@ jobs:
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
 
-      # Not `--frozen-lockfile`: a `lab/*` branch is a scratch branch, and a
-      # prototype that pulls in a package is a normal thing to do there. Failing
+      # Not `--frozen-lockfile`: a `lab/**` branch is a scratch branch, and
+      # harness work that pulls in a package is a normal thing to do there. Failing
       # the whole run on a lockfile the author has not committed yet would make
       # this job an obstacle rather than a signal.
       - name: Install dependencies

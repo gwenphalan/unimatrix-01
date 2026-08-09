@@ -28,8 +28,9 @@
     },
     "types": ["vite/client", "node"]
   },
-  // `prototypes/` is deliberately absent. Prototypes are throwaway code on
-  // `lab/*` branches; typechecking them would make a half-finished sketch a
-  // failing check, and on `main` the directory is empty anyway.
+  // `prototypes/` is deliberately absent. Prototypes are throwaway, gitignored
+  // sketches that are never committed; typechecking them would make a
+  // half-finished sketch a failing check, and on `main` the directory is empty
+  // anyway.
   "include": ["src/**/*.ts", "src/**/*.tsx", "vite.config.ts"]
 }

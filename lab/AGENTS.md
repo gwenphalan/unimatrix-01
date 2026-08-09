@@ -18,7 +18,7 @@ Why not a `lab.unimatrix-01.dev` subdomain, since that was the obvious alternati
 - `src/routes`: `prototype-index.tsx` (the list) and `prototype-host.tsx` (renders one prototype and nothing else).
 - `src/lib/prototype-registry.ts`: `import.meta.glob` discovery of `lab/prototypes/**/*.tsx`.
 - `src/mocks`: the only data surface a prototype may use. See below.
-- `prototypes/`: **empty on `main`.** See `prototypes/README.md`.
+- `prototypes/`: gitignored working-tree sketches — only `.gitkeep` and `README.md` are tracked. See `prototypes/README.md`.
 
 ## 4. Mocks
 
@@ -49,4 +49,4 @@ Keep `LabUserStore` in step with `packages/user-data/src/types.ts` by hand. If t
 
 - `pnpm install` installs lab's dependencies in CI, which never needs them.
 - **Dependabot watches `lab/package.json`** and will open PRs for a dev-only harness. Accepted deliberately: an unsupported or malformed key makes Dependabot reject `.github/dependabot.yml` entirely, silently disabling npm updates repo-wide, and a rejected config looks exactly like a quiet week. A few dev-harness PRs is the cheaper failure.
-- `lab/*` branches rot against `packages/ui` and `packages/chrome` changes. Correct for throwaway work.
+- A prototype rots against `packages/ui` and `packages/chrome` changes. Correct for throwaway work.

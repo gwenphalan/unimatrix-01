@@ -1,13 +1,11 @@
 name: Prototypes guard
 
-# Keeps `lab/prototypes/` empty on `main`.
+# Catches a prototype forced into a pull request to `main`.
 #
-# GitHub cannot express the rule the way it reads. Branch protection and
-# rulesets gate the **target** branch, and there is no "block merges whose head
-# matches `lab/*`" filter. So the negative rule ("prototype branches are never
-# merged") is expressed as the positive invariant that can actually be enforced:
-# a check on pull requests to `main` that fails when the diff touches
-# `lab/prototypes/`.
+# `.gitignore` is the first line: it ignores `lab/prototypes/*` with `.gitkeep`
+# and `README.md` negated back, so a sketch cannot be staged without
+# `git add -f`. This check is what catches the forced add — it fails when a pull
+# request to `main` has a diff touching `lab/prototypes/`.
 #
 # WHAT THIS IS NOT: a security control. Say it plainly, because a rule that
 # sounds like a security boundary gets trusted like one. The lab is local-dev
@@ -84,11 +82,11 @@ jobs:
             echo "::error::Prototypes must not be merged to main. Offending paths:"
             echo "${offending}"
             echo ""
-            echo "lab/prototypes/ stays empty on main. Prototypes live on lab/* branches"
-            echo "and are never merged. This is repo hygiene, not a security control:"
-            echo "the lab is local-dev only, so a prototype on main costs clutter and"
-            echo "rot rather than exposure. Drop the files from this branch and open a"
-            echo "lab/* branch for them instead."
+            echo "lab/prototypes/ stays empty on main. Sketches are gitignored and stay in"
+            echo "your working tree, so this diff can only exist because of a git add -f."
+            echo "Drop the files from this branch. This is repo hygiene, not a security"
+            echo "control: the lab is local-dev only, so a prototype on main costs clutter"
+            echo "and rot rather than exposure."
             exit 1
           fi
 
