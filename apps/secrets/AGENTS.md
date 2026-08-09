@@ -10,7 +10,7 @@ the only one permitted to return a decrypted value. See `.notes/01-todo/secrets.
 constraint list and the items (read/write routes, KEK rotation) this workspace does not yet
 implement.
 
-Transport is a bearer token over plain HTTP on the overlay. TLS with a pinned self-signed server
+Transport is a bearer token over plain HTTP. TLS with a pinned self-signed server
 certificate is the decided follow-up, landing when `apps/api` first calls this service and both ends
 can be tested together — not an omission.
 
@@ -63,8 +63,8 @@ can be tested together — not an omission.
 - **No route here may serve a secret value** — `/health` is the only route today. The scoped read
   route in a later item is the one exception this service will ever have; see §1.
 - **`PUBLIC_ROUTE_URLS` is the entire allowlist, and a URL matching no route is not on it.** Denying
-  unmatched URLs is the point, not an oversight to patch: reachability on `dokploy-network` proves
-  nothing about who is calling. Never exempt them.
+  unmatched URLs is the point, not an oversight to patch: being able to open a socket to this
+  service proves nothing about who is calling. Never exempt them.
 - **Three hook placements are load-bearing and none of them is visible from a diff.** The guard runs
   at `preValidation`, because `@fastify/rate-limit` attaches route-level hooks and those always run
   after instance-level ones of the same type — an `onRequest` guard would be unreachable by the
