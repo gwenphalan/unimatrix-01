@@ -3,11 +3,14 @@ import { describe, expect, it } from "vitest";
 import {
   createSecretBodySchema,
   deleteSecretsBodySchema,
+  getSecretQuerySchema,
+  listSecretsQuerySchema,
   listSecretsResponseSchema,
   rotateSecretBodySchema,
   secretMaskedPrefixSchema,
   secretMetadataSchema,
   secretNameSchema,
+  secretValueResponseSchema,
   secretValueSchema,
   SECRET_VALUE_MAX_LENGTH,
 } from "../src/index.js";
@@ -122,6 +125,55 @@ describe("listSecretsResponseSchema", () => {
   it("rejects an unknown key, proving strictObject", () => {
     expect(
       listSecretsResponseSchema.safeParse({ secrets: [VALID_METADATA], extra: true }).success,
+    ).toBe(false);
+  });
+});
+
+describe("getSecretQuerySchema", () => {
+  it("accepts a minimal valid query", () => {
+    expect(getSecretQuerySchema.safeParse({ name: "github/api-token" }).success).toBe(true);
+  });
+
+  it("rejects an extra key, proving strictObject", () => {
+    expect(
+      getSecretQuerySchema.safeParse({ name: "github/api-token", extra: true }).success,
+    ).toBe(false);
+  });
+
+  it("rejects an invalid name", () => {
+    expect(getSecretQuerySchema.safeParse({ name: "Github_Token" }).success).toBe(false);
+  });
+});
+
+describe("listSecretsQuerySchema", () => {
+  it("accepts an empty object", () => {
+    expect(listSecretsQuerySchema.safeParse({}).success).toBe(true);
+  });
+
+  it("rejects any key, proving strictObject", () => {
+    expect(listSecretsQuerySchema.safeParse({ name: "github/api-token" }).success).toBe(false);
+  });
+});
+
+describe("secretValueResponseSchema", () => {
+  const VALID_VALUE_RESPONSE = { name: "github/api-token", value: "hunter2" };
+
+  it("accepts a minimal valid response", () => {
+    expect(secretValueResponseSchema.safeParse(VALID_VALUE_RESPONSE).success).toBe(true);
+  });
+
+  it("rejects an extra key, proving strictObject", () => {
+    expect(
+      secretValueResponseSchema.safeParse({ ...VALID_VALUE_RESPONSE, extra: true }).success,
+    ).toBe(false);
+  });
+
+  it("rejects an over-length value", () => {
+    expect(
+      secretValueResponseSchema.safeParse({
+        ...VALID_VALUE_RESPONSE,
+        value: "x".repeat(SECRET_VALUE_MAX_LENGTH + 1),
+      }).success,
     ).toBe(false);
   });
 });

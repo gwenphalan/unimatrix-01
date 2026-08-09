@@ -3,9 +3,9 @@ import { z } from "zod";
 /**
  * These shapes back the secrets store served by `apps/secrets` — a Fastify
  * service with its own Drizzle schema, distinct from `@unimatrix/secrets`
- * (crypto, no I/O) and from `@unimatrix/db`. It ships only `/health` today;
- * the routes these shapes describe (list, create, rotate, delete, and the
- * scoped service-read) are later items — see `.notes/01-todo/secrets.todo.md`.
+ * (crypto, no I/O) and from `@unimatrix/db`. The scoped read route needs a
+ * `read`-capability service token; create, rotate, delete and list metadata
+ * need `manage`. No route reachable by a `manage` token returns a value.
  */
 
 /**
@@ -43,12 +43,31 @@ export const secretMaskedPrefixSchema = z.string().min(1).max(32);
 
 export type SecretMaskedPrefix = z.output<typeof secretMaskedPrefixSchema>;
 
+/** Query for the scoped read route — a name and nothing else. */
+export const getSecretQuerySchema = z.strictObject({
+  name: secretNameSchema,
+});
+
+export type GetSecretQuery = z.output<typeof getSecretQuerySchema>;
+
+/**
+ * The one response shape in this file that carries a decrypted value.
+ * `apps/secrets`' scoped read route is its only producer, and reaching it
+ * needs a `read`-capability service token — nothing an admin surface can
+ * call returns this shape.
+ */
+export const secretValueResponseSchema = z.strictObject({
+  name: secretNameSchema,
+  value: secretValueSchema,
+});
+
+export type SecretValueResponse = z.output<typeof secretValueResponseSchema>;
+
 /**
  * `kekVersion` is metadata, not a value — it makes incremental rotation
  * observable (which rows still need re-sealing under the newest key) without
- * exposing anything about the plaintext. There is no `description` field and
- * no shape for reading a value back over a browser session; the absence is
- * the security property.
+ * exposing anything about the plaintext. There is no `description` field.
+ * `secretValueResponseSchema` above is the only shape here that carries one.
  */
 export const secretMetadataSchema = z.strictObject({
   name: secretNameSchema,
@@ -65,6 +84,15 @@ export const listSecretsResponseSchema = z.strictObject({
 });
 
 export type ListSecretsResponse = z.output<typeof listSecretsResponseSchema>;
+
+/**
+ * Not optional and not `z.object({}).passthrough()` — an empty
+ * `strictObject` is what makes "no value under any query parameter" a
+ * property of the route rather than a claim about the handler.
+ */
+export const listSecretsQuerySchema = z.strictObject({});
+
+export type ListSecretsQuery = z.output<typeof listSecretsQuerySchema>;
 
 export const createSecretBodySchema = z.strictObject({
   name: secretNameSchema,
