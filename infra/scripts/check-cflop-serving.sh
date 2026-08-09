@@ -149,12 +149,25 @@ check_body_contains /nonsense '<div id="app"></div>'
 check_body_contains /robots.txt 'Sitemap: https://cflop.unimatrix-01.dev/sitemap.xml'
 check_body_contains /sitemap.xml '<loc>https://cflop.unimatrix-01.dev/</loc>'
 
+# A tab open across a deploy still has `import()` calls pointing at chunk hashes
+# the new build dropped, so the HTML has to be `no-cache` or a fresh navigation
+# could be served a stale document out of the browser's heuristic cache. The
+# missing-asset row is the regression guard for `$uri` vs `$request_uri`: keyed
+# on the wrong variable, a 404 for a hash a later deploy could reissue would
+# cache `immutable` for a year instead.
+check_header / cache-control 'no-cache'
+check_header "${bundle}" cache-control 'public, max-age=31536000, immutable'
+check_header /assets/gone-0000000000000000.js cache-control 'no-cache'
+
 check_header /robots.txt content-type 'text/plain'
 check_header /sitemap.xml content-type 'text/xml'
 
 # `always` on both `add_header` directives is the only reason these survive a
-# redirect or an error response.
-for path in / /learn/ /nonsense; do
+# redirect or an error response. The hashed bundle is in this list too — it is
+# the one path served out of the `map`-selected cache-control block rather than
+# the top-level `server` one, so it is the row that would actually catch a
+# location-level `add_header` stripping these on a JS asset.
+for path in / /learn/ /nonsense "${bundle}"; do
   check_header "${path}" content-security-policy "frame-ancestors 'self'"
   check_header "${path}" x-content-type-options nosniff
 done

@@ -29,7 +29,7 @@ export default defineConfig({
       // `head: () => ({ meta: [...] })` bodies only run when the router renders
       // a route, which the Playwright smoke suite does and this suite does not.
       // Those statements are real and shipped, just unreachable from here.
-      thresholds: { statements: 61, functions: 53 },
+      thresholds: { statements: 65, functions: 57 },
     }),
     environment: "jsdom",
     include: ["test/**/*.test.ts", "test/**/*.test.tsx"],

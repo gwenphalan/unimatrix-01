@@ -176,15 +176,17 @@ arrive in answer to the ping" comparison runs against a clock the API also
 filters on, so no local skew enters the arithmetic.
 
 The primary signal is CodeRabbit's commit status on the pinned sha, context
-`CodeRabbit`, read from the combined status endpoint. It is undocumented — four
-descriptions measured across two PRs — so an absent context degrades to matching
-the comments and says so on stderr rather than hanging:
+`CodeRabbit`, read from the combined status endpoint. It is undocumented — five
+descriptions measured across three PRs — so an absent context degrades to
+matching the comments and says so on stderr rather than hanging:
 
   Review queued                                  keep polling
   Review in progress                             said once, then the heartbeat
   Review skipped: ...   updated after the ping    the ping was swallowed
   Review skipped: ...   updated before the ping    this repo's resting state
   Review completed                               read the comments for the outcome
+  Review rate limited   updated after the ping    ride out the cooldown, then re-ping
+  Review rate limited   updated before the ping    a refusal already ridden out
 
 The `state` field is not read. It was measured `success` for both the skip and
 the completion, so branching on it would call a swallowed ping a finished
@@ -496,11 +498,19 @@ Otherwise, from phase 2's own ping-and-wait, one line, whichever applies:
   refused: rate limited, cooldown <n>m exceeds threshold
   refused: rate limited, countdown unreadable — the ping is yours
   refused: rate limited again after one re-ping
+  refused: rate limited again after one re-ping — the included review budget is spent, not a short cooldown
   refused: merged, CodeRabbit is done for good
   refused: head commit changed mid-review, reviewed head was <sha>
   refused: review failed — read the comment
   refused: skipped — ping did not register    re-ping, nothing was spent
   nothing reviewable — that IS the review
+
+Also on stdout, from `ride_out_cooldown` itself — reached at arm time before
+the first ping, or from either poll-loop refusal above, comment or status —
+whenever the cooldown is short enough to ride out rather than refuse. A live
+cooldown can run up to SHIP_PR_MAX_COOLDOWN (30m default) with nothing else
+printed, and this is the one line that says the run is still alive through it:
+  cooling down <n>m, [re-]pinging at <time>   riding out a rate limit, then one ping
 
 The post-review wait — reached from `reviewed: <base> -> <n>`, from the
 startup baseline read finding the review count already > 0, and, minus the
@@ -565,7 +575,6 @@ Also on stderr, said once where they apply:
   live rate-limit marker at arm time, <n>m left
   stale rate-limit marker at arm time, deadline lapsed — pinging anyway
   rate-limit marker at arm time, countdown unreadable — pinging anyway
-  cooling down <n>m, [re-]pinging at <time>   riding out a rate limit, then one ping
   pinged at <time> / re-pinged at <time>      the ping is posted; the wait goes on
   auto-merge armed on <sha> — GitHub squashes once the required checks pass
   auto-merge armed UNREVIEWED on <sha> — nothing has read this diff
@@ -1750,9 +1759,10 @@ cooldown_remaining() {
   echo $((deadline + count * secs - $(date -u +%s)))
 }
 
-# The rate-limit path, reached from two places: the startup check below and the
-# poll loop's own arm. Called plainly and never in a subshell, so its writes to
-# `since` and `refusals_absorbed` are the caller's.
+# The rate-limit path, reached from three places: the startup check below and
+# the poll loop's own two arms, one keyed on the comment and one on the commit
+# status. Called plainly and never in a subshell, so its writes to `since` and
+# `refusals_absorbed` are the caller's.
 #
 # Prints an outcome line on every branch. Returns 0 when a ping was posted and
 # waiting should continue, 1 when the outcome is terminal.
@@ -1772,7 +1782,23 @@ ride_out_cooldown() {
     verb="pinged"
   fi
   if [ "$refusals_absorbed" -gt 1 ]; then
-    echo "refused: rate limited again after one re-ping"
+    # A plain cooldown and a spent Fair Usage quota read identically as
+    # "rate limited" everywhere else in this function, but they are not the
+    # same wait: re-arming this later helps the first and does nothing for
+    # the second. `bodies` is safe to read here — the ledger comment above
+    # `refusals_absorbed=0` is why the startup call can never reach this
+    # branch, so whichever poll-loop arm got here has already populated it
+    # for the refusal being reported.
+    local quota="" b
+    for b in ${bodies+"${bodies[@]}"}; do
+      case $b in
+        *"Fair Usage Limits Policy"*)
+          quota=" — the included review budget is spent, not a short cooldown"
+          break
+          ;;
+      esac
+    done
+    echo "refused: rate limited again after one re-ping${quota}"
     return 1
   fi
   if [ "$auto_reping" -ne 1 ]; then
@@ -1805,7 +1831,11 @@ ride_out_cooldown() {
   # edited, so pinging exactly on the boundary earns a second refusal and burns
   # the one retry.
   remaining=$((remaining + 15))
-  echo "cooling down $((remaining / 60))m, ${again}pinging at $(local_time $(($(date -u +%s) + remaining)))" >&2
+  # stdout, not stderr: a cooldown can run up to SHIP_PR_MAX_COOLDOWN (30m
+  # default) with nothing else printed in between, and on stderr that stretch
+  # produced no `Monitor` notification at all — indistinguishable from a dead
+  # script for as long as the cooldown lasts.
+  echo "cooling down $((remaining / 60))m, ${again}pinging at $(local_time $(($(date -u +%s) + remaining)))"
   # Offline is the fixture harness, and it has to reach the arithmetic above —
   # that is the point of routing both entry points through one function. What it
   # must not do is sleep out a real countdown or post to a real PR, so it skips
@@ -1908,6 +1938,10 @@ started=$(date +%s)
 while true; do
   ok=1
   err=""
+  # Set inside the status case below, and read just once, right after it, to
+  # keep the body loop from re-matching the same refusal the status already
+  # absorbed — see the comment at the arm that sets it.
+  rate_limited_by_status=0
 
   if [ "$offline" -eq 1 ]; then
     if [ "$step" -ge "${#fixtures[@]}" ]; then
@@ -1957,12 +1991,13 @@ while true; do
     fails=0
 
     # Primary signal: CodeRabbit's own commit status on the pinned head. It is
-    # undocumented — four descriptions measured across two PRs — so an absent
+    # undocumented — five descriptions measured across three PRs — so an absent
     # context degrades to the comment matching below rather than hanging.
     #
     # The `state` field is deliberately not read. It was measured `success` for
-    # both "Review skipped" and "Review completed", so branching on it would call
-    # a swallowed ping a finished review.
+    # "Review skipped", "Review completed" and "Review rate limited" alike, so
+    # branching on it would call a swallowed ping, or a refusal, a finished
+    # review.
     if [ -z "$status_line" ]; then
       if [ "$status_absent_said" -eq 0 ]; then
         status_absent_said=1
@@ -1987,6 +2022,22 @@ while true; do
           if [ "$in_progress" -eq 0 ]; then
             in_progress=1
             echo "review in progress" >&2
+          fi
+          ;;
+        "Review rate limited"*)
+          # Same discriminator as "Review skipped" above, and for the same
+          # reason: the status carries no `since` filter of its own, so only a
+          # stamp after our own ping is a fresh refusal rather than one already
+          # ridden out before this run's ping went anywhere near it.
+          if [ "$(date -u -d "$status_at" +%s 2>/dev/null || echo 0)" -gt "$ping_epoch" ]; then
+            refusals_absorbed=$((refusals_absorbed + 1))
+            ride_out_cooldown || exit 0
+            # The comment behind this same refusal is still sitting in
+            # `$bodies` from the read at the top of this iteration — without
+            # this flag the loop below would match it too and count one
+            # CodeRabbit refusal as two, burning the one-retry budget on a
+            # single reply.
+            rate_limited_by_status=1
           fi
           ;;
       esac
@@ -2018,6 +2069,13 @@ while true; do
     # reason: `set -u` treats an empty array's expansion as unset on Bash before
     # 4.4, and a poll that turns up no comments in the window is the ordinary
     # case rather than an edge — every quiet fixture reaches here with none.
+    #
+    # The `rate_limited_by_status` guard sits on the rate-limit arm alone, not
+    # around this whole loop: skipping the loop entirely also skipped whatever
+    # else the same poll carried — a co-present "did not have any reviewable
+    # changes", "The pull request is closed" or "Review failed" body went
+    # unread, and since this loop is what advances `since`, unread here meant
+    # unread on every later poll too.
     for body in ${bodies+"${bodies[@]}"}; do
       case $body in
         # Ahead of "review in progress" within a single body: a clean review
@@ -2031,14 +2089,19 @@ while true; do
           fi
           exit 0
           ;;
-        *"rate limited by coderabbit.ai"*)
-          # A refusal read nothing, so the re-ping is still the *first* review.
-          # Only this outcome is worth riding out; the rest are final.
-          #
-          # Counted here rather than inside the function, which also serves the
-          # startup path — where nothing has been refused yet.
-          refusals_absorbed=$((refusals_absorbed + 1))
-          ride_out_cooldown || exit 0
+        *"rate limited by coderabbit.ai"* | *"Review rate limited."*)
+          # Skipped when the status case above already absorbed this poll's
+          # refusal: the comment carrying it is still sitting in `$bodies`, and
+          # matching it here too would be the same refusal counted twice.
+          if [ "$rate_limited_by_status" -eq 0 ]; then
+            # A refusal read nothing, so the re-ping is still the *first* review.
+            # Only this outcome is worth riding out; the rest are final.
+            #
+            # Counted here rather than inside the function, which also serves the
+            # startup path — where nothing has been refused yet.
+            refusals_absorbed=$((refusals_absorbed + 1))
+            ride_out_cooldown || exit 0
+          fi
           break
           ;;
         *"did not have any reviewable changes"*)

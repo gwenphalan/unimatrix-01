@@ -93,14 +93,22 @@ on every PR, so gating on it would be reading the signal the review wait exists 
 
 Confirm a review from the review itself regardless; the description says one ran, not what it found.
 
-(A rate-limited run is documented upstream as reporting `pass` with the text `Review rate limited`.
-That exact string has not been observed here — treat it as read, not measured.)
+A rate-limited run reports `pass` with the text `Review rate limited` — measured on PR #236,
+alongside comments in both the older and newer wordings below. The newer comment names a spent
+**quota** ("Your included review limit is currently reached under our Fair Usage Limits Policy"),
+not a short wait: its own countdown did not hold on the PR it was measured on — the re-ping after it
+expired was refused again with a fresh short countdown of its own. Treat two rate-limit refusals in a
+row on the same PR as the budget being spent for now, not as a cooldown that just needs longer.
 
-1. Check the summary comment for the marker
+1. Check the summary comment for the marker — either `rate limited by coderabbit.ai` or the newer
+   `Review rate limited.`
    (`gh pr view <pr> --json comments`, grep `rate limited`).
-2. **The "Next review available in: N minutes" countdown is not a live clock**, so polling for the
+2. **The countdown — "Next review available in: N minutes" on the older wording, "next included
+   review will be available in N minutes" on the newer one — is not a live clock**, so polling for the
    marker to vanish can wait forever and the deadline is the comment's **`updated_at` + N**, not
-   `created_at` and not "now + N":
+   `created_at` and not "now + N". CodeRabbit has been seen posting both wordings for the same
+   refusal, seconds apart; `coderabbit-deadline.sh` prefers whichever one actually carries a readable
+   countdown, not just whichever is newest:
 
    ```sh
    .claude/skills/ship-pr/scripts/coderabbit-deadline.sh <owner/repo> <pr>
@@ -202,7 +210,7 @@ from upstream and marked as such.
 | --- | --- | --- |
 | Reviewed, findings | count > baseline — counting only reviews with a **body**, see above | yes — triage them |
 | Reviewed clean | `No actionable comments were generated in the recent review` — **count stays at baseline** | yes |
-| Rate-limited | `rate limited by coderabbit.ai` | yes — cool down, re-ping |
+| Rate-limited | `rate limited by coderabbit.ai`, or the newer `Review rate limited.`, or the `Review rate limited` commit status | yes — cool down, re-ping |
 | Merged PR | `Review failed` / `The pull request is closed` | yes — CodeRabbit is done, forever |
 | Head moved mid-review | `Review failed` / `The head commit changed during the review from <a> to <b>` | yes — see below |
 | Ping never registered | the commit status below reads `Review skipped: ...` with an `updated_at` **later than** the ping | yes — re-ping, nothing was spent |
@@ -226,13 +234,15 @@ gh api "repos/<owner>/<repo>/commits/<head-sha>/status" \
 | `Review skipped: automatic reviews are disabled`, `updated_at` **before** your ping | this repo's resting state, on every PR from the moment it opens |
 | `Review skipped: ...`, `updated_at` **after** your ping | the ping was swallowed |
 | `Review completed` | it stopped — read the summary comment for what it found |
+| `Review rate limited`, `updated_at` **before** your ping | a refusal already ridden out, nothing new to act on |
+| `Review rate limited`, `updated_at` **after** your ping | this ping was refused — ride out the cooldown and re-ping |
 
-Three traps. **`state` is useless**: measured `success` for both the skip and the completion, so
-never branch on it — the `updated_at` is the whole discriminator. **Statuses are per head sha**, so
-pin the sha you pinged on; a push landing after the review leaves the new head carrying only the
-resting skip. And the vocabulary is **undocumented** — four descriptions across two PRs, absent from
-the yaml reference, the commands guide and the plans page — so treat an absent context as "fall back
-to the summary comment", not as an answer.
+Three traps. **`state` is useless**: measured `success` for the skip, the completion and the rate
+limit alike, so never branch on it — the `updated_at` is the whole discriminator. **Statuses are per
+head sha**, so pin the sha you pinged on; a push landing after the review leaves the new head carrying
+only the resting skip. And the vocabulary is **undocumented** — five descriptions across three PRs,
+absent from the yaml reference, the commands guide and the plans page — so treat an absent context as
+"fall back to the summary comment", not as an answer.
 
 **The waiter can merge for you on the clean row, and on the findings row too, on different terms.** On a clean review it arms GitHub's native auto-merge immediately,
 pinned with `--match-head-commit` to the sha that was actually reviewed; GitHub then squashes once

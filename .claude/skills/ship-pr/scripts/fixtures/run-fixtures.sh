@@ -470,6 +470,7 @@ EOF
 
 check rate-limited-retry 0 "$(f rate-limited clean)" \
   SHIP_PR_COMMENTS_FIXTURE="$here/wait/rate-limited/comments.json" <<'EOF'
+cooling down 0m, re-pinging at <time>
 offline: re-ping suppressed, continuing as if posted
 reviewed clean, count unchanged at 0
 offline: auto-merge not armed (would arm on fixture-head-sha)
@@ -478,8 +479,70 @@ EOF
 # One retry and no more: the second refusal is the owner's call.
 check rate-limited-cap 0 "$(f rate-limited rate-limited)" \
   SHIP_PR_COMMENTS_FIXTURE="$here/wait/rate-limited/comments.json" <<'EOF'
+cooling down 0m, re-pinging at <time>
 offline: re-ping suppressed, continuing as if posted
 refused: rate limited again after one re-ping
+EOF
+
+# CodeRabbit's newer wording, matched on its own with no commit status to
+# help — proves the widened body-loop arm catches "Review rate limited." the
+# same way it already caught "rate limited by coderabbit.ai".
+check rate-limited-new-wording 0 "$(f rate-limited-new)" <<'EOF'
+refused: rate limited
+EOF
+
+# An empty comment list, so only the commit status can be responsible for
+# this outcome — proves the "Review rate limited" status arm acts on its own,
+# not merely alongside a comment the body loop would have caught anyway.
+check rate-limited-status 0 "$(f rate-limited-status)" <<'EOF'
+refused: rate limited
+EOF
+
+# The status twin of skipped-resting: the same description, stamped BEFORE
+# the ping, is a refusal this run never earned rather than one to ride out.
+check rate-limited-status-resting 0 "$(f rate-limited-status-resting)" <<'EOF'
+FIXTURES EXHAUSTED
+EOF
+
+# What CodeRabbit actually posted on PR #236: a "Review rate limited" commit
+# status alongside BOTH comment wordings, all in the same poll. Without
+# `rate_limited_by_status` gating the body loop, the status arm and a comment
+# arm would each count this refusal once — two increments for one refusal,
+# tripping the one-retry cap on the very first poll instead of riding it out.
+# The expected shape is identical to `rate-limited-retry`'s: reaching the
+# second poll's clean review is only possible if the first poll absorbed
+# exactly one refusal.
+check rate-limited-realistic 0 "$(f rate-limited-realistic clean)" \
+  SHIP_PR_COMMENTS_FIXTURE="$here/wait/rate-limited-realistic/comments.json" <<'EOF'
+cooling down 0m, re-pinging at <time>
+offline: re-ping suppressed, continuing as if posted
+reviewed clean, count unchanged at 0
+offline: auto-merge not armed (would arm on fixture-head-sha)
+EOF
+
+# The regression this pins: the status arm absorbing a refusal must not skip
+# the body loop outright, or a co-present outcome comment in the same poll —
+# here "did not have any reviewable changes" — goes unread. Gating only the
+# rate-limit arm inside the loop reads it after `rate_limited_by_status` is
+# already set; gating the whole loop the way the code used to would instead
+# print `FIXTURES EXHAUSTED`, having advanced `since` past a comment nothing
+# reads a second time.
+check rate-limited-status-and-no-changes 0 "$(f rate-limited-status-and-no-changes)" \
+  SHIP_PR_COMMENTS_FIXTURE="$here/wait/rate-limited/comments.json" <<'EOF'
+cooling down 0m, re-pinging at <time>
+offline: re-ping suppressed, continuing as if posted
+nothing reviewable — that IS the review
+EOF
+
+# The cap message names the quota when the refusal that tripped it carries the
+# Fair Usage wording, because that refusal is not the plain cooldown the rest
+# of this function's lines describe — riding out a longer wait would not have
+# changed the outcome.
+check rate-limited-cap-quota 0 "$(f rate-limited rate-limited-quota)" \
+  SHIP_PR_COMMENTS_FIXTURE="$here/wait/rate-limited/comments.json" <<'EOF'
+cooling down 0m, re-pinging at <time>
+offline: re-ping suppressed, continuing as if posted
+refused: rate limited again after one re-ping — the included review budget is spent, not a short cooldown
 EOF
 
 # No commit status at all — the comment fallback reads the skip notice, and
@@ -623,6 +686,70 @@ else
   failures=$((failures + 1))
   printf '  FAIL  already-reviewed-on-stderr (expected off stdout and on stderr)\n'
 fi
+
+# --- coderabbit-deadline.sh -------------------------------------------
+#
+# Called directly rather than through `check()` and watch-pr.sh: the script
+# already reads SHIP_PR_COMMENTS_FIXTURE itself, and going through watch-pr.sh
+# adds the real wall clock (cooldown_remaining subtracts `date -u +%s` from
+# every fixture's fixed 2026 timestamp) for no coverage in return — every
+# fixture reads as long-elapsed regardless of which marker the tie-break
+# picks. Reading the deadline line straight off the script is what actually
+# pins the tie-break, not just the arithmetic downstream of it.
+#
+# Confirmed to matter: reverting coderabbit-deadline.sh to its pre-PR content
+# in a scratch copy turns both cases below red — the new-wording case because
+# the old `select` never matched "Review rate limited." at all, and the
+# stale-older-marker case because the old code had no tie-break to bound.
+deadline_script="$here/../coderabbit-deadline.sh"
+
+deadline_case_wanted() {
+  local name=$1
+  [ "${#wanted[@]}" -eq 0 ] && return 0
+  local entry
+  for entry in "${wanted[@]}"; do
+    [ "$entry" = "$name" ] && return 0
+  done
+  return 1
+}
+
+deadline_check() {
+  local name=$1 fixture=$2 expected=$3 actual
+  deadline_case_wanted "$name" || return 0
+  ran=$((ran + 1))
+  actual=$(SHIP_PR_COMMENTS_FIXTURE="$fixture" bash "$deadline_script" fixture/repo 1 2>&1)
+  if [ "$actual" = "$expected" ]; then
+    printf '  ok    %s\n' "$name"
+  else
+    failures=$((failures + 1))
+    printf '  FAIL  %s\n' "$name"
+    diff <(printf '%s\n' "$expected") <(printf '%s\n' "$actual") | sed 's/^/        /'
+  fi
+}
+
+# A rate-limit comment in CodeRabbit's newer wording only — no comment
+# anywhere in the fixture carries the older "rate limited by coderabbit.ai"
+# phrase the pre-PR `select` matched on.
+deadline_check coderabbit-deadline-new-wording-only \
+  "$here/wait/rate-limited-new/comments.json" \
+  "updated=2026-07-31T18:04:11Z countdown=8 seconds"
+
+# The regression this file exists to close: an older marker at 18:00:00Z with
+# a readable countdown, a newer marker an hour later with none. The tie-break
+# must not treat the hour-old marker as this refusal's own — it reports the
+# newest marker's countdown=unknown instead of a deadline already an hour in
+# the past.
+deadline_check coderabbit-deadline-stale-older-marker-falls-back \
+  "$here/comments-stale-older-marker.json" \
+  "updated=2026-07-31T19:00:00Z countdown=unknown"
+
+# The case the tie-break exists for: the newest marker (2 seconds later) has
+# no readable countdown, and the older sibling does. Proves the 60s window
+# still resolves the pair the tie-break was built for, not just the hour-apart
+# pair above that it now refuses.
+deadline_check coderabbit-deadline-near-tie-break-still-resolves \
+  "$here/comments-near-tie-break.json" \
+  "updated=2026-07-31T18:14:19Z countdown=6 seconds"
 
 # --- cleanup-branches.sh -----------------------------------------------
 #
