@@ -161,7 +161,8 @@ function AlertDialogCancel({
         // ancestor and `outline` would otherwise paint flush with the dialog's own
         // `bg-background`. The content is the surface here, so both branches lift.
         className={cn(
-          "not-in-[.site-panel]:bg-input/30 not-in-[.site-panel]:hover:bg-input/50",
+          variant === "outline" &&
+            "not-in-[.site-panel]:bg-input/30 not-in-[.site-panel]:hover:bg-input/50",
           className,
         )}
         {...props}
