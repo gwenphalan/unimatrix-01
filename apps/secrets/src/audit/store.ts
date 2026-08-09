@@ -1,4 +1,4 @@
-import type { SecretsDatabaseInstance } from "../db/client.js";
+import type { SecretsDatabaseWriter } from "../db/client.js";
 import { secretAuditLogTable } from "../db/schema/index.js";
 
 /**
@@ -36,8 +36,11 @@ export interface SecretAuditEntry {
  * The only export this module will ever have. Append-only is not a property the
  * table can assert for itself — SQLite has no such mode — so it is held by
  * nothing here being able to change or remove a row.
+ *
+ * Takes a {@link SecretsDatabaseWriter} rather than the database so a caller
+ * can pass a transaction handle and land the row with the mutation it records.
  */
-export function recordAuditEntry(db: SecretsDatabaseInstance["db"], entry: SecretAuditEntry): void {
+export function recordAuditEntry(db: SecretsDatabaseWriter, entry: SecretAuditEntry): void {
   db.insert(secretAuditLogTable)
     .values({
       action: entry.action,

@@ -13,7 +13,11 @@
 // absent, so a CLI there could not run in the container at all.
 import { recordAuditEntry } from "../audit/index.js";
 import { resolveSecretsDatabaseFilePath } from "../config.js";
-import { createSecretsDatabase, type SecretsDatabaseInstance } from "../db/client.js";
+import {
+  createSecretsDatabase,
+  type SecretsDatabaseInstance,
+  type SecretsDatabaseWriter,
+} from "../db/client.js";
 import {
   isServiceTokenCapability,
   issueServiceToken,
@@ -33,20 +37,57 @@ export interface ServiceTokenCliDeps {
   write: (line: string) => void;
 }
 
-function readFlag(argv: readonly string[], flag: string): string | undefined {
-  const index = argv.indexOf(flag);
-
-  if (index === -1) {
-    return undefined;
-  }
-
-  return argv[index + 1];
+/**
+ * Runs a token mutation and the audit row that records it as one transaction.
+ * Synchronous on purpose: `better-sqlite3` is a synchronous driver, so no other
+ * JavaScript can interleave between the two writes — an `async` callback would
+ * hand control back to the event loop mid-transaction. `behavior: "immediate"`
+ * takes the write lock before issuance reads the name it is about to claim,
+ * matching `apps/api/src/modules/user-data/store.ts`.
+ */
+function writeAtomically<T>(
+  db: ServiceTokenCliDeps["db"],
+  write: (tx: SecretsDatabaseWriter) => T,
+): T {
+  return db.transaction(write, { behavior: "immediate" });
 }
 
-function requireFlag(argv: readonly string[], flag: string): string {
-  const value = readFlag(argv, flag);
+/**
+ * Consumes exactly the flags a subcommand supports, and refuses anything else.
+ * A credential-minting CLI must not run on arguments it did not understand: a
+ * misspelt `--scope` would otherwise mint a token scoped to the wrong prefix
+ * and say nothing about it.
+ */
+function parseFlags(argv: readonly string[], supported: readonly string[]): Map<string, string> {
+  const values = new Map<string, string>();
 
-  if (value === undefined || value.startsWith("--")) {
+  for (let index = 0; index < argv.length; index += 2) {
+    const flag = argv[index] ?? "";
+
+    if (!supported.includes(flag)) {
+      throw new Error(`Unknown argument ${JSON.stringify(flag)}.\n\n${USAGE}`);
+    }
+
+    if (values.has(flag)) {
+      throw new Error(`${flag} was given more than once.\n\n${USAGE}`);
+    }
+
+    const value = argv[index + 1];
+
+    if (value === undefined || value.startsWith("--")) {
+      throw new Error(`${flag} is required.\n\n${USAGE}`);
+    }
+
+    values.set(flag, value);
+  }
+
+  return values;
+}
+
+function requireFlag(values: ReadonlyMap<string, string>, flag: string): string {
+  const value = values.get(flag);
+
+  if (value === undefined) {
     throw new Error(`${flag} is required.\n\n${USAGE}`);
   }
 
@@ -54,7 +95,8 @@ function requireFlag(argv: readonly string[], flag: string): string {
 }
 
 function runIssue(argv: readonly string[], deps: ServiceTokenCliDeps): void {
-  const capability = requireFlag(argv, "--capability");
+  const flags = parseFlags(argv, ["--name", "--scope", "--capability"]);
+  const capability = requireFlag(flags, "--capability");
 
   // No default. Defaulting either way silently mints the wrong kind of
   // credential, and the two are mutually exclusive by design.
@@ -62,17 +104,21 @@ function runIssue(argv: readonly string[], deps: ServiceTokenCliDeps): void {
     throw new Error(`--capability must be read or manage.\n\n${USAGE}`);
   }
 
-  const issued = issueServiceToken(deps.db, {
-    name: requireFlag(argv, "--name"),
-    scopePrefix: requireFlag(argv, "--scope"),
-    capability,
-  });
+  const name = requireFlag(flags, "--name");
+  const scopePrefix = requireFlag(flags, "--scope");
+  // One transaction, so a failed audit write takes the token with it. An
+  // unaudited credential is worse than an unissued one.
+  const issued = writeAtomically(deps.db, (tx) => {
+    const result = issueServiceToken(tx, { name, scopePrefix, capability });
 
-  recordAuditEntry(deps.db, {
-    action: "service_token.issued",
-    actorKind: "host-cli",
-    outcome: "success",
-    serviceTokenId: issued.record.id,
+    recordAuditEntry(tx, {
+      action: "service_token.issued",
+      actorKind: "host-cli",
+      outcome: "success",
+      serviceTokenId: result.record.id,
+    });
+
+    return result;
   });
 
   deps.write(`Issued service token ${JSON.stringify(issued.record.name)}.`);
@@ -84,24 +130,30 @@ function runIssue(argv: readonly string[], deps: ServiceTokenCliDeps): void {
 }
 
 function runRevoke(argv: readonly string[], deps: ServiceTokenCliDeps): void {
-  const name = requireFlag(argv, "--name");
-  const revoked = revokeServiceToken(deps.db, name);
+  const name = requireFlag(parseFlags(argv, ["--name"]), "--name");
+  const revoked = writeAtomically(deps.db, (tx) => {
+    const record = revokeServiceToken(tx, name);
 
-  if (revoked === null) {
-    throw new Error(`No active service token named ${JSON.stringify(name)}.`);
-  }
+    if (record === null) {
+      throw new Error(`No active service token named ${JSON.stringify(name)}.`);
+    }
 
-  recordAuditEntry(deps.db, {
-    action: "service_token.revoked",
-    actorKind: "host-cli",
-    outcome: "success",
-    serviceTokenId: revoked.id,
+    recordAuditEntry(tx, {
+      action: "service_token.revoked",
+      actorKind: "host-cli",
+      outcome: "success",
+      serviceTokenId: record.id,
+    });
+
+    return record;
   });
 
   deps.write(`Revoked service token ${JSON.stringify(revoked.name)}.`);
 }
 
-function runList(deps: ServiceTokenCliDeps): void {
+function runList(argv: readonly string[], deps: ServiceTokenCliDeps): void {
+  parseFlags(argv, []);
+
   const tokens = listServiceTokens(deps.db);
 
   if (tokens.length === 0) {
@@ -144,7 +196,7 @@ export function runServiceTokenCli(argv: readonly string[], deps: ServiceTokenCl
 
       return;
     case "list":
-      runList(deps);
+      runList(rest, deps);
 
       return;
     default:

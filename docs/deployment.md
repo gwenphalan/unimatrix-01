@@ -228,8 +228,9 @@ two subcommands, and both they and `issue` append a row to the audit log.
 the shared overlay `dokploy-network` by default, which is what lets Traefik
 reach a stack that does have a domain. Measured on the host 2026-08-08: 12 of
 13 Compose services sit on it, including two PR previews and unrelated
-third-party stacks, so any container on the host can open a socket to this
-one. What stops them is the bearer token, not the network position.
+third-party stacks, so any container attached to `dokploy-network` can open a
+socket to this one. What stops them is the bearer token, not the network
+position.
 
 Dokploy's **Advanced → Isolated Deployment** toggle is the documented way off
 that shared network: it creates a network named after the stack's `appName`,

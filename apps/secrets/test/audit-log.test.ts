@@ -87,6 +87,28 @@ void test("a failed revoke appends nothing", () => {
   });
 });
 
+// The mutation and its row are one transaction, so the log cannot fall behind
+// the store: a credential that exists with nothing recording its issuance is
+// exactly what this table is for. Dropping the table is the cheapest real
+// failure — the insert throws inside the transaction, as a disk or schema fault
+// would.
+void test("a failing audit write rolls the token mutation back", () => {
+  withAuditFixture(({ instance, run }) => {
+    run("issue", "--name", "api", "--scope", "github", "--capability", "read");
+    instance.client.exec("DROP TABLE secret_audit_log");
+
+    assert.throws(() =>
+      run("issue", "--name", "deploy", "--scope", "dokploy", "--capability", "read"),
+    );
+    assert.throws(() => run("revoke", "--name", "api"));
+    assert.deepEqual(
+      listServiceTokens(instance.db).map((token) => `${token.name}:${String(token.revokedAt)}`),
+      ["api:null"],
+      "a token mutation survived the audit write that failed beside it",
+    );
+  });
+});
+
 void test("no audit column holds the token that was issued", () => {
   withAuditFixture(({ instance, run }) => {
     const printed = run("issue", "--name", "api", "--scope", "github", "--capability", "manage");

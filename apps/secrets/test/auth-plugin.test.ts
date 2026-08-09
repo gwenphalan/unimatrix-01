@@ -146,7 +146,12 @@ void test("authenticating stamps the token's last-used time", async () => {
       headers: { authorization: `Bearer ${issued.token}` },
     });
 
-    assert.notEqual(listServiceTokens(app.db)[0]?.lastUsedAt, null);
+    // Resolved and asserted present first: `[0]?.lastUsedAt` on an empty list
+    // is `undefined`, which passes a `notEqual(null)` while proving nothing.
+    const stored = listServiceTokens(app.db).find((token) => token.id === issued.record.id);
+
+    assert.ok(stored, "the issued token was not persisted");
+    assert.notEqual(stored.lastUsedAt, null);
   } finally {
     await app.close();
   }

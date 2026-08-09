@@ -3,6 +3,7 @@ import { dirname } from "node:path";
 
 import BetterSqlite3 from "better-sqlite3";
 import { drizzle, type BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
+import type { BaseSQLiteDatabase } from "drizzle-orm/sqlite-core";
 
 import * as schema from "./schema/index.js";
 
@@ -15,6 +16,18 @@ export interface SecretsDatabaseInstance {
   client: BetterSqlite3.Database;
   db: BetterSQLite3Database<typeof schema>;
 }
+
+/**
+ * The database or a transaction handle on it — the common supertype of both,
+ * so a store function typed to this writes through either. That is what lets a
+ * mutation and the audit row recording it share one transaction; see
+ * `src/cli/service-token.ts`.
+ */
+export type SecretsDatabaseWriter = BaseSQLiteDatabase<
+  "sync",
+  BetterSqlite3.RunResult,
+  typeof schema
+>;
 
 export function createSecretsDatabase(options: { filePath: string }): SecretsDatabaseInstance {
   const { filePath } = options;

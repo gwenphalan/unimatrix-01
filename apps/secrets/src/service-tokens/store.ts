@@ -3,13 +3,11 @@ import { randomUUID } from "node:crypto";
 import { secretNameSchema } from "@unimatrix/shared";
 import { and, eq, isNull, sql } from "drizzle-orm";
 
-import type { SecretsDatabaseInstance } from "../db/client.js";
+import type { SecretsDatabaseWriter } from "../db/client.js";
 import { serviceTokensTable } from "../db/schema/index.js";
 
 import { isServiceTokenCapability, type ServiceTokenCapability } from "./capability.js";
 import { generateServiceToken, hashServiceToken, isServiceTokenShape } from "./format.js";
-
-type SecretsDatabase = SecretsDatabaseInstance["db"];
 
 /**
  * A token is named for the consumer that holds it (`api`, `deploy-worker`), so
@@ -60,7 +58,7 @@ function createServiceTokenError(message: string): Error {
 }
 
 export function issueServiceToken(
-  db: SecretsDatabase,
+  db: SecretsDatabaseWriter,
   options: IssueServiceTokenOptions,
 ): IssuedServiceToken {
   const name = options.name.trim();
@@ -112,7 +110,10 @@ export function issueServiceToken(
 }
 
 /** Returns the revoked row, or `null` when no *active* token carries that name. */
-export function revokeServiceToken(db: SecretsDatabase, name: string): ServiceTokenSummary | null {
+export function revokeServiceToken(
+  db: SecretsDatabaseWriter,
+  name: string,
+): ServiceTokenSummary | null {
   const record = db
     .update(serviceTokensTable)
     .set({ revokedAt: sql`CURRENT_TIMESTAMP` })
@@ -124,7 +125,7 @@ export function revokeServiceToken(db: SecretsDatabase, name: string): ServiceTo
 }
 
 /** Revoked tokens included: a revocation nobody can see is a revocation nobody can audit. */
-export function listServiceTokens(db: SecretsDatabase): ServiceTokenSummary[] {
+export function listServiceTokens(db: SecretsDatabaseWriter): ServiceTokenSummary[] {
   return db
     .select(serviceTokenSummaryColumns)
     .from(serviceTokensTable)
@@ -145,7 +146,7 @@ export type ServiceTokenLookup =
   | { outcome: "active"; token: ServiceTokenSummary };
 
 export function findServiceTokenByPlaintext(
-  db: SecretsDatabase,
+  db: SecretsDatabaseWriter,
   presented: string,
 ): ServiceTokenLookup {
   if (!isServiceTokenShape(presented)) {
@@ -165,7 +166,7 @@ export function findServiceTokenByPlaintext(
   return token.revokedAt === null ? { outcome: "active", token } : { outcome: "revoked", token };
 }
 
-export function touchServiceTokenLastUsed(db: SecretsDatabase, id: string): void {
+export function touchServiceTokenLastUsed(db: SecretsDatabaseWriter, id: string): void {
   db.update(serviceTokensTable)
     .set({ lastUsedAt: sql`CURRENT_TIMESTAMP` })
     .where(eq(serviceTokensTable.id, id))

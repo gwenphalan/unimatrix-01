@@ -3,8 +3,9 @@
 ## 1. Overview
 `apps/secrets` is the Fastify service backing the Unimatrix secrets store — sealed value storage
 under a versioned KEK ring (`@unimatrix/secrets`). `/health` is the only route, and the only URL
-answerable without a bearer service token; everything else is 401, including a URL matching no
-route. No route here may ever serve a secret value, and even once the scoped read route lands it is
+answerable without a bearer service token: an unauthenticated request to anything else is a 401,
+including a URL matching no route, and only an authenticated one gets a 404 for an unmatched URL.
+No route here may ever serve a secret value, and even once the scoped read route lands it is
 the only one permitted to return a decrypted value. See `.notes/01-todo/secrets.todo.md` for the
 constraint list and the items (read/write routes, KEK rotation) this workspace does not yet
 implement.

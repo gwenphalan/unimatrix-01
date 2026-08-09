@@ -7,7 +7,11 @@ import test from "node:test";
 import { runServiceTokenCli } from "../src/cli/service-token.js";
 import { createSecretsDatabase, type SecretsDatabaseInstance } from "../src/db/client.js";
 import { migrateSecretsDatabase } from "../src/db/migrate.js";
-import { findServiceTokenByPlaintext, isServiceTokenShape } from "../src/service-tokens/index.js";
+import {
+  findServiceTokenByPlaintext,
+  isServiceTokenShape,
+  listServiceTokens,
+} from "../src/service-tokens/index.js";
 
 interface CliRun {
   db: SecretsDatabaseInstance["db"];
@@ -86,7 +90,10 @@ void test("list shows capability and scope but neither a digest nor a plaintext"
 
     assert.match(listed, /^name\tcapability\tscope\tcreated\tlast used\trevoked$/mu);
     assert.match(listed, /^api\tmanage\tgithub\t/mu);
-    assert.ok(!listed.includes(token ?? "unreachable"), "the listing printed the plaintext token");
+    // Resolved before it is used as a needle: a `?? "unreachable"` fallback
+    // would make this pass on an issuance that printed nothing at all.
+    assert.ok(token !== undefined, "issue printed no token");
+    assert.ok(!listed.includes(token), "the listing printed the plaintext token");
     assert.doesNotMatch(listed, /[0-9a-f]{64}/u, "the listing printed a digest");
   });
 });
@@ -98,6 +105,26 @@ void test("revoke marks the named token and then refuses to repeat itself", () =
     assert.deepEqual(run("revoke", "--name", "api"), ['Revoked service token "api".']);
     assert.throws(() => run("revoke", "--name", "api"), /No active service token/u);
     assert.match(run("list").join("\n"), /^api\tread\tgithub\t/mu);
+  });
+});
+
+// Ignoring an argument it did not understand is how a minting CLI hands out a
+// credential nobody asked for — a misspelt `--scope` must not fall through to
+// the default the flag would have set.
+void test("an unrecognised or repeated flag stops the command rather than being ignored", () => {
+  withCli(({ db, run }) => {
+    assert.throws(
+      () => run("issue", "--name", "api", "--scope", "github", "--capability", "read", "--force"),
+      /Unknown argument "--force"[\s\S]*Usage:/u,
+    );
+    assert.throws(
+      () =>
+        run("issue", "--name", "api", "--name", "other", "--scope", "g", "--capability", "read"),
+      /--name was given more than once/u,
+    );
+    assert.throws(() => run("revoke", "--name", "api", "--scope", "github"), /"--scope"/u);
+    assert.throws(() => run("list", "--name", "api"), /"--name"/u);
+    assert.deepEqual(listServiceTokens(db), [], "a refused command still minted a token");
   });
 });
 
