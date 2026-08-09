@@ -2,13 +2,17 @@
 
 ## 1. Overview
 `apps/secrets` is the Fastify service backing the Unimatrix secrets store — sealed value storage
-under a versioned KEK ring (`@unimatrix/secrets`). `/health` is the only route, and the only URL
-answerable without a bearer service token: an unauthenticated request to anything else is a 401,
-including a URL matching no route, and only an authenticated one gets a 404 for an unmatched URL.
-No route here may ever serve a secret value, and even once the scoped read route lands it is
-the only one permitted to return a decrypted value. See `.notes/01-todo/secrets.todo.md` for the
-constraint list and the items (read/write routes, KEK rotation) this workspace does not yet
-implement.
+under a versioned KEK ring (`@unimatrix/secrets`). `/health` is the only URL answerable without a
+bearer service token: an unauthenticated request to anything else is a 401, including a URL
+matching no route, and only an authenticated one gets a 404 for an unmatched URL.
+
+Five routes sit behind that guard, split by the caller's token capability. `GET /secrets/value`
+needs a `read`-capability token and is the **only** route anywhere in this service permitted to
+return a decrypted value. `POST /secrets`, `POST /secrets/rotate`, `DELETE /secrets` and
+`GET /secrets` need `manage` and return metadata — a masked prefix, never a value. There is no
+read-back route reachable by a `manage` token, no debug flag that adds one, and no local-dev-only
+variant; see `.notes/01-todo/secrets.todo.md` for what this workspace does not yet implement
+(KEK rotation).
 
 Transport is a bearer token over plain HTTP. TLS with a pinned self-signed server
 certificate is the decided follow-up, landing when `apps/api` first calls this service and both ends
@@ -43,7 +47,7 @@ can be tested together — not an omission.
 - `src/lib/http`: the error envelope and its normalizer, and the logger options. Mirrors
   `apps/api/src/lib/http` at a fraction of the size — no `requestId` in the body and no
   validation-issue detail, because there is no browser client to consume either.
-- `src/modules`: `health` only, registered by `index.ts`.
+- `src/modules`: `health` and `secrets` (the five routes described in §1), registered by `index.ts`.
 - `src/db`: this service's own Drizzle setup (`client.ts`, `migrate.ts`, `schema/`) — **never**
   `@unimatrix/db`. That package's SQLite volume is single-writer and already owned by the API
   container; see `packages/db/AGENTS.md` before proposing a shared database.
@@ -60,8 +64,14 @@ can be tested together — not an omission.
   `@unimatrix/*` with no import parsing, so a comment naming the package this service deliberately
   does not depend on would demand `packages/db/**` in the README watch-path block. Reference it as a
   path (`packages/db/src/client.ts`) instead.
-- **No route here may serve a secret value** — `/health` is the only route today. The scoped read
-  route in a later item is the one exception this service will ever have; see §1.
+- **The scoped read route is the one exception to "no route here may serve a secret value"** — see
+  §1. Every denial the five routes throw (wrong capability, out-of-scope name, absent name) goes
+  through one `denySecretAccess` construction site in `src/modules/secrets/index.ts` and comes back
+  byte-identical, headers included, so nothing distinguishes "you can't" from "it isn't there".
+- **Rotation supersedes the live `secret_versions` row before inserting the new one.** Inserting
+  first would put two live rows on the same name at once, and the partial unique index
+  (`secret_versions_live_unique`) would roll the whole transaction back instead of the rotation
+  landing.
 - **`PUBLIC_ROUTE_URLS` is the entire allowlist, and a URL matching no route is not on it.** Denying
   unmatched URLs is the point, not an oversight to patch: being able to open a socket to this
   service proves nothing about who is calling. Never exempt them.
@@ -76,6 +86,11 @@ can be tested together — not an omission.
   so a root-scope route silently gets no limit. `test/rate-limit.test.ts` pins all three.
 - **A test that needs a valid token needs `DB_MIGRATE_ON_START: "true"` in its env.** The default is
   false, so `service_tokens` does not exist and every lookup is a 500 rather than an auth result.
+- **A route-level hook must return a `Promise` or call the `done` argument it declares.** Fastify's
+  hook runner only advances past a hook that does one of those two things; a plain synchronous
+  function returning `undefined` satisfies neither, and the request hangs with no error at all
+  (measured — every route behind `requireCapability` in `src/modules/secrets/index.ts` stalled
+  silently until it returned a `Promise`).
 - **A database fault inside the guard is a 500, never a 401.** A broken schema reported as a bad
   credential sends the caller hunting for a token that is fine.
 - **The audit table (`secret_audit_log`) has no foreign keys, deliberately.** The client runs

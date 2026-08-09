@@ -1,12 +1,24 @@
 # Secrets service
 
 The secrets service is a Fastify service deployed from `apps/secrets/Dockerfile`
-through `infra/docker/secrets-compose.yaml`. It ships only `/health` — no
-route in this workspace serves a secret value.
+through `infra/docker/secrets-compose.yaml`.
 
 Every request except `GET /health` carries a bearer service token or is
 answered 401, including a request to a URL matching no route. Reaching this
 service over the network is not authorization.
+
+| Route | Capability | Returns |
+| --- | --- | --- |
+| `GET /secrets/value` | `read` | The decrypted value for one in-scope name — the only route anywhere in this service that returns one |
+| `GET /secrets` | `manage` | Metadata (masked prefix, KEK version, timestamps) for every in-scope name |
+| `POST /secrets` | `manage` | Metadata for a newly created secret |
+| `POST /secrets/rotate` | `manage` | Metadata for a freshly sealed version of an existing secret |
+| `DELETE /secrets` | `manage` | `{ affected: <count> }`; denies the whole request if any submitted name is out of scope or absent |
+
+A caller's token scope also governs every route above: a name reaches a route only when the
+token's `scopePrefix` covers it (`src/service-tokens/scope.ts`). Every denial — wrong capability,
+out-of-scope name, absent name — comes back the same 404, so none of the three is distinguishable
+from outside.
 
 ## Dokploy redeploy watch paths
 
