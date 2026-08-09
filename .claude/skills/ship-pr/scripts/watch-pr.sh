@@ -2070,24 +2070,30 @@ while true; do
     # 4.4, and a poll that turns up no comments in the window is the ordinary
     # case rather than an edge — every quiet fixture reaches here with none.
     #
-    # Skipped whole when the status case above already absorbed this poll's
-    # refusal: the comment carrying it is still sitting in `$bodies`, and
-    # matching it here too would be the same refusal counted twice.
-    if [ "$rate_limited_by_status" -eq 0 ]; then
-      for body in ${bodies+"${bodies[@]}"}; do
-        case $body in
-          # Ahead of "review in progress" within a single body: a clean review
-          # never moves the count, so this is the only signal that it finished, and
-          # a body carrying both means the review ended while stale progress text
-          # was still in it.
-          *"No actionable comments were generated"*)
-            echo "reviewed clean, count unchanged at $n"
-            if arm_auto_merge 0; then
-              wait_for_merge "$head_sha"
-            fi
-            exit 0
-            ;;
-          *"rate limited by coderabbit.ai"* | *"Review rate limited."*)
+    # The `rate_limited_by_status` guard sits on the rate-limit arm alone, not
+    # around this whole loop: skipping the loop entirely also skipped whatever
+    # else the same poll carried — a co-present "did not have any reviewable
+    # changes", "The pull request is closed" or "Review failed" body went
+    # unread, and since this loop is what advances `since`, unread here meant
+    # unread on every later poll too.
+    for body in ${bodies+"${bodies[@]}"}; do
+      case $body in
+        # Ahead of "review in progress" within a single body: a clean review
+        # never moves the count, so this is the only signal that it finished, and
+        # a body carrying both means the review ended while stale progress text
+        # was still in it.
+        *"No actionable comments were generated"*)
+          echo "reviewed clean, count unchanged at $n"
+          if arm_auto_merge 0; then
+            wait_for_merge "$head_sha"
+          fi
+          exit 0
+          ;;
+        *"rate limited by coderabbit.ai"* | *"Review rate limited."*)
+          # Skipped when the status case above already absorbed this poll's
+          # refusal: the comment carrying it is still sitting in `$bodies`, and
+          # matching it here too would be the same refusal counted twice.
+          if [ "$rate_limited_by_status" -eq 0 ]; then
             # A refusal read nothing, so the re-ping is still the *first* review.
             # Only this outcome is worth riding out; the rest are final.
             #
@@ -2095,45 +2101,45 @@ while true; do
             # startup path — where nothing has been refused yet.
             refusals_absorbed=$((refusals_absorbed + 1))
             ride_out_cooldown || exit 0
-            break
-            ;;
-          *"did not have any reviewable changes"*)
-            echo "nothing reviewable — that IS the review"
-            exit 0
-            ;;
-          *"The pull request is closed"*)
-            echo "refused: merged, CodeRabbit is done for good"
-            exit 0
-            ;;
-          *"The head commit changed during the review"*)
-            echo "refused: head commit changed mid-review, reviewed head was $head_sha"
-            exit 0
-            ;;
-          *"Review failed"*)
-            echo "refused: review failed — read the comment"
-            exit 0
-            ;;
-          *"review in progress"*)
-            # Said once, then carried by the heartbeat. Without it, a running
-            # review and a ping that never registered produce identical output for
-            # as long as the review takes.
-            if [ "$in_progress" -eq 0 ]; then
-              in_progress=1
-              echo "review in progress" >&2
-            fi
-            break
-            ;;
-          *"Review skipped"* | *"Auto reviews are disabled"*)
-            # Reached only where the commit status is absent, and the resting-state
-            # ambiguity is already gone by the time it is: `bodies` holds nothing
-            # older than the ping this script posted, so a skip notice in here is a
-            # skip notice that arrived in answer to it.
-            echo "refused: skipped — ping did not register"
-            exit 0
-            ;;
-        esac
-      done
-    fi
+          fi
+          break
+          ;;
+        *"did not have any reviewable changes"*)
+          echo "nothing reviewable — that IS the review"
+          exit 0
+          ;;
+        *"The pull request is closed"*)
+          echo "refused: merged, CodeRabbit is done for good"
+          exit 0
+          ;;
+        *"The head commit changed during the review"*)
+          echo "refused: head commit changed mid-review, reviewed head was $head_sha"
+          exit 0
+          ;;
+        *"Review failed"*)
+          echo "refused: review failed — read the comment"
+          exit 0
+          ;;
+        *"review in progress"*)
+          # Said once, then carried by the heartbeat. Without it, a running
+          # review and a ping that never registered produce identical output for
+          # as long as the review takes.
+          if [ "$in_progress" -eq 0 ]; then
+            in_progress=1
+            echo "review in progress" >&2
+          fi
+          break
+          ;;
+        *"Review skipped"* | *"Auto reviews are disabled"*)
+          # Reached only where the commit status is absent, and the resting-state
+          # ambiguity is already gone by the time it is: `bodies` holds nothing
+          # older than the ping this script posted, so a skip notice in here is a
+          # skip notice that arrived in answer to it.
+          echo "refused: skipped — ping did not register"
+          exit 0
+          ;;
+      esac
+    done
   else
     fails=$((fails + 1))
     if [ "$fails" -ge 3 ]; then

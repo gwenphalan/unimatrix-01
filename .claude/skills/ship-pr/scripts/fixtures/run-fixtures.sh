@@ -520,6 +520,20 @@ reviewed clean, count unchanged at 0
 offline: auto-merge not armed (would arm on fixture-head-sha)
 EOF
 
+# The regression this pins: the status arm absorbing a refusal must not skip
+# the body loop outright, or a co-present outcome comment in the same poll —
+# here "did not have any reviewable changes" — goes unread. Gating only the
+# rate-limit arm inside the loop reads it after `rate_limited_by_status` is
+# already set; gating the whole loop the way the code used to would instead
+# print `FIXTURES EXHAUSTED`, having advanced `since` past a comment nothing
+# reads a second time.
+check rate-limited-status-and-no-changes 0 "$(f rate-limited-status-and-no-changes)" \
+  SHIP_PR_COMMENTS_FIXTURE="$here/wait/rate-limited/comments.json" <<'EOF'
+cooling down 0m, re-pinging at <time>
+offline: re-ping suppressed, continuing as if posted
+nothing reviewable — that IS the review
+EOF
+
 # The cap message names the quota when the refusal that tripped it carries the
 # Fair Usage wording, because that refusal is not the plain cooldown the rest
 # of this function's lines describe — riding out a longer wait would not have
