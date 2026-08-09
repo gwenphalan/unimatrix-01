@@ -125,13 +125,23 @@ run_case() {
   rc=$?
 
   [ "$rc" = "$want_rc" ] || ok=0
+  # The default arms are the point: an expectation token this function does not
+  # recognise is a typo in one of the case lists below, and without them it
+  # asserts nothing at all while still printing `ok`. That is the same silent
+  # pass the `ran` guards exist to prevent, by the likelier route.
   case "$want_stdout" in
+  # `nonempty` alone would accept bytes Claude Code discards: it reads a hook's
+  # stdout only as JSON carrying `hookSpecificOutput.additionalContext`. A
+  # broken `jq -nc` template would emit a reminder that reaches no agent and
+  # still exit 0 — this PR's own failure mode, one level up.
+  nonempty) printf '%s' "$stdout" | jq -e '.hookSpecificOutput.additionalContext | strings' >/dev/null 2>&1 || ok=0 ;;
   empty) [ -z "$stdout" ] || ok=0 ;;
-  nonempty) [ -n "$stdout" ] || ok=0 ;;
+  *) ok=0 ;;
   esac
   case "$want_sentinel" in
   present) [ -e "$sentinel" ] || ok=0 ;;
   absent) [ ! -e "$sentinel" ] || ok=0 ;;
+  *) ok=0 ;;
   esac
 
   if [ "$ok" = 1 ]; then
@@ -252,10 +262,70 @@ write_transcript "$t14" "$(line_noise)"
 p14=$(payload_prompt "$judgement_prompt" "case14" "$t14")
 run_case "case14-problem-solving-no-records-fires" "$problem_solving" "$p14" 0 nonempty "$(ps_sentinel case14)" present
 
+# --- case 15: writing-docs comment branch, skill NOT loaded — fires -------
+# The positive control for case 8. On its own, case 8 passes just as happily
+# against a comment branch that was deleted outright: silence and no sentinel
+# is what a dead branch produces too.
+
+t15="${work}/t15.jsonl"
+write_transcript "$t15" "$(line_noise)"
+p15=$(payload_edit "src/foo.ts" "// a comment" "case15" "$t15")
+run_case "case15-comment-branch-fires-when-unloaded" "$writing_docs" "$p15" 0 nonempty "$(wd_sentinel comments case15)" present
+
+# --- case 16: writing-docs, transcript loads ONLY composing-context -------
+# The wrong-skill control that case 11 gives composing-context. Without it
+# here, a name match loosened to a substring passes.
+
+t16="${work}/t16.jsonl"
+write_transcript "$t16" "$(line_user_marker composing-context)"
+p16=$(payload_edit "docs/foo.md" "" "case16" "$t16")
+run_case "case16-writing-docs-wrong-skill-fires" "$writing_docs" "$p16" 0 nonempty "$(wd_sentinel docs case16)" present
+
+# --- cases 17-20: the boundary cut and the tool_result exclusion, for the
+# two scripts that carry their own copy of the detection.
+#
+# The three `skill_loaded()` copies are independent by design — the shared
+# helper was rejected deliberately — so nothing but this suite holds them in
+# sync. Covering these two mechanisms on writing-docs alone (cases 4 and 10)
+# leaves a mutation of either sibling copy green.
+
+t17="${work}/t17.jsonl"
+write_transcript "$t17" \
+  "$(line_user_marker composing-context)" \
+  "$(line_boundary)" \
+  "$(line_noise)"
+p17=$(payload_edit "AGENTS.md" "" "case17" "$t17")
+run_case "case17-composing-context-stale-marker-fires" "$composing_context" "$p17" 0 nonempty "$(cc_sentinel case17)" present
+
+t18="${work}/t18.jsonl"
+write_transcript "$t18" "$(line_user_marker_tool_result composing-context)"
+p18=$(payload_edit "AGENTS.md" "" "case18" "$t18")
+run_case "case18-composing-context-tool-result-excluded-fires" "$composing_context" "$p18" 0 nonempty "$(cc_sentinel case18)" present
+
+t19="${work}/t19.jsonl"
+write_transcript "$t19" \
+  "$(line_user_marker problem-solving)" \
+  "$(line_boundary)" \
+  "$(line_noise)"
+p19=$(payload_prompt "$judgement_prompt" "case19" "$t19")
+run_case "case19-problem-solving-stale-marker-fires" "$problem_solving" "$p19" 0 nonempty "$(ps_sentinel case19)" present
+
+t20="${work}/t20.jsonl"
+write_transcript "$t20" "$(line_user_marker_tool_result problem-solving)"
+p20=$(payload_prompt "$judgement_prompt" "case20" "$t20")
+run_case "case20-problem-solving-tool-result-excluded-fires" "$problem_solving" "$p20" 0 nonempty "$(ps_sentinel case20)" present
+
 printf '\n'
+
+# The count is asserted, not just reported: deleting a `run_case` line leaves
+# the suite green at one case fewer, and the coverage it removed is invisible
+# in a passing run. Raise this deliberately when adding a case.
+expected_cases=20
 
 if ((ran == 0)); then
   fail "no case executed — the check cannot pass vacuously"
+elif ((ran != expected_cases)); then
+  fail "${ran} case(s) executed, expected ${expected_cases} — a case was removed or not reached"
 fi
 
 if ((failures > 0)); then
