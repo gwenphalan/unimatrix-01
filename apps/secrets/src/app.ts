@@ -1,4 +1,4 @@
-import Fastify, { type FastifyInstance, type FastifyServerOptions } from "fastify";
+import Fastify, { LogController, type FastifyInstance, type FastifyServerOptions } from "fastify";
 
 import type { SecretsDatabaseInstance } from "./db/client.js";
 import type { SecretsRuntimeConfig } from "./keyring.js";
@@ -46,8 +46,8 @@ export function buildApp(
 
   const appOptions = {
     bodyLimit: REQUEST_BODY_LIMIT_BYTES,
-    disableRequestLogging: true,
     forceCloseConnections: true,
+    logController: new LogController({ disableRequestLogging: true }),
     logger: loggerOptions,
     // No `trustProxy`, unlike `apps/api`, where Traefik is in front. Nothing
     // fronts this service, so `X-Forwarded-For` would be attacker-controlled
