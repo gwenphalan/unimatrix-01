@@ -19,7 +19,10 @@
 //
 // Reads `coverage/coverage-summary.json`, which exists because
 // `packages/config-vitest` requests the `json-summary` reporter. Run it after the
-// tests; it asserts on their artifacts rather than re-running them.
+// tests; it asserts on their artifacts rather than re-running them. The summaries
+// survive a turbo cache hit because `turbo.json` declares `coverage/**` as a `test`
+// output — without that, a replayed `test` writes no files and every workspace here
+// reports `skip`.
 //
 // `apps/api` is not covered here. It runs the Node test runner rather than vitest
 // and emits no such summary, so its floors are asserted by the
