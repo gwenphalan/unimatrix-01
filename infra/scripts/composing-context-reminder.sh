@@ -17,7 +17,10 @@
 # this skill exists to avoid.
 #
 # Once per session and never fatal, for the same reasons as
-# `writing-docs-reminder.sh`.
+# `writing-docs-reminder.sh`. Stays silent instead when `composing-context` is
+# already loaded, and writes no sentinel on that path — the sentinel means
+# "already said this", a suppressed reminder said nothing, so it is due again
+# if the skill later leaves context.
 set -uo pipefail
 
 command -v jq >/dev/null 2>&1 || exit 0
@@ -26,6 +29,10 @@ payload=$(cat)
 
 path=$(printf '%s' "$payload" | jq -r '.tool_response.filePath // .tool_input.file_path // empty' 2>/dev/null)
 [ -n "$path" ] || exit 0
+
+# Read for the loaded-skill check below. Same idiom as turn-telemetry.sh:56
+# and session-telemetry.sh:49.
+transcript=$(printf '%s' "$payload" | jq -r '.transcript_path // empty' 2>/dev/null)
 
 # Agent-facing context only. A README or a design doc is documentation and
 # belongs to `writing-docs` alone.
@@ -36,8 +43,50 @@ case "$path" in
 esac
 
 session=$(printf '%s' "$payload" | jq -r '.session_id // "unknown"' 2>/dev/null)
+
+# Whether `composing-context` is already loaded in this session's context. Two
+# independent copies of this upstream-format dependency already exist for a
+# different purpose — turn-telemetry.sh:271-282 matches the `Skill` tool-call
+# record, session-telemetry.sh:171 matches the body-load marker — grep there
+# first if this ever needs to change for a transcript format change.
+#
+# Matches two shapes: the `invoked_skills` attachment (observed after *some*
+# compactions, not all — its absence must fail safe, not stale-suppress) and
+# the marker line that opens a skill's body. The scan stops at the last
+# `compact_boundary` so a load from before a compaction — no longer in
+# context — cannot suppress a reminder that is due again.
+loaded_program='
+  select(type == "object")
+  | if .type == "system" and .subtype == "compact_boundary" then
+      "--boundary--"
+    else
+      (
+        (.attachment | objects | select(.type == "invoked_skills")
+          | .skills | arrays | .[] | .name | strings),
+        (select(.type == "user") | .message | objects | .content | arrays | .[]
+          | objects | select(.type == "text") | .text | strings
+          | split("\n")[0]
+          | select(startswith("Base directory for this skill: "))
+          | sub("^.*/"; ""))
+      )
+    end
+'
+
+skill_loaded() {
+	[ -n "$transcript" ] && [ -r "$transcript" ] || return 1
+	# jq's exit code is ignored on purpose — see writing-docs-reminder.sh for
+	# the measured truncated-transcript reason this is not `| grep -q`.
+	names=$(jq -r "$loaded_program" "$transcript" 2>/dev/null)
+	names=${names##*--boundary--}
+	case $'\n'"$names"$'\n' in
+	*$'\n'composing-context$'\n'*) return 0 ;;
+	esac
+	return 1
+}
+
 sentinel="${TMPDIR:-/tmp}/claude-composing-context-reminder-${session//[^A-Za-z0-9._-]/_}"
 [ -e "$sentinel" ] && exit 0
+skill_loaded && exit 0
 : >"$sentinel" 2>/dev/null || exit 0
 
 jq -nc '{

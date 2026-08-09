@@ -91,6 +91,15 @@ jobs:
       - name: Ship-pr fixtures
         run: bash ./.claude/skills/ship-pr/scripts/fixtures/run-fixtures.sh
 
+      # Same placement rationale — bash and jq against synthetic payloads and
+      # transcript fixtures, no `node_modules`. Exercises the loaded-skill
+      # check in writing-docs-reminder.sh, composing-context-reminder.sh and
+      # problem-solving-reminder.sh. These fixtures are the only signal those
+      # hooks get: suppression is silent by design — no output, exit 0 — so a
+      # detection that broke reads exactly like one that worked.
+      - name: Reminder hook fixtures
+        run: bash ./infra/scripts/check-reminder-hooks.sh
+
       # The repo's shell reaches no other static analysis: CodeQL has no shell
       # extractor, `.claude/` is in no pnpm workspace so turbo never sees it, and
       # prettier has no bash parser. A step in `Verify` rather than a job of its
