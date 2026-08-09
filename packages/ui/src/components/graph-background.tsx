@@ -30,34 +30,37 @@ function boldLatticePhase(extent: number): number {
 }
 
 /**
- * Centers the `.grid-backdrop` lattice on the page by writing the four phase
+ * Centers the `.grid-backdrop` lattice horizontally by writing the two phase
  * variables it reads. Renders nothing — the grid itself is painted by CSS on
  * `<body class="grid-backdrop">`; this component owns only the measurement
  * that keeps it aligned.
  *
- * Without it the lattice falls back to a plain `0 0` origin and sits visibly
- * off-center against centered content on any viewport whose half-extent is not
+ * Without it the lattice falls back to a plain `0` x-origin and sits visibly
+ * off-center against centered content on any viewport whose half-width is not
  * a whole number of cells: the content edges end up at different distances
  * from their nearest lines. Content is centered in the viewport — the `mx-auto
  * max-w-[92rem]` shell's rect center equals `clientWidth / 2` — so the viewport
  * centerline is the content centerline.
  *
+ * There is no vertical counterpart, deliberately. The content column this
+ * aligns to has no vertical centerline, so a vertical phase would be centering
+ * against nothing. It is also actively harmful: `documentElement.clientHeight`
+ * tracks the visible viewport height, which iOS Safari shrinks and grows as
+ * its address bar hides and reappears. The `ResizeObserver` below fires on
+ * those changes either way — keeping `apply` width-only is what stops them
+ * rewriting anything and sliding the backdrop under stationary content.
+ * Confirmed on an iPhone over LAN.
+ *
  * Mount it once per app, inside the shell. It is safe at every width: the grid
  * paints on mobile too, so there is no viewport gate here.
  *
- * `ResizeObserver` on `documentElement`, not a `window.innerWidth/innerHeight`
- * dependency — this centers against `clientWidth/clientHeight`, which excludes
- * the scrollbar gutter, so a vertical scrollbar toggling on or off moves the
- * measurement with no matching `innerWidth/innerHeight` change to re-trigger a
- * size-keyed effect. `clientHeight` on `documentElement` is the *viewport*
- * height rather than the content height, so this fires on real viewport changes
- * only and never thrashes against page growth.
- *
- * Verified: the observer does deliver on a real viewport resize
- * (`apps/web/e2e/grid-phase.spec.ts`). The scrollbar-gutter case above is the
- * stated reason for preferring `clientWidth` over `innerWidth` but is *not*
- * itself verified — headless Chromium uses overlay scrollbars, so it does not
- * reproduce there. Treat it as the design rationale, not a tested guarantee.
+ * `ResizeObserver` on `documentElement`, not a `window.innerWidth` dependency
+ * — this centers against `clientWidth`, which excludes the scrollbar gutter,
+ * so a vertical scrollbar toggling on or off moves the measurement with no
+ * matching `innerWidth` change to re-trigger a size-keyed effect. Verified: a
+ * headed Chromium measured `clientWidth` 1265 against `innerWidth` 1280 (a
+ * 15px gutter), and a `position: fixed; inset: 0` probe measured 1265 too,
+ * matching the `clientWidth` basis.
  */
 export function GraphBackground(): null {
   React.useEffect(() => {
@@ -65,9 +68,7 @@ export function GraphBackground(): null {
 
     const apply = () => {
       root.style.setProperty("--grid-phase-x", `${latticePhase(root.clientWidth, GRID)}px`);
-      root.style.setProperty("--grid-phase-y", `${latticePhase(root.clientHeight, GRID)}px`);
       root.style.setProperty("--grid-bold-phase-x", `${boldLatticePhase(root.clientWidth)}px`);
-      root.style.setProperty("--grid-bold-phase-y", `${boldLatticePhase(root.clientHeight)}px`);
     };
 
     apply();
