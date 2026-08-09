@@ -158,15 +158,18 @@
      only because that element is not a stacking context (relative, z-index
      auto); the color-mix fill on the class, not here, is what covers an iOS
      rubber-band over-scroll region that a viewport-sized layer can't reach.
-     Each tiled layer is phased so one of its lines lands exactly on the
-     page's centerline: the 240px tier (bold lines + intersection dots) by
-     `--grid-bold-phase-*`, the 40px tier by `--grid-phase-*`. Both are
-     written by `GraphBackground`, which is the only reader/writer of them;
-     the two tiers stay seam-locked because 240 is a whole multiple of 40.
-     The last layer is the full-size vignette, which has no lattice. Falls
-     back to the plain `0 0` origin without JS — visibly off-center against
-     centered content, which is why the component is mounted in both
-     shells. */
+     Each tiled layer is phased horizontally so one of its lines lands
+     exactly on the page's centerline: the 240px tier (bold lines +
+     intersection dots) by `--grid-bold-phase-x`, the 40px tier by
+     `--grid-phase-x`. Both are written by `GraphBackground`, which is the
+     only reader/writer of them; the two tiers stay seam-locked because 240
+     is a whole multiple of 40. There is no vertical phase — the content
+     column has no vertical centerline to align to, and measuring viewport
+     height slides the lattice whenever a mobile address bar moves. The last
+     layer is the full-size vignette, which has no
+     lattice. Falls back to the plain `0` x-origin without JS — visibly
+     off-center against centered content, which is why the component is
+     mounted in both shells. */
   .grid-backdrop::before {
     content: "";
     position: fixed;
@@ -213,11 +216,11 @@
       40px 40px,
       100% 100%;
     background-position:
-      var(--grid-bold-phase-x, 0px) var(--grid-bold-phase-y, 0px),
-      var(--grid-bold-phase-x, 0px) var(--grid-bold-phase-y, 0px),
-      var(--grid-bold-phase-x, 0px) var(--grid-bold-phase-y, 0px),
-      var(--grid-phase-x, 0px) var(--grid-phase-y, 0px),
-      var(--grid-phase-x, 0px) var(--grid-phase-y, 0px),
+      var(--grid-bold-phase-x, 0px) 0,
+      var(--grid-bold-phase-x, 0px) 0,
+      var(--grid-bold-phase-x, 0px) 0,
+      var(--grid-phase-x, 0px) 0,
+      var(--grid-phase-x, 0px) 0,
       0 0;
   }
 

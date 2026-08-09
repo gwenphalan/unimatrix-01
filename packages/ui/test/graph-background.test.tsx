@@ -7,13 +7,12 @@ const GRID = 40;
 const BOLD_GRID = 240;
 
 /**
- * Sets the viewport `documentElement` reports. The component measures
- * `clientWidth`/`clientHeight` rather than `window.innerWidth`, and jsdom
- * leaves both at 0, so every case has to declare its own extent.
+ * Sets the viewport width `documentElement` reports. The component measures
+ * `clientWidth` rather than `window.innerWidth`, and jsdom leaves it at 0, so
+ * every case has to declare its own extent.
  */
-function setViewport(width: number, height: number): void {
+function setViewport(width: number): void {
   vi.spyOn(document.documentElement, "clientWidth", "get").mockReturnValue(width);
-  vi.spyOn(document.documentElement, "clientHeight", "get").mockReturnValue(height);
 }
 
 function phase(property: string): number {
@@ -32,7 +31,7 @@ afterEach(() => {
 
 describe("GraphBackground", () => {
   it("renders nothing", () => {
-    setViewport(1440, 900);
+    setViewport(1440);
 
     const { container } = render(<GraphBackground />);
 
@@ -42,20 +41,17 @@ describe("GraphBackground", () => {
   it("puts a fine line exactly on the viewport centerline", () => {
     // 1000/2 = 500; 500 % 40 = 20. Lines land at 20 + n*40, and 500 is one of
     // them (20 + 12*40), which is the property the phase exists to guarantee.
-    setViewport(1000, 700);
+    setViewport(1000);
 
     render(<GraphBackground />);
 
     const x = phase("--grid-phase-x");
     expect(x).toBe(20);
     expect((1000 / 2 - x) % GRID).toBe(0);
-
-    const y = phase("--grid-phase-y");
-    expect((700 / 2 - y) % GRID).toBe(0);
   });
 
   it("puts the centerline mid bold cell, not on a bold line", () => {
-    setViewport(1000, 700);
+    setViewport(1000);
 
     render(<GraphBackground />);
 
@@ -69,7 +65,7 @@ describe("GraphBackground", () => {
   });
 
   it("keeps every bold line sitting on a fine line", () => {
-    setViewport(1337, 911);
+    setViewport(1337);
 
     render(<GraphBackground />);
 
@@ -77,7 +73,6 @@ describe("GraphBackground", () => {
     // the two tiers stay seam-locked at any viewport. Asserted on a
     // deliberately non-round one.
     expect((phase("--grid-bold-phase-x") - phase("--grid-phase-x")) % GRID).toBe(0);
-    expect((phase("--grid-bold-phase-y") - phase("--grid-phase-y")) % GRID).toBe(0);
   });
 
   it("recomputes when documentElement resizes", () => {
@@ -93,7 +88,7 @@ describe("GraphBackground", () => {
         disconnect(): void {}
       },
     );
-    setViewport(1000, 700);
+    setViewport(1000);
 
     render(<GraphBackground />);
     expect(phase("--grid-phase-x")).toBe(20);
@@ -101,7 +96,7 @@ describe("GraphBackground", () => {
     // A vertical scrollbar appearing changes `clientWidth` with no matching
     // `innerWidth` change — the exact case a `useViewportSize` dependency
     // misses and this observer exists to catch.
-    setViewport(985, 700);
+    setViewport(985);
     notify?.();
 
     expect(phase("--grid-phase-x")).toBe((((985 / 2) % GRID) + GRID) % GRID);
@@ -117,7 +112,7 @@ describe("GraphBackground", () => {
         disconnect = disconnect;
       },
     );
-    setViewport(1000, 700);
+    setViewport(1000);
 
     render(<GraphBackground />).unmount();
 
