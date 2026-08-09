@@ -224,31 +224,29 @@ The plaintext prints once and only its digest is stored, so a lost token is
 reissued rather than recovered. `list` and `revoke --name <name>` are the other
 two subcommands, and both they and `issue` append a row to the audit log.
 
-**No Domains entry is not isolation.** Dokploy attaches every Compose stack to
-the shared overlay `dokploy-network` by default, which is what lets Traefik
-reach a stack that does have a domain. Measured on the host 2026-08-08: 12 of
-13 Compose services sit on it, including two PR previews and unrelated
-third-party stacks, so any container attached to `dokploy-network` can open a
-socket to this one. What stops them is the bearer token, not the network
-position.
+**No Domains entry also means no shared network.** Dokploy attaches a stack to
+the shared overlay `dokploy-network` when Traefik has to reach it — which is
+when the stack has a domain. This service has none, and measured on the host
+2026-08-09 its container sits on its own per-stack bridge and nothing else,
+while `apps/api`'s sits on both that overlay and its own. Every container on
+`dokploy-network` is one Traefik serves. So no other stack on the host can open
+a socket to this one today.
 
-Dokploy's **Advanced → Isolated Deployment** toggle is the documented way off
-that shared network: it creates a network named after the stack's `appName`,
-attaches the stack's services to it, and connects Traefik to *that* network
-instead. A single-service stack with no domain cannot hit the sibling-DNS
-breakage reported upstream (Dokploy issues #3525 and #3562), so on its own
-terms it costs nothing. Unverified: the one stack on this host with the flag
-set has no containers deployed, so the behaviour is read from Dokploy's docs
-and the `compose.isolatedDeployment` column on v0.29.13, not observed.
+Do not read that as the boundary. Network position is not authorization: every
+request but `GET /health` is rejected without a valid service token, and that is
+what carries the boundary whatever the container is attached to.
 
-**Isolation and cross-stack reachability cannot both hold.** `apps/api` is a
-separate Compose stack, and `dokploy-network` is how it would reach this one —
-isolating this stack takes it off that network. Either the two stacks share an
-explicitly declared network, or isolation stays off. The item that makes
-`apps/api` a client of this service is where that gets decided; nothing turns
-it on before then. Also unverified — nobody has enabled isolation and watched
-what happens to cross-stack DNS. Defence in depth either way: the token is
-what carries the boundary.
+Dokploy's **Advanced → Isolated Deployment** toggle forces a stack off the
+shared network explicitly. It is off here and does not need turning on, because
+a domainless stack is not attached in the first place. Unverified: whether
+adding a domain, or a later redeploy, changes this stack's attachment.
+
+**A cross-stack client needs a network arranged for it.** `apps/api` is a
+separate Compose stack and shares no network with this one, so it cannot reach
+the store as things stand. The item that makes it a client is where the two get
+an explicitly declared shared network — and adding one puts the store back
+within reach of whatever else sits on that network, which is the trade the
+service token exists to cover.
 
 ## Traefik expectations
 
