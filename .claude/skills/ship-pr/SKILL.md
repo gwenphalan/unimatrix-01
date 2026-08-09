@@ -285,7 +285,9 @@ traps — are in `.claude/skills/ship-pr/reference/review-ladder.md`. Read that 
    without asking. **Floor is `high`**; `low` and `medium` review inline, which is the self-review
    this section forbids. Expensive: ~2M tokens for one PR. One at a time.
 3. **A reviewer subagent** — the cheap option, and the one to prefer on a small diff. Give it the diff
-   and the PR body, not your reasoning.
+   and the PR body, not your reasoning. Dispatch a `pr-review-toolkit` agent, **never
+   `general-purpose`** — a generic reviewer's report reads exactly like a specialist's, so nothing
+   surfaces that no real review happened.
 4. **`/code-review ultra` — a handoff to the owner, for a large or security-sensitive change.** You
    **cannot launch it**; attempting it silently falls back to an inline review that never touched the
    cloud, and reporting that as `ultra` reports something that did not happen. It bills money rather
