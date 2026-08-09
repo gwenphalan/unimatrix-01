@@ -1,17 +1,23 @@
 # Prototypes
 
-**This directory is empty on `main`, and stays that way.**
+**Nothing in here is committed.** `.gitignore` ignores `lab/prototypes/*` and
+negates `.gitkeep` and `README.md` back in, so a sketch cannot be staged without
+`git add -f`. That ignore is what keeps this directory empty on `main`.
 
-Prototypes live on `lab/*` branches and are never merged. The
-`No prototypes on main` check fails if the diff adds a file under
-`lab/prototypes/`. It is advisory — not armed as a required status check — so it
-reports rather than blocks.
+The `No prototypes on main` check is the backstop for a forced add: it fails when
+a pull request's diff adds a file under `lab/prototypes/`. It is advisory — not
+armed as a required status check — so it reports rather than blocks.
 
 That check is **repo hygiene, not a security control** — worth saying plainly,
 because a rule that sounds like a security boundary gets trusted like one. The
 lab is local-dev only: no Dockerfile, no compose file, no domain, no CI image
 job, no route in any deployed app. A prototype reaching `main` costs clutter,
 `pnpm check` time, and rot. It does not expose anything.
+
+Write sketches in the **main checkout**. `infra/scripts/link-worktree-dirs.mjs`
+links each untracked entry here from the main checkout into a worktree and never
+the reverse, so one sketch is reachable from everywhere — while a sketch authored
+inside a worktree is invisible from the main checkout and dies with the worktree.
 
 ## Writing one
 
@@ -58,9 +64,15 @@ Then `pnpm --filter @unimatrix/lab dev` and open the printed URL.
   is where the two-level cap above comes from: this directory is gitignored, and
   a recursive glob would skip it entirely. `lab/src/styles.css` carries the
   measurement.
-- **Expect rot.** `lab/*` branches drift behind `packages/ui` and
-  `packages/chrome`. That is correct for throwaway work: a stale prototype
-  breaks in the browser, which is the only place it is ever used.
+
+  **App-local CSS does not come with cloned JSX.** An app's own
+  `@layer components` classes (`apps/web/src/styles.css`) live in a stylesheet
+  the lab never imports and that no `@source` line here scans, so a clone
+  carrying one renders unstyled with every check green. Use utilities, or copy
+  the rule you need into `lab/src/styles.css` and delete it with the prototype.
+- **Expect rot.** A sketch drifts behind `packages/ui` and `packages/chrome`.
+  That is correct for throwaway work: a stale prototype breaks in the browser,
+  which is the only place it is ever used.
 
 ## What is enforced mechanically, and what is not
 
@@ -79,6 +91,7 @@ that is a consequence of the wiring, **convention, not a mechanism** aimed at
 prototypes.
 
 **What actually keeps this contained** is that the lab has no Dockerfile, no
-compose entry, no CI `Images` row and no build script, plus the
-`No prototypes on main` check keeping `lab/prototypes/` empty on the default
-branch. Containment is structural; the lint rule is hygiene for the harness.
+compose entry, no CI `Images` row and no build script. The gitignore is what
+keeps `lab/prototypes/` empty on the default branch, and the
+`No prototypes on main` check catches a forced add. Containment is structural;
+the lint rule is hygiene for the harness.

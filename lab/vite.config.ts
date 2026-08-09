@@ -50,12 +50,13 @@ export function createLabViteConfig(): UserConfig {
         // `/public` must precede the bare `@unimatrix/ui` entry: vite walks the
         // alias array in order and the first matching `find` wins.
         //
-        // Both point at source rather than `dist`, and that is the reason this
-        // workspace exists at all. `packages/ui` publishes `./dist` via its
-        // `exports` map and is built with `tsc`, so resolving it normally means
-        // editing a shared component shows nothing here until a rebuild — which
-        // defeats the entire purpose of a design harness. The apps keep
-        // consuming `dist`; only the lab sees source.
+        // Both point at source rather than `dist`. `packages/ui` publishes
+        // `./dist` via its `exports` map and is built with `tsc`, so resolving
+        // it normally means editing a shared component shows nothing here until
+        // a rebuild — which defeats the entire purpose of a design harness.
+        // Every Vite app carries the same pair of aliases for the same reason;
+        // this workspace exists as a prototyping harness, not because of how it
+        // resolves modules.
         {
           find: /^@unimatrix\/ui\/public$/,
           replacement: fileURLToPath(new URL("../packages/ui/src/public.ts", import.meta.url)),

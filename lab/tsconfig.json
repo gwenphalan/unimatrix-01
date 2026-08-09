@@ -4,13 +4,12 @@
     "jsx": "react-jsx",
     // Every `@unimatrix/*` entry maps to package *source*, not `dist`.
     //
-    // For `ui` and `shared` that is the whole point of the harness: both
-    // publish `./dist` through their `exports` map and are built with `tsc`, so
-    // resolving them the normal way means editing a shared component or a
-    // contract shows nothing here until a rebuild. It also means `pnpm
-    // --filter @unimatrix/lab typecheck` would depend on those packages having
-    // been built, and turbo's `typecheck` task declares `^typecheck`, not
-    // `^build`. The apps keep consuming `dist`; only the lab sees source.
+    // `ui` and `shared` publish `./dist` through their `exports` map and are
+    // built with `tsc`, so resolving them the normal way means editing a shared
+    // component or a contract shows nothing here until a rebuild. It would also
+    // make `pnpm --filter @unimatrix/lab typecheck` depend on those packages
+    // having been built, and turbo's `typecheck` task declares `^typecheck`,
+    // not `^build`. Every Vite app maps the same pair for the same reasons.
     //
     // `chrome` is source-only already, so its mapping is the same one every
     // other consumer carries.
@@ -28,8 +27,9 @@
     },
     "types": ["vite/client", "node"]
   },
-  // `prototypes/` is deliberately absent. Prototypes are throwaway code on
-  // `lab/*` branches; typechecking them would make a half-finished sketch a
-  // failing check, and on `main` the directory is empty anyway.
+  // `prototypes/` is deliberately absent. Prototypes are throwaway, gitignored
+  // sketches that are never committed; typechecking them would make a
+  // half-finished sketch a failing check, and on `main` the directory is empty
+  // anyway.
   "include": ["src/**/*.ts", "src/**/*.tsx", "vite.config.ts"]
 }

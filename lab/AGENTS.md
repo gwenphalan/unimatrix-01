@@ -6,6 +6,8 @@
 
 It is the third top-level workspace entry, alongside `apps/*` and `packages/*`, because it must be a workspace member to import `@unimatrix/ui` and `@unimatrix/chrome`.
 
+Building or promoting a prototype goes through the `lab-prototype` skill: this file holds the facts, the skill holds the order.
+
 ## 2. The defining constraint: local-dev only
 
 `pnpm --filter @unimatrix/lab dev` and nothing else. **No `build` script, no Dockerfile, no compose file, no domain, no CI `Images` entry, and no route in any deployed app.** This is what makes the whole security question disappear: prototype code has no production surface to leak onto. If a change here creates a deploy artifact of any kind, it has misread what this workspace is.
@@ -18,7 +20,7 @@ Why not a `lab.unimatrix-01.dev` subdomain, since that was the obvious alternati
 - `src/routes`: `prototype-index.tsx` (the list) and `prototype-host.tsx` (renders one prototype and nothing else).
 - `src/lib/prototype-registry.ts`: `import.meta.glob` discovery of `lab/prototypes/**/*.tsx`.
 - `src/mocks`: the only data surface a prototype may use. See below.
-- `prototypes/`: **empty on `main`.** See `prototypes/README.md`.
+- `prototypes/`: gitignored working-tree sketches — only `.gitkeep` and `README.md` are tracked. See `prototypes/README.md`.
 
 ## 4. Mocks
 
@@ -40,7 +42,7 @@ Keep `LabUserStore` in step with `packages/user-data/src/types.ts` by hand. If t
 
 - **Scripts are `dev`, `lint` and `typecheck` only.** No `test` (turbo would run it against a harness with no tests) and no `build` (nothing builds the lab, and a `build` script would put it in `pnpm verify`'s `turbo run build` for nothing).
 - **`prototypes/` is excluded from lint, typecheck and prettier**, and included in the stylesheet's `@source` globs. A half-finished sketch must not be a failing check; a prototype with no Tailwind output would be useless.
-- **`@unimatrix/ui` and `@unimatrix/shared` resolve to package *source*** through `vite.config.ts` aliases and `tsconfig.json` paths, unlike the apps, which consume `dist`. Both are built with `tsc` and publish `./dist` via their `exports` map, so without the alias, editing a shared component shows nothing here until a rebuild — which defeats the entire purpose.
+- **`@unimatrix/ui` and `@unimatrix/shared` resolve to package *source*** through `vite.config.ts` aliases and `tsconfig.json` paths — the same wiring every Vite app carries. Both are built with `tsc` and publish `./dist` via their `exports` map, so without the alias, editing a shared component shows nothing here until a rebuild — which defeats the entire purpose.
 - **`@tanstack/react-router` is in `dedupe`** alongside `react`/`react-dom`. `@unimatrix/chrome` declares it as a peer; two resolved copies means the shell's `useRouterState` reads a router context `RouterProvider` never wrote to.
 - **The stylesheet turns Tailwind's automatic source detection off (`source(none)`) and lists every scanned path itself.** Unlike the apps, this is not a convenience: `lab/prototypes/` is gitignored, Tailwind skips gitignored paths, and while automatic detection is on its workspace-wide source makes that filter apply to every other `@source` too — so no directive of any shape reaches a prototype. The reasoning, the measurement and the per-depth prototype lines are in `src/styles.css`; read the comments there before editing any line of it. Nothing but a browser catches a mistake — lint, types and every automated check stay green while prototypes render half-styled.
 - **Banned imports** (enforced by `no-restricted-imports` in `eslint.config.mjs`, and **only under `lab/src/`** — `lab/prototypes/` is excluded from lint, so nothing stops a prototype importing them; containment is the absence of a deploy artifact, not this rule): `@unimatrix/api-client`, `@unimatrix/user-data`, `@unimatrix/auth/react`, `@unimatrix/auth/server`, `@clerk/*`. The bare `@unimatrix/auth` entry is allowed and used — it is the permission scheme, and nothing else.
@@ -49,4 +51,4 @@ Keep `LabUserStore` in step with `packages/user-data/src/types.ts` by hand. If t
 
 - `pnpm install` installs lab's dependencies in CI, which never needs them.
 - **Dependabot watches `lab/package.json`** and will open PRs for a dev-only harness. Accepted deliberately: an unsupported or malformed key makes Dependabot reject `.github/dependabot.yml` entirely, silently disabling npm updates repo-wide, and a rejected config looks exactly like a quiet week. A few dev-harness PRs is the cheaper failure.
-- `lab/*` branches rot against `packages/ui` and `packages/chrome` changes. Correct for throwaway work.
+- A prototype rots against `packages/ui` and `packages/chrome` changes. Correct for throwaway work.

@@ -56,13 +56,11 @@ function EmptyState() {
   return (
     <Card className="flex flex-col items-start gap-3 border-dashed p-6">
       <RiFlaskLine aria-hidden="true" className="size-5 text-muted-foreground" />
-      <p className="text-sm text-foreground">No prototypes on this branch.</p>
+      <p className="text-sm text-foreground">No prototypes here yet.</p>
       <p className="max-w-2xl text-sm text-muted-foreground">
-        That is the expected state on <code>main</code>. Prototypes live on <code>lab/*</code>{" "}
-        branches and are never merged — a required check fails any pull request to <code>main</code>{" "}
-        whose diff touches <code>lab/prototypes/</code>. That is repo hygiene, not a security
-        control: the lab is local-dev only, so a prototype reaching <code>main</code> costs clutter
-        and rot, not exposure.
+        Sketches are gitignored — they stay in your working tree and are never committed, so an
+        empty list is the normal state in a fresh checkout. Write them in the main checkout: a
+        worktree gets symlinks to those, never the reverse.
       </p>
     </Card>
   );
