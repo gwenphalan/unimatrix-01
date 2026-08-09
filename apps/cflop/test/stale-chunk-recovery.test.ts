@@ -154,6 +154,48 @@ describe("installStaleChunkRecovery", () => {
     expect(reload).not.toHaveBeenCalled();
   });
 
+  it("reloads when the probe answers 200 with the HTML shell", async () => {
+    const reload = vi.fn();
+    const probe = vi.fn().mockResolvedValue(
+      new Response("<!doctype html>", {
+        status: 200,
+        headers: { "content-type": "text/html; charset=UTF-8" },
+      }),
+    );
+    dispose = installStaleChunkRecovery({ reload, probe });
+
+    dispatchPreloadError(
+      new Error(
+        "Failed to fetch dynamically imported module: https://cflop.example/assets/learn-abc.js",
+      ),
+    );
+    await flushMicrotasks();
+
+    expect(reload).toHaveBeenCalledTimes(1);
+  });
+
+  // `response.ok` spans the whole 2xx range, so this is what keeps a `201` or
+  // `206` carrying HTML from spending the build's one reload.
+  it("does not reload when an HTML response is 2xx but not 200", async () => {
+    const reload = vi.fn();
+    const probe = vi.fn().mockResolvedValue(
+      new Response("<!doctype html>", {
+        status: 206,
+        headers: { "content-type": "text/html" },
+      }),
+    );
+    dispose = installStaleChunkRecovery({ reload, probe });
+
+    dispatchPreloadError(
+      new Error(
+        "Failed to fetch dynamically imported module: https://cflop.example/assets/learn-abc.js",
+      ),
+    );
+    await flushMicrotasks();
+
+    expect(reload).not.toHaveBeenCalled();
+  });
+
   it("does not reload when the probe rejects with a network failure", async () => {
     const reload = vi.fn();
     dispose = installStaleChunkRecovery({ reload, probe: networkFailureProbe });

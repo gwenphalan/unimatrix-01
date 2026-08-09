@@ -100,8 +100,11 @@ async function isChunkConfirmedGone(
     return true;
   }
 
-  const contentType = response.headers.get("content-type") ?? "";
-  return response.ok && contentType.includes("text/html");
+  // `200`, not `response.ok`: the SPA fallback this recognizes answers exactly
+  // `200` with the shell, so widening to the whole 2xx range only lets a `201`
+  // or `206` that happens to carry HTML spend the build's one reload.
+  const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
+  return response.status === 200 && contentType.includes("text/html");
 }
 
 export interface InstallStaleChunkRecoveryOptions {
