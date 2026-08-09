@@ -30,8 +30,9 @@ message said.
 What sends it to the loop instead is **discovered, not judged up front** — so investigate first,
 then decide. Investigation answers questions of *fact* from the code. What it cannot answer is a
 *requirement*: something the code has no opinion on and the owner hasn't settled — two viable
-designs, a dependency to pick, a boundary to move. One live requirement is enough. When unsure which
-of the two something is, it's a requirement.
+designs, a dependency to pick, a boundary to move. One is enough — but you have to be able to name
+it: which decision, and which answers are on the table. An unease that won't resolve into that shape
+isn't one, and the item goes solo.
 
 The owner can also ask for the loop outright — `/todo --collab`, or in any other words — and owes no
 reason for it.
@@ -43,22 +44,8 @@ reason for it.
    answers to whatever the owner attached, and options for every live requirement. Bring it back.
    Stop.
 3. **Per task, repeat:** the owner names the next task; investigate scoped to that task only; bring
-   options; the owner chooses; write the task.
-
-## The loop in the owner's own words, first four turns
-
-    me: /todo setup automatic dokploy instance management and deployment per-image
-    agent: *scaffolds*
-    agent: *investigates current implementation of deployment infra and brings me the current
-           state*
-    me: first task will be setting up per app config files outlining deployment domain,
-        variable custom compose/dockerfile configs, etc.
-    agent: *preliminary investigation of current docker setup, then brings options for the
-           specifics of the task (json files in apps directory, single file with all apps,
-           etc.)*
-
-Once on this path, keep that shape: stop after scaffolding, and again after every investigation — no
-rule stated elsewhere reliably transmits that.
+   options; the owner chooses; write the task. Stop after every investigation — no rule stated
+   elsewhere reliably transmits that.
 
 ## What a task is
 
