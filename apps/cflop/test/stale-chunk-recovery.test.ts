@@ -52,7 +52,9 @@ describe("installStaleChunkRecovery", () => {
     dispose = installStaleChunkRecovery({ reload });
 
     dispatchPreloadError(
-      new Error("Failed to fetch dynamically imported module: https://cflop.example/assets/learn-abc.js"),
+      new Error(
+        "Failed to fetch dynamically imported module: https://cflop.example/assets/learn-abc.js",
+      ),
     );
 
     expect(reload).toHaveBeenCalledTimes(1);
@@ -75,10 +77,14 @@ describe("installStaleChunkRecovery", () => {
     dispose = installStaleChunkRecovery({ reload });
 
     dispatchPreloadError(
-      new Error("Failed to fetch dynamically imported module: https://cflop.example/assets/learn-abc.js"),
+      new Error(
+        "Failed to fetch dynamically imported module: https://cflop.example/assets/learn-abc.js",
+      ),
     );
     dispatchPreloadError(
-      new Error("Failed to fetch dynamically imported module: https://cflop.example/assets/drill-xyz.js"),
+      new Error(
+        "Failed to fetch dynamically imported module: https://cflop.example/assets/drill-xyz.js",
+      ),
     );
 
     expect(reload).toHaveBeenCalledTimes(2);
@@ -91,7 +97,11 @@ describe("installStaleChunkRecovery", () => {
     });
     dispose = installStaleChunkRecovery({ reload });
 
-    dispatchPreloadError(new Error("Failed to fetch dynamically imported module: https://cflop.example/assets/learn-abc.js"));
+    dispatchPreloadError(
+      new Error(
+        "Failed to fetch dynamically imported module: https://cflop.example/assets/learn-abc.js",
+      ),
+    );
 
     expect(reload).not.toHaveBeenCalled();
   });
@@ -100,7 +110,9 @@ describe("installStaleChunkRecovery", () => {
     const reload = vi.fn();
     dispose = installStaleChunkRecovery({ reload });
 
-    dispatchPreloadError(new Error("Unable to preload CSS for https://cflop.example/assets/learn.css"));
+    dispatchPreloadError(
+      new Error("Unable to preload CSS for https://cflop.example/assets/learn.css"),
+    );
 
     expect(reload).not.toHaveBeenCalled();
   });
@@ -111,7 +123,9 @@ describe("installStaleChunkRecovery", () => {
     dispose();
 
     dispatchPreloadError(
-      new Error("Failed to fetch dynamically imported module: https://cflop.example/assets/learn-abc.js"),
+      new Error(
+        "Failed to fetch dynamically imported module: https://cflop.example/assets/learn-abc.js",
+      ),
     );
 
     expect(reload).not.toHaveBeenCalled();
