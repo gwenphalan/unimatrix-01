@@ -62,7 +62,10 @@ wrote a PNG that `Read` then renders visually. So "I need to see the page" is no
 for Chrome.
 
 Its failures are unlike a browser you are watching: a selector that never resolves times out with a
-green-looking run around it, so read what the run printed rather than its exit code.
+green-looking run around it, so read what the run printed rather than its exit code. A launch that
+fails because the browser binary is not there is not a finding either — that cache is populated only
+by `pnpm setup:worktree --with-playwright`, so install it yourself with the same command that step
+runs, `pnpm --filter @unimatrix/web exec playwright install --with-deps chromium`, and retry.
 
 **Two traps, both measured here.** Playwright is a dependency of `apps/web`, `apps/cflop` and
 `packages/e2e-helpers` only — `apps/admin`, `apps/auth`, `packages/ui` and `packages/chrome` have
@@ -88,8 +91,13 @@ solve — and you have no way to know she is busy. Take this route only on one o
 
 On that route, check `tabs_context_mcp` before creating anything and open a new tab rather than
 reusing one of hers. Never trigger `alert`, `confirm`, or any modal: they block every subsequent
-command and end browser control for the session. If the extension is not connected the tools are
-simply absent — say so and use Playwright rather than reporting the surface unchecked.
+command and end browser control for the session.
+
+If the extension is not connected the tools are simply absent, and what that costs depends on which
+trigger sent you here. On the watch trigger, run headed Playwright and say why she is looking at a
+different window. On the profile trigger there is no fallback: a clean launch cannot reproduce an
+extension conflict, a cached state or a live session, so the verdict is `FAILED TO RENDER` naming the
+missing extension. Never let a clean-profile run stand in for her profile.
 
 If neither route is available, the verdict is `FAILED TO RENDER` with the reason. It is never
 "probably fine".
