@@ -673,6 +673,70 @@ else
   printf '  FAIL  already-reviewed-on-stderr (expected off stdout and on stderr)\n'
 fi
 
+# --- coderabbit-deadline.sh -------------------------------------------
+#
+# Called directly rather than through `check()` and watch-pr.sh: the script
+# already reads SHIP_PR_COMMENTS_FIXTURE itself, and going through watch-pr.sh
+# adds the real wall clock (cooldown_remaining subtracts `date -u +%s` from
+# every fixture's fixed 2026 timestamp) for no coverage in return — every
+# fixture reads as long-elapsed regardless of which marker the tie-break
+# picks. Reading the deadline line straight off the script is what actually
+# pins the tie-break, not just the arithmetic downstream of it.
+#
+# Confirmed to matter: reverting coderabbit-deadline.sh to its pre-PR content
+# in a scratch copy turns both cases below red — the new-wording case because
+# the old `select` never matched "Review rate limited." at all, and the
+# stale-older-marker case because the old code had no tie-break to bound.
+deadline_script="$here/../coderabbit-deadline.sh"
+
+deadline_case_wanted() {
+  local name=$1
+  [ "${#wanted[@]}" -eq 0 ] && return 0
+  local entry
+  for entry in "${wanted[@]}"; do
+    [ "$entry" = "$name" ] && return 0
+  done
+  return 1
+}
+
+deadline_check() {
+  local name=$1 fixture=$2 expected=$3 actual
+  deadline_case_wanted "$name" || return 0
+  ran=$((ran + 1))
+  actual=$(SHIP_PR_COMMENTS_FIXTURE="$fixture" bash "$deadline_script" fixture/repo 1 2>&1)
+  if [ "$actual" = "$expected" ]; then
+    printf '  ok    %s\n' "$name"
+  else
+    failures=$((failures + 1))
+    printf '  FAIL  %s\n' "$name"
+    diff <(printf '%s\n' "$expected") <(printf '%s\n' "$actual") | sed 's/^/        /'
+  fi
+}
+
+# A rate-limit comment in CodeRabbit's newer wording only — no comment
+# anywhere in the fixture carries the older "rate limited by coderabbit.ai"
+# phrase the pre-PR `select` matched on.
+deadline_check coderabbit-deadline-new-wording-only \
+  "$here/wait/rate-limited-new/comments.json" \
+  "updated=2026-07-31T18:04:11Z countdown=8 seconds"
+
+# The regression this file exists to close: an older marker at 18:00:00Z with
+# a readable countdown, a newer marker an hour later with none. The tie-break
+# must not treat the hour-old marker as this refusal's own — it reports the
+# newest marker's countdown=unknown instead of a deadline already an hour in
+# the past.
+deadline_check coderabbit-deadline-stale-older-marker-falls-back \
+  "$here/comments-stale-older-marker.json" \
+  "updated=2026-07-31T19:00:00Z countdown=unknown"
+
+# The case the tie-break exists for: the newest marker (2 seconds later) has
+# no readable countdown, and the older sibling does. Proves the 60s window
+# still resolves the pair the tie-break was built for, not just the hour-apart
+# pair above that it now refuses.
+deadline_check coderabbit-deadline-near-tie-break-still-resolves \
+  "$here/comments-near-tie-break.json" \
+  "updated=2026-07-31T18:14:19Z countdown=6 seconds"
+
 # --- cleanup-branches.sh -----------------------------------------------
 #
 # cleanup-branches.sh talks to plain git, not `gh`, so a JSON payload cannot
