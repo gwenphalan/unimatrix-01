@@ -506,6 +506,80 @@ void test("the three ways of missing a secret are indistinguishable from each ot
   }
 });
 
+void test("list returns metadata for in-scope names only, and rejects any query parameter", async () => {
+  const app = createTestApp();
+
+  try {
+    await app.ready();
+
+    const manageAll = issueToken(app, { name: "manage-all", scopePrefix: "github", capability: "manage" });
+
+    await app.inject({
+      method: "POST",
+      url: "/secrets",
+      headers: { authorization: `Bearer ${manageAll}` },
+      payload: { name: "github/api-token", value: "hunter2" },
+    });
+
+    const dokployToken = issueToken(app, {
+      name: "manage-dokploy",
+      scopePrefix: "dokploy",
+      capability: "manage",
+    });
+
+    await app.inject({
+      method: "POST",
+      url: "/secrets",
+      headers: { authorization: `Bearer ${dokployToken}` },
+      payload: { name: "dokploy/api-token", value: "hunter2" },
+    });
+
+    const scopedList = await app.inject({
+      method: "GET",
+      url: "/secrets",
+      headers: { authorization: `Bearer ${dokployToken}` },
+    });
+
+    assert.equal(scopedList.statusCode, 200);
+
+    const body: { secrets: { name: string }[] } = scopedList.json();
+
+    assert.deepEqual(
+      body.secrets.map((secret) => secret.name),
+      ["dokploy/api-token"],
+    );
+
+    const rejected = await app.inject({
+      method: "GET",
+      url: "/secrets?name=github",
+      headers: { authorization: `Bearer ${dokployToken}` },
+    });
+
+    assert.equal(rejected.statusCode, 400);
+  } finally {
+    await app.close();
+  }
+});
+
+void test("a read token cannot reach list", async () => {
+  const app = createTestApp();
+
+  try {
+    await app.ready();
+
+    const token = issueToken(app, { name: "read", scopePrefix: "github", capability: "read" });
+    const response = await app.inject({
+      method: "GET",
+      url: "/secrets",
+      headers: { authorization: `Bearer ${token}` },
+    });
+
+    assert.equal(response.statusCode, 404);
+  } finally {
+    await app.close();
+  }
+});
+
 void test("getServiceToken denies a null service token — unreachable through a real request, since the auth guard already would have", () => {
   const warnings: unknown[] = [];
   const fakeRequest = {

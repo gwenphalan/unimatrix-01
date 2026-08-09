@@ -9,6 +9,8 @@ import {
   deleteSecretsContract,
   getSecretQuerySchema,
   getSecretValueContract,
+  listSecretsContract,
+  listSecretsQuerySchema,
   rotateSecretBodySchema,
   rotateSecretContract,
 } from "@unimatrix/shared";
@@ -26,6 +28,7 @@ import {
   deleteSecrets,
   getLiveSecretVersion,
   listExistingSecretNames,
+  listSecretMetadata,
   rotateSecret,
   type SecretMetadataRow,
 } from "./store.js";
@@ -340,6 +343,27 @@ export const secretsModule: FastifyPluginAsync = (app) => {
 
         throw error;
       }
+    },
+  });
+
+  app.withTypeProvider<ZodTypeProvider>().route({
+    method: listSecretsContract.method,
+    url: listSecretsContract.path,
+    preValidation: requireCapability("manage"),
+    schema: {
+      querystring: listSecretsQuerySchema,
+      response: { 200: listSecretsContract.responseSchema },
+    },
+    // Filtered in JavaScript with `scopeCoversName`, never a SQL `LIKE` —
+    // the same rule the mutation routes follow, so `github` never covers
+    // `githubx/token` here either.
+    handler: (request) => {
+      const token = getServiceToken(request);
+      const secrets = listSecretMetadata(app.db).filter((row) =>
+        scopeCoversName(token.scopePrefix, row.name),
+      );
+
+      return { secrets };
     },
   });
 
