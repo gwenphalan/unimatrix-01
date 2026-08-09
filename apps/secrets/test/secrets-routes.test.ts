@@ -365,6 +365,147 @@ void test("delete denies the whole request if any name is outside the token's sc
   }
 });
 
+void test("create -> read round trip", async () => {
+  const app = createTestApp();
+
+  try {
+    await app.ready();
+
+    const manageToken = issueToken(app, {
+      name: "manage",
+      scopePrefix: "github",
+      capability: "manage",
+    });
+
+    await app.inject({
+      method: "POST",
+      url: "/secrets",
+      headers: { authorization: `Bearer ${manageToken}` },
+      payload: { name: "github/api-token", value: "hunter2" },
+    });
+
+    const readToken = issueToken(app, { name: "read", scopePrefix: "github", capability: "read" });
+    const response = await app.inject({
+      method: "GET",
+      url: "/secrets/value?name=github%2Fapi-token",
+      headers: { authorization: `Bearer ${readToken}` },
+    });
+
+    assert.equal(response.statusCode, 200);
+    assert.deepEqual(response.json(), { name: "github/api-token", value: "hunter2" });
+
+    const auditRows = app.db
+      .select()
+      .from(secretAuditLogTable)
+      .where(eq(secretAuditLogTable.action, "secret.read"))
+      .all();
+
+    assert.equal(auditRows.length, 1);
+    assert.equal(auditRows[0]?.outcome, "success");
+  } finally {
+    await app.close();
+  }
+});
+
+void test("a manage token cannot reach the value route", async () => {
+  const app = createTestApp();
+
+  try {
+    await app.ready();
+
+    const manageToken = issueToken(app, {
+      name: "manage",
+      scopePrefix: "github",
+      capability: "manage",
+    });
+
+    await app.inject({
+      method: "POST",
+      url: "/secrets",
+      headers: { authorization: `Bearer ${manageToken}` },
+      payload: { name: "github/api-token", value: "hunter2" },
+    });
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/secrets/value?name=github%2Fapi-token",
+      headers: { authorization: `Bearer ${manageToken}` },
+    });
+
+    assert.equal(response.statusCode, 404);
+    assert.ok(!response.payload.includes("hunter2"), "the response echoed the plaintext value");
+  } finally {
+    await app.close();
+  }
+});
+
+void test("the three ways of missing a secret are indistinguishable from each other, headers included", async () => {
+  const app = createTestApp();
+
+  try {
+    await app.ready();
+
+    const manageToken = issueToken(app, {
+      name: "manage",
+      scopePrefix: "github",
+      capability: "manage",
+    });
+
+    await app.inject({
+      method: "POST",
+      url: "/secrets",
+      headers: { authorization: `Bearer ${manageToken}` },
+      payload: { name: "github/api-token", value: "hunter2" },
+    });
+
+    const readGithubToken = issueToken(app, {
+      name: "read-github",
+      scopePrefix: "github",
+      capability: "read",
+    });
+    const readDokployToken = issueToken(app, {
+      name: "read-dokploy",
+      scopePrefix: "dokploy",
+      capability: "read",
+    });
+
+    // Absent: a name with no live version.
+    const absent = await app.inject({
+      method: "GET",
+      url: "/secrets/value?name=github%2Fmissing",
+      headers: { authorization: `Bearer ${readGithubToken}` },
+    });
+
+    // Out of scope: a real name, wrong scope.
+    const outOfScope = await app.inject({
+      method: "GET",
+      url: "/secrets/value?name=github%2Fapi-token",
+      headers: { authorization: `Bearer ${readDokployToken}` },
+    });
+
+    // Wrong capability: a manage token presented at the read route.
+    const wrongCapability = await app.inject({
+      method: "GET",
+      url: "/secrets/value?name=github%2Fapi-token",
+      headers: { authorization: `Bearer ${manageToken}` },
+    });
+
+    // `x-ratelimit-remaining` decrements per request regardless of the
+    // reason, so it is left out here — it distinguishes "how many requests
+    // happened", never "why one was denied". `x-ratelimit-limit` is the
+    // bucket identity: all three land in the same one, distinct from the
+    // unmatched-route ceiling (`NOT_FOUND_RATE_LIMIT_OPTIONS`, 30/min).
+    for (const response of [absent, outOfScope, wrongCapability]) {
+      assert.equal(response.statusCode, 404);
+      assert.deepEqual(response.json(), absent.json());
+      assert.equal(response.headers["x-ratelimit-limit"], absent.headers["x-ratelimit-limit"]);
+      assert.ok(response.headers["x-ratelimit-limit"] !== undefined);
+    }
+  } finally {
+    await app.close();
+  }
+});
+
 void test("getServiceToken denies a null service token — unreachable through a real request, since the auth guard already would have", () => {
   const warnings: unknown[] = [];
   const fakeRequest = {

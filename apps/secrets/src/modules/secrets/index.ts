@@ -7,13 +7,15 @@ import {
   createSecretContract,
   deleteSecretsBodySchema,
   deleteSecretsContract,
+  getSecretQuerySchema,
+  getSecretValueContract,
   rotateSecretBodySchema,
   rotateSecretContract,
 } from "@unimatrix/shared";
 
 import { recordAuditEntry } from "../../audit/index.js";
 import type { SecretsDatabaseWriter } from "../../db/client.js";
-import { sealSecretPlaintext } from "../../keyring.js";
+import { openSecretPlaintext, sealSecretPlaintext } from "../../keyring.js";
 import { SecretsHttpError } from "../../lib/http/errors.js";
 import type { AuthenticatedServiceToken } from "../../plugins/auth.js";
 import { scopeCoversName } from "../../service-tokens/scope.js";
@@ -260,6 +262,84 @@ export const secretsModule: FastifyPluginAsync = (app) => {
       });
 
       return { affected };
+    },
+  });
+
+  app.withTypeProvider<ZodTypeProvider>().route({
+    method: getSecretValueContract.method,
+    url: getSecretValueContract.path,
+    preValidation: requireCapability("read"),
+    schema: {
+      querystring: getSecretQuerySchema,
+      response: { 200: getSecretValueContract.responseSchema },
+    },
+    // Every branch below — out of scope, absent, decrypt failure, success —
+    // records exactly one `secret.read` audit row and denies or returns.
+    // Each `recordAuditEntry` call runs on `app.db` directly rather than
+    // inside `writeAtomically`: a denial's audit row has to survive the
+    // `SecretsHttpError` thrown right after it, and a transaction wrapping
+    // both would roll the row back along with the throw.
+    handler: (request) => {
+      const { name } = request.query;
+      const token = getServiceToken(request);
+
+      if (!scopeCoversName(token.scopePrefix, name)) {
+        recordAuditEntry(app.db, {
+          action: "secret.read",
+          actorKind: "service-token",
+          outcome: "failure",
+          actorTokenId: token.id,
+          secretName: name,
+        });
+        denySecretAccess(request, "out_of_scope");
+      }
+
+      const live = getLiveSecretVersion(app.db, name);
+
+      if (live === undefined) {
+        recordAuditEntry(app.db, {
+          action: "secret.read",
+          actorKind: "service-token",
+          outcome: "failure",
+          actorTokenId: token.id,
+          secretName: name,
+        });
+        denySecretAccess(request, "not_found");
+      }
+
+      try {
+        const value = openSecretPlaintext(
+          app.runtimeConfig.keyring,
+          { name, versionId: live.versionId },
+          live.envelope,
+        );
+
+        recordAuditEntry(app.db, {
+          action: "secret.read",
+          actorKind: "service-token",
+          outcome: "success",
+          actorTokenId: token.id,
+          secretName: name,
+          secretVersionId: live.versionId,
+        });
+
+        return { name, value };
+      } catch (error) {
+        // Never becomes a 404: `SecretsError` (`@unimatrix/secrets`) carries
+        // no `statusCode`, so `normalizeSecretsError` already turns it into
+        // a bare 500. Reporting an unreadable credential as absent sends the
+        // operator hunting a row that is right there.
+        recordAuditEntry(app.db, {
+          action: "secret.read",
+          actorKind: "service-token",
+          outcome: "failure",
+          actorTokenId: token.id,
+          secretName: name,
+          secretVersionId: live.versionId,
+        });
+
+        throw error;
+      }
     },
   });
 
