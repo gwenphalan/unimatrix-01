@@ -470,6 +470,7 @@ EOF
 
 check rate-limited-retry 0 "$(f rate-limited clean)" \
   SHIP_PR_COMMENTS_FIXTURE="$here/wait/rate-limited/comments.json" <<'EOF'
+cooling down 0m, re-pinging at <time>
 offline: re-ping suppressed, continuing as if posted
 reviewed clean, count unchanged at 0
 offline: auto-merge not armed (would arm on fixture-head-sha)
@@ -478,6 +479,7 @@ EOF
 # One retry and no more: the second refusal is the owner's call.
 check rate-limited-cap 0 "$(f rate-limited rate-limited)" \
   SHIP_PR_COMMENTS_FIXTURE="$here/wait/rate-limited/comments.json" <<'EOF'
+cooling down 0m, re-pinging at <time>
 offline: re-ping suppressed, continuing as if posted
 refused: rate limited again after one re-ping
 EOF
