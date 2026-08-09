@@ -76,12 +76,21 @@ void test("success: create then read leaks the value into neither the log nor th
       capability: "read",
     }).token;
 
-    await app.inject({
+    const created = await app.inject({
       method: "POST",
       url: "/secrets",
       headers: { authorization: `Bearer ${manageToken}` },
       payload: { name: "github/api-token", value: PLAINTEXT },
     });
+
+    // The create route is the one place a value enters the service, so it is
+    // also the one place a handler could hand it straight back. The response
+    // schema being strict already turns that into a 500 rather than a leak —
+    // this asserts the property directly, so a schema loosened later fails
+    // here rather than silently becoming a management route that returns a
+    // secret.
+    assert.equal(created.statusCode, 200);
+    assertNoLeak(capture.lines.join(""), created.payload);
 
     const response = await app.inject({
       method: "GET",

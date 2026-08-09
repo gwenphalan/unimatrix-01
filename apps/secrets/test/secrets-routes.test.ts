@@ -8,6 +8,7 @@ import { buildApp, type BuildSecretsAppOptions } from "../src/app.js";
 import { loadSecretsRuntimeConfig, type SecretsRuntimeEnv } from "../src/config.js";
 import { secretAuditLogTable, secretsTable, secretVersionsTable } from "../src/db/schema/index.js";
 import { loadSecretsKeyringFromEnv } from "../src/keyring.js";
+import { SecretsHttpError } from "../src/lib/http/errors.js";
 import { getServiceToken } from "../src/modules/secrets/index.js";
 import { issueServiceToken, type ServiceTokenCapability } from "../src/service-tokens/index.js";
 
@@ -617,6 +618,17 @@ void test("getServiceToken denies a null service token — unreachable through a
     log: { warn: (payload: unknown) => warnings.push(payload) },
   } as unknown as FastifyRequest;
 
-  assert.throws(() => getServiceToken(fakeRequest), /Route not found/u);
+  // Asserts the whole envelope, not just the message: a denial that kept this
+  // wording but changed to a 401 or a 500 would defeat the point of routing
+  // every denial through one construction site, and a message-only regex
+  // would still pass.
+  assert.throws(
+    () => getServiceToken(fakeRequest),
+    (error: unknown) =>
+      error instanceof SecretsHttpError &&
+      error.statusCode === 404 &&
+      error.code === "NOT_FOUND" &&
+      error.message === "Route not found",
+  );
   assert.equal(warnings.length, 1);
 });
