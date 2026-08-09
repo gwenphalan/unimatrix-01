@@ -30,9 +30,9 @@ message said.
 What sends it to the loop instead is **discovered, not judged up front** — so investigate first,
 then decide. Investigation answers questions of *fact* from the code. What it cannot answer is a
 *requirement*: something the code has no opinion on and the owner hasn't settled — two viable
-designs, a dependency to pick, a boundary to move. One is enough — but you have to be able to name
-it: which decision, and which answers are on the table. An unease that won't resolve into that shape
-isn't one, and the item goes solo.
+designs, a dependency to pick, a boundary to move. One live requirement is enough — but you have to
+be able to name the decision it turns on. An unease that won't resolve into a named decision goes
+back to investigation, not to the loop, and never into a written task.
 
 The owner can also ask for the loop outright — `/todo --collab`, or in any other words — and owes no
 reason for it.
@@ -44,8 +44,7 @@ reason for it.
    answers to whatever the owner attached, and options for every live requirement. Bring it back.
    Stop.
 3. **Per task, repeat:** the owner names the next task; investigate scoped to that task only; bring
-   options; the owner chooses; write the task. Stop after every investigation — no rule stated
-   elsewhere reliably transmits that.
+   options; the owner chooses; write the task. Stop after every investigation.
 
 ## What a task is
 
