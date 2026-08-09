@@ -3,7 +3,13 @@ import ReactDOM from "react-dom/client";
 import { RouterProvider } from "@tanstack/react-router";
 
 import { router } from "@/app/router";
+import { installStaleChunkRecovery } from "@/lib/stale-chunk-recovery";
 import "@/styles.css";
+
+// Not in `@/app/router`: that module is also imported by `prerender/entry.tsx`
+// for the SSR build, and a module that touches `window`/`sessionStorage` at
+// import time would break `vite build --ssr`.
+installStaleChunkRecovery();
 
 const rootElement = document.getElementById("app");
 
