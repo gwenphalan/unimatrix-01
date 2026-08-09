@@ -107,10 +107,7 @@ function requireCapability(
  * `behavior: "immediate"` takes the write lock up front rather than on the
  * transaction's first statement.
  */
-function writeAtomically<T>(
-  app: FastifyInstance,
-  write: (tx: SecretsDatabaseWriter) => T,
-): T {
+function writeAtomically<T>(app: FastifyInstance, write: (tx: SecretsDatabaseWriter) => T): T {
   return app.db.transaction(write, { behavior: "immediate" });
 }
 

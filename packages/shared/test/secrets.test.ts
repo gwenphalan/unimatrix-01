@@ -135,9 +135,9 @@ describe("getSecretQuerySchema", () => {
   });
 
   it("rejects an extra key, proving strictObject", () => {
-    expect(
-      getSecretQuerySchema.safeParse({ name: "github/api-token", extra: true }).success,
-    ).toBe(false);
+    expect(getSecretQuerySchema.safeParse({ name: "github/api-token", extra: true }).success).toBe(
+      false,
+    );
   });
 
   it("rejects an invalid name", () => {

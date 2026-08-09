@@ -44,7 +44,11 @@ function issueToken(
 }
 
 function readSecretVersions(app: FastifyInstance, name: string) {
-  return app.db.select().from(secretVersionsTable).where(eq(secretVersionsTable.secretName, name)).all();
+  return app.db
+    .select()
+    .from(secretVersionsTable)
+    .where(eq(secretVersionsTable.secretName, name))
+    .all();
 }
 
 void test("create stores a secret and returns metadata carrying no value", async () => {
@@ -142,8 +146,16 @@ void test("a read token cannot reach create, rotate or delete", async () => {
 
     const token = issueToken(app, { name: "read", scopePrefix: "github", capability: "read" });
     const attempts = [
-      { method: "POST" as const, url: "/secrets", payload: { name: "github/api-token", value: "x" } },
-      { method: "POST" as const, url: "/secrets/rotate", payload: { name: "github/api-token", value: "x" } },
+      {
+        method: "POST" as const,
+        url: "/secrets",
+        payload: { name: "github/api-token", value: "x" },
+      },
+      {
+        method: "POST" as const,
+        url: "/secrets/rotate",
+        payload: { name: "github/api-token", value: "x" },
+      },
       { method: "DELETE" as const, url: "/secrets", payload: { names: ["github/api-token"] } },
     ];
 
@@ -153,7 +165,11 @@ void test("a read token cannot reach create, rotate or delete", async () => {
         headers: { authorization: `Bearer ${token}` },
       });
 
-      assert.equal(response.statusCode, 404, `${attempt.method} ${attempt.url} was reachable by a read token`);
+      assert.equal(
+        response.statusCode,
+        404,
+        `${attempt.method} ${attempt.url} was reachable by a read token`,
+      );
     }
   } finally {
     await app.close();
@@ -236,7 +252,11 @@ void test("rotate denies a name outside the token's scope", async () => {
   try {
     await app.ready();
 
-    const manageAll = issueToken(app, { name: "manage-all", scopePrefix: "github", capability: "manage" });
+    const manageAll = issueToken(app, {
+      name: "manage-all",
+      scopePrefix: "github",
+      capability: "manage",
+    });
 
     await app.inject({
       method: "POST",
@@ -336,7 +356,11 @@ void test("delete denies the whole request if any name is outside the token's sc
   try {
     await app.ready();
 
-    const manageAll = issueToken(app, { name: "manage-all", scopePrefix: "github", capability: "manage" });
+    const manageAll = issueToken(app, {
+      name: "manage-all",
+      scopePrefix: "github",
+      capability: "manage",
+    });
 
     await app.inject({
       method: "POST",
@@ -512,7 +536,11 @@ void test("list returns metadata for in-scope names only, and rejects any query 
   try {
     await app.ready();
 
-    const manageAll = issueToken(app, { name: "manage-all", scopePrefix: "github", capability: "manage" });
+    const manageAll = issueToken(app, {
+      name: "manage-all",
+      scopePrefix: "github",
+      capability: "manage",
+    });
 
     await app.inject({
       method: "POST",

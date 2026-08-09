@@ -1,4 +1,9 @@
-import { loadSecretsKeyring, SecretValue, type SecretContext, type SecretsKeyring } from "@unimatrix/secrets";
+import {
+  loadSecretsKeyring,
+  SecretValue,
+  type SecretContext,
+  type SecretsKeyring,
+} from "@unimatrix/secrets";
 
 import type { SecretsRuntimeConfigBase, SecretsRuntimeEnv } from "./config.js";
 
