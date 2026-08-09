@@ -2,10 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { installStaleChunkRecovery, isStaleChunkError } from "@/lib/stale-chunk-recovery";
 
-function dispatchPreloadError(payload: unknown): void {
+function dispatchPreloadError(payload: unknown): VitePreloadErrorEvent {
   const event = new Event("vite:preloadError", { cancelable: true }) as VitePreloadErrorEvent;
   event.payload = payload as Error;
   window.dispatchEvent(event);
+  return event;
 }
 
 describe("isStaleChunkError", () => {
@@ -30,7 +31,7 @@ describe("isStaleChunkError", () => {
     expect(isStaleChunkError(undefined)).toBe(false);
   });
 
-  it("rejects an object with a non-string message", () => {
+  it("rejects a non-Error object before its message is even inspected", () => {
     expect(isStaleChunkError({ message: 42 })).toBe(false);
   });
 });
@@ -58,6 +59,19 @@ describe("installStaleChunkRecovery", () => {
     );
 
     expect(reload).toHaveBeenCalledTimes(1);
+  });
+
+  it("never calls preventDefault, so __vitePreload still rethrows", () => {
+    const reload = vi.fn();
+    dispose = installStaleChunkRecovery({ reload });
+
+    const event = dispatchPreloadError(
+      new Error(
+        "Failed to fetch dynamically imported module: https://cflop.example/assets/learn-abc.js",
+      ),
+    );
+
+    expect(event.defaultPrevented).toBe(false);
   });
 
   it("does not reload a second time for the same module URL", () => {
@@ -94,6 +108,25 @@ describe("installStaleChunkRecovery", () => {
     const reload = vi.fn();
     vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
       throw new DOMException("blocked", "SecurityError");
+    });
+    dispose = installStaleChunkRecovery({ reload });
+
+    dispatchPreloadError(
+      new Error(
+        "Failed to fetch dynamically imported module: https://cflop.example/assets/learn-abc.js",
+      ),
+    );
+
+    expect(reload).not.toHaveBeenCalled();
+  });
+
+  it("never reloads when sessionStorage.setItem throws", () => {
+    // getItem still succeeds here — this is the quota-exceeded/Safari
+    // private-browsing shape, where reads work but a write throws, rather
+    // than the read-side failure the case above covers.
+    const reload = vi.fn();
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new DOMException("QuotaExceededError", "QuotaExceededError");
     });
     dispose = installStaleChunkRecovery({ reload });
 
