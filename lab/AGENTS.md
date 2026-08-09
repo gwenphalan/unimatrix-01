@@ -6,6 +6,8 @@
 
 It is the third top-level workspace entry, alongside `apps/*` and `packages/*`, because it must be a workspace member to import `@unimatrix/ui` and `@unimatrix/chrome`.
 
+Building or promoting a prototype goes through the `lab-prototype` skill: this file holds the facts, the skill holds the order.
+
 ## 2. The defining constraint: local-dev only
 
 `pnpm --filter @unimatrix/lab dev` and nothing else. **No `build` script, no Dockerfile, no compose file, no domain, no CI `Images` entry, and no route in any deployed app.** This is what makes the whole security question disappear: prototype code has no production surface to leak onto. If a change here creates a deploy artifact of any kind, it has misread what this workspace is.
