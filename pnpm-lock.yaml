@@ -398,6 +398,9 @@ importers:
 
   apps/secrets:
     dependencies:
+      '@fastify/rate-limit':
+        specifier: ^11.1.0
+        version: 11.1.0
       '@unimatrix/secrets':
         specifier: workspace:*
         version: link:../../packages/secrets

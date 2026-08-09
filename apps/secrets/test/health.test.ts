@@ -56,7 +56,10 @@ void test("GET /health rejects unexpected query parameters", async () => {
   }
 });
 
-void test("GET /missing-route returns the minimal not-found envelope", async () => {
+// Not a 404. A URL matching no route is denied like any other, so route
+// existence is not something an unauthenticated caller can enumerate.
+// `auth-plugin.test.ts` is where the same URL answers 404 with a valid token.
+void test("GET /missing-route is denied rather than answered", async () => {
   const app = createTestApp();
   try {
     const response = await app.inject({
@@ -64,11 +67,11 @@ void test("GET /missing-route returns the minimal not-found envelope", async () 
       url: "/missing-route",
     });
 
-    assert.equal(response.statusCode, 404);
+    assert.equal(response.statusCode, 401);
     assert.deepEqual(response.json(), {
       error: {
-        code: "NOT_FOUND",
-        message: "Route not found",
+        code: "UNAUTHORIZED",
+        message: "A valid service token is required",
       },
     });
   } finally {

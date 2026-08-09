@@ -211,26 +211,44 @@ that volume automatically at container startup. As with the API service,
 confirm the volume is mapped to persistent host storage (Advanced → Volumes)
 so it survives redeploys.
 
+**Issuing a service token:** every request except `GET /health` carries a
+bearer token, and tokens are minted by a CLI inside the running container
+rather than over HTTP. It needs the database but not `SECRETS_KEKS`.
+
+```bash
+docker exec <container> node dist/cli/service-token.js \
+  issue --name api --scope github --capability read
+```
+
+The plaintext prints once and only its digest is stored, so a lost token is
+reissued rather than recovered. `list` and `revoke --name <name>` are the other
+two subcommands, and both they and `issue` append a row to the audit log.
+
 **No Domains entry is not isolation.** Dokploy attaches every Compose stack to
 the shared overlay `dokploy-network` by default, which is what lets Traefik
 reach a stack that does have a domain. Measured on the host 2026-08-08: 12 of
 13 Compose services sit on it, including two PR previews and unrelated
-third-party stacks, so any container on the host can open a socket to this
-one. Nothing authenticates those callers yet — this item ships `/health` and no
-other route, so there is nothing behind it to reach. Authenticating every
-caller is a prerequisite for the first route that returns a value, not
-something already in place.
+third-party stacks, so any container attached to `dokploy-network` can open a
+socket to this one. What stops them is the bearer token, not the network
+position.
 
 Dokploy's **Advanced → Isolated Deployment** toggle is the documented way off
 that shared network: it creates a network named after the stack's `appName`,
 attaches the stack's services to it, and connects Traefik to *that* network
-instead. Turning it on for this service is worth doing — a single-service
-stack with no domain cannot hit the sibling-DNS breakage reported upstream
-(Dokploy issues #3525 and #3562), so it costs nothing here. Unverified: the
-one stack on this host with the flag set has no containers deployed, so the
-behaviour is read from Dokploy's docs and the `compose.isolatedDeployment`
-column on v0.29.13, not observed. Defence in depth either way — the
-authentication in the next item is what actually carries the boundary.
+instead. A single-service stack with no domain cannot hit the sibling-DNS
+breakage reported upstream (Dokploy issues #3525 and #3562), so on its own
+terms it costs nothing. Unverified: the one stack on this host with the flag
+set has no containers deployed, so the behaviour is read from Dokploy's docs
+and the `compose.isolatedDeployment` column on v0.29.13, not observed.
+
+**Isolation and cross-stack reachability cannot both hold.** `apps/api` is a
+separate Compose stack, and `dokploy-network` is how it would reach this one —
+isolating this stack takes it off that network. Either the two stacks share an
+explicitly declared network, or isolation stays off. The item that makes
+`apps/api` a client of this service is where that gets decided; nothing turns
+it on before then. Also unverified — nobody has enabled isolation and watched
+what happens to cross-stack DNS. Defence in depth either way: the token is
+what carries the boundary.
 
 ## Traefik expectations
 

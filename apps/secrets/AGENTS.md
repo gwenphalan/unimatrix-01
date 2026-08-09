@@ -2,13 +2,21 @@
 
 ## 1. Overview
 `apps/secrets` is the Fastify service backing the Unimatrix secrets store — sealed value storage
-under a versioned KEK ring (`@unimatrix/secrets`). This item ships only `/health`; no route here may
-ever serve a secret value, and even once the scoped read route lands it is the only one permitted to
-return a decrypted value. See `.notes/01-todo/secrets.todo.md` for the constraint list and the later
-items (auth, read/write routes, KEK rotation) this workspace does not yet implement.
+under a versioned KEK ring (`@unimatrix/secrets`). `/health` is the only route, and the only URL
+answerable without a bearer service token: an unauthenticated request to anything else is a 401,
+including a URL matching no route, and only an authenticated one gets a 404 for an unmatched URL.
+No route here may ever serve a secret value, and even once the scoped read route lands it is
+the only one permitted to return a decrypted value. See `.notes/01-todo/secrets.todo.md` for the
+constraint list and the items (read/write routes, KEK rotation) this workspace does not yet
+implement.
+
+Transport is a bearer token over plain HTTP on the overlay. TLS with a pinned self-signed server
+certificate is the decided follow-up, landing when `apps/api` first calls this service and both ends
+can be tested together — not an omission.
 
 ## 2. Folder Structure
-- `src/app.ts`: Fastify construction, `runtimeConfig`/`db` decoration, not-found handler.
+- `src/app.ts`: Fastify construction, `runtimeConfig`/`db` decoration, the error handler, and the
+  rate-limited not-found handler.
 - `src/server.ts`: process startup, signal handling, listen/shutdown. No `.env` file loading, unlike
   `apps/api/src/env.ts` — porting it would put a plaintext KEK on a developer's disk, the exact
   artifact this service exists to avoid multiplying. Local dev supplies `SECRETS_KEKS` on the command
@@ -18,14 +26,23 @@ items (auth, read/write routes, KEK rotation) this workspace does not yet implem
   module directly, before anything has been built, and a `@unimatrix/secrets` import here would
   resolve through its `dist` export map and fail closed in exactly that probe. It checks that
   `SECRETS_KEKS` is set but does not parse it or return it; see `src/keyring.ts`.
-- `src/keyring.ts`: the one file allowed to import `@unimatrix/secrets`. Loads the `SecretsKeyring`
+- `src/keyring.ts`: the one file under `src/` allowed to import `@unimatrix/secrets`. Loads the `SecretsKeyring`
   from `SECRETS_KEKS` and defines the composed runtime config type (config.ts's shape plus the
   keyring) — never the raw string. `src/server.ts` composes the two loaders into one object before
   building the app; nothing here returns them pre-composed.
-- `src/plugins`: `index.ts` wires only the Zod type-provider compilers and the database — no CORS, no
-  rate limiting, no security headers, no request-id/observability plugin. This service has no browser
-  caller and no public surface yet for any of that to protect; the auth item brings a rate-limit
-  plugin with the routes that need one.
+- `src/plugins`: `index.ts` wires the Zod type-provider compilers, the database, the rate limiter and
+  the service-token guard — no CORS, no security headers, no request-id/observability plugin. This
+  service has no browser caller for any of those to serve.
+- `src/service-tokens`: token generation and hashing (`format.ts`), the `read`/`manage` capability
+  (`capability.ts`), segment-boundary prefix matching (`scope.ts`), and the Drizzle-backed store.
+- `src/audit`: the append-only writer for `secret_audit_log`. One export, and that is the property —
+  SQLite cannot make a table append-only, so nothing here may gain an update or delete.
+- `src/cli/service-token.ts`: host-local token issuance, revocation and listing. Under `src/` rather
+  than `scripts/` because `tsconfig.build.json` excludes `scripts/` and the image ships built output
+  with no `tsx`, so a CLI there could not run in the container.
+- `src/lib/http`: the error envelope and its normalizer, and the logger options. Mirrors
+  `apps/api/src/lib/http` at a fraction of the size — no `requestId` in the body and no
+  validation-issue detail, because there is no browser client to consume either.
 - `src/modules`: `health` only, registered by `index.ts`.
 - `src/db`: this service's own Drizzle setup (`client.ts`, `migrate.ts`, `schema/`) — **never**
   `@unimatrix/db`. That package's SQLite volume is single-writer and already owned by the API
@@ -43,8 +60,24 @@ items (auth, read/write routes, KEK rotation) this workspace does not yet implem
   `@unimatrix/*` with no import parsing, so a comment naming the package this service deliberately
   does not depend on would demand `packages/db/**` in the README watch-path block. Reference it as a
   path (`packages/db/src/client.ts`) instead.
-- **No route in this item may serve a secret value** — `/health` is the only route here. The scoped
-  read route in a later item is the one exception this service will ever have; see §1.
+- **No route here may serve a secret value** — `/health` is the only route today. The scoped read
+  route in a later item is the one exception this service will ever have; see §1.
+- **`PUBLIC_ROUTE_URLS` is the entire allowlist, and a URL matching no route is not on it.** Denying
+  unmatched URLs is the point, not an oversight to patch: reachability on `dokploy-network` proves
+  nothing about who is calling. Never exempt them.
+- **Three hook placements are load-bearing and none of them is visible from a diff.** The guard runs
+  at `preValidation`, because `@fastify/rate-limit` attaches route-level hooks and those always run
+  after instance-level ones of the same type — an `onRequest` guard would be unreachable by the
+  limiter. The not-found handler carries its own limiter at `onRequest` inside `app.after()`, because
+  `setNotFoundHandler` fires no `onRoute` event and so the global ceiling never reaches unmatched
+  URLs at all; at `preValidation` or `preHandler` the guard runs first and the ceiling never fires.
+  And a test route must be registered through `app.register`, never on the root instance after
+  `buildApp()` — `onRoute` runs synchronously at `route()` time while the plugin boots through avvio,
+  so a root-scope route silently gets no limit. `test/rate-limit.test.ts` pins all three.
+- **A test that needs a valid token needs `DB_MIGRATE_ON_START: "true"` in its env.** The default is
+  false, so `service_tokens` does not exist and every lookup is a 500 rather than an auth result.
+- **A database fault inside the guard is a 500, never a 401.** A broken schema reported as a bad
+  credential sends the caller hunting for a token that is fine.
 - **The audit table (`secret_audit_log`) has no foreign keys, deliberately.** The client runs
   `foreign_keys = ON` (`src/db/client.ts`); an FK to `secrets(name)` with `onDelete: "cascade"` would
   erase the audit trail of exactly the deletion it exists to record.
