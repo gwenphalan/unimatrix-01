@@ -484,6 +484,53 @@ offline: re-ping suppressed, continuing as if posted
 refused: rate limited again after one re-ping
 EOF
 
+# CodeRabbit's newer wording, matched on its own with no commit status to
+# help — proves the widened body-loop arm catches "Review rate limited." the
+# same way it already caught "rate limited by coderabbit.ai".
+check rate-limited-new-wording 0 "$(f rate-limited-new)" <<'EOF'
+refused: rate limited
+EOF
+
+# An empty comment list, so only the commit status can be responsible for
+# this outcome — proves the "Review rate limited" status arm acts on its own,
+# not merely alongside a comment the body loop would have caught anyway.
+check rate-limited-status 0 "$(f rate-limited-status)" <<'EOF'
+refused: rate limited
+EOF
+
+# The status twin of skipped-resting: the same description, stamped BEFORE
+# the ping, is a refusal this run never earned rather than one to ride out.
+check rate-limited-status-resting 0 "$(f rate-limited-status-resting)" <<'EOF'
+FIXTURES EXHAUSTED
+EOF
+
+# What CodeRabbit actually posted on PR #236: a "Review rate limited" commit
+# status alongside BOTH comment wordings, all in the same poll. Without
+# `rate_limited_by_status` gating the body loop, the status arm and a comment
+# arm would each count this refusal once — two increments for one refusal,
+# tripping the one-retry cap on the very first poll instead of riding it out.
+# The expected shape is identical to `rate-limited-retry`'s: reaching the
+# second poll's clean review is only possible if the first poll absorbed
+# exactly one refusal.
+check rate-limited-realistic 0 "$(f rate-limited-realistic clean)" \
+  SHIP_PR_COMMENTS_FIXTURE="$here/wait/rate-limited-realistic/comments.json" <<'EOF'
+cooling down 0m, re-pinging at <time>
+offline: re-ping suppressed, continuing as if posted
+reviewed clean, count unchanged at 0
+offline: auto-merge not armed (would arm on fixture-head-sha)
+EOF
+
+# The cap message names the quota when the refusal that tripped it carries the
+# Fair Usage wording, because that refusal is not the plain cooldown the rest
+# of this function's lines describe — riding out a longer wait would not have
+# changed the outcome.
+check rate-limited-cap-quota 0 "$(f rate-limited rate-limited-quota)" \
+  SHIP_PR_COMMENTS_FIXTURE="$here/wait/rate-limited/comments.json" <<'EOF'
+cooling down 0m, re-pinging at <time>
+offline: re-ping suppressed, continuing as if posted
+refused: rate limited again after one re-ping — the included review budget is spent, not a short cooldown
+EOF
+
 # No commit status at all — the comment fallback reads the skip notice, and
 # everything in `bodies` is already newer than the ping.
 check skipped 0 "$(f skipped)" <<'EOF'
