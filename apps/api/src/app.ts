@@ -1,5 +1,5 @@
 import type { DatabaseInstance } from "@unimatrix/db";
-import Fastify, { type FastifyInstance, type FastifyServerOptions } from "fastify";
+import Fastify, { LogController, type FastifyInstance, type FastifyServerOptions } from "fastify";
 import { isResponseSerializationError } from "fastify-type-provider-zod";
 
 import type { ApiRuntimeConfig } from "./config.js";
@@ -15,15 +15,19 @@ declare module "fastify" {
   }
 }
 
-export function buildApp(config: ApiRuntimeConfig): FastifyInstance {
-  const appOptions = {
-    disableRequestLogging: true,
+export function buildAppOptions(config: ApiRuntimeConfig) {
+  return {
     forceCloseConnections: true,
+    // Fastify's own per-request lines are redundant here: the `onResponse` hook in
+    // `src/plugins/observability.ts` emits the app's `request completed` record.
+    logController: new LogController({ disableRequestLogging: true }),
     logger: buildLoggerOptions(config),
     trustProxy: config.trustProxy,
   } satisfies FastifyServerOptions;
+}
 
-  const app: FastifyInstance = Fastify(appOptions);
+export function buildApp(config: ApiRuntimeConfig): FastifyInstance {
+  const app: FastifyInstance = Fastify(buildAppOptions(config));
 
   app.decorate("runtimeConfig", config);
   setupCorePlugins(app);

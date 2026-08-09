@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { buildApp } from "../src/app.js";
+import { buildApp, buildAppOptions } from "../src/app.js";
 import { loadApiRuntimeConfig, type ApiRuntimeEnv } from "../src/config.js";
 
 function createTestApp(env: ApiRuntimeEnv = {}) {
@@ -14,19 +14,15 @@ function createTestApp(env: ApiRuntimeEnv = {}) {
   );
 }
 
-void test("buildApp disables Fastify default request logging", async () => {
-  const app = createTestApp();
-  const appWithConfig = app as typeof app & {
-    initialConfig?: {
-      disableRequestLogging?: boolean;
-    };
-  };
+void test("buildApp disables Fastify default request logging", () => {
+  const options = buildAppOptions(
+    loadApiRuntimeConfig({
+      LOG_LEVEL: "error",
+      NODE_ENV: "test",
+    }),
+  );
 
-  try {
-    assert.equal(appWithConfig.initialConfig?.disableRequestLogging, true);
-  } finally {
-    await app.close();
-  }
+  assert.equal(options.logController.disableRequestLogging, true);
 });
 
 void test("GET /health returns the expected health payload and hardening headers", async () => {
