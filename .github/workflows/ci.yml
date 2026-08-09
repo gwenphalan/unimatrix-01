@@ -94,9 +94,9 @@ jobs:
       # Same placement rationale — bash and jq against synthetic payloads and
       # transcript fixtures, no `node_modules`. Exercises the loaded-skill
       # check in writing-docs-reminder.sh, composing-context-reminder.sh and
-      # problem-solving-reminder.sh, the only pre-merge signal these hooks
-      # get: a live end-to-end test is not possible, since the hook
-      # registration a worktree session runs is the main checkout's.
+      # problem-solving-reminder.sh. These fixtures are the only signal those
+      # hooks get: suppression is silent by design — no output, exit 0 — so a
+      # detection that broke reads exactly like one that worked.
       - name: Reminder hook fixtures
         run: bash ./infra/scripts/check-reminder-hooks.sh
 
