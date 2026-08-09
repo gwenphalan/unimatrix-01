@@ -2,11 +2,17 @@ import type { SecretsDatabaseWriter } from "../db/client.js";
 import { secretAuditLogTable } from "../db/schema/index.js";
 
 /**
- * Extended by the routes that mutate secrets — `secret.created`,
- * `secret.rotated`, `secret.deleted`, `secret.read`. Token lifecycle is here
- * because minting and retiring a credential is itself a mutation of this store.
+ * Token lifecycle is here because minting and retiring a credential is
+ * itself a mutation of this store. `secret.read` is recorded on every read
+ * attempt, success and failure alike — the other three only on success.
  */
-export type SecretAuditAction = "service_token.issued" | "service_token.revoked";
+export type SecretAuditAction =
+  | "service_token.issued"
+  | "service_token.revoked"
+  | "secret.created"
+  | "secret.rotated"
+  | "secret.deleted"
+  | "secret.read";
 
 /** An authenticated service token, or the host CLI, which has no session. */
 export type SecretAuditActorKind = "service-token" | "host-cli";

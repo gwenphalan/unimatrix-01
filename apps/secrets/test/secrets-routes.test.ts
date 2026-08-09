@@ -1,0 +1,379 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+
+import { eq } from "drizzle-orm";
+import type { FastifyInstance, FastifyRequest } from "fastify";
+
+import { buildApp, type BuildSecretsAppOptions } from "../src/app.js";
+import { loadSecretsRuntimeConfig, type SecretsRuntimeEnv } from "../src/config.js";
+import { secretAuditLogTable, secretsTable, secretVersionsTable } from "../src/db/schema/index.js";
+import { loadSecretsKeyringFromEnv } from "../src/keyring.js";
+import { getServiceToken } from "../src/modules/secrets/index.js";
+import { issueServiceToken, type ServiceTokenCapability } from "../src/service-tokens/index.js";
+
+const TEST_KEK = `1:${Buffer.alloc(32, 7).toString("base64")}`;
+
+/** `DB_MIGRATE_ON_START` is not optional — without it every table is missing and every route is a 500. */
+function createTestApp(
+  env: SecretsRuntimeEnv = {},
+  options: BuildSecretsAppOptions = {},
+): FastifyInstance {
+  const mergedEnv = {
+    LOG_LEVEL: "error",
+    NODE_ENV: "test",
+    SECRETS_KEKS: TEST_KEK,
+    SECRETS_DATABASE_URL: ":memory:",
+    DB_MIGRATE_ON_START: "true",
+    ...env,
+  };
+
+  return buildApp(
+    {
+      ...loadSecretsRuntimeConfig(mergedEnv),
+      keyring: loadSecretsKeyringFromEnv(mergedEnv),
+    },
+    options,
+  );
+}
+
+function issueToken(
+  app: FastifyInstance,
+  options: { name: string; scopePrefix: string; capability: ServiceTokenCapability },
+): string {
+  return issueServiceToken(app.db, options).token;
+}
+
+function readSecretVersions(app: FastifyInstance, name: string) {
+  return app.db.select().from(secretVersionsTable).where(eq(secretVersionsTable.secretName, name)).all();
+}
+
+void test("create stores a secret and returns metadata carrying no value", async () => {
+  const app = createTestApp();
+
+  try {
+    await app.ready();
+
+    const token = issueToken(app, { name: "manage", scopePrefix: "github", capability: "manage" });
+
+    // 12+ characters so `SecretValue#mask()` returns a visible prefix rather
+    // than an all-stars mask, which is what makes the assertion below able
+    // to distinguish "the wrong prefix" from "no prefix logic ran at all".
+    const response = await app.inject({
+      method: "POST",
+      url: "/secrets",
+      headers: { authorization: `Bearer ${token}` },
+      payload: { name: "github/api-token", value: "hunter2-hunter2" },
+    });
+
+    assert.equal(response.statusCode, 200);
+
+    const body: { name: string; kekVersion: number; maskedPrefix: string } = response.json();
+
+    assert.equal(body.name, "github/api-token");
+    assert.equal(body.kekVersion, 1);
+    assert.equal(body.maskedPrefix, "hunt********");
+    assert.equal("value" in body, false);
+    assert.ok(!response.payload.includes("hunter2"), "the response echoed the plaintext value");
+
+    const versions = readSecretVersions(app, "github/api-token");
+
+    assert.equal(versions.length, 1);
+    assert.equal(versions[0]?.supersededAt, null);
+  } finally {
+    await app.close();
+  }
+});
+
+void test("create rejects a duplicate name", async () => {
+  const app = createTestApp();
+
+  try {
+    await app.ready();
+
+    const token = issueToken(app, { name: "manage", scopePrefix: "github", capability: "manage" });
+    const create = () =>
+      app.inject({
+        method: "POST",
+        url: "/secrets",
+        headers: { authorization: `Bearer ${token}` },
+        payload: { name: "github/api-token", value: "hunter2" },
+      });
+
+    assert.equal((await create()).statusCode, 200);
+
+    const second = await create();
+
+    assert.equal(second.statusCode, 400);
+
+    const body: { error: { code: string } } = second.json();
+
+    assert.equal(body.error.code, "VALIDATION_ERROR");
+  } finally {
+    await app.close();
+  }
+});
+
+void test("create denies a name outside the token's scope", async () => {
+  const app = createTestApp();
+
+  try {
+    await app.ready();
+
+    const token = issueToken(app, { name: "manage", scopePrefix: "github", capability: "manage" });
+    const response = await app.inject({
+      method: "POST",
+      url: "/secrets",
+      headers: { authorization: `Bearer ${token}` },
+      payload: { name: "dokploy/token", value: "hunter2" },
+    });
+
+    assert.equal(response.statusCode, 404);
+    assert.deepEqual(response.json(), { error: { code: "NOT_FOUND", message: "Route not found" } });
+  } finally {
+    await app.close();
+  }
+});
+
+void test("a read token cannot reach create, rotate or delete", async () => {
+  const app = createTestApp();
+
+  try {
+    await app.ready();
+
+    const token = issueToken(app, { name: "read", scopePrefix: "github", capability: "read" });
+    const attempts = [
+      { method: "POST" as const, url: "/secrets", payload: { name: "github/api-token", value: "x" } },
+      { method: "POST" as const, url: "/secrets/rotate", payload: { name: "github/api-token", value: "x" } },
+      { method: "DELETE" as const, url: "/secrets", payload: { names: ["github/api-token"] } },
+    ];
+
+    for (const attempt of attempts) {
+      const response = await app.inject({
+        ...attempt,
+        headers: { authorization: `Bearer ${token}` },
+      });
+
+      assert.equal(response.statusCode, 404, `${attempt.method} ${attempt.url} was reachable by a read token`);
+    }
+  } finally {
+    await app.close();
+  }
+});
+
+void test("rotate supersedes the old version, keeps exactly one live row, and advances rotatedAt", async () => {
+  const app = createTestApp();
+
+  try {
+    await app.ready();
+
+    const token = issueToken(app, { name: "manage", scopePrefix: "github", capability: "manage" });
+
+    await app.inject({
+      method: "POST",
+      url: "/secrets",
+      headers: { authorization: `Bearer ${token}` },
+      payload: { name: "github/api-token", value: "hunter2-hunter2" },
+    });
+
+    // A past timestamp that direct SQL manipulation makes deterministic —
+    // asserting "advanced" against SQLite's second-resolution
+    // `CURRENT_TIMESTAMP` any other way risks two writes in the same wall
+    // clock second comparing equal.
+    const STALE_ROTATED_AT = "2020-01-01 00:00:00";
+
+    await app.db
+      .update(secretsTable)
+      .set({ rotatedAt: STALE_ROTATED_AT })
+      .where(eq(secretsTable.name, "github/api-token"));
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/secrets/rotate",
+      headers: { authorization: `Bearer ${token}` },
+      payload: { name: "github/api-token", value: "hunter3-hunter3" },
+    });
+
+    assert.equal(response.statusCode, 200);
+
+    const body: { name: string; maskedPrefix: string; rotatedAt: string } = response.json();
+
+    assert.equal(body.name, "github/api-token");
+    assert.equal(body.maskedPrefix, "hunt********");
+    assert.notEqual(body.rotatedAt, STALE_ROTATED_AT);
+
+    const versions = readSecretVersions(app, "github/api-token");
+
+    assert.equal(versions.length, 2);
+    assert.equal(versions.filter((version) => version.supersededAt === null).length, 1);
+  } finally {
+    await app.close();
+  }
+});
+
+void test("rotate denies a name that does not exist", async () => {
+  const app = createTestApp();
+
+  try {
+    await app.ready();
+
+    const token = issueToken(app, { name: "manage", scopePrefix: "github", capability: "manage" });
+    const response = await app.inject({
+      method: "POST",
+      url: "/secrets/rotate",
+      headers: { authorization: `Bearer ${token}` },
+      payload: { name: "github/missing", value: "hunter2" },
+    });
+
+    assert.equal(response.statusCode, 404);
+  } finally {
+    await app.close();
+  }
+});
+
+void test("rotate denies a name outside the token's scope", async () => {
+  const app = createTestApp();
+
+  try {
+    await app.ready();
+
+    const manageAll = issueToken(app, { name: "manage-all", scopePrefix: "github", capability: "manage" });
+
+    await app.inject({
+      method: "POST",
+      url: "/secrets",
+      headers: { authorization: `Bearer ${manageAll}` },
+      payload: { name: "github/api-token", value: "hunter2" },
+    });
+
+    const dokployToken = issueToken(app, {
+      name: "manage-dokploy",
+      scopePrefix: "dokploy",
+      capability: "manage",
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/secrets/rotate",
+      headers: { authorization: `Bearer ${dokployToken}` },
+      payload: { name: "github/api-token", value: "hunter3" },
+    });
+
+    assert.equal(response.statusCode, 404);
+  } finally {
+    await app.close();
+  }
+});
+
+void test("delete removes secret_versions rows and leaves the audit rows behind", async () => {
+  const app = createTestApp();
+
+  try {
+    await app.ready();
+
+    const token = issueToken(app, { name: "manage", scopePrefix: "github", capability: "manage" });
+
+    await app.inject({
+      method: "POST",
+      url: "/secrets",
+      headers: { authorization: `Bearer ${token}` },
+      payload: { name: "github/api-token", value: "hunter2" },
+    });
+
+    const response = await app.inject({
+      method: "DELETE",
+      url: "/secrets",
+      headers: { authorization: `Bearer ${token}` },
+      payload: { names: ["github/api-token"] },
+    });
+
+    assert.equal(response.statusCode, 200);
+    assert.deepEqual(response.json(), { affected: 1 });
+    assert.deepEqual(readSecretVersions(app, "github/api-token"), []);
+
+    const auditRows = app.db.select().from(secretAuditLogTable).all();
+
+    assert.ok(auditRows.length >= 2, "the created and deleted rows should both survive the delete");
+  } finally {
+    await app.close();
+  }
+});
+
+void test("delete denies the whole request if any name is out of scope or missing, and deletes nothing", async () => {
+  const app = createTestApp();
+
+  try {
+    await app.ready();
+
+    const token = issueToken(app, { name: "manage", scopePrefix: "github", capability: "manage" });
+
+    for (const name of ["github/one", "github/two"]) {
+      await app.inject({
+        method: "POST",
+        url: "/secrets",
+        headers: { authorization: `Bearer ${token}` },
+        payload: { name, value: "hunter2" },
+      });
+    }
+
+    const response = await app.inject({
+      method: "DELETE",
+      url: "/secrets",
+      headers: { authorization: `Bearer ${token}` },
+      payload: { names: ["github/one", "github/two", "github/missing"] },
+    });
+
+    assert.equal(response.statusCode, 404);
+    assert.equal(readSecretVersions(app, "github/one").length, 1);
+    assert.equal(readSecretVersions(app, "github/two").length, 1);
+  } finally {
+    await app.close();
+  }
+});
+
+void test("delete denies the whole request if any name is outside the token's scope", async () => {
+  const app = createTestApp();
+
+  try {
+    await app.ready();
+
+    const manageAll = issueToken(app, { name: "manage-all", scopePrefix: "github", capability: "manage" });
+
+    await app.inject({
+      method: "POST",
+      url: "/secrets",
+      headers: { authorization: `Bearer ${manageAll}` },
+      payload: { name: "github/api-token", value: "hunter2" },
+    });
+
+    const dokployToken = issueToken(app, {
+      name: "manage-dokploy",
+      scopePrefix: "dokploy",
+      capability: "manage",
+    });
+
+    const response = await app.inject({
+      method: "DELETE",
+      url: "/secrets",
+      headers: { authorization: `Bearer ${dokployToken}` },
+      payload: { names: ["github/api-token"] },
+    });
+
+    assert.equal(response.statusCode, 404);
+    assert.equal(readSecretVersions(app, "github/api-token").length, 1);
+  } finally {
+    await app.close();
+  }
+});
+
+void test("getServiceToken denies a null service token — unreachable through a real request, since the auth guard already would have", () => {
+  const warnings: unknown[] = [];
+  const fakeRequest = {
+    serviceToken: null,
+    id: "fake-request-id",
+    routeOptions: { url: "/secrets" },
+    log: { warn: (payload: unknown) => warnings.push(payload) },
+  } as unknown as FastifyRequest;
+
+  assert.throws(() => getServiceToken(fakeRequest), /Route not found/u);
+  assert.equal(warnings.length, 1);
+});

@@ -1,4 +1,4 @@
-import { loadSecretsKeyring, type SecretsKeyring } from "@unimatrix/secrets";
+import { loadSecretsKeyring, SecretValue, type SecretContext, type SecretsKeyring } from "@unimatrix/secrets";
 
 import type { SecretsRuntimeConfigBase, SecretsRuntimeEnv } from "./config.js";
 
@@ -26,4 +26,38 @@ export type SecretsRuntimeConfig = SecretsRuntimeConfigBase & { keyring: Secrets
  */
 export function loadSecretsKeyringFromEnv(env: SecretsRuntimeEnv = process.env): SecretsKeyring {
   return loadSecretsKeyring(env.SECRETS_KEKS);
+}
+
+export interface SealedSecretPlaintext {
+  envelope: string;
+  maskedPrefix: string;
+  kekVersion: number;
+}
+
+/**
+ * The only place under `src/` that constructs a `SecretValue` from request
+ * input — everywhere else in the store and routes passes the sealed
+ * envelope and masked prefix this returns, never the plaintext itself.
+ */
+export function sealSecretPlaintext(
+  keyring: SecretsKeyring,
+  context: SecretContext,
+  plaintext: string,
+): SealedSecretPlaintext {
+  const value = new SecretValue(plaintext);
+
+  return {
+    envelope: keyring.seal({ context, value }),
+    maskedPrefix: value.mask(),
+    kekVersion: keyring.activeVersion,
+  };
+}
+
+/** Unwraps the `SecretValue` `SecretsKeyring#open` returns to the plaintext string the read route sends. */
+export function openSecretPlaintext(
+  keyring: SecretsKeyring,
+  context: SecretContext,
+  envelope: string,
+): string {
+  return keyring.open({ context, envelope }).reveal();
 }
