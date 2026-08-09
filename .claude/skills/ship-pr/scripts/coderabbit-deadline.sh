@@ -13,8 +13,12 @@ coderabbit.ai" with a "Next review available in: N <unit>" countdown, and
 "Review rate limited." with a Fair Usage Limits Policy notice and "next
 included review will be available in N <unit>" — and this matches either.
 CodeRabbit has been seen posting comments in both wordings, seconds apart, for
-one refusal; when more than one marker is present, the newest one that
-actually carries a readable countdown wins, not just the newest overall.
+one refusal; when the newest marker has no readable countdown but a sibling
+posted within the last minute does, the sibling's countdown wins. Past that
+window a readable older marker is a separate, prior refusal rather than a
+same-refusal sibling, so its countdown is not reused — it may already have
+lapsed, which would report a deadline in the past as still live. The newest
+marker wins on its own in that case, reporting countdown=unknown.
 
 The countdown is not a live clock. It is rewritten only when CodeRabbit runs,
 so polling for the marker to vanish waits forever, and N is whatever was true
@@ -59,21 +63,39 @@ fi
 repo=$1
 pr=$2
 
-# shellcheck disable=SC2016  # jq filter, not shell: $re, $m, $c and $readable are jq bindings.
+# shellcheck disable=SC2016  # jq filter, not shell: $re, $window, $latest, $m, $c and $near are jq bindings.
 filter='
   ("(?:Next review available in|next included review will be available in):?[^0-9]*([0-9]+) ([a-z]+)") as $re
+  # How close a readable sibling has to sit to the newest marker to count as
+  # the same refusal rather than a separate, earlier one. CodeRabbit has been
+  # seen posting both wordings a couple of seconds apart for one refusal;
+  # nothing has been seen anywhere near a minute, so this is generous, not
+  # tight. Widen it only with a fresh measurement, since the whole point is to
+  # stay well short of "an hour apart is still the same refusal".
+  | 60 as $window
   | [.[] | select(.user.login=="coderabbitai[bot]" and
       ((.body | contains("rate limited by coderabbit.ai")) or (.body | contains("Review rate limited."))))]
   | if length == 0 then "no rate-limit comment found"
     else
-      # CodeRabbit has posted both wordings for one refusal seconds apart, so
-      # max_by(.updated_at) alone can land on whichever posted last even when
-      # THAT one is the one with no parseable countdown — reporting unknown
-      # while an older sibling has the real number. Restrict to markers with a
-      # readable countdown first, and only fall back to the newest marker
-      # overall when none of them have one.
-      ( [.[] | select([.body | scan($re)] | length > 0)] ) as $readable
-      | (if ($readable | length) > 0 then $readable else . end | max_by(.updated_at)) as $m
+      max_by(.updated_at) as $latest
+      | (if ([$latest.body | scan($re)] | length) > 0 then
+          # The newest marker already carries a readable countdown — no
+          # fallback needed, and no older marker gets to override it.
+          $latest
+        else
+          # CodeRabbit has posted both wordings for one refusal seconds apart,
+          # so the newest marker can be the one with no parseable countdown
+          # while an older sibling from the SAME refusal has the real number.
+          # Restrict the fallback to siblings within $window of the newest —
+          # an older marker further back than that is a separate refusal, and
+          # its countdown is stale rather than a stand-in for the current one.
+          ( [.[] | select(
+              ([.body | scan($re)] | length > 0) and
+              (($latest.updated_at | fromdateiso8601) - (.updated_at | fromdateiso8601)) <= $window
+            )]
+          ) as $near
+          | if ($near | length) > 0 then ($near | max_by(.updated_at)) else $latest end
+        end) as $m
       | ([$m.body | scan($re)] | first) as $c
       | if $c == null then "updated=\($m.updated_at) countdown=unknown"
         else "updated=\($m.updated_at) countdown=\($c[0]) \($c[1])"
