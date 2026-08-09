@@ -38,3 +38,32 @@ test("grid phase recomputes on viewport resize", async ({ page }) => {
     "centerline sits mid bold cell",
   ).toBe(120);
 });
+
+test("grid phase ignores a height-only viewport change", async ({ page }) => {
+  await page.setViewportSize({ width: 1300, height: 900 });
+  await page.goto("/");
+  await page.waitForFunction(
+    () => document.documentElement.style.getPropertyValue("--grid-phase-x") !== "",
+  );
+
+  const before = await page.evaluate(readPhase);
+
+  // An iOS address bar retracting is a height-only viewport change. The
+  // `ResizeObserver` still fires on one — this pins that it rewrites nothing,
+  // which is what stops the lattice sliding under stationary content.
+  await page.setViewportSize({ width: 1300, height: 640 });
+  await page.waitForTimeout(400);
+  const after = await page.evaluate(readPhase);
+
+  expect(after.px, "fine phase must survive a height-only change").toBe(before.px);
+  expect(after.bx, "bold phase must survive a height-only change").toBe(before.bx);
+
+  // Re-adding a vertical phase would leave the assertions above green, so pin
+  // the absence directly: nothing may write a y variable at any viewport.
+  const vertical = await page.evaluate(() => ({
+    py: document.documentElement.style.getPropertyValue("--grid-phase-y"),
+    by: document.documentElement.style.getPropertyValue("--grid-bold-phase-y"),
+  }));
+
+  expect(vertical, "no vertical phase may be written").toStrictEqual({ py: "", by: "" });
+});

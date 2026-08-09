@@ -163,9 +163,10 @@
      intersection dots) by `--grid-bold-phase-x`, the 40px tier by
      `--grid-phase-x`. Both are written by `GraphBackground`, which is the
      only reader/writer of them; the two tiers stay seam-locked because 240
-     is a whole multiple of 40. There is no vertical phase — the backdrop is
-     viewport-pinned, not page-sized, so it has no vertical centerline to
-     align to. The last layer is the full-size vignette, which has no
+     is a whole multiple of 40. There is no vertical phase — the content
+     column has no vertical centerline to align to, and measuring viewport
+     height slides the lattice whenever a mobile address bar moves. The last
+     layer is the full-size vignette, which has no
      lattice. Falls back to the plain `0` x-origin without JS — visibly
      off-center against centered content, which is why the component is
      mounted in both shells. */

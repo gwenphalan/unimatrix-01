@@ -42,16 +42,14 @@ function boldLatticePhase(extent: number): number {
  * max-w-[92rem]` shell's rect center equals `clientWidth / 2` — so the viewport
  * centerline is the content centerline.
  *
- * There is no vertical counterpart. The backdrop is pinned to the viewport
- * (`position: fixed`), so it has no page-height extent to center against, and
- * the content column it aligns to has no vertical centerline either — a
- * vertical phase would be centering against nothing. A real-device check (an
- * iPhone, Safari, over LAN) confirmed the removal fixes what it was meant to
- * fix: `documentElement.clientHeight` tracks the visible viewport height,
- * which iOS Safari shrinks and grows as its address bar hides and reappears,
- * so measuring it fired the `ResizeObserver` and rewrote the phase on every
- * such change — visibly shifting the backdrop under stationary content. Not
- * measuring height at all removes that trigger entirely.
+ * There is no vertical counterpart, deliberately. The content column this
+ * aligns to has no vertical centerline, so a vertical phase would be centering
+ * against nothing. It is also actively harmful: `documentElement.clientHeight`
+ * tracks the visible viewport height, which iOS Safari shrinks and grows as
+ * its address bar hides and reappears. The `ResizeObserver` below fires on
+ * those changes either way — keeping `apply` width-only is what stops them
+ * rewriting anything and sliding the backdrop under stationary content.
+ * Confirmed on an iPhone over LAN.
  *
  * Mount it once per app, inside the shell. It is safe at every width: the grid
  * paints on mobile too, so there is no viewport gate here.
