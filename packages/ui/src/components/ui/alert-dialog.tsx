@@ -157,7 +157,13 @@ function AlertDialogCancel({
     <Button variant={variant} size={size} asChild>
       <AlertDialogPrimitive.Cancel
         data-slot="alert-dialog-cancel"
-        className={cn(className)}
+        // The content is portalled to `document.body`, so it has no `.site-panel`
+        // ancestor and `outline` would otherwise paint flush with the dialog's own
+        // `bg-background`. The content is the surface here, so both branches lift.
+        className={cn(
+          "not-in-[.site-panel]:bg-input/30 not-in-[.site-panel]:hover:bg-input/50",
+          className,
+        )}
         {...props}
       />
     </Button>
