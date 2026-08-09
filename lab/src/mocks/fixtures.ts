@@ -1,4 +1,9 @@
-import type { ContentPost, UserDocument, UserFileMetadata } from "@unimatrix/shared";
+import type {
+  ContentAssetMetadata,
+  ContentPost,
+  UserDocument,
+  UserFileMetadata,
+} from "@unimatrix/shared";
 
 /**
  * The seed data every mock starts from.
@@ -62,6 +67,23 @@ export const mockPosts: ContentPost[] = [
     liveUrl: null,
     updatedAt: NOW,
     body: "Project body.",
+  },
+];
+
+export const mockAssets: ContentAssetMetadata[] = [
+  {
+    hash: "a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90",
+    contentType: "image/png",
+    size: 148_231,
+    originalFilename: "section-nav-layouts.png",
+    createdAt: NOW,
+  },
+  {
+    hash: "0f1e2d3c4b5a69788796a5b4c3d2e1f00f1e2d3c4b5a69788796a5b4c3d2e1f0",
+    contentType: "application/pdf",
+    size: 32_768,
+    originalFilename: "shell-spec.pdf",
+    createdAt: "2026-07-14T08:15:00.000Z",
   },
 ];
 

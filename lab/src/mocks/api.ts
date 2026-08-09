@@ -1,19 +1,21 @@
 import type {
   AdminListPostsQuery,
   BulkResult,
+  ContentAssetMetadata,
   ContentPost,
   ContentPostSummary,
   CreatePostBody,
   DeletePostsBody,
   GetPostQuery,
   HealthResponse,
+  ListAssetsResponse,
   ListPostsQuery,
   ListPostsResponse,
   SetPostsStateBody,
   UpdatePostBody,
 } from "@unimatrix/shared";
 
-import { mockPosts } from "./fixtures.js";
+import { mockAssets, mockPosts } from "./fixtures.js";
 
 /**
  * A stand-in for `@unimatrix/api-client`'s content surface.
@@ -31,7 +33,9 @@ import { mockPosts } from "./fixtures.js";
  *
  * The surface is narrower than the real client's on purpose: no `request()`
  * escape hatch, no auth-token provider, no base URL. There is nothing to
- * configure because there is nothing to reach.
+ * configure because there is nothing to reach. The per-user document and file
+ * methods are absent too, because that surface is `LabUserStore` in
+ * `user-data.ts` rather than this file.
  */
 export interface LabApiClient {
   getHealth(): Promise<HealthResponse>;
@@ -43,6 +47,7 @@ export interface LabApiClient {
   updatePost(body: UpdatePostBody): Promise<ContentPost>;
   setPostsState(body: SetPostsStateBody): Promise<BulkResult>;
   deletePosts(body: DeletePostsBody): Promise<BulkResult>;
+  listAssets(): Promise<ListAssetsResponse>;
 }
 
 export interface CreateLabApiClientOptions {
@@ -54,6 +59,8 @@ export interface CreateLabApiClientOptions {
   latencyMs?: number;
   /** Seed rows. Defaults to `mockPosts`; pass your own to design an empty state. */
   posts?: ContentPost[];
+  /** Seed assets. Defaults to `mockAssets`; pass your own to design an empty state. */
+  assets?: ContentAssetMetadata[];
 }
 
 /** Thrown where the real client would throw `ApiClientError`. */
@@ -108,6 +115,9 @@ export function createLabApiClient(options: CreateLabApiClientOptions = {}): Lab
   // POST OBJECTS with `mockPosts`, so one client mutating a returned post would
   // rewrite the exported fixture and every later client's starting state.
   const posts: ContentPost[] = (options.posts ?? mockPosts).map((post) => ({ ...post }));
+  const assets: ContentAssetMetadata[] = (options.assets ?? mockAssets).map((asset) => ({
+    ...asset,
+  }));
 
   function findById(id: string): ContentPost {
     const post = posts.find((candidate) => candidate.id === id);
@@ -292,6 +302,16 @@ export function createLabApiClient(options: CreateLabApiClientOptions = {}): Lab
       const result: BulkResult = { affected };
 
       return result;
+    },
+
+    async listAssets() {
+      await delay(latencyMs);
+
+      // The fixture is written newest first because the real route orders by
+      // `createdAt` desc. Nothing here writes an asset, so no runtime sort.
+      const response: ListAssetsResponse = { assets: assets.map((asset) => ({ ...asset })) };
+
+      return response;
     },
   };
 }
