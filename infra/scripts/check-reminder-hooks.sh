@@ -315,12 +315,31 @@ write_transcript "$t20" "$(line_user_marker_tool_result problem-solving)"
 p20=$(payload_prompt "$judgement_prompt" "case20" "$t20")
 run_case "case20-problem-solving-tool-result-excluded-fires" "$problem_solving" "$p20" 0 nonempty "$(ps_sentinel case20)" present
 
+# --- case 21: a loaded skill whose name CONTAINS the target as a substring -
+# `writing-docs-extra` is not `writing-docs`, so the reminder is still due.
+# Case 16's wrong-skill control cannot catch a loosened match, because
+# `composing-context` shares no substring with the target — only a name that
+# contains it distinguishes the exact match from a `*writing*`-style one. The
+# `$'\n'`-delimited `case` arm is what makes this pass.
+
+t21="${work}/t21.jsonl"
+write_transcript "$t21" "$(line_user_marker writing-docs-extra)"
+p21=$(payload_edit "docs/foo.md" "" "case21" "$t21")
+run_case "case21-substring-name-does-not-match-fires" "$writing_docs" "$p21" 0 nonempty "$(wd_sentinel docs case21)" present
+
+# --- case 22: same, via the invoked_skills attachment rather than a marker -
+
+t22="${work}/t22.jsonl"
+write_transcript "$t22" "$(line_invoked_skills writing-docs-extra)"
+p22=$(payload_edit "docs/foo.md" "" "case22" "$t22")
+run_case "case22-substring-name-in-attachment-fires" "$writing_docs" "$p22" 0 nonempty "$(wd_sentinel docs case22)" present
+
 printf '\n'
 
 # The count is asserted, not just reported: deleting a `run_case` line leaves
 # the suite green at one case fewer, and the coverage it removed is invisible
 # in a passing run. Raise this deliberately when adding a case.
-expected_cases=20
+expected_cases=22
 
 if ((ran == 0)); then
   fail "no case executed — the check cannot pass vacuously"
