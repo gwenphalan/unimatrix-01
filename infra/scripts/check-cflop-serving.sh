@@ -163,8 +163,11 @@ check_header /robots.txt content-type 'text/plain'
 check_header /sitemap.xml content-type 'text/xml'
 
 # `always` on both `add_header` directives is the only reason these survive a
-# redirect or an error response.
-for path in / /learn/ /nonsense; do
+# redirect or an error response. The hashed bundle is in this list too — it is
+# the one path served out of the `map`-selected cache-control block rather than
+# the top-level `server` one, so it is the row that would actually catch a
+# location-level `add_header` stripping these on a JS asset.
+for path in / /learn/ /nonsense "${bundle}"; do
   check_header "${path}" content-security-policy "frame-ancestors 'self'"
   check_header "${path}" x-content-type-options nosniff
 done
