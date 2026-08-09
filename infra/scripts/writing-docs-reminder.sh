@@ -20,6 +20,11 @@
 # The two branches keep separate sentinels because they carry different advice;
 # a code edit early in a session must not consume the documentation reminder.
 #
+# Stays silent instead when the skill is already loaded in the session's
+# context, and writes no sentinel on that path — the sentinel means "already
+# said this", but a suppressed reminder said nothing, so the reminder is due
+# again if the skill later leaves context (a compaction, most likely).
+#
 # `PostToolUse` rather than `PreToolUse` deliberately: the model has already
 # composed the edit by the time either fires, so `PreToolUse` would gain nothing
 # for the first edit and could block edits if it ever misbehaved. This hook
@@ -32,6 +37,10 @@ payload=$(cat)
 
 path=$(printf '%s' "$payload" | jq -r '.tool_response.filePath // .tool_input.file_path // empty' 2>/dev/null)
 [ -n "$path" ] || exit 0
+
+# Read for the loaded-skill check in `remind()` below. Same idiom as
+# turn-telemetry.sh:56 and session-telemetry.sh:49.
+transcript=$(printf '%s' "$payload" | jq -r '.transcript_path // empty' 2>/dev/null)
 
 # `.notes/` is gitignored scratch — todo lists and working notes, not repo
 # documentation. Reminding an agent about doc standards there is pure noise.
@@ -49,9 +58,56 @@ esac
 
 session=$(printf '%s' "$payload" | jq -r '.session_id // "unknown"' 2>/dev/null)
 
+# Whether `writing-docs` is already loaded in this session's context, so an
+# already-informed session gets no repeat reminder. Two independent copies of
+# this upstream-format dependency already exist for a different purpose —
+# turn-telemetry.sh:271-282 matches the `Skill` tool-call record,
+# session-telemetry.sh:171 matches the body-load marker — grep there first if
+# this ever needs to change for a transcript format change.
+#
+# Matches two shapes: the `invoked_skills` attachment (observed after *some*
+# compactions, not all — its absence must fail safe, not stale-suppress) and
+# the marker line that opens a skill's body. The scan stops at the last
+# `compact_boundary` so a load from before a compaction — no longer in
+# context — cannot suppress a reminder that is due again.
+loaded_program='
+  select(type == "object")
+  | if .type == "system" and .subtype == "compact_boundary" then
+      "--boundary--"
+    else
+      (
+        (.attachment | objects | select(.type == "invoked_skills")
+          | .skills | arrays | .[] | .name | strings),
+        (select(.type == "user") | .message | objects | .content | arrays | .[]
+          | objects | select(.type == "text") | .text | strings
+          | split("\n")[0]
+          | select(startswith("Base directory for this skill: "))
+          | sub("^.*/"; ""))
+      )
+    end
+'
+
+skill_loaded() {
+	[ -n "$transcript" ] && [ -r "$transcript" ] || return 1
+	# jq's exit code is ignored on purpose. The transcript is flushed
+	# asynchronously and its last line is routinely half-written, so jq prints
+	# a parse error and exits 5 while still emitting every complete record
+	# before it on stdout — piping into `grep -q` would read that exit code as
+	# "no match" even when the match already succeeded (measured against a
+	# truncated fixture). Capturing into a variable and matching with `case`
+	# reads what did make it to stdout and never looks at the exit code.
+	names=$(jq -r "$loaded_program" "$transcript" 2>/dev/null)
+	names=${names##*--boundary--}
+	case $'\n'"$names"$'\n' in
+	*$'\n'writing-docs$'\n'*) return 0 ;;
+	esac
+	return 1
+}
+
 remind() {
 	sentinel="${TMPDIR:-/tmp}/claude-writing-docs-reminder-$1-${session//[^A-Za-z0-9._-]/_}"
 	[ -e "$sentinel" ] && exit 0
+	skill_loaded && exit 0
 	: >"$sentinel" 2>/dev/null || exit 0
 	jq -nc --arg message "$2" '{
 	  hookSpecificOutput: {
