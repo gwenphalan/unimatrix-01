@@ -52,25 +52,47 @@ Each app pins its own dev port with `strictPort: true`, so a collision refuses t
 quietly answering on another origin. If the server will not start, that is a finding — report it
 rather than working around it by changing the port.
 
-## Two ways in, and they fail differently
+## Two ways in, and only one of them is the default
 
-**Claude in Chrome** (`mcp__claude-in-chrome__*`) drives a real browser the owner can watch. It is
-the default here, because seeing the page is the point. Its failure modes are environmental: the
-extension may not be connected, in which case the tools are simply absent — say so and use the other
-route rather than reporting the surface unchecked. Never trigger `alert`, `confirm`, or any modal:
-they block every subsequent command and end browser control for the session.
+**Headless Playwright is the default**, driven from `Bash`; Chromium is in the local browser cache
+(`~/.cache/ms-playwright`). It produces every input the verdict is built from with no window at all —
+measured in one script: `page.on('console')` captured the log, `locator.evaluate(el =>
+getComputedStyle(el).color)` read a style back off the live element, and `page.screenshot({ path })`
+wrote a PNG that `Read` then renders visually. So "I need to see the page" is not a reason to reach
+for Chrome.
 
-**Playwright** is installed and driveable from `Bash` — it is a dependency of the workspaces that
-ship a smoke suite, and Chromium is in the local browser cache (`~/.cache/ms-playwright`). Use
-it when the check is scripted or repeatable, when a modal is unavoidable, or when Chrome tooling is
-unavailable. Its failures are different in kind: a selector that never resolves times out with a
-green-looking suite around it, so read what the run printed rather than its exit code.
+Its failures are unlike a browser you are watching: a selector that never resolves times out with a
+green-looking run around it, so read what the run printed rather than its exit code.
+
+**Two traps, both measured here.** Playwright is a dependency of `apps/web`, `apps/cflop` and
+`packages/e2e-helpers` only — `apps/admin`, `apps/auth`, `packages/ui` and `packages/chrome` have
+none, and they are among the surfaces this agent exists to check. And Node resolves
+`@playwright/test` from the *script's* own directory rather than the cwd, so a driver script at an
+absolute `/tmp` path dies on `ERR_MODULE_NOT_FOUND` however it is invoked. Write the script inside a
+workspace that has Playwright — `apps/web` is the usual one — and run it from there by a relative
+path, `cd apps/web && pnpm exec node ./<your-script>`.
+
+Verifying `apps/admin`, `apps/auth`, `packages/ui` or `packages/chrome` therefore means the script
+lives in `apps/web` and navigates to the other app's dev port. Playwright does not care which origin
+it is pointed at.
+
+**Claude in Chrome (`mcp__claude-in-chrome__*`) drives the browser the owner is using.** It focuses
+her window and takes over a tab, so a dispatch landing while she is mid-solve in cstimer destroys the
+solve — and you have no way to know she is busy. Take this route only on one of two triggers:
+
+- **She asked to watch.** Reach for headed Playwright first — `chromium.launch({ headless: false })`
+  opens its own window instead of taking hers. Chrome is for when she asked for *her* browser.
+- **The bug needs her actual profile** — an extension conflict, cached state, an already-live
+  session. Playwright launches clean, so nothing profile-specific reproduces in it. An authenticated
+  route is *not* one of these: dev Clerk keys and a local auth server exist, so sign in.
+
+On that route, check `tabs_context_mcp` before creating anything and open a new tab rather than
+reusing one of hers. Never trigger `alert`, `confirm`, or any modal: they block every subsequent
+command and end browser control for the session. If the extension is not connected the tools are
+simply absent — say so and use Playwright rather than reporting the surface unchecked.
 
 If neither route is available, the verdict is `FAILED TO RENDER` with the reason. It is never
 "probably fine".
-
-With Chrome tooling, check `tabs_context_mcp` before creating anything, and open a new tab rather
-than reusing one of the owner's.
 
 ## What to check, in order
 
