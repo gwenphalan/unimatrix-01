@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
 import { loadSecretsKeyring, type SecretsKeyring } from "@unimatrix/secrets";
 import { eq } from "drizzle-orm";
@@ -165,6 +167,58 @@ void test("with secret_audit_log dropped, the value is not printed", () => {
   });
 });
 
+void test("an absent name whose own audit write also fails still surfaces the absent-secret error, not the audit failure", () => {
+  withSecretCli(({ instance, run, output }) => {
+    instance.client.exec("DROP TABLE secret_audit_log");
+
+    assert.throws(
+      () => run("read", "--name", "github/missing"),
+      (error: unknown) => {
+        assert.ok(error instanceof Error);
+        // The absent-secret reason stays primary — "no such table" is only ever appended after it,
+        // never standing alone in its place the way the pre-fix bug reported it.
+        assert.ok(
+          error.message.startsWith('No live secret named "github/missing".'),
+          `the absent-secret reason was not primary: ${error.message}`,
+        );
+        assert.match(error.message, /audit row could not be written/u);
+
+        return true;
+      },
+    );
+    assert.deepEqual(output, []);
+  });
+});
+
+void test("a corrupted ciphertext whose own audit write also fails still surfaces the decrypt failure, not the audit failure", () => {
+  withSecretCli(({ instance, seal, run, output }) => {
+    const { versionId, envelope } = seal("github/token", PLAINTEXT);
+    const fields = envelope.split(".");
+
+    fields[3] = Buffer.from("not the real ciphertext").toString("base64");
+
+    instance.db
+      .update(secretVersionsTable)
+      .set({ envelope: fields.join(".") })
+      .where(eq(secretVersionsTable.id, versionId))
+      .run();
+
+    instance.client.exec("DROP TABLE secret_audit_log");
+
+    assert.throws(
+      () => run("read", "--name", "github/token"),
+      (error: unknown) => {
+        assert.ok(error instanceof Error);
+        assert.match(error.message, /authentication|decrypt/iu);
+        assert.match(error.message, /audit row could not be written/u);
+
+        return true;
+      },
+    );
+    assert.deepEqual(output, []);
+  });
+});
+
 void test("an unrecognised or repeated flag, a missing --name, and an unknown subcommand all refuse", () => {
   withSecretCli(({ run }) => {
     assert.throws(
@@ -179,4 +233,56 @@ void test("an unrecognised or repeated flag, a missing --name, and an unknown su
     assert.throws(() => run("list"), /Unknown subcommand "list"[\s\S]*Usage:/u);
     assert.throws(() => run(), /Unknown subcommand ""/u);
   });
+});
+
+void test("read does not crash with an unhandled EPIPE when its stdout is closed early by a pipe reader", () => {
+  const secretEntryPath = fileURLToPath(new URL("../src/cli/secret.ts", import.meta.url));
+  const secretsAppRoot = fileURLToPath(new URL("..", import.meta.url));
+  const directory = mkdtempSync(join(tmpdir(), "unimatrix-secrets-read-epipe-"));
+
+  try {
+    const databaseFilePath = join(directory, "secrets.sqlite");
+    const instance = createSecretsDatabase({ filePath: databaseFilePath });
+
+    migrateSecretsDatabase(instance);
+
+    const keyring = loadSecretsKeyring(TEST_KEK);
+    const versionId = randomUUID();
+    const sealed = sealSecretPlaintext(keyring, { name: "github/token", versionId }, PLAINTEXT);
+
+    createSecret(instance.db, {
+      name: "github/token",
+      versionId,
+      envelope: sealed.envelope,
+      maskedPrefix: sealed.maskedPrefix,
+      kekVersion: sealed.kekVersion,
+    });
+    instance.client.close();
+
+    const env: NodeJS.ProcessEnv = {
+      ...process.env,
+      SECRETS_DATABASE_URL: databaseFilePath,
+      SECRETS_KEKS: TEST_KEK,
+    };
+
+    // `head -c 0` reads nothing and closes its end of the pipe immediately, guaranteeing the
+    // producer's one write lands after the reader is gone.
+    const result = spawnSync(
+      "sh",
+      [
+        "-c",
+        `node --import tsx ${JSON.stringify(secretEntryPath)} read --name github/token | head -c 0`,
+      ],
+      { cwd: secretsAppRoot, env, encoding: "utf8" },
+    );
+
+    assert.equal(result.status, 0, `pipeline exited non-zero; stderr was: ${result.stderr}`);
+    assert.doesNotMatch(
+      result.stderr,
+      /Unhandled 'error' event|EPIPE/u,
+      `read crashed on EPIPE instead of exiting clean; stderr was: ${result.stderr}`,
+    );
+  } finally {
+    rmSync(directory, { force: true, recursive: true });
+  }
 });

@@ -9,7 +9,12 @@ import { createSecretsDatabase, type SecretsDatabaseInstance } from "../db/clien
 import { loadSecretsKeyringFromEnv, openSecretPlaintext, type SecretsKeyring } from "../keyring.js";
 import { getLiveSecretVersion } from "../modules/secrets/store.js";
 
-import { parseFlags, requireFlag } from "./support.js";
+import {
+  ignoreEpipeOnStdout,
+  parseFlags,
+  recordAuditEntrySafely,
+  requireFlag,
+} from "./support.js";
 
 const USAGE = ["Usage:", "  secret read --name <secret-name>"].join("\n");
 
@@ -31,14 +36,22 @@ function runRead(argv: readonly string[], deps: SecretCliDeps): void {
   const live = getLiveSecretVersion(deps.db, name);
 
   if (live === undefined) {
-    recordAuditEntry(deps.db, {
-      action: "secret.read",
-      actorKind: "host-cli",
-      outcome: "failure",
-      secretName: name,
-    });
+    const error = new Error(`No live secret named ${JSON.stringify(name)}.`);
 
-    throw new Error(`No live secret named ${JSON.stringify(name)}.`);
+    recordAuditEntrySafely(
+      () => {
+        recordAuditEntry(deps.db, {
+          action: "secret.read",
+          actorKind: "host-cli",
+          outcome: "failure",
+          secretName: name,
+        });
+      },
+      error,
+      "secret.read failure",
+    );
+
+    throw error;
   }
 
   let value: string;
@@ -46,13 +59,19 @@ function runRead(argv: readonly string[], deps: SecretCliDeps): void {
   try {
     value = openSecretPlaintext(deps.keyring, { name, versionId: live.versionId }, live.envelope);
   } catch (error) {
-    recordAuditEntry(deps.db, {
-      action: "secret.read",
-      actorKind: "host-cli",
-      outcome: "failure",
-      secretName: name,
-      secretVersionId: live.versionId,
-    });
+    recordAuditEntrySafely(
+      () => {
+        recordAuditEntry(deps.db, {
+          action: "secret.read",
+          actorKind: "host-cli",
+          outcome: "failure",
+          secretName: name,
+          secretVersionId: live.versionId,
+        });
+      },
+      error,
+      "secret.read failure",
+    );
 
     throw error;
   }
@@ -88,6 +107,8 @@ export function runSecretCli(argv: readonly string[], deps: SecretCliDeps): void
 
 function main(): void {
   const instance = createSecretsDatabase({ filePath: resolveSecretsDatabaseFilePath() });
+
+  ignoreEpipeOnStdout();
 
   try {
     runSecretCli(process.argv.slice(2), {
