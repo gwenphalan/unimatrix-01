@@ -12,7 +12,9 @@ export type SecretAuditAction =
   | "secret.created"
   | "secret.rotated"
   | "secret.deleted"
-  | "secret.read";
+  | "secret.read"
+  | "secret.resealed"
+  | "kek.verified";
 
 /** An authenticated service token, or the host CLI, which has no session. */
 export type SecretAuditActorKind = "service-token" | "host-cli";

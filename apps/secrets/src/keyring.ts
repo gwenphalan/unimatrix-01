@@ -7,6 +7,11 @@ import {
 
 import type { SecretsRuntimeConfigBase, SecretsRuntimeEnv } from "./config.js";
 
+// Re-exported so the CLIs under `src/cli/` never need their own
+// `@unimatrix/secrets` import — this file is the one place under `src/`
+// allowed to have one (see `apps/secrets/AGENTS.md` §2).
+export type { SecretContext, SecretsKeyring };
+
 /**
  * The full runtime config, `SecretsRuntimeConfigBase` plus the loaded keyring — never the raw
  * `SECRETS_KEKS` string. `SecretsKeyring` redacts itself on `toString`/`toJSON`/inspect
@@ -65,4 +70,22 @@ export function openSecretPlaintext(
   envelope: string,
 ): string {
   return keyring.open({ context, envelope }).reveal();
+}
+
+/**
+ * Opens `envelope` under whichever KEK version sealed it and immediately reseals the same
+ * `SecretValue` under the keyring's active version — `kek rotate`'s one cryptographic step. Never
+ * calls `.reveal()`, so a plaintext never exists as a variable in the rotation CLI at all.
+ */
+export function resealSecretEnvelope(
+  keyring: SecretsKeyring,
+  context: SecretContext,
+  envelope: string,
+): { envelope: string; kekVersion: number } {
+  const value = keyring.open({ context, envelope });
+
+  return {
+    envelope: keyring.seal({ context, value }),
+    kekVersion: keyring.activeVersion,
+  };
 }
