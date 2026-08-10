@@ -10,6 +10,7 @@ import { createSecretsDatabase, type SecretsDatabaseInstance } from "../db/clien
 import {
   loadSecretsKeyringFromEnv,
   resealSecretEnvelope,
+  SecretsError,
   type SecretsKeyring,
 } from "../keyring.js";
 import {
@@ -18,15 +19,30 @@ import {
   type AllSecretVersionRow,
 } from "../modules/secrets/store.js";
 
-import { parseFlags, writeAtomically } from "./support.js";
+import {
+  ignoreEpipeOnStdout,
+  parseFlags,
+  parsePositiveIntFlag,
+  recordAuditEntrySafely,
+  requireFlag,
+  writeAtomically,
+} from "./support.js";
 
-const USAGE = ["Usage:", "  kek verify", "  kek rotate", "  kek generate [--version <n>]"].join(
-  "\n",
-);
+const USAGE = [
+  "Usage:",
+  "  kek verify --expect-active <n>",
+  "  kek rotate --to-version <n>",
+  "  kek generate [--version <n>]",
+].join("\n");
+
+// `SECRETS_KEKS`'s own entry pattern (`packages/secrets/src/keyring.ts`) accepts 1-9999 and
+// refuses a duplicate version; `generate` mints entries that ring loader will actually accept —
+// see `runGenerate`.
+const KEK_MAX_VERSION = 9999;
 
 export interface KekCliDeps {
   db: SecretsDatabaseInstance["db"];
-  // Undefined only when `generate` runs with no SECRETS_KEKS set at all — see `main` below.
+  // Undefined only when `generate` runs with no usable SECRETS_KEKS — see `loadKeyringForMain` below.
   keyring: SecretsKeyring | undefined;
   write: (line: string) => void;
 }
@@ -44,14 +60,18 @@ function requireKeyring(deps: KekCliDeps): SecretsKeyring {
  * `kek_version` column — `SecretsKeyring#open` resolves the key the same way, so a census built
  * from the column could report zero rows on a retiring key while the envelopes are still sealed
  * under it, and an operator who trusted that report would then drop the only key that can open them.
+ * Names the row rather than the envelope in its error — the envelope carries the IV, ciphertext and
+ * tag, and none of those belong in a message (same rule `packages/secrets/AGENTS.md` §5 states for
+ * that package).
  */
-function parseEnvelopeVersion(envelope: string): number {
-  const field = envelope.split(".")[1];
+function parseEnvelopeVersion(row: AllSecretVersionRow): number {
+  const field = row.envelope.split(".")[1];
   const version = field === undefined ? NaN : Number(field);
 
   if (!Number.isInteger(version) || version <= 0) {
     throw new Error(
-      `Envelope has a malformed or missing KEK version field: ${JSON.stringify(envelope)}.`,
+      `Secret ${JSON.stringify(row.secretName)} version ${JSON.stringify(row.id)} has a ` +
+        "malformed or missing KEK version field in its envelope.",
     );
   }
 
@@ -68,21 +88,46 @@ function assertColumnMatchesEnvelope(row: AllSecretVersionRow, envelopeVersion: 
   }
 }
 
-type RowVerificationStatus = "opened" | "not-in-ring" | "open-failed";
+/** Never a plaintext or a ciphertext field — `SecretsError#message` never carries either (see `packages/secrets/AGENTS.md` §5), and this only ever reads that message or wraps a row identity. */
+function describeOpenFailure(error: unknown): string {
+  if (error instanceof SecretsError) {
+    return `${error.code}: ${error.message}`;
+  }
+
+  return error instanceof Error ? error.message : String(error);
+}
+
+type RowVerificationStatus = "opened" | "not-in-ring" | "column-mismatch" | "open-failed";
 
 interface RowVerification {
   row: AllSecretVersionRow;
   envelopeVersion: number;
   status: RowVerificationStatus;
+  /** Set on every status but `"opened"` — never a plaintext or a ciphertext, see `describeOpenFailure`. */
+  reason?: string;
 }
 
 function verifyRow(keyring: SecretsKeyring, row: AllSecretVersionRow): RowVerification {
-  const envelopeVersion = parseEnvelopeVersion(row.envelope);
+  const envelopeVersion = parseEnvelopeVersion(row);
 
-  assertColumnMatchesEnvelope(row, envelopeVersion);
+  if (envelopeVersion !== row.kekVersion) {
+    return {
+      row,
+      envelopeVersion,
+      status: "column-mismatch",
+      reason:
+        `kek_version column is ${String(row.kekVersion)} but the envelope is sealed under ` +
+        `version ${String(envelopeVersion)}`,
+    };
+  }
 
   if (!keyring.versions.includes(envelopeVersion)) {
-    return { row, envelopeVersion, status: "not-in-ring" };
+    return {
+      row,
+      envelopeVersion,
+      status: "not-in-ring",
+      reason: `version ${String(envelopeVersion)} is not in SECRETS_KEKS`,
+    };
   }
 
   try {
@@ -90,8 +135,8 @@ function verifyRow(keyring: SecretsKeyring, row: AllSecretVersionRow): RowVerifi
     keyring.open({ context: { name: row.secretName, versionId: row.id }, envelope: row.envelope });
 
     return { row, envelopeVersion, status: "opened" };
-  } catch {
-    return { row, envelopeVersion, status: "open-failed" };
+  } catch (error) {
+    return { row, envelopeVersion, status: "open-failed", reason: describeOpenFailure(error) };
   }
 }
 
@@ -139,6 +184,13 @@ function buildVerifyReport(
   }
 
   const failedRows = results.filter((result) => result.status !== "opened");
+
+  // Named per row — a version-level count says nothing about which secret is actually wrong, and
+  // the wrong answer here ("the ring is bad") can cost a correct restored key its only defender.
+  for (const result of failedRows) {
+    lines.push(`  ${result.row.secretName} (${result.row.id}): ${result.reason ?? result.status}`);
+  }
+
   const outsideActive = results.filter(
     (result) => result.status === "opened" && result.envelopeVersion !== keyring.activeVersion,
   );
@@ -164,38 +216,22 @@ function buildVerifyReport(
 }
 
 /**
- * The crypto result (every row opens under the key recorded for it) and the audit-write result
- * (the `kek.verified` row landed) are reported through separate throw paths — a busy audit insert
- * (measured: a competing `BEGIN IMMEDIATE` blocks the full 5000ms busy timeout and then throws)
- * must never read as "verification failed" to an operator deciding whether a restored key is right.
+ * Prints `report.lines` (if any), records the `kek.verified` row, and turns the two outcomes
+ * (verification, audit write) into stdout and the throw. Whichever of the two failed, the last
+ * line written to stdout starts `NOT VERIFIED` — the crypto result and the audit-write result are
+ * reported through separate throw paths (a busy audit insert, measured to block the full 5000ms
+ * busy timeout before throwing, must never read as "verification failed" to an operator deciding
+ * whether a restored key is right), but neither may leave stdout's last line reading as success on
+ * a non-zero exit.
  */
-function runVerify(deps: KekCliDeps): void {
-  const keyring = requireKeyring(deps);
-  const rows = listAllSecretVersions(deps.db);
-
-  if (rows.length === 0) {
-    // Not "a wrong path created a fresh empty store" — a fresh file has no tables at all, and the
-    // select above would already have thrown `no such table: secret_versions`. This guards the
-    // genuinely empty case: there is nothing here for this command to prove anything about.
-    throw new Error("No sealed rows exist; this command cannot prove a key is correct.");
-  }
-
-  let verificationError: Error | undefined;
-  let report: VerifyReport | undefined;
-
-  try {
-    report = buildVerifyReport(keyring, rows);
-  } catch (error) {
-    verificationError = error instanceof Error ? error : new Error(String(error));
-  }
-
+function finalizeVerify(
+  deps: KekCliDeps,
+  report: VerifyReport | undefined,
+  verificationError: Error | undefined,
+): void {
   if (report !== undefined) {
     for (const line of report.lines) {
       deps.write(line);
-    }
-
-    if (!report.ok) {
-      verificationError = new Error(report.summary);
     }
   }
 
@@ -212,22 +248,115 @@ function runVerify(deps: KekCliDeps): void {
   }
 
   if (verificationError !== undefined) {
+    if (auditError !== undefined) {
+      deps.write(
+        `NOT VERIFIED — ${verificationError.message} (additionally, the kek.verified audit row ` +
+          `could not be written: ${auditError.message})`,
+      );
+    } else {
+      deps.write(`NOT VERIFIED — ${verificationError.message}`);
+    }
+
     throw verificationError;
   }
 
   if (auditError !== undefined) {
-    throw new Error(
+    const message =
       "Every row opened under its recorded key, but the kek.verified audit row could not be " +
-        `written: ${auditError.message}`,
+      `written: ${auditError.message}`;
+
+    deps.write(`NOT VERIFIED — ${message}`);
+
+    throw new Error(message);
+  }
+}
+
+function runVerify(deps: KekCliDeps, expectActive: number): void {
+  const keyring = requireKeyring(deps);
+
+  if (keyring.activeVersion !== expectActive) {
+    throw new Error(
+      `SECRETS_KEKS's active version is ${String(keyring.activeVersion)}, not the ` +
+        `${String(expectActive)} you expected.\nRefusing to certify.`,
+    );
+  }
+
+  const rows = listAllSecretVersions(deps.db);
+
+  if (rows.length === 0) {
+    // Not "a wrong path created a fresh empty store" — a fresh file has no tables at all, and the
+    // select above would already have thrown `no such table: secret_versions`. This guards the
+    // genuinely empty case: there is nothing here for this command to prove anything about.
+    finalizeVerify(
+      deps,
+      undefined,
+      new Error("No sealed rows exist; this command cannot prove a key is correct."),
+    );
+
+    return;
+  }
+
+  let verificationError: Error | undefined;
+  let report: VerifyReport | undefined;
+
+  try {
+    report = buildVerifyReport(keyring, rows);
+  } catch (error) {
+    verificationError = error instanceof Error ? error : new Error(String(error));
+  }
+
+  if (report !== undefined && !report.ok) {
+    verificationError = new Error(report.summary);
+  }
+
+  finalizeVerify(deps, report, verificationError);
+}
+
+/** Records `kek.rotated`/failure and throws — the shared shape of rotate's three whole-run refusals. */
+function refuseRotateRun(deps: KekCliDeps, message: string): never {
+  const error = new Error(message);
+
+  recordAuditEntrySafely(
+    () => {
+      recordAuditEntry(deps.db, { action: "kek.rotated", actorKind: "host-cli", outcome: "failure" });
+    },
+    error,
+    "kek.rotated failure",
+  );
+
+  throw error;
+}
+
+/** Records `kek.rotated`/success once the run (a no-op or a completed reseal) is actually done. */
+function recordRotateSuccess(deps: KekCliDeps, resealedCount: number): void {
+  try {
+    recordAuditEntry(deps.db, { action: "kek.rotated", actorKind: "host-cli", outcome: "success" });
+  } catch (auditError) {
+    const message = auditError instanceof Error ? auditError.message : String(auditError);
+
+    throw new Error(
+      `Re-sealed ${String(resealedCount)} row(s), but the kek.rotated audit row could not be ` +
+        `written: ${message}`,
+      { cause: auditError },
     );
   }
 }
 
-function runRotate(deps: KekCliDeps): void {
+function runRotate(deps: KekCliDeps, toVersion: number): void {
   const keyring = requireKeyring(deps);
 
+  if (keyring.activeVersion !== toVersion) {
+    refuseRotateRun(
+      deps,
+      `SECRETS_KEKS's active version is ${String(keyring.activeVersion)}, not the ` +
+        `${String(toVersion)} you asked for. The redeploy that adds version ` +
+        `${String(toVersion)} has not taken effect in this container. Refusing to rotate.`,
+    );
+  }
+
   if (keyring.versions.length === 1) {
-    throw new Error(
+    refuseRotateRun(
+      deps,
       "SECRETS_KEKS carries only one version; there is nothing to rotate to. Add the new " +
         "version and redeploy before running `kek rotate` — running it now would re-seal every " +
         "row under the key it is already sealed under.",
@@ -238,7 +367,7 @@ function runRotate(deps: KekCliDeps): void {
   const activeVersion = keyring.activeVersion;
 
   const censused = rows.map((row) => {
-    const envelopeVersion = parseEnvelopeVersion(row.envelope);
+    const envelopeVersion = parseEnvelopeVersion(row);
 
     assertColumnMatchesEnvelope(row, envelopeVersion);
 
@@ -262,7 +391,8 @@ function runRotate(deps: KekCliDeps): void {
       (a, b) => a - b,
     );
 
-    throw new Error(
+    refuseRotateRun(
+      deps,
       `${String(missing.length)} row(s) are sealed under version(s) ${missingVersions.join(", ")}, ` +
         "which SECRETS_KEKS does not carry. Refusing to start: rotating without every existing " +
         "key present would strand those rows unreadable. Add the missing version(s) back to " +
@@ -273,7 +403,13 @@ function runRotate(deps: KekCliDeps): void {
   const pending = censused.filter((entry) => entry.envelopeVersion !== activeVersion);
 
   if (pending.length === 0) {
+    // Deliberately not symmetric with `verify`'s "No sealed rows exist" refusal on an empty store:
+    // rotate's job is to act on whatever exists, and zero rows needing a reseal — whether because
+    // the store is empty or because every row is already on the active version — is a legitimate
+    // "nothing to do", not a case that needs a human to look. `verify`'s job is to certify a key is
+    // correct, and an empty store proves nothing about that no matter how the command exits.
     deps.write(`Every row is already sealed under version ${String(activeVersion)}.`);
+    recordRotateSuccess(deps, 0);
 
     return;
   }
@@ -313,25 +449,27 @@ function runRotate(deps: KekCliDeps): void {
       // Same rule as `src/modules/secrets/index.ts`'s denial audit rows: written outside the
       // transaction that failed, so it survives the rollback. Guarded on its own: the reseal
       // failure is what the operator needs to diagnose, and a busy audit insert (verify hits the
-      // same failure mode) must never replace it as the error that reaches them — so `error`,
+      // same failure mode) must never replace it as the error that reaches them — so `wrapped`,
       // not the audit write's own error, is always what gets rethrown below.
-      try {
-        recordAuditEntry(deps.db, {
-          action: "secret.resealed",
-          actorKind: "host-cli",
-          outcome: "failure",
-          secretName: row.secretName,
-          secretVersionId: row.id,
-        });
-      } catch (auditError) {
-        if (error instanceof Error) {
-          const audit = auditError instanceof Error ? auditError.message : String(auditError);
+      const wrapped = error instanceof Error ? error : new Error(String(error));
 
-          error.message += ` (additionally, the secret.resealed failure audit row could not be written: ${audit})`;
-        }
-      }
+      wrapped.message = `Failed to re-seal ${row.secretName} (${row.id}): ${wrapped.message}`;
 
-      throw error;
+      recordAuditEntrySafely(
+        () => {
+          recordAuditEntry(deps.db, {
+            action: "secret.resealed",
+            actorKind: "host-cli",
+            outcome: "failure",
+            secretName: row.secretName,
+            secretVersionId: row.id,
+          });
+        },
+        wrapped,
+        "secret.resealed failure",
+      );
+
+      throw wrapped;
     }
   }
 
@@ -339,6 +477,7 @@ function runRotate(deps: KekCliDeps): void {
     `Re-sealed ${String(resealedCount)} of ${String(pending.length)} row(s) under version ` +
       `${String(activeVersion)}.`,
   );
+  recordRotateSuccess(deps, resealedCount);
 }
 
 function runGenerate(argv: readonly string[], deps: KekCliDeps): void {
@@ -350,10 +489,30 @@ function runGenerate(argv: readonly string[], deps: KekCliDeps): void {
   if (versionFlag === undefined) {
     version = deps.keyring === undefined ? 1 : deps.keyring.activeVersion + 1;
   } else {
-    version = Number(versionFlag);
+    version = parsePositiveIntFlag(versionFlag, "--version", USAGE);
+  }
 
-    if (!Number.isInteger(version) || version <= 0) {
-      throw new Error(`--version must be a positive integer.\n\n${USAGE}`);
+  if (version > KEK_MAX_VERSION) {
+    throw new Error(
+      `--version must be ${String(KEK_MAX_VERSION)} or lower — SECRETS_KEKS entries above that ` +
+        `are rejected on load.\n\n${USAGE}`,
+    );
+  }
+
+  if (deps.keyring !== undefined) {
+    if (deps.keyring.versions.includes(version)) {
+      throw new Error(
+        `Version ${String(version)} is already in SECRETS_KEKS; generating it would mint a ` +
+          "duplicate that the ring loader refuses on the next redeploy.",
+      );
+    }
+
+    if (version <= deps.keyring.activeVersion) {
+      throw new Error(
+        `Version ${String(version)} is not greater than the active version ` +
+          `${String(deps.keyring.activeVersion)} — SECRETS_KEKS requires the active (first-listed) ` +
+          "entry to be the highest version present.",
+      );
     }
   }
 
@@ -367,6 +526,16 @@ function runGenerate(argv: readonly string[], deps: KekCliDeps): void {
     "Prepend this entry to the existing SECRETS_KEKS value (this entry first, comma-separated) " +
       "so it becomes the active key on the next redeploy. This is the only copy printed.",
   );
+
+  // Best-effort: the fresh-bootstrap case this command exists for (see `loadKeyringForMain`) can
+  // run before the database has ever been migrated, so `secret_audit_log` may not exist yet — that
+  // must never turn "mint a key" into "mint a key, unless the schema isn't there yet". A recovery
+  // run against a booted service's volume, where the table does exist, still gets its row.
+  try {
+    recordAuditEntry(deps.db, { action: "kek.generated", actorKind: "host-cli", outcome: "success" });
+  } catch {
+    // Swallowed deliberately — see comment above.
+  }
 }
 
 /**
@@ -378,16 +547,30 @@ export function runKekCli(argv: readonly string[], deps: KekCliDeps): void {
   const [subcommand, ...rest] = argv;
 
   switch (subcommand) {
-    case "verify":
-      parseFlags(rest, [], USAGE);
-      runVerify(deps);
+    case "verify": {
+      const flags = parseFlags(rest, ["--expect-active"], USAGE);
+      const expectActive = parsePositiveIntFlag(
+        requireFlag(flags, "--expect-active", USAGE),
+        "--expect-active",
+        USAGE,
+      );
+
+      runVerify(deps, expectActive);
 
       return;
-    case "rotate":
-      parseFlags(rest, [], USAGE);
-      runRotate(deps);
+    }
+    case "rotate": {
+      const flags = parseFlags(rest, ["--to-version"], USAGE);
+      const toVersion = parsePositiveIntFlag(
+        requireFlag(flags, "--to-version", USAGE),
+        "--to-version",
+        USAGE,
+      );
+
+      runRotate(deps, toVersion);
 
       return;
+    }
     case "generate":
       runGenerate(rest, deps);
 
@@ -398,26 +581,54 @@ export function runKekCli(argv: readonly string[], deps: KekCliDeps): void {
 }
 
 /**
- * `generate` is the only subcommand that can run without `SECRETS_KEKS` at all — the fresh
- * local-dev bootstrap case `README.md` documents, where there is no ring yet to default
- * `--version` from. Whenever the variable *is* set, `generate` loads it too, so its default
- * (`activeVersion + 1`) is the next real version rather than always falling back to 1 — the
- * rotation runbook in `docs/deployment.md` runs `generate` against an already-booted service,
- * where `SECRETS_KEKS` is always set.
+ * `generate` is the only subcommand that can run without a usable `SECRETS_KEKS` at all — the
+ * fresh local-dev bootstrap case `README.md` documents, where there is no ring yet to default
+ * `--version` from, and the recovery case `docs/deployment.md` documents, where the ring is set but
+ * unparsable and `generate` is the one command that can still mint a way out. Whenever the variable
+ * *is* set and readable, `generate` loads it too, so its default (`activeVersion + 1`) is the next
+ * real version rather than always falling back to 1, and so `runGenerate` can refuse a duplicate or
+ * an out-of-order version — the rotation runbook in `docs/deployment.md` runs `generate` against an
+ * already-booted service, where `SECRETS_KEKS` is always set and almost always readable.
  */
 function isSecretsKeksSet(): boolean {
   return (process.env.SECRETS_KEKS ?? "").trim().length > 0;
+}
+
+function loadKeyringForMain(argv: readonly string[]): SecretsKeyring | undefined {
+  if (argv[0] !== "generate") {
+    return loadSecretsKeyringFromEnv();
+  }
+
+  if (!isSecretsKeksSet()) {
+    return undefined;
+  }
+
+  try {
+    return loadSecretsKeyringFromEnv();
+  } catch (error) {
+    // SECRETS_KEKS is set but unreadable — exactly the state `docs/deployment.md`'s recovery
+    // section exists for. `generate` can still mint a replacement key with no ring loaded; say so
+    // on stderr rather than refusing the one command that gets the operator out, but never silently
+    // skip the duplicate/ordering checks a loaded ring does support.
+    process.stderr.write(
+      `SECRETS_KEKS could not be read (${error instanceof Error ? error.message : String(error)}); ` +
+        "generating without checking it for duplicates or version ordering.\n",
+    );
+
+    return undefined;
+  }
 }
 
 function main(): void {
   const argv = process.argv.slice(2);
   const instance = createSecretsDatabase({ filePath: resolveSecretsDatabaseFilePath() });
 
+  ignoreEpipeOnStdout();
+
   try {
     runKekCli(argv, {
       db: instance.db,
-      keyring:
-        argv[0] === "generate" && !isSecretsKeksSet() ? undefined : loadSecretsKeyringFromEnv(),
+      keyring: loadKeyringForMain(argv),
       write: (line) => {
         process.stdout.write(`${line}\n`);
       },

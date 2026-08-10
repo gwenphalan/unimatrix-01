@@ -99,24 +99,29 @@ and none of them taking a `--kek` flag — `docker exec` already inherits
 Locally:
 
     pnpm --filter @unimatrix/secrets-app exec tsx src/cli/kek.ts generate
-    pnpm --filter @unimatrix/secrets-app exec tsx src/cli/kek.ts verify
-    pnpm --filter @unimatrix/secrets-app exec tsx src/cli/kek.ts rotate
+    pnpm --filter @unimatrix/secrets-app exec tsx src/cli/kek.ts verify --expect-active <n>
+    pnpm --filter @unimatrix/secrets-app exec tsx src/cli/kek.ts rotate --to-version <n>
 
 In the container, against the live volume:
 
     docker exec <container> node dist/cli/kek.js generate
-    docker exec <container> node dist/cli/kek.js verify
-    docker exec <container> node dist/cli/kek.js rotate
+    docker exec <container> node dist/cli/kek.js verify --expect-active <n>
+    docker exec <container> node dist/cli/kek.js rotate --to-version <n>
 
 `generate [--version <n>]` prints one `<version>:<key>` entry — never the rest
-of the ring — to prepend to `SECRETS_KEKS`. `verify` censuses every
-`secret_versions` row from the envelope's own KEK version field, proves each
-one opens under a key the loaded ring carries, and exits non-zero if any row
-sits outside the active version even when every row opens; it also records a
-`kek.verified` audit row. `rotate` re-seals every row — live and superseded —
-under the active version, refuses to run when the ring holds only one
-version or when any row's version is missing from the ring, and is resumable:
-a row already sealed under the active version is left alone. See
+of the ring — to prepend to `SECRETS_KEKS`, bounded to versions 1-9999 and
+refusing one already in a loaded ring or not greater than its active version.
+`verify --expect-active <n>` and `rotate --to-version <n>` both require the
+flag and both refuse outright when `n` does not match `SECRETS_KEKS`'s actual
+active version — the version a stale redeploy still carries is caught before
+either command trusts it. `verify` censuses every `secret_versions` row from
+the envelope's own KEK version field, proves each one opens under a key the
+loaded ring carries, and exits non-zero if any row sits outside the active
+version even when every row opens; it also records a `kek.verified` audit
+row. `rotate` re-seals every row — live and superseded — under the active
+version, refuses to run when the ring holds only one version or when any
+row's version is missing from the ring, and is resumable: a row already
+sealed under the active version is left alone. See
 [`docs/deployment.md`](../../docs/deployment.md) for the full rotation
 runbook, including how to capture the outgoing key before rotating.
 
