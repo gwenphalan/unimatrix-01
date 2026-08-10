@@ -9,12 +9,7 @@ import { createSecretsDatabase, type SecretsDatabaseInstance } from "../db/clien
 import { loadSecretsKeyringFromEnv, openSecretPlaintext, type SecretsKeyring } from "../keyring.js";
 import { getLiveSecretVersion } from "../modules/secrets/store.js";
 
-import {
-  ignoreEpipeOnStdout,
-  parseFlags,
-  recordAuditEntrySafely,
-  requireFlag,
-} from "./support.js";
+import { ignoreEpipeOnStdout, parseFlags, recordAuditEntrySafely, requireFlag } from "./support.js";
 
 const USAGE = ["Usage:", "  secret read --name <secret-name>"].join("\n");
 

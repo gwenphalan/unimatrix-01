@@ -318,7 +318,11 @@ function refuseRotateRun(deps: KekCliDeps, message: string): never {
 
   recordAuditEntrySafely(
     () => {
-      recordAuditEntry(deps.db, { action: "kek.rotated", actorKind: "host-cli", outcome: "failure" });
+      recordAuditEntry(deps.db, {
+        action: "kek.rotated",
+        actorKind: "host-cli",
+        outcome: "failure",
+      });
     },
     error,
     "kek.rotated failure",
@@ -532,7 +536,11 @@ function runGenerate(argv: readonly string[], deps: KekCliDeps): void {
   // must never turn "mint a key" into "mint a key, unless the schema isn't there yet". A recovery
   // run against a booted service's volume, where the table does exist, still gets its row.
   try {
-    recordAuditEntry(deps.db, { action: "kek.generated", actorKind: "host-cli", outcome: "success" });
+    recordAuditEntry(deps.db, {
+      action: "kek.generated",
+      actorKind: "host-cli",
+      outcome: "success",
+    });
   } catch {
     // Swallowed deliberately — see comment above.
   }

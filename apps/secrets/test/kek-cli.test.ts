@@ -15,7 +15,11 @@ import { createSecretsDatabase, type SecretsDatabaseInstance } from "../src/db/c
 import { migrateSecretsDatabase } from "../src/db/migrate.js";
 import { secretVersionsTable, secretsTable } from "../src/db/schema/index.js";
 import { openSecretPlaintext, sealSecretPlaintext } from "../src/keyring.js";
-import { createSecret, getLiveSecretVersion, resealSecretVersion } from "../src/modules/secrets/store.js";
+import {
+  createSecret,
+  getLiveSecretVersion,
+  resealSecretVersion,
+} from "../src/modules/secrets/store.js";
 
 function keyForVersion(version: number): string {
   return Buffer.alloc(32, version).toString("base64");
@@ -207,13 +211,18 @@ void test("verify treats a kek_version column/envelope mismatch as a per-row fai
     );
 
     // The whole census still printed — a mismatch on one row must not suppress the other row's line.
-    assert.ok(output.some((line) => line.startsWith("kek version\trows")), "the header never printed");
+    assert.ok(
+      output.some((line) => line.startsWith("kek version\trows")),
+      "the header never printed",
+    );
     assert.ok(
       output.some((line) => line.includes("github/token") && line.includes(versionId)),
       "the mismatched row was never named",
     );
     assert.ok(
-      output.some((line) => /kek_version column is 2 but the envelope is sealed under version 1/u.test(line)),
+      output.some((line) =>
+        /kek_version column is 2 but the envelope is sealed under version 1/u.test(line),
+      ),
       "the mismatch's cause was never reported",
     );
     assert.equal(auditRows("kek.verified").length, 1);
@@ -277,16 +286,13 @@ void test("a failing audit write does not turn a successful verification into a 
 
 void test("verify refuses when no keyring is injected — reachable only by calling runKekCli directly, never through main()", () => {
   withKekCli(({ instance }) => {
-    assert.throws(
-      () => {
-        runKekCli(["verify", "--expect-active", "1"], {
-          db: instance.db,
-          keyring: undefined,
-          write: () => {},
-        });
-      },
-      /SECRETS_KEKS must be set to run this command/u,
-    );
+    assert.throws(() => {
+      runKekCli(["verify", "--expect-active", "1"], {
+        db: instance.db,
+        keyring: undefined,
+        write: () => {},
+      });
+    }, /SECRETS_KEKS must be set to run this command/u);
   });
 });
 
@@ -626,16 +632,13 @@ void test("rotate on an empty, migrated store is a no-op rather than a refusal �
 
 void test("rotate refuses when no keyring is injected — reachable only by calling runKekCli directly, never through main()", () => {
   withKekCli(({ instance }) => {
-    assert.throws(
-      () => {
-        runKekCli(["rotate", "--to-version", "1"], {
-          db: instance.db,
-          keyring: undefined,
-          write: () => {},
-        });
-      },
-      /SECRETS_KEKS must be set to run this command/u,
-    );
+    assert.throws(() => {
+      runKekCli(["rotate", "--to-version", "1"], {
+        db: instance.db,
+        keyring: undefined,
+        write: () => {},
+      });
+    }, /SECRETS_KEKS must be set to run this command/u);
   });
 });
 
