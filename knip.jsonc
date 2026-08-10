@@ -21,7 +21,13 @@
       // Shared test/lint toolchain declared once at the root and consumed by
       // every workspace through pnpm's hoisting. The root has no source files
       // importing them, so knip cannot see the usage.
+      //
+      // @playwright/test is different: it has no consumer of its own. It sits
+      // at the root so a driver script written anywhere under infra/scripts/
+      // can resolve it — those scripts are ad hoc and not committed, so knip
+      // never sees an import either.
       "ignoreDependencies": [
+        "@playwright/test",
         "@testing-library/jest-dom",
         "@testing-library/react",
         "eslint",
