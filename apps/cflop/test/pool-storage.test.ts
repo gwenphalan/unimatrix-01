@@ -158,6 +158,9 @@ describe("drill pool mode", () => {
     mirrorLearnedCaseToPool("oll", "oll-1", true);
 
     expect(readCasePool("oll")).toEqual({ "oll-1": true });
+    // The mirror is the one pool writer that must not clear the mode: routing it through
+    // setCaseEnabled would reset it here, and every later mark would stop reaching the pool.
+    expect(readDrillPoolMode("oll")).toBe("only-learned");
   });
 
   it("writes an explicit false that survives readCasePool, rather than an absent entry", () => {
@@ -166,6 +169,7 @@ describe("drill pool mode", () => {
 
     expect(readCasePool("oll")).toEqual({ "oll-1": false });
     expect(isCaseEnabled(readCasePool("oll"), "oll-1")).toBe(false);
+    expect(readDrillPoolMode("oll")).toBe("only-learned");
   });
 
   it("keeps oll and pll modes independent", () => {
