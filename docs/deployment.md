@@ -224,8 +224,8 @@ The plaintext prints once and only its digest is stored, so a lost token is
 reissued rather than recovered. `list` and `revoke --name <name>` are the other
 two subcommands, and both they and `issue` append a row to the audit log.
 
-**Rotating the KEK:** three more host-local CLIs, `dist/cli/kek.js` and
-`dist/cli/secret.js`, sit beside `service-token.js`. None of them take a
+**Rotating the KEK:** two more host-local CLIs, `dist/cli/kek.js` and
+`dist/cli/secret.js`, sit beside `service-token.js`. Neither takes a
 `--kek` flag — `docker exec` already inherits `SECRETS_KEKS`. The ordered
 runbook:
 
@@ -259,11 +259,14 @@ runbook:
    the old entry from `SECRETS_KEKS` and redeploy again.
 
 **Recovering a volume when the service will not boot:** run the CLI directly
-against the volume from outside the running container, supplying
-`SECRETS_KEKS` on the command line and the image tag Dokploy built for this
-service (visible in its Dokploy UI or `docker images`):
+against the volume from outside the running container. Export
+`SECRETS_KEKS` in the invoking shell first — `-e SECRETS_KEKS` with no `=`
+forwards that shell variable into the container without ever putting the key
+in argv — and pass the image tag Dokploy built for this service (visible in
+its Dokploy UI or `docker images`):
 
 ```bash
+export SECRETS_KEKS=...
 docker run --rm -e SECRETS_KEKS -v <project>_secrets-data:/data \
   <image> node dist/cli/kek.js verify --expect-active <n>
 ```

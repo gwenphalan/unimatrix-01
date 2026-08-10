@@ -92,8 +92,8 @@ scope, capability and revocation state; `revoke --name <name>` retires one.
 
 ## Managing the KEK ring
 
-Three more host-local CLIs sit beside `service-token`, all under `src/cli/`
-and none of them taking a `--kek` flag — `docker exec` already inherits
+Two more host-local CLIs sit beside `service-token`, both under `src/cli/`
+and neither taking a `--kek` flag — `docker exec` already inherits
 `SECRETS_KEKS`, and argv is world-readable on the host.
 
 Locally:
