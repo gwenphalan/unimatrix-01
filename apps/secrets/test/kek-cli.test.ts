@@ -651,10 +651,7 @@ void test("rotate refuses when a row's envelope has a malformed version field, t
       .where(eq(secretVersionsTable.id, versionId))
       .run();
 
-    assert.throws(
-      () => rotate(buildKeyring([1, 2])),
-      /malformed or missing KEK version field/u,
-    );
+    assert.throws(() => rotate(buildKeyring([1, 2])), /malformed or missing KEK version field/u);
 
     const row = instance.db
       .select({ kekVersion: secretVersionsTable.kekVersion })
