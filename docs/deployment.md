@@ -224,6 +224,57 @@ The plaintext prints once and only its digest is stored, so a lost token is
 reissued rather than recovered. `list` and `revoke --name <name>` are the other
 two subcommands, and both they and `issue` append a row to the audit log.
 
+**Rotating the KEK:** two more host-local CLIs, `dist/cli/kek.js` and
+`dist/cli/secret.js`, sit beside `service-token.js`. Neither takes a
+`--kek` flag — `docker exec` already inherits `SECRETS_KEKS`. The ordered
+runbook:
+
+1. Capture the current key before touching anything, into offline `age`
+   storage: `docker exec <container> printenv SECRETS_KEKS`, or read it from
+   Dokploy's environment-variable UI where it was pasted. Do this regardless
+   of whether anything looks wrong — a backup taken after a key is already
+   lost is not a backup.
+2. `docker exec <container> node dist/cli/kek.js generate` and age-encrypt the
+   printed `<version>:<key>` entry offline — call this new version `<n>`. It
+   prints only the new entry, never the rest of the ring. `SECRETS_KEKS` set
+   but unparsable (the state a broken volume can leave it in) does not block
+   this step: `generate` says so on stderr and still prints a usable entry.
+3. In Dokploy's environment-variable UI, prepend the new entry to
+   `SECRETS_KEKS` (new entry first, comma-separated), keeping the old entry,
+   and redeploy.
+4. `docker exec <container> node dist/cli/kek.js rotate --to-version <n>` —
+   re-seals every `secret_versions` row, live and superseded, under version
+   `<n>`. Refuses to start if `<n>` is not the ring's actual active version
+   (the redeploy in step 3 has not taken effect in this container) or if any
+   row's KEK version is missing from the ring, and is resumable if
+   interrupted.
+5. `docker exec <container> node dist/cli/kek.js verify --expect-active <n>`
+   — must report zero rows outside version `<n>` before the next step, and
+   likewise refuses outright if `<n>` is not the ring's actual active
+   version. It censuses every row from the envelope's own KEK version field,
+   not the `kek_version` column, because `SecretsKeyring#open` resolves the
+   key the same way; a census built from the column could read "nothing left
+   on the old key" while envelopes are still sealed under it.
+6. Only once `verify` reports zero rows outside the active version, remove
+   the old entry from `SECRETS_KEKS` and redeploy again.
+
+**Recovering a volume when the service will not boot:** run the CLI directly
+against the volume from outside the running container. Export
+`SECRETS_KEKS` in the invoking shell first — `-e SECRETS_KEKS` with no `=`
+forwards that shell variable into the container without ever putting the key
+in argv — and pass the image tag Dokploy built for this service (visible in
+its Dokploy UI or `docker images`):
+
+```bash
+export SECRETS_KEKS=...
+docker run --rm -e SECRETS_KEKS -v <project>_secrets-data:/data \
+  <image> node dist/cli/kek.js verify --expect-active <n>
+```
+
+The volume name is prefixed with the Dokploy project name by Compose — read
+the actual name from `docker volume ls` rather than copying `secrets-data`
+from `secrets-compose.yaml` directly.
+
 **No Domains entry also means no shared network.** Dokploy attaches a stack to
 the shared overlay `dokploy-network` when Traefik has to reach it — which is
 when the stack has a domain. This service has none, and measured on the host

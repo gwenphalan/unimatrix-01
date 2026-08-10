@@ -53,9 +53,10 @@ repository-wide convention.
 Requires a KEK — the service refuses to start without one. There is no `.env`
 file support here (unlike `apps/api`): loading one would put a plaintext KEK
 on a developer's disk, the exact artifact this service exists to avoid
-multiplying. Supply `SECRETS_KEKS` on the command line instead:
+multiplying. Supply `SECRETS_KEKS` on the command line instead, generating the
+key with `kek generate` (see "Managing the KEK ring" below):
 
-    SECRETS_KEKS=1:$(node -e "console.log(require('node:crypto').randomBytes(32).toString('base64'))") \
+    SECRETS_KEKS=1:$(pnpm --filter @unimatrix/secrets-app exec tsx src/cli/kek.ts generate | head -1 | cut -d: -f2) \
       pnpm --filter @unimatrix/secrets-app dev
 
 Migrations run out-of-band in dev, same as `packages/db`:
@@ -88,3 +89,49 @@ mutually exclusive, so a consumer needing both takes two tokens.
 The plaintext is printed once and only its SHA-256 digest is stored, so a lost
 token is reissued rather than recovered. `list` shows every token with its
 scope, capability and revocation state; `revoke --name <name>` retires one.
+
+## Managing the KEK ring
+
+Two more host-local CLIs sit beside `service-token`, both under `src/cli/`
+and neither taking a `--kek` flag — `docker exec` already inherits
+`SECRETS_KEKS`, and argv is world-readable on the host.
+
+Locally:
+
+    pnpm --filter @unimatrix/secrets-app exec tsx src/cli/kek.ts generate
+    pnpm --filter @unimatrix/secrets-app exec tsx src/cli/kek.ts verify --expect-active <n>
+    pnpm --filter @unimatrix/secrets-app exec tsx src/cli/kek.ts rotate --to-version <n>
+
+In the container, against the live volume:
+
+    docker exec <container> node dist/cli/kek.js generate
+    docker exec <container> node dist/cli/kek.js verify --expect-active <n>
+    docker exec <container> node dist/cli/kek.js rotate --to-version <n>
+
+`generate [--version <n>]` prints one `<version>:<key>` entry — never the rest
+of the ring — to prepend to `SECRETS_KEKS`, bounded to versions 1-9999 and
+refusing one already in a loaded ring or not greater than its active version.
+`verify --expect-active <n>` and `rotate --to-version <n>` both require the
+flag and both refuse outright when `n` does not match `SECRETS_KEKS`'s actual
+active version — the version a stale redeploy still carries is caught before
+either command trusts it. `verify` censuses every `secret_versions` row from
+the envelope's own KEK version field, proves each one opens under a key the
+loaded ring carries, and exits non-zero if any row sits outside the active
+version even when every row opens; it also records a `kek.verified` audit
+row. `rotate` re-seals every row — live and superseded — under the active
+version, refuses to run when the ring holds only one version or when any
+row's version is missing from the ring, and is resumable: a row already
+sealed under the active version is left alone. See
+[`docs/deployment.md`](../../docs/deployment.md) for the full rotation
+runbook, including how to capture the outgoing key before rotating.
+
+## Reading a value
+
+`secret read --name <name>` is the one host-local CLI permitted to print a
+decrypted value — the audited escape hatch, not a bypass of the read-back
+restriction in `AGENTS.md` §1: it needs host access in addition to
+`SECRETS_KEKS`, and it writes the same `secret.read` audit row `GET
+/secrets/value` does, before printing anything.
+
+    pnpm --filter @unimatrix/secrets-app exec tsx src/cli/secret.ts read --name github/token
+    docker exec <container> node dist/cli/secret.js read --name github/token

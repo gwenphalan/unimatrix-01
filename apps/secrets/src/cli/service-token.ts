@@ -1,7 +1,7 @@
 // Issuance is a host-local CLI rather than a route, and stays one. A minting
 // route needs a credential to protect it, which is the bootstrap problem, and
 // it would be the highest-value target this service could expose. `docker exec`
-// sets the same bar the read CLI will: host access.
+// sets the same bar the read CLI does: host access.
 //
 // It reads `resolveSecretsDatabaseFilePath` rather than
 // `loadSecretsRuntimeConfig`, which hard-requires `SECRETS_KEKS`. Minting a
@@ -13,17 +13,15 @@
 // absent, so a CLI there could not run in the container at all.
 import { recordAuditEntry } from "../audit/index.js";
 import { resolveSecretsDatabaseFilePath } from "../config.js";
-import {
-  createSecretsDatabase,
-  type SecretsDatabaseInstance,
-  type SecretsDatabaseWriter,
-} from "../db/client.js";
+import { createSecretsDatabase, type SecretsDatabaseInstance } from "../db/client.js";
 import {
   isServiceTokenCapability,
   issueServiceToken,
   listServiceTokens,
   revokeServiceToken,
 } from "../service-tokens/index.js";
+
+import { parseFlags, requireFlag, writeAtomically } from "./support.js";
 
 const USAGE = [
   "Usage:",
@@ -37,66 +35,9 @@ export interface ServiceTokenCliDeps {
   write: (line: string) => void;
 }
 
-/**
- * Runs a token mutation and the audit row that records it as one transaction.
- * Synchronous on purpose: `better-sqlite3` is a synchronous driver, so no other
- * JavaScript can interleave between the two writes — an `async` callback would
- * hand control back to the event loop mid-transaction. `behavior: "immediate"`
- * takes the write lock before issuance reads the name it is about to claim,
- * matching `apps/api/src/modules/user-data/store.ts`.
- */
-function writeAtomically<T>(
-  db: ServiceTokenCliDeps["db"],
-  write: (tx: SecretsDatabaseWriter) => T,
-): T {
-  return db.transaction(write, { behavior: "immediate" });
-}
-
-/**
- * Consumes exactly the flags a subcommand supports, and refuses anything else.
- * A credential-minting CLI must not run on arguments it did not understand: a
- * misspelt `--scope` would otherwise mint a token scoped to the wrong prefix
- * and say nothing about it.
- */
-function parseFlags(argv: readonly string[], supported: readonly string[]): Map<string, string> {
-  const values = new Map<string, string>();
-
-  for (let index = 0; index < argv.length; index += 2) {
-    const flag = argv[index] ?? "";
-
-    if (!supported.includes(flag)) {
-      throw new Error(`Unknown argument ${JSON.stringify(flag)}.\n\n${USAGE}`);
-    }
-
-    if (values.has(flag)) {
-      throw new Error(`${flag} was given more than once.\n\n${USAGE}`);
-    }
-
-    const value = argv[index + 1];
-
-    if (value === undefined || value.startsWith("--")) {
-      throw new Error(`${flag} is required.\n\n${USAGE}`);
-    }
-
-    values.set(flag, value);
-  }
-
-  return values;
-}
-
-function requireFlag(values: ReadonlyMap<string, string>, flag: string): string {
-  const value = values.get(flag);
-
-  if (value === undefined) {
-    throw new Error(`${flag} is required.\n\n${USAGE}`);
-  }
-
-  return value;
-}
-
 function runIssue(argv: readonly string[], deps: ServiceTokenCliDeps): void {
-  const flags = parseFlags(argv, ["--name", "--scope", "--capability"]);
-  const capability = requireFlag(flags, "--capability");
+  const flags = parseFlags(argv, ["--name", "--scope", "--capability"], USAGE);
+  const capability = requireFlag(flags, "--capability", USAGE);
 
   // No default. Defaulting either way silently mints the wrong kind of
   // credential, and the two are mutually exclusive by design.
@@ -104,8 +45,8 @@ function runIssue(argv: readonly string[], deps: ServiceTokenCliDeps): void {
     throw new Error(`--capability must be read or manage.\n\n${USAGE}`);
   }
 
-  const name = requireFlag(flags, "--name");
-  const scopePrefix = requireFlag(flags, "--scope");
+  const name = requireFlag(flags, "--name", USAGE);
+  const scopePrefix = requireFlag(flags, "--scope", USAGE);
   // One transaction, so a failed audit write takes the token with it. An
   // unaudited credential is worse than an unissued one.
   const issued = writeAtomically(deps.db, (tx) => {
@@ -130,7 +71,7 @@ function runIssue(argv: readonly string[], deps: ServiceTokenCliDeps): void {
 }
 
 function runRevoke(argv: readonly string[], deps: ServiceTokenCliDeps): void {
-  const name = requireFlag(parseFlags(argv, ["--name"]), "--name");
+  const name = requireFlag(parseFlags(argv, ["--name"], USAGE), "--name", USAGE);
   const revoked = writeAtomically(deps.db, (tx) => {
     const record = revokeServiceToken(tx, name);
 
@@ -152,7 +93,7 @@ function runRevoke(argv: readonly string[], deps: ServiceTokenCliDeps): void {
 }
 
 function runList(argv: readonly string[], deps: ServiceTokenCliDeps): void {
-  parseFlags(argv, []);
+  parseFlags(argv, [], USAGE);
 
   const tokens = listServiceTokens(deps.db);
 
