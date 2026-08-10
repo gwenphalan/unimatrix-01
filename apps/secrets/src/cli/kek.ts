@@ -198,17 +198,41 @@ function buildVerifyReport(
     (a, b) => a - b,
   );
 
-  let summary: string;
+  // A mismatch says nothing about whether the row opens — it may open fine — so it gets its own
+  // clause rather than folding into "could not be opened", which points the operator at the key
+  // for a problem that is not the key's.
+  const mismatchRows = failedRows.filter((result) => result.status === "column-mismatch");
+  const unopenableRows = failedRows.filter((result) => result.status !== "column-mismatch");
 
-  if (failedRows.length > 0) {
-    summary = `${String(failedRows.length)} row(s) could not be opened under a KEK in the ring.`;
-  } else if (outsideVersions.length > 0) {
-    summary =
-      `${String(outsideActive.length)} row(s) are still sealed under version(s) ` +
-      `${outsideVersions.join(", ")}; run \`kek rotate\`.`;
-  } else {
-    summary = `Every row is sealed under active version ${String(keyring.activeVersion)}.`;
+  const summaryClauses: string[] = [];
+
+  if (unopenableRows.length > 0) {
+    summaryClauses.push(
+      `${String(unopenableRows.length)} row(s) could not be opened under a KEK in the ring.`,
+    );
   }
+
+  if (mismatchRows.length > 0) {
+    summaryClauses.push(
+      `${String(mismatchRows.length)} row(s) have a kek_version column that disagrees with their ` +
+        "envelope's own version field.",
+    );
+  }
+
+  if (summaryClauses.length === 0 && outsideVersions.length > 0) {
+    summaryClauses.push(
+      `${String(outsideActive.length)} row(s) are still sealed under version(s) ` +
+        `${outsideVersions.join(", ")}; run \`kek rotate\`.`,
+    );
+  }
+
+  if (summaryClauses.length === 0) {
+    summaryClauses.push(
+      `Every row is sealed under active version ${String(keyring.activeVersion)}.`,
+    );
+  }
+
+  const summary = summaryClauses.join(" ");
 
   lines.push(summary);
 
@@ -275,10 +299,19 @@ function runVerify(deps: KekCliDeps, expectActive: number): void {
   const keyring = requireKeyring(deps);
 
   if (keyring.activeVersion !== expectActive) {
-    throw new Error(
-      `SECRETS_KEKS's active version is ${String(keyring.activeVersion)}, not the ` +
-        `${String(expectActive)} you expected.\nRefusing to certify.`,
+    // Routed through `finalizeVerify` rather than a bare throw: a run against a stale ring is
+    // exactly the operator mistake `--expect-active` exists to catch, and every other terminating
+    // path out of `verify` records a `kek.verified` row — this one must too.
+    finalizeVerify(
+      deps,
+      undefined,
+      new Error(
+        `SECRETS_KEKS's active version is ${String(keyring.activeVersion)}, not the ` +
+          `${String(expectActive)} you expected.\nRefusing to certify.`,
+      ),
     );
+
+    return;
   }
 
   const rows = listAllSecretVersions(deps.db);

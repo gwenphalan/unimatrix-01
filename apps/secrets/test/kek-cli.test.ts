@@ -149,7 +149,7 @@ void test("verify --expect-active is required", () => {
   });
 });
 
-void test("verify refuses when SECRETS_KEKS's active version does not match --expect-active, and writes no audit row", () => {
+void test("verify refuses when SECRETS_KEKS's active version does not match --expect-active, and still writes a failure audit row", () => {
   withKekCli(({ seal, runWith, auditRows }) => {
     seal(2, "github/token", "plaintext");
 
@@ -159,9 +159,10 @@ void test("verify refuses when SECRETS_KEKS's active version does not match --ex
     );
     assert.equal(
       auditRows("kek.verified").length,
-      0,
-      "an --expect-active mismatch is refused before the census, and writes no audit row",
+      1,
+      "an --expect-active mismatch is the operator mistake this flag exists to catch — it must leave a trace",
     );
+    assert.equal(auditRows("kek.verified")[0]?.outcome, "failure");
   });
 });
 
@@ -194,7 +195,7 @@ void test("verify throws when a row's version is absent from the ring, and names
   });
 });
 
-void test("verify treats a kek_version column/envelope mismatch as a per-row failure rather than aborting the census", () => {
+void test("verify treats a kek_version column/envelope mismatch as a per-row failure rather than aborting the census, and its summary never says the row could not be opened", () => {
   withKekCli(({ instance, seal, verify, output, auditRows }) => {
     seal(1, "github/other", "other-plaintext");
     const { versionId } = seal(1, "github/token", "plaintext");
@@ -207,7 +208,15 @@ void test("verify treats a kek_version column/envelope mismatch as a per-row fai
 
     assert.throws(
       () => verify(buildKeyring([1, 2])),
-      /1 row\(s\) could not be opened under a KEK in the ring\./u,
+      (error: unknown) => {
+        assert.ok(error instanceof Error);
+        // A mismatch says nothing about whether the row opens — it may open fine — so the summary
+        // must not point at the key the way "could not be opened" does.
+        assert.match(error.message, /kek_version column that disagrees/u);
+        assert.doesNotMatch(error.message, /could not be opened/u);
+
+        return true;
+      },
     );
 
     // The whole census still printed — a mismatch on one row must not suppress the other row's line.
@@ -227,6 +236,32 @@ void test("verify treats a kek_version column/envelope mismatch as a per-row fai
     );
     assert.equal(auditRows("kek.verified").length, 1);
     assert.equal(auditRows("kek.verified")[0]?.outcome, "failure");
+  });
+});
+
+void test("verify's summary carries both clauses when an unopenable row and a mismatched row both exist", () => {
+  withKekCli(({ instance, seal, verify }) => {
+    // Unopenable: sealed under a version the ring does not carry.
+    seal(3, "github/not-in-ring", "plaintext-a");
+
+    // Mismatched: kek_version column disagrees with the envelope's own version field.
+    const { versionId } = seal(1, "github/mismatched", "plaintext-b");
+    instance.db
+      .update(secretVersionsTable)
+      .set({ kekVersion: 2 })
+      .where(eq(secretVersionsTable.id, versionId))
+      .run();
+
+    assert.throws(
+      () => verify(buildKeyring([1, 2])),
+      (error: unknown) => {
+        assert.ok(error instanceof Error);
+        assert.match(error.message, /1 row\(s\) could not be opened under a KEK in the ring\./u);
+        assert.match(error.message, /1 row\(s\) have a kek_version column that disagrees/u);
+
+        return true;
+      },
+    );
   });
 });
 
