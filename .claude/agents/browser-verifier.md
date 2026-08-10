@@ -67,17 +67,12 @@ fails because the browser binary is not there is not a finding either — that c
 by `pnpm setup:worktree --with-playwright`, so install it yourself with the same command that step
 runs, `pnpm --filter @unimatrix/web exec playwright install --with-deps chromium`, and retry.
 
-**Two traps, both measured here.** Playwright is a dependency of `apps/web`, `apps/cflop` and
-`packages/e2e-helpers` only — `apps/admin`, `apps/auth`, `packages/ui` and `packages/chrome` have
-none, and they are among the surfaces this agent exists to check. And Node resolves
-`@playwright/test` from the *script's* own directory rather than the cwd, so a driver script at an
-absolute `/tmp` path dies on `ERR_MODULE_NOT_FOUND` however it is invoked. Write the script inside a
-workspace that has Playwright — `apps/web` is the usual one — and run it from there by a relative
-path, `cd apps/web && pnpm exec node ./<your-script>`.
-
-Verifying `apps/admin`, `apps/auth`, `packages/ui` or `packages/chrome` therefore means the script
-lives in `apps/web` and navigates to the other app's dev port. Playwright does not care which origin
-it is pointed at.
+**One trap, measured here.** Node resolves `@playwright/test` from the *script's* own directory
+upward rather than from the cwd, so a driver script at an absolute `/tmp` path dies on
+`ERR_MODULE_NOT_FOUND` however it is invoked. `@playwright/test` is a root devDependency, and root
+`node_modules` is an ancestor of every directory in the repo, so a script written anywhere inside the
+repo tree resolves it — `infra/scripts/` is the natural home for one. A script still placed outside
+the tree, in `/tmp` or elsewhere, still fails the same way.
 
 **Claude in Chrome (`mcp__claude-in-chrome__*`) drives the browser the owner is using.** It focuses
 her window and takes over a tab, so a dispatch landing while she is mid-solve in cstimer destroys the
