@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
 import { loadSecretsKeyring, type SecretsKeyring } from "@unimatrix/secrets";
 import { eq } from "drizzle-orm";
@@ -412,6 +414,35 @@ void test("a mid-run failure aborts, leaves earlier rows re-sealed and later row
   });
 });
 
+void test("a mid-run failure whose failure-audit write also fails still surfaces the reseal failure, not the audit failure", () => {
+  withKekCli(({ instance, seal, runWith }) => {
+    const { versionId, envelope } = seal(1, "github/token", "plaintext");
+
+    const corruptedFields = envelope.split(".");
+    corruptedFields[3] = Buffer.from("not the real ciphertext").toString("base64");
+    instance.db
+      .update(secretVersionsTable)
+      .set({ envelope: corruptedFields.join(".") })
+      .where(eq(secretVersionsTable.id, versionId))
+      .run();
+
+    instance.client.exec("DROP TABLE secret_audit_log");
+
+    assert.throws(
+      () => runWith(buildKeyring([1, 2]), "rotate"),
+      (error: unknown) => {
+        assert.ok(error instanceof Error);
+        // The reseal failure (envelope authentication) stays the primary message; the audit
+        // write's own failure is appended, never substituted in its place.
+        assert.match(error.message, /authentication|decrypt/iu);
+        assert.match(error.message, /secret\.resealed failure audit row could not be written/u);
+
+        return true;
+      },
+    );
+  });
+});
+
 void test("rotate refuses to start when a row's version is missing from the ring, and touches nothing", () => {
   withKekCli(({ instance, seal, runWith }) => {
     seal(1, "github/a", "plaintext-a");
@@ -469,4 +500,62 @@ void test("generate prints an entry that loadSecretsKeyring accepts", () => {
     // Highest version first, matching the format `kek generate`'s own reminder describes.
     assert.doesNotThrow(() => loadSecretsKeyring(`${entryLine},1:${keyForVersion(1)}`));
   });
+});
+
+// `main()` isn't exported — its own wiring decision (which env determines whether `generate`
+// gets a loaded keyring) is only reachable by actually running the CLI as a process, not by
+// calling `runGenerate` or `runKekCli` with an injected `deps.keyring`.
+void test("main() loads a keyring for generate whenever SECRETS_KEKS is set, and only defaults to version 1 when it is genuinely absent", () => {
+  const directory = mkdtempSync(join(tmpdir(), "unimatrix-secrets-kek-generate-main-"));
+
+  try {
+    const kekEntryPath = fileURLToPath(new URL("../src/cli/kek.ts", import.meta.url));
+    const secretsAppRoot = fileURLToPath(new URL("..", import.meta.url));
+    const databaseFilePath = join(directory, "secrets.sqlite");
+
+    const runGenerateProcess = (secretsKeks: string | undefined): number => {
+      const env: NodeJS.ProcessEnv = { ...process.env, SECRETS_DATABASE_URL: databaseFilePath };
+
+      if (secretsKeks === undefined) {
+        delete env.SECRETS_KEKS;
+      } else {
+        env.SECRETS_KEKS = secretsKeks;
+      }
+
+      const result = spawnSync(process.execPath, ["--import", "tsx", kekEntryPath, "generate"], {
+        cwd: secretsAppRoot,
+        env,
+        encoding: "utf8",
+      });
+
+      assert.equal(result.status, 0, `generate exited non-zero; stderr was: ${result.stderr}`);
+
+      const entryLine = result.stdout
+        .split("\n")
+        .find((line) => /^\d+:[A-Za-z0-9+/]+=*$/u.test(line));
+
+      assert.ok(
+        entryLine,
+        `generate printed no <version>:<key> line; stdout was: ${result.stdout}`,
+      );
+
+      return Number(entryLine.split(":")[0]);
+    };
+
+    assert.equal(
+      runGenerateProcess(undefined),
+      1,
+      "with no SECRETS_KEKS at all (the fresh-bootstrap case), generate must default to version 1",
+    );
+
+    const ring = `2:${keyForVersion(2)},1:${keyForVersion(1)}`;
+
+    assert.equal(
+      runGenerateProcess(ring),
+      3,
+      "with SECRETS_KEKS set to a ring whose active version is 2, generate must default to 3",
+    );
+  } finally {
+    rmSync(directory, { force: true, recursive: true });
+  }
 });

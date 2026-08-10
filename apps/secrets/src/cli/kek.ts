@@ -26,7 +26,7 @@ const USAGE = ["Usage:", "  kek verify", "  kek rotate", "  kek generate [--vers
 
 export interface KekCliDeps {
   db: SecretsDatabaseInstance["db"];
-  // Undefined only for `generate`, which never needs SECRETS_KEKS at all — see `main` below.
+  // Undefined only when `generate` runs with no SECRETS_KEKS set at all — see `main` below.
   keyring: SecretsKeyring | undefined;
   write: (line: string) => void;
 }
@@ -311,14 +311,25 @@ function runRotate(deps: KekCliDeps): void {
       deps.write(`re-sealed ${row.secretName} (${row.id}) under version ${String(activeVersion)}`);
     } catch (error) {
       // Same rule as `src/modules/secrets/index.ts`'s denial audit rows: written outside the
-      // transaction that failed, so it survives the rollback.
-      recordAuditEntry(deps.db, {
-        action: "secret.resealed",
-        actorKind: "host-cli",
-        outcome: "failure",
-        secretName: row.secretName,
-        secretVersionId: row.id,
-      });
+      // transaction that failed, so it survives the rollback. Guarded on its own: the reseal
+      // failure is what the operator needs to diagnose, and a busy audit insert (verify hits the
+      // same failure mode) must never replace it as the error that reaches them — so `error`,
+      // not the audit write's own error, is always what gets rethrown below.
+      try {
+        recordAuditEntry(deps.db, {
+          action: "secret.resealed",
+          actorKind: "host-cli",
+          outcome: "failure",
+          secretName: row.secretName,
+          secretVersionId: row.id,
+        });
+      } catch (auditError) {
+        if (error instanceof Error) {
+          const audit = auditError instanceof Error ? auditError.message : String(auditError);
+
+          error.message += ` (additionally, the secret.resealed failure audit row could not be written: ${audit})`;
+        }
+      }
 
       throw error;
     }
@@ -386,6 +397,18 @@ export function runKekCli(argv: readonly string[], deps: KekCliDeps): void {
   }
 }
 
+/**
+ * `generate` is the only subcommand that can run without `SECRETS_KEKS` at all — the fresh
+ * local-dev bootstrap case `README.md` documents, where there is no ring yet to default
+ * `--version` from. Whenever the variable *is* set, `generate` loads it too, so its default
+ * (`activeVersion + 1`) is the next real version rather than always falling back to 1 — the
+ * rotation runbook in `docs/deployment.md` runs `generate` against an already-booted service,
+ * where `SECRETS_KEKS` is always set.
+ */
+function isSecretsKeksSet(): boolean {
+  return (process.env.SECRETS_KEKS ?? "").trim().length > 0;
+}
+
 function main(): void {
   const argv = process.argv.slice(2);
   const instance = createSecretsDatabase({ filePath: resolveSecretsDatabaseFilePath() });
@@ -393,8 +416,8 @@ function main(): void {
   try {
     runKekCli(argv, {
       db: instance.db,
-      // `generate` is the one subcommand that never needs SECRETS_KEKS — see `KekCliDeps`.
-      keyring: argv[0] === "generate" ? undefined : loadSecretsKeyringFromEnv(),
+      keyring:
+        argv[0] === "generate" && !isSecretsKeksSet() ? undefined : loadSecretsKeyringFromEnv(),
       write: (line) => {
         process.stdout.write(`${line}\n`);
       },
