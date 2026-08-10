@@ -10,9 +10,10 @@ Five routes sit behind that guard, split by the caller's token capability. `GET 
 needs a `read`-capability token and is the **only** route anywhere in this service permitted to
 return a decrypted value. `POST /secrets`, `POST /secrets/rotate`, `DELETE /secrets` and
 `GET /secrets` need `manage` and return metadata — a masked prefix, never a value. There is no
-read-back route reachable by a `manage` token, no debug flag that adds one, and no local-dev-only
-variant; see `.notes/01-todo/secrets.todo.md` for what this workspace does not yet implement
-(KEK rotation).
+read-back route reachable by a `manage` token and no debug flag that adds one. The host-local
+`secret read` CLI (`src/cli/secret.ts`) can still print a value — that is not a bypass of this rule:
+it needs host access in addition to a service token's worth of KEK material, and it writes the same
+`secret.read` audit row the route does.
 
 Transport is a bearer token over plain HTTP. TLS with a pinned self-signed server
 certificate is the decided follow-up, landing when `apps/api` first calls this service and both ends
@@ -44,6 +45,13 @@ can be tested together — not an omission.
 - `src/cli/service-token.ts`: host-local token issuance, revocation and listing. Under `src/` rather
   than `scripts/` because `tsconfig.build.json` excludes `scripts/` and the image ships built output
   with no `tsx`, so a CLI there could not run in the container.
+- `src/cli/kek.ts`: host-local `verify`, `rotate` and `generate` for the KEK ring. `verify` censuses
+  `secret_versions` and proves every row opens under a key the ring carries; `rotate` re-seals every
+  row under the active version; `generate` prints one new `<version>:<key>` entry and never the
+  existing ring. No `export` subcommand — see §3.
+- `src/cli/secret.ts`: host-local `read --name <name>`, the one CLI permitted to print a decrypted
+  value — see §1.
+- `src/cli/support.ts`: `parseFlags`/`requireFlag`/`writeAtomically`, shared by all three CLIs above.
 - `src/lib/http`: the error envelope and its normalizer, and the logger options. Mirrors
   `apps/api/src/lib/http` at a fraction of the size — no `requestId` in the body and no
   validation-issue detail, because there is no browser client to consume either.
@@ -102,6 +110,15 @@ can be tested together — not an omission.
 - **The KEK lives only in `SECRETS_KEKS`, and only as a `SecretsKeyring`.** It is below every value
   this service stores in the trust order; nothing this service depends on may ever be stored in this
   store.
+- **`kek rotate` re-seals a row in place, keeping `secret_versions.id`.** The envelope's AAD binds
+  `versionId` (`packages/secrets/src/envelope.ts`), so a fresh id on re-seal would produce an
+  envelope that cannot open against its own row — silently, until someone reads it.
+- **No CLI under `src/cli/` may take a `--kek` flag, on any subcommand.** Argv is world-readable on
+  the host running the container, and `docker exec` already inherits `SECRETS_KEKS`; a flag would
+  only add a second, worse way to hand over the same key.
+- **A retired KEK version stays in `SECRETS_KEKS` until `kek verify` reports zero rows outside the
+  active version.** Removing it earlier stops future writes and reads working, then makes the rows
+  still sealed under it unrecoverable — see `docs/deployment.md`'s rotation runbook.
 
 ## 4. Coverage Floor
 Same ratchet policy as `apps/api/AGENTS.md` §2a — `node --test --experimental-test-coverage`, with

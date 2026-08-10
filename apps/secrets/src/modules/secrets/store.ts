@@ -26,6 +26,14 @@ export interface LiveSecretVersion {
   kekVersion: number;
 }
 
+export interface AllSecretVersionRow {
+  id: string;
+  secretName: string;
+  envelope: string;
+  kekVersion: number;
+  isLive: boolean;
+}
+
 /** Every function here takes a {@link SecretsDatabaseWriter} rather than the database, so a caller composes it inside a transaction alongside the audit row that records it. */
 export function createSecret(
   tx: SecretsDatabaseWriter,
@@ -151,6 +159,52 @@ export function getLiveSecretVersion(
     )
     .where(eq(secretsTable.name, name))
     .get();
+}
+
+/** Every `secret_versions` row, live and superseded alike — what `kek verify` and `kek rotate` census. */
+export function listAllSecretVersions(db: SecretsDatabaseWriter): AllSecretVersionRow[] {
+  return db
+    .select({
+      id: secretVersionsTable.id,
+      secretName: secretVersionsTable.secretName,
+      envelope: secretVersionsTable.envelope,
+      kekVersion: secretVersionsTable.kekVersion,
+      supersededAt: secretVersionsTable.supersededAt,
+    })
+    .from(secretVersionsTable)
+    .orderBy(asc(secretVersionsTable.secretName), asc(secretVersionsTable.createdAt))
+    .all()
+    .map((row) => ({
+      id: row.id,
+      secretName: row.secretName,
+      envelope: row.envelope,
+      kekVersion: row.kekVersion,
+      isLive: row.supersededAt === null,
+    }));
+}
+
+/**
+ * Re-seals a row in place, keeping its `id` — the AAD binds `versionId`, so a fresh id would yield
+ * an envelope that cannot open against its own row. Asserts exactly one row changed: an `UPDATE`
+ * against a missing `id` returns `changes: 0` with no error, and `kek rotate` snapshots rows up
+ * front, so a concurrent delete could otherwise land a `secret.resealed` audit row for a row that
+ * no longer exists.
+ */
+export function resealSecretVersion(
+  tx: SecretsDatabaseWriter,
+  version: { id: string; envelope: string; kekVersion: number },
+): void {
+  const result = tx
+    .update(secretVersionsTable)
+    .set({ envelope: version.envelope, kekVersion: version.kekVersion })
+    .where(eq(secretVersionsTable.id, version.id))
+    .run();
+
+  if (result.changes !== 1) {
+    throw new Error(
+      `Expected to re-seal exactly one row for version id ${JSON.stringify(version.id)}, but ${String(result.changes)} row(s) changed.`,
+    );
+  }
 }
 
 export function listSecretMetadata(db: SecretsDatabaseWriter): SecretMetadataRow[] {
