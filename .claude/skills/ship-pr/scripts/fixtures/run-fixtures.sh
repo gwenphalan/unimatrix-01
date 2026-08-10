@@ -333,6 +333,39 @@ offline: auto-merge armed UNREVIEWED (would arm on fixture-head-sha) — merge-w
 base branch changed after arm, from main to release-2 — GitHub disables the arm on a base switch; re-arm by hand: gh pr merge 1 --repo fixture/repo --auto --squash --match-head-commit fixture-head-sha
 EOF
 
+# A merge to the base after the arm. The head sha, the base name and the checks
+# are all still exactly what was armed, so every other detection above is blind
+# to it and the arm can never fire — the regression this pins is the loop
+# polling in silence until the timeout, which is what PR #242 actually did for
+# about four hours.
+check merge-wait-behind 0 "$(f never-reviewed)" \
+  SHIP_PR_CHECKS_FIXTURES="$(cf checks-green-one.json checks-green-one.json)" \
+  SHIP_PR_MERGE_FIXTURES="$here/merge-wait/behind.json" -- --no-review <<'EOF'
+offline: auto-merge armed UNREVIEWED (would arm on fixture-head-sha) — merge-wait fixtures follow
+branch went BEHIND after arm — the arm is live but cannot fire; update and re-arm: gh pr update-branch 1 --repo fixture/repo, then gh pr merge 1 --repo fixture/repo --auto --squash --match-head-commit $(gh pr view 1 --repo fixture/repo --json headRefOid --jq .headRefOid)
+EOF
+
+# The same shape for a conflicted branch, which also cannot merge without the
+# head moving.
+check merge-wait-dirty 0 "$(f never-reviewed)" \
+  SHIP_PR_CHECKS_FIXTURES="$(cf checks-green-one.json checks-green-one.json)" \
+  SHIP_PR_MERGE_FIXTURES="$here/merge-wait/dirty.json" -- --no-review <<'EOF'
+offline: auto-merge armed UNREVIEWED (would arm on fixture-head-sha) — merge-wait fixtures follow
+branch went DIRTY after arm — the arm is live but cannot fire; resolve the conflicts and re-arm
+EOF
+
+# `BLOCKED` must NOT be terminal — it is the ordinary state of an armed PR whose
+# required checks have not all reported yet, so treating it like BEHIND would end
+# almost every real run on its first poll. Asserted by the absence of any merge
+# line and the presence of `FIXTURES EXHAUSTED`: the loop polled past it and
+# asked for a second fixture.
+check merge-wait-blocked-not-terminal 0 "$(f never-reviewed)" \
+  SHIP_PR_CHECKS_FIXTURES="$(cf checks-green-one.json checks-green-one.json checks-green-one.json)" \
+  SHIP_PR_MERGE_FIXTURES="$here/merge-wait/blocked.json" -- --no-review <<'EOF'
+offline: auto-merge armed UNREVIEWED (would arm on fixture-head-sha) — merge-wait fixtures follow
+FIXTURES EXHAUSTED
+EOF
+
 # --- Phase 2: the review wait ----------------------------------------------
 
 check clean 0 "$(f clean)" <<'EOF'

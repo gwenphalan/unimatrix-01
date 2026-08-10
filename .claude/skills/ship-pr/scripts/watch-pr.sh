@@ -546,6 +546,8 @@ arm" above — on stdout:
   head changed after arm, from <sha> to <sha> — auto-merge disabled; re-arm by hand: gh pr merge ...   terminal
   head changed after arm, from <sha> to <sha> — auto-merge could NOT be disabled ...disable it by hand now: gh pr merge ...   terminal
   base branch changed after arm, from <name> to <name> — ...re-arm by hand: gh pr merge ...   terminal
+  branch went BEHIND after arm — the arm is live but cannot fire; update and re-arm: gh pr update-branch ...   terminal
+  branch went DIRTY after arm — the arm is live but cannot fire; resolve the conflicts and re-arm   terminal
   merge-wait API ERROR xN — stopping rather than waiting blind   three consecutive failures, exit 2
 
 Either phase, the post-review wait, or the wait-for-merge phase can also end
@@ -1311,7 +1313,7 @@ wait_for_merge() {
           ;;
       esac
     else
-      pr_json=$(gh pr view "$pr" --repo "$repo" --json state,headRefOid,baseRefName,mergeCommit 2>/dev/null) || rc=1
+      pr_json=$(gh pr view "$pr" --repo "$repo" --json state,headRefOid,baseRefName,mergeCommit,mergeStateStatus 2>/dev/null) || rc=1
     fi
 
     if [ "$rc" -eq 0 ] && [ -n "$pr_json" ]; then
@@ -1320,8 +1322,9 @@ wait_for_merge() {
       state=$(jq -r '.state // ""' <<<"$pr_json")
       cur_sha=$(jq -r '.headRefOid // ""' <<<"$pr_json")
       merged_sha=$(jq -r '.mergeCommit.oid // ""' <<<"$pr_json")
-      local base_ref
+      local base_ref merge_state
       base_ref=$(jq -r '.baseRefName // ""' <<<"$pr_json")
+      merge_state=$(jq -r '.mergeStateStatus // ""' <<<"$pr_json")
 
       if [ "$state" = "MERGED" ]; then
         echo "merged ${merged_sha:-$cur_sha}"
@@ -1374,6 +1377,36 @@ wait_for_merge() {
         # sha — which is exactly what just stopped being true.
         exit 0
       fi
+
+      # A merge to the base after the arm leaves this PR BEHIND, and
+      # `strict_required_status_checks_policy` then refuses the squash — the arm
+      # stays live and fires never. Nothing above can see it: the head sha, the
+      # base name and the check results are all still exactly what was armed, so
+      # without reading the merge state this loop polls a PR that cannot merge
+      # until the timeout, silently. Measured on PR #242 — armed and green, three
+      # unrelated merges landed on `main`, and it sat for roughly four hours
+      # reporting nothing at all.
+      #
+      # Terminal and hands-off, matching how the pre-arm transition already
+      # treats the same two states. `gh pr update-branch` is the fix and it moves
+      # the head sha, which cancels this arm by design — so re-arming is a
+      # deliberate act on the new sha, not something to do silently on the
+      # operator's behalf while claiming the reviewed head is the merged one.
+      #
+      # `UNKNOWN` is excluded on purpose: GitHub computes mergeability
+      # asynchronously and genuinely returns it on a healthy PR, so acting on it
+      # would end most runs early. `BLOCKED` is excluded too — that is the
+      # ordinary state of a PR whose checks have not all reported yet.
+      case $merge_state in
+        BEHIND)
+          echo "branch went BEHIND after arm — the arm is live but cannot fire; update and re-arm: gh pr update-branch $pr --repo $repo, then gh pr merge $pr --repo $repo --auto --squash --match-head-commit \$(gh pr view $pr --repo $repo --json headRefOid --jq .headRefOid)"
+          exit 0
+          ;;
+        DIRTY)
+          echo "branch went DIRTY after arm — the arm is live but cannot fire; resolve the conflicts and re-arm"
+          exit 0
+          ;;
+      esac
 
       # The existing checks_fixtures cursor, offline — a third consumer of the
       # one continuous stream, alongside wait_for_required_checks()'s own call
