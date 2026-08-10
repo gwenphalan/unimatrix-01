@@ -639,6 +639,60 @@ void test("rotate refuses to start when a row's version is missing from the ring
   });
 });
 
+void test("rotate refuses when a row's envelope has a malformed version field, touches nothing, and writes a kek.rotated failure row", () => {
+  withKekCli(({ instance, seal, rotate, auditRows }) => {
+    const { versionId, envelope } = seal(1, "github/token", "plaintext");
+    const fields = envelope.split(".");
+    fields[1] = "not-a-version";
+
+    instance.db
+      .update(secretVersionsTable)
+      .set({ envelope: fields.join(".") })
+      .where(eq(secretVersionsTable.id, versionId))
+      .run();
+
+    assert.throws(
+      () => rotate(buildKeyring([1, 2])),
+      /malformed or missing KEK version field/u,
+    );
+
+    const row = instance.db
+      .select({ kekVersion: secretVersionsTable.kekVersion })
+      .from(secretVersionsTable)
+      .get();
+
+    assert.equal(row?.kekVersion, 1, "the census's own throw must not touch any row");
+    assert.equal(auditRows("kek.rotated").length, 1);
+    assert.equal(auditRows("kek.rotated")[0]?.outcome, "failure");
+  });
+});
+
+void test("rotate refuses when a row's kek_version column disagrees with its envelope's own version field, touches nothing, and writes a kek.rotated failure row", () => {
+  withKekCli(({ instance, seal, rotate, auditRows }) => {
+    const { versionId } = seal(1, "github/token", "plaintext");
+
+    instance.db
+      .update(secretVersionsTable)
+      .set({ kekVersion: 2 })
+      .where(eq(secretVersionsTable.id, versionId))
+      .run();
+
+    assert.throws(
+      () => rotate(buildKeyring([1, 2])),
+      /kek_version column of 2 but its envelope is sealed under version 1/u,
+    );
+
+    const row = instance.db
+      .select({ kekVersion: secretVersionsTable.kekVersion })
+      .from(secretVersionsTable)
+      .get();
+
+    assert.equal(row?.kekVersion, 2, "the census's own throw must not touch any row");
+    assert.equal(auditRows("kek.rotated").length, 1);
+    assert.equal(auditRows("kek.rotated")[0]?.outcome, "failure");
+  });
+});
+
 void test("rotate on an already-complete store is a no-op with a message, and still writes a kek.rotated success row", () => {
   withKekCli(({ seal, rotate, instance, auditRows }) => {
     seal(2, "github/token", "plaintext");

@@ -403,13 +403,22 @@ function runRotate(deps: KekCliDeps, toVersion: number): void {
   const rows = listAllSecretVersions(deps.db);
   const activeVersion = keyring.activeVersion;
 
-  const censused = rows.map((row) => {
-    const envelopeVersion = parseEnvelopeVersion(row);
+  let censused: { row: AllSecretVersionRow; envelopeVersion: number }[];
 
-    assertColumnMatchesEnvelope(row, envelopeVersion);
+  try {
+    censused = rows.map((row) => {
+      const envelopeVersion = parseEnvelopeVersion(row);
 
-    return { row, envelopeVersion };
-  });
+      assertColumnMatchesEnvelope(row, envelopeVersion);
+
+      return { row, envelopeVersion };
+    });
+  } catch (error) {
+    // Same terminating-path rule as the two whole-run refusals above: a malformed envelope version
+    // or a kek_version/envelope disagreement is exactly the state an operator reconstructs from the
+    // audit log afterwards, so this throw must record `kek.rotated`/failure too, not bypass it.
+    refuseRotateRun(deps, error instanceof Error ? error.message : String(error));
+  }
 
   const versionCounts = new Map<number, number>();
   for (const entry of censused) {
