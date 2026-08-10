@@ -66,10 +66,45 @@ the `code-review` workflow or handing off `ultra`.
 3. **A reviewer subagent** is the cheap option, and the one to prefer on a small diff. Give it the
    diff and the PR body — not your reasoning, which is the thing that would contaminate it.
 
-   Dispatch from the roster you actually have, not from a name you remember: a plugin's agents
-   register at session start, so one installed mid-session is absent here and present next session.
-   Where no specialist fits, `general-purpose` with a specific brief does the job. Breadth is not the
-   point; a second opinion on the part that could be wrong is.
+   **A review dispatch goes to a `pr-review-toolkit` agent or it does not happen.** Never
+   `general-purpose`: it returns a report that reads exactly like a specialist's while carrying none
+   of the review posture the specialists were written with, so a review that did not really happen
+   is indistinguishable from one that did. The ban covers *review* dispatches only —
+   `general-purpose` stays correct for search, investigation, and everything else this repo
+   dispatches it for.
+
+   Enumerate before concluding nothing fits — "no specialist fits", decided without listing them, is
+   what produced the generic dispatch this rule replaces. What the plugin registers, and what each
+   one is for:
+
+   - **`pr-review-toolkit:code-reviewer`** — guideline compliance and general correctness.
+     Applicable to *any* diff, which is what makes "nothing fits" almost always wrong. Default pick.
+   - **`pr-review-toolkit:silent-failure-hunter`** — catch blocks, fallbacks, anything that can
+     swallow an error. Whenever the diff touches error handling.
+   - **`pr-review-toolkit:pr-test-analyzer`** — test coverage and quality, when the diff changes
+     tests or should have.
+   - **`pr-review-toolkit:type-design-analyzer`** — new or reshaped types: encapsulation,
+     invariants, whether a wrong state is representable.
+   - **`pr-review-toolkit:comment-analyzer`** — comments and docstrings against the code they
+     describe.
+   - **`pr-review-toolkit:code-simplifier`** — **not a reviewer.** Its own brief is to *apply*
+     refinements "autonomously and proactively", so pointing it at an open PR rewrites the branch
+     under it. Before the diff is final, or not at all.
+
+   Dispatch the one that fits, not several. The plugin's `review-pr` command fans the whole roster
+   out, and it is the owner's surface rather than this rung: it aggregates in the calling context
+   instead of a fresh one, scopes off `git diff` instead of the PR body, defaults to a set that
+   includes the editing agent above, and spends the five-hour window on agents with no surface on
+   the diff.
+
+   The roster is user-level — it installs under `~/.claude/plugins/`, outside this repo — so a clone
+   without the plugin has no rung 3 at all, and a plugin installed mid-session is absent here and
+   present next session. When it is missing, or the diff genuinely lands outside every entry above,
+   fall to another rung: wait out CodeRabbit's cooldown, or run the `code-review` workflow at
+   `high`. Never substitute a generic agent for an absent specialist — no review beats a review that
+   reads authoritative and is not one.
+
+   Breadth is not the point; a second opinion on the part that could be wrong is.
 4. **For a large or security-sensitive change, hand off to the owner for `/code-review ultra`.** It
    is user-triggered and billed and **you cannot launch it**, so this is a handoff, not a task.
 
