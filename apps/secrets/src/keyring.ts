@@ -1,7 +1,9 @@
 import {
   loadSecretsKeyring,
+  SecretsError,
   SecretValue,
   type SecretContext,
+  type SecretsErrorCode,
   type SecretsKeyring,
 } from "@unimatrix/secrets";
 
@@ -10,7 +12,8 @@ import type { SecretsRuntimeConfigBase, SecretsRuntimeEnv } from "./config.js";
 // Re-exported so the CLIs under `src/cli/` never need their own
 // `@unimatrix/secrets` import — this file is the one place under `src/`
 // allowed to have one (see `apps/secrets/AGENTS.md` §2).
-export type { SecretContext, SecretsKeyring };
+export { SecretsError };
+export type { SecretContext, SecretsErrorCode, SecretsKeyring };
 
 /**
  * The full runtime config, `SecretsRuntimeConfigBase` plus the loaded keyring — never the raw
