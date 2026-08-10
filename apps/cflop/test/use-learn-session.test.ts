@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { getAlgorithmSet, groupCasesByGroup } from "@/features/algorithms/algorithm-sets";
 import { orderedLearnCases } from "@/features/learn/learn-case-order";
 import { useLearnSession } from "@/features/learn/use-learn-session";
+import { readCasePool } from "@/lib/pool-storage";
 import { readCaseProgress } from "@/lib/progress-storage";
 
 const walkOrder = orderedLearnCases(groupCasesByGroup(getAlgorithmSet("pll")), {});
@@ -94,5 +95,42 @@ describe("useLearnSession", () => {
 
     expect(readCaseProgress("pll")).toEqual({ [firstCase.id]: "known" });
     expect(result.current.currentCase).toBe(secondCase);
+  });
+
+  describe("only-learned mode", () => {
+    it("leaves the drill pool untouched when the mode is off", () => {
+      const { result } = renderHook(() => useLearnSession("pll"));
+
+      act(() => {
+        result.current.toggleLearned();
+      });
+
+      expect(readCasePool("pll")).toEqual({});
+    });
+
+    it("mirrors a mark into the pool when the mode is on", () => {
+      window.localStorage.setItem("cflop:pool-mode:pll", "only-learned");
+
+      const { result } = renderHook(() => useLearnSession("pll"));
+
+      act(() => {
+        result.current.toggleLearned();
+      });
+
+      expect(readCasePool("pll")).toEqual({ [firstCase.id]: true });
+    });
+
+    it("mirrors an unmark as an explicit false when the mode is on", () => {
+      markKnown(lateCase.id);
+      window.localStorage.setItem("cflop:pool-mode:pll", "only-learned");
+
+      const { result } = renderHook(() => useLearnSession("pll", lateCase.id));
+
+      act(() => {
+        result.current.toggleLearned();
+      });
+
+      expect(readCasePool("pll")).toEqual({ [lateCase.id]: false });
+    });
   });
 });

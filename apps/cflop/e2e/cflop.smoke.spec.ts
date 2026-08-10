@@ -150,6 +150,59 @@ test.describe("coarse pointer", () => {
   });
 });
 
+test.describe("only-learned mode", () => {
+  test.use({ hasTouch: true });
+
+  /**
+   * Turns the mode on in Drill's picker, then marks a case learned in Learn - the only path
+   * that opens both the drill-pool menu and the Learn session in one run, and so the only
+   * automated check that the two routes actually agree.
+   */
+  test("Learn writes newly learned cases into the sticky drill pool", async ({ page }) => {
+    const pageErrors = collectPageErrors(page);
+    const main = page.locator("main");
+
+    await gotoRoute(page, "/learn");
+    await main
+      .getByRole("radiogroup", { name: "Algorithm set" })
+      .getByRole("radio", { name: "PLL" })
+      .click();
+
+    await main.getByRole("button", { name: "Choose cases" }).click();
+    await main.getByRole("button", { name: "PLL Ua", exact: true }).click();
+    await main.getByRole("button", { name: "Learned", exact: true }).click();
+
+    // The algorithm set is one shared key, so PLL carries into Drill without reselecting it.
+    await gotoRoute(page, "/drill");
+    await main.getByRole("button", { name: "Choose cases" }).click();
+    await main.getByRole("button", { name: /^Drill pool/ }).click();
+    await page.getByRole("menuitemcheckbox", { name: /^Enable only learned/ }).click();
+    await page.keyboard.press("Escape");
+
+    await expect(
+      main.getByRole("button", { name: "PLL Ua", exact: true, pressed: true }),
+    ).toBeVisible();
+    await expect(
+      main.getByRole("button", { name: "PLL Gd", exact: true, pressed: false }),
+    ).toBeVisible();
+
+    await scanAccessibility(page, "/drill (only-learned mode on)");
+
+    await gotoRoute(page, "/learn");
+    await main.getByRole("button", { name: "Choose cases" }).click();
+    await main.getByRole("button", { name: "PLL Gd", exact: true }).click();
+    await main.getByRole("button", { name: "Learned", exact: true }).click();
+
+    await gotoRoute(page, "/drill");
+    await main.getByRole("button", { name: "Choose cases" }).click();
+    await expect(
+      main.getByRole("button", { name: "PLL Gd", exact: true, pressed: true }),
+    ).toBeVisible();
+
+    expectNoPageErrors(pageErrors);
+  });
+});
+
 test("Learn flow: guided session and case picker", async ({ page }) => {
   const pageErrors = collectPageErrors(page);
   const main = page.locator("main");

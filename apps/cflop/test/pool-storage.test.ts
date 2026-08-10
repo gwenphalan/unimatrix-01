@@ -1,6 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { isCaseEnabled, readCasePool, setCaseEnabled, setCasesEnabled } from "@/lib/pool-storage";
+import {
+  clearDrillPoolMode,
+  enableOnlyLearnedCases,
+  isCaseEnabled,
+  mirrorLearnedCaseToPool,
+  readCasePool,
+  readDrillPoolMode,
+  setCaseEnabled,
+  setCasesEnabled,
+} from "@/lib/pool-storage";
 
 describe("pool storage", () => {
   beforeEach(() => {
@@ -34,7 +43,11 @@ describe("pool storage", () => {
 
     setCasesEnabled("oll", { "oll-2": false, "oll-3": true });
 
-    expect(setItem).toHaveBeenCalledTimes(1);
+    // `setCasesEnabled` also writes the mode, which is a real write of its own - filter to the
+    // pool key so the "one write" claim survives that.
+    const poolWrites = setItem.mock.calls.filter(([key]) => key === "cflop:pool:oll");
+
+    expect(poolWrites).toHaveLength(1);
     expect(readCasePool("oll")).toEqual({ "oll-1": false, "oll-2": false, "oll-3": true });
     // Restored by the shared `afterEach` in `test/setup.ts`, so a failure above cannot leak it.
   });
@@ -85,5 +98,84 @@ describe("isCaseEnabled", () => {
 
   it("honors an explicit enabled entry", () => {
     expect(isCaseEnabled({ "oll-1": true }, "oll-1")).toBe(true);
+  });
+});
+
+describe("drill pool mode", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
+  it("defaults to manual when nothing is stored", () => {
+    expect(readDrillPoolMode("oll")).toBe("manual");
+  });
+
+  it("turns the mode on and writes the changes together", () => {
+    enableOnlyLearnedCases("oll", { "oll-1": true, "oll-2": false });
+
+    expect(readDrillPoolMode("oll")).toBe("only-learned");
+    expect(readCasePool("oll")).toEqual({ "oll-1": true, "oll-2": false });
+  });
+
+  it("resets to manual on setCaseEnabled", () => {
+    enableOnlyLearnedCases("oll", { "oll-1": true });
+    setCaseEnabled("oll", "oll-2", true);
+
+    expect(readDrillPoolMode("oll")).toBe("manual");
+  });
+
+  it("resets to manual on setCasesEnabled", () => {
+    enableOnlyLearnedCases("oll", { "oll-1": true });
+    setCasesEnabled("oll", { "oll-2": true });
+
+    expect(readDrillPoolMode("oll")).toBe("manual");
+  });
+
+  it("leaves the mode alone when setCasesEnabled throws on malformed input", () => {
+    enableOnlyLearnedCases("oll", { "oll-1": true });
+    const badChanges = { "oll-2": "yes" } as unknown as Record<string, boolean>;
+
+    expect(() => setCasesEnabled("oll", badChanges)).toThrow();
+    expect(readDrillPoolMode("oll")).toBe("only-learned");
+  });
+
+  it("clears the mode without touching the pool", () => {
+    enableOnlyLearnedCases("oll", { "oll-1": true });
+    clearDrillPoolMode("oll");
+
+    expect(readDrillPoolMode("oll")).toBe("manual");
+    expect(readCasePool("oll")).toEqual({ "oll-1": true });
+  });
+
+  it("does nothing under the manual mode", () => {
+    mirrorLearnedCaseToPool("oll", "oll-1", true);
+
+    expect(readCasePool("oll")).toEqual({});
+  });
+
+  it("writes true under the only-learned mode", () => {
+    enableOnlyLearnedCases("oll", {});
+    mirrorLearnedCaseToPool("oll", "oll-1", true);
+
+    expect(readCasePool("oll")).toEqual({ "oll-1": true });
+    // The mirror is the one pool writer that must not clear the mode: routing it through
+    // setCaseEnabled would reset it here, and every later mark would stop reaching the pool.
+    expect(readDrillPoolMode("oll")).toBe("only-learned");
+  });
+
+  it("writes an explicit false that survives readCasePool, rather than an absent entry", () => {
+    enableOnlyLearnedCases("oll", { "oll-1": true });
+    mirrorLearnedCaseToPool("oll", "oll-1", false);
+
+    expect(readCasePool("oll")).toEqual({ "oll-1": false });
+    expect(isCaseEnabled(readCasePool("oll"), "oll-1")).toBe(false);
+    expect(readDrillPoolMode("oll")).toBe("only-learned");
+  });
+
+  it("keeps oll and pll modes independent", () => {
+    enableOnlyLearnedCases("oll", { "oll-1": true });
+
+    expect(readDrillPoolMode("oll")).toBe("only-learned");
+    expect(readDrillPoolMode("pll")).toBe("manual");
   });
 });

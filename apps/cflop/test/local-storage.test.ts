@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { readCasePool, setCaseEnabled } from "@/lib/pool-storage";
+import { enableOnlyLearnedCases, readCasePool, setCaseEnabled } from "@/lib/pool-storage";
 import { readPreviewMode, writePreviewMode } from "@/lib/preview-mode-storage";
 import { readCaseProgress, setCaseStatus } from "@/lib/progress-storage";
 
@@ -87,5 +87,12 @@ describe("pre-rebrand localStorage keys", () => {
 
     expect(window.localStorage.getItem("cflop:preview-mode:learn")).toBe("two-sided");
     expect(window.localStorage.getItem("cube-trainer:preview-mode:learn")).toBeNull();
+  });
+
+  it("writes the drill-pool mode under the current prefix only", () => {
+    enableOnlyLearnedCases("oll", {});
+
+    expect(window.localStorage.getItem("cflop:pool-mode:oll")).toBe("only-learned");
+    expect(window.localStorage.getItem("cube-trainer:pool-mode:oll")).toBeNull();
   });
 });

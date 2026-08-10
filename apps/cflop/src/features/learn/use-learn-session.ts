@@ -6,6 +6,7 @@ import { useCaseProgress } from "@/features/algorithms/use-case-progress";
 import type { FaceletCube } from "@/features/cube/model";
 import { orderedLearnCases } from "@/features/learn/learn-case-order";
 import { getCaseSetup } from "@/features/trainer/case-setup";
+import { mirrorLearnedCaseToPool } from "@/lib/pool-storage";
 
 export interface LearnSessionState {
   currentCase: AlgorithmCase | undefined;
@@ -18,7 +19,10 @@ export interface LearnSessionState {
   canGoNext: boolean;
   next: () => void;
   back: () => void;
-  /** Marks the current case known, or - for a case opened from the grid - hands it back. */
+  /**
+   * Marks the current case known, or - for a case opened from the grid - hands it back. Also
+   * the sole writer that mirrors learned status into the drill pool; see `toggleLearned`.
+   */
   toggleLearned: () => void;
 }
 
@@ -94,6 +98,9 @@ export function useLearnSession(setId: AlgorithmSetId, initialCaseId?: string): 
 
     if (!learned) {
       updateStatus(currentCase.id, "known");
+      // toggleLearned is the only progress writer today; a second one would also need this
+      // call, or the drill pool stops following learned status under the only-learned mode.
+      mirrorLearnedCaseToPool(setId, currentCase.id, true);
       // The current case drops out of `orderedCases` on the next render, so the same
       // cursor index naturally slides onto what was the next case - no explicit advance.
       return;
@@ -108,7 +115,8 @@ export function useLearnSession(setId: AlgorithmSetId, initialCaseId?: string): 
     setCursor(Math.max(index, 0));
     setPinnedCaseId(undefined);
     updateStatus(currentCase.id, "new");
-  }, [currentCase, groupedCases, learned, progress, updateStatus]);
+    mirrorLearnedCaseToPool(setId, currentCase.id, false);
+  }, [currentCase, groupedCases, learned, progress, setId, updateStatus]);
 
   return useMemo(
     () => ({
