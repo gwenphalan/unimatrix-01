@@ -16,7 +16,9 @@ export interface CaseSelectionMenuProps {
   enabledCount: number;
   groups: CaseGroupSelection[];
   learnedCount: number;
-  onEnableOnlyLearned: () => void;
+  /** Whether the only-learned mode is on for this set. */
+  onlyLearned: boolean;
+  onOnlyLearnedChange: (checked: boolean) => void;
   onSetAllEnabled: (enabled: boolean) => void;
   onSetGroupEnabled: (group: string, enabled: boolean) => void;
   totalCount: number;
@@ -30,13 +32,16 @@ export interface CaseSelectionMenuProps {
  * visible in the cards behind the menu.
  *
  * Groups show `enabled/total` rather than a tri-state box: the checkbox indicator is a single
- * tick, so a partially-enabled group would be indistinguishable from a fully-enabled one.
+ * tick, so a partially-enabled group would be indistinguishable from a fully-enabled one. Enable
+ * only learned's tick means something different from a group's - not a selection state but
+ * whether the pool is following learned status right now (see `pool-storage.ts`).
  */
 export function CaseSelectionMenu({
   enabledCount,
   groups,
   learnedCount,
-  onEnableOnlyLearned,
+  onlyLearned,
+  onOnlyLearnedChange,
   onSetAllEnabled,
   onSetGroupEnabled,
   totalCount,
@@ -68,15 +73,23 @@ export function CaseSelectionMenu({
         >
           Disable all
         </DropdownMenuItem>
-        <DropdownMenuItem
-          // With nothing learned this would silently empty the pool, which is Disable all
-          // wearing a different label.
-          disabled={learnedCount === 0}
-          onSelect={onEnableOnlyLearned}
+        <DropdownMenuCheckboxItem
+          checked={onlyLearned}
+          // Disabled only for turning the mode on with nothing learned - that would silently
+          // empty the pool, which is Disable all wearing a different label. Turning an active
+          // mode back off must stay reachable even at zero learned cases, or unlearning the
+          // last one strands a ticked box nobody can untick.
+          disabled={learnedCount === 0 && !onlyLearned}
+          onCheckedChange={(checked) => {
+            onOnlyLearnedChange(checked === true);
+          }}
+          onSelect={(event) => {
+            event.preventDefault();
+          }}
         >
           Enable only learned
           <span className="ml-auto text-muted-foreground">{learnedCount}</span>
-        </DropdownMenuItem>
+        </DropdownMenuCheckboxItem>
         <DropdownMenuSeparator />
         <DropdownMenuLabel>By category</DropdownMenuLabel>
         {groups.map(({ enabled, group, total }) => (

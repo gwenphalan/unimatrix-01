@@ -23,7 +23,8 @@ export interface DrillChooseCasesViewProps {
  */
 export function DrillChooseCasesView({ onBack, setId }: DrillChooseCasesViewProps) {
   const algorithmSet = getAlgorithmSet(setId);
-  const { pool, setEnabled, setManyEnabled } = useCasePool(setId);
+  const { clearOnlyLearned, enableOnlyLearned, onlyLearned, pool, setEnabled, setManyEnabled } =
+    useCasePool(setId);
   const { progress } = useCaseProgress(setId);
 
   const groupedCases = useMemo(() => groupCasesByGroup(algorithmSet), [algorithmSet]);
@@ -39,8 +40,8 @@ export function DrillChooseCasesView({ onBack, setId }: DrillChooseCasesViewProp
     setManyEnabled(selectionChanges(algorithmSet.cases, () => enabled));
   }
 
-  function enableOnlyLearned() {
-    setManyEnabled(
+  function applyOnlyLearned() {
+    enableOnlyLearned(
       selectionChanges(
         algorithmSet.cases,
         (algorithmCase) => progress[algorithmCase.id] === "known",
@@ -54,6 +55,15 @@ export function DrillChooseCasesView({ onBack, setId }: DrillChooseCasesViewProp
     setManyEnabled(selectionChanges(cases, () => enabled));
   }
 
+  function handleOnlyLearnedChange(checked: boolean) {
+    if (checked) {
+      applyOnlyLearned();
+      return;
+    }
+
+    clearOnlyLearned();
+  }
+
   return (
     <div className="space-y-8">
       <ToolTitleBar
@@ -62,7 +72,8 @@ export function DrillChooseCasesView({ onBack, setId }: DrillChooseCasesViewProp
             enabledCount={enabledCount}
             groups={groups}
             learnedCount={learnedCount}
-            onEnableOnlyLearned={enableOnlyLearned}
+            onlyLearned={onlyLearned}
+            onOnlyLearnedChange={handleOnlyLearnedChange}
             onSetAllEnabled={setAllEnabled}
             onSetGroupEnabled={setGroupEnabled}
             totalCount={algorithmSet.cases.length}
