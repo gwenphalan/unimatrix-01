@@ -16,8 +16,9 @@ it needs host access in addition to a service token's worth of KEK material, and
 `secret.read` audit row the route does.
 
 Transport is a bearer token over plain HTTP. TLS with a pinned self-signed server
-certificate is the decided follow-up, landing when `apps/api` first calls this service and both ends
-can be tested together — not an omission.
+certificate is the decided follow-up, landing with the PR that gives the two stacks a shared network
+and a live service token — not an omission. `apps/api` already carries the client and the boot-time
+cache as of this PR, but the two stacks share no network yet, so that PR has not happened.
 
 ## 2. Folder Structure
 - `src/app.ts`: Fastify construction, `runtimeConfig`/`db` decoration, the error handler, and the
