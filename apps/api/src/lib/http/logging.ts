@@ -12,7 +12,25 @@ const REDACTED_LOG_PATHS = [
   "res.headers['set-cookie']",
 ] as const;
 
-export function buildLoggerOptions(config: ApiRuntimeConfig): ApiLoggerOptions {
+export interface ApiLoggerStream {
+  write: (chunk: string) => void;
+}
+
+export interface BuildApiLoggerOptions {
+  /** Where records go instead of stdout. Tests pass one to assert on redaction. */
+  stream?: ApiLoggerStream;
+}
+
+/**
+ * Fastify 5.10.0 accepts `{ transport, stream }` together without throwing
+ * (measured), but which sink wins was not measured — a test asserting on
+ * `stream` should pin `NODE_ENV=test` so the development-only `transport`
+ * branch below is never added in the first place.
+ */
+export function buildLoggerOptions(
+  config: ApiRuntimeConfig,
+  options: BuildApiLoggerOptions = {},
+): ApiLoggerOptions {
   const isDevelopment = config.nodeEnv === "development";
 
   return {
@@ -33,5 +51,6 @@ export function buildLoggerOptions(config: ApiRuntimeConfig): ApiLoggerOptions {
           },
         }
       : {}),
+    ...(options.stream === undefined ? {} : { stream: options.stream }),
   };
 }
