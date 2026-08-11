@@ -20,6 +20,12 @@ token's `scopePrefix` covers it (`src/service-tokens/scope.ts`). Every denial �
 out-of-scope name, absent name — comes back the same 404, so none of the three is distinguishable
 from outside.
 
+`POST /secrets`, `POST /secrets/rotate` and `DELETE /secrets` each accept an optional
+`actorUserId` in the body and record it on the audit row they write. It is an assertion by the
+calling, service-token-authenticated caller — not a fact this service verifies — and feeds no
+authorization decision; omitting it lands `null`. `POST /secrets` reports a name that already
+exists as `409 CONFLICT`, distinct from the `400 VALIDATION_ERROR` a malformed body gets.
+
 ## Dokploy redeploy watch paths
 
 Configure the secrets Dokploy service to watch these repository paths. A

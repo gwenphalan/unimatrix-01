@@ -16,7 +16,11 @@ import { defineApiContract } from "./api-contract.js";
  * content API every other contract in this barrel describes, and are not for
  * `@unimatrix/api-client` — `client.ts` builds request URLs from a single
  * base URL, so a client method built from one of these paths would send it
- * to the wrong service.
+ * to the wrong service. `createSecretContract`, `rotateSecretContract` and
+ * `deleteSecretsContract`'s bodies each carry an optional `actorUserId` —
+ * a caller-attributed acting-user id the calling service asserts rather than
+ * proves, recorded on the audit row and never used in an authorization
+ * decision (see `secretActorUserIdSchema` in `../schemas/secrets.ts`).
  */
 export const getSecretValueContract = defineApiContract({
   method: "GET",

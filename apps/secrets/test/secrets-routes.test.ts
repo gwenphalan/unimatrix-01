@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
+import { readdirSync, readFileSync } from "node:fs";
+import { join, relative } from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
 import { eq } from "drizzle-orm";
 import type { FastifyInstance, FastifyRequest } from "fastify";
@@ -108,11 +111,11 @@ void test("create rejects a duplicate name", async () => {
 
     const second = await create();
 
-    assert.equal(second.statusCode, 400);
+    assert.equal(second.statusCode, 409);
 
     const body: { error: { code: string } } = second.json();
 
-    assert.equal(body.error.code, "VALIDATION_ERROR");
+    assert.equal(body.error.code, "CONFLICT");
   } finally {
     await app.close();
   }
@@ -390,6 +393,141 @@ void test("delete denies the whole request if any name is outside the token's sc
   }
 });
 
+/** The most recent `secret_audit_log` row for `action`, in the order rows were inserted. */
+function lastAuditRow(app: FastifyInstance, action: string) {
+  const rows = app.db
+    .select()
+    .from(secretAuditLogTable)
+    .where(eq(secretAuditLogTable.action, action))
+    .all();
+
+  return rows.at(-1);
+}
+
+void test("create, rotate and delete land actorUserId on their audit row when the caller sends one", async () => {
+  const app = createTestApp();
+
+  try {
+    await app.ready();
+
+    const token = issueToken(app, { name: "manage", scopePrefix: "github", capability: "manage" });
+
+    await app.inject({
+      method: "POST",
+      url: "/secrets",
+      headers: { authorization: `Bearer ${token}` },
+      payload: { name: "github/api-token", value: "hunter2", actorUserId: "user_2create" },
+    });
+
+    assert.equal(lastAuditRow(app, "secret.created")?.actorUserId, "user_2create");
+
+    await app.inject({
+      method: "POST",
+      url: "/secrets/rotate",
+      headers: { authorization: `Bearer ${token}` },
+      payload: { name: "github/api-token", value: "hunter3", actorUserId: "user_2rotate" },
+    });
+
+    assert.equal(lastAuditRow(app, "secret.rotated")?.actorUserId, "user_2rotate");
+
+    await app.inject({
+      method: "DELETE",
+      url: "/secrets",
+      headers: { authorization: `Bearer ${token}` },
+      payload: { names: ["github/api-token"], actorUserId: "user_2delete" },
+    });
+
+    assert.equal(lastAuditRow(app, "secret.deleted")?.actorUserId, "user_2delete");
+  } finally {
+    await app.close();
+  }
+});
+
+void test("create, rotate and delete land a null actorUserId when the caller omits one", async () => {
+  const app = createTestApp();
+
+  try {
+    await app.ready();
+
+    const token = issueToken(app, { name: "manage", scopePrefix: "github", capability: "manage" });
+
+    await app.inject({
+      method: "POST",
+      url: "/secrets",
+      headers: { authorization: `Bearer ${token}` },
+      payload: { name: "github/api-token", value: "hunter2" },
+    });
+
+    assert.equal(lastAuditRow(app, "secret.created")?.actorUserId, null);
+
+    await app.inject({
+      method: "POST",
+      url: "/secrets/rotate",
+      headers: { authorization: `Bearer ${token}` },
+      payload: { name: "github/api-token", value: "hunter3" },
+    });
+
+    assert.equal(lastAuditRow(app, "secret.rotated")?.actorUserId, null);
+
+    await app.inject({
+      method: "DELETE",
+      url: "/secrets",
+      headers: { authorization: `Bearer ${token}` },
+      payload: { names: ["github/api-token"] },
+    });
+
+    assert.equal(lastAuditRow(app, "secret.deleted")?.actorUserId, null);
+  } finally {
+    await app.close();
+  }
+});
+
+void test("create, rotate and delete reject an unknown body key even alongside a valid actorUserId", async () => {
+  const app = createTestApp();
+
+  try {
+    await app.ready();
+
+    const token = issueToken(app, { name: "manage", scopePrefix: "github", capability: "manage" });
+
+    const createResponse = await app.inject({
+      method: "POST",
+      url: "/secrets",
+      headers: { authorization: `Bearer ${token}` },
+      payload: { name: "github/api-token", value: "hunter2", actorUserId: "user_2c", extra: true },
+    });
+
+    assert.equal(createResponse.statusCode, 400);
+
+    await app.inject({
+      method: "POST",
+      url: "/secrets",
+      headers: { authorization: `Bearer ${token}` },
+      payload: { name: "github/api-token", value: "hunter2" },
+    });
+
+    const rotateResponse = await app.inject({
+      method: "POST",
+      url: "/secrets/rotate",
+      headers: { authorization: `Bearer ${token}` },
+      payload: { name: "github/api-token", value: "hunter3", actorUserId: "user_2c", extra: true },
+    });
+
+    assert.equal(rotateResponse.statusCode, 400);
+
+    const deleteResponse = await app.inject({
+      method: "DELETE",
+      url: "/secrets",
+      headers: { authorization: `Bearer ${token}` },
+      payload: { names: ["github/api-token"], actorUserId: "user_2c", extra: true },
+    });
+
+    assert.equal(deleteResponse.statusCode, 400);
+  } finally {
+    await app.close();
+  }
+});
+
 void test("create -> read round trip", async () => {
   const app = createTestApp();
 
@@ -631,4 +769,85 @@ void test("getServiceToken denies a null service token — unreachable through a
       error.message === "Route not found",
   );
   assert.equal(warnings.length, 1);
+});
+
+/** Strips line and block comments so a comment mentioning `actorUserId` cannot satisfy the check below. */
+function stripComments(source: string): string {
+  return source.replaceAll(/\/\*[\s\S]*?\*\//gu, "").replaceAll(/^[ \t]*\/\/.*$/gmu, "");
+}
+
+function listTsFiles(dir: string): string[] {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(dir, entry.name);
+    return entry.isDirectory() ? listTsFiles(path) : entry.name.endsWith(".ts") ? [path] : [];
+  });
+}
+
+/**
+ * The structural counterpart to the trust-argument comment in
+ * `src/modules/secrets/index.ts`: `actorUserId` may only appear in the four
+ * places that carry it from the request body to the audit row, and never
+ * beside a function or operator this service uses to make an authorization
+ * decision. A regression here — `actorUserId` reaching `scopeCoversName`,
+ * `requireCapability`, or an `if` guarding a denial — would defeat the whole
+ * point of treating it as an unverified assertion.
+ */
+void test("actorUserId appears only where it is carried into the audit log, never in a decision", () => {
+  const srcRoot = fileURLToPath(new URL("../src", import.meta.url));
+  const ALLOWED_RELATIVE_PATHS = new Set([
+    join("modules", "secrets", "index.ts"),
+    join("audit", "store.ts"),
+    join("db", "schema", "audit-log.ts"),
+  ]);
+  const DECISION_TOKENS = [
+    "scopeCoversName",
+    "requireCapability",
+    "denySecretAccess",
+    "getLiveSecretVersion",
+    "listExistingSecretNames",
+    "if (",
+    "capability !==",
+    "capability ===",
+  ];
+
+  let sawOccurrence = false;
+
+  for (const file of listTsFiles(srcRoot)) {
+    const relativePath = relative(srcRoot, file);
+    const lines = stripComments(readFileSync(file, "utf8")).split("\n");
+
+    for (const [index, line] of lines.entries()) {
+      if (!line.includes("actorUserId")) {
+        continue;
+      }
+
+      sawOccurrence = true;
+
+      assert.ok(
+        ALLOWED_RELATIVE_PATHS.has(relativePath),
+        `actorUserId appears outside the allowed files at ${relativePath}:${String(index + 1)}`,
+      );
+
+      for (const token of DECISION_TOKENS) {
+        assert.ok(
+          !line.includes(token),
+          `actorUserId appears alongside the decision-making token "${token}" at ${relativePath}:${String(index + 1)}`,
+        );
+      }
+    }
+  }
+
+  assert.ok(sawOccurrence, "expected to find at least one actorUserId occurrence under src/");
+});
+
+/** Self-check: if `stripComments` ever stopped working, a comment mentioning `actorUserId` would falsely trip the guard above. */
+void test("stripComments hides a commented-out actorUserId mention from the structural guard", () => {
+  const commented = 'const x = 1;\n// if (actorUserId === "admin") { deny(); }\nconst y = 2;';
+  const stripped = stripComments(commented);
+
+  assert.ok(!stripped.includes("actorUserId"));
+
+  const real = 'const { actorUserId } = request.body;\nif (actorUserId === "admin") { deny(); }';
+
+  assert.ok(stripComments(real).includes("actorUserId"));
 });

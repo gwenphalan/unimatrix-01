@@ -8,7 +8,12 @@ import { hasZodFastifySchemaValidationErrors } from "fastify-type-provider-zod";
  * the first file needing both.
  */
 export type SecretsHttpErrorCode =
-  "UNAUTHORIZED" | "VALIDATION_ERROR" | "NOT_FOUND" | "RATE_LIMITED" | "INTERNAL_ERROR";
+  | "UNAUTHORIZED"
+  | "VALIDATION_ERROR"
+  | "NOT_FOUND"
+  | "CONFLICT"
+  | "RATE_LIMITED"
+  | "INTERNAL_ERROR";
 
 /**
  * Deliberately flatter than `apps/api`'s: no `statusCode` inside the body, no

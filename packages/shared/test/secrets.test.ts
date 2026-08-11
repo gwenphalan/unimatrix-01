@@ -1,12 +1,16 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  adminCreateSecretBodySchema,
+  adminDeleteSecretBodySchema,
+  adminRotateSecretBodySchema,
   createSecretBodySchema,
   deleteSecretsBodySchema,
   getSecretQuerySchema,
   listSecretsQuerySchema,
   listSecretsResponseSchema,
   rotateSecretBodySchema,
+  secretActorUserIdSchema,
   secretMaskedPrefixSchema,
   secretMetadataSchema,
   secretNameSchema,
@@ -103,6 +107,52 @@ describe("secretMetadataSchema", () => {
   });
 });
 
+describe("secretActorUserIdSchema", () => {
+  it("accepts a Clerk-shaped user id", () => {
+    expect(secretActorUserIdSchema.safeParse("user_2cccccccccccccccccccccccccc").success).toBe(
+      true,
+    );
+  });
+
+  it("rejects an empty id", () => {
+    expect(secretActorUserIdSchema.safeParse("").success).toBe(false);
+  });
+
+  it("rejects an id over the max length", () => {
+    expect(secretActorUserIdSchema.safeParse("a".repeat(129)).success).toBe(false);
+  });
+
+  it("rejects a disallowed character", () => {
+    expect(secretActorUserIdSchema.safeParse("user 2c").success).toBe(false);
+  });
+});
+
+describe("adminCreateSecretBodySchema / adminRotateSecretBodySchema", () => {
+  it("accept a minimal valid body", () => {
+    const body = { name: "github/api-token", value: "hunter2" };
+    expect(adminCreateSecretBodySchema.safeParse(body).success).toBe(true);
+    expect(adminRotateSecretBodySchema.safeParse(body).success).toBe(true);
+  });
+
+  it("reject an actorUserId key — the browser-facing bodies carry no session assertion", () => {
+    const body = { name: "github/api-token", value: "hunter2", actorUserId: "user_2c" };
+    expect(adminCreateSecretBodySchema.safeParse(body).success).toBe(false);
+    expect(adminRotateSecretBodySchema.safeParse(body).success).toBe(false);
+  });
+});
+
+describe("adminDeleteSecretBodySchema", () => {
+  it("accepts a single name", () => {
+    expect(adminDeleteSecretBodySchema.safeParse({ name: "github/api-token" }).success).toBe(true);
+  });
+
+  it("rejects a names array — the browser-facing delete is narrowed to one name at a time", () => {
+    expect(adminDeleteSecretBodySchema.safeParse({ names: ["github/api-token"] }).success).toBe(
+      false,
+    );
+  });
+});
+
 describe("createSecretBodySchema / rotateSecretBodySchema", () => {
   it("accept a minimal valid body", () => {
     const body = { name: "github/api-token", value: "hunter2" };
@@ -110,8 +160,25 @@ describe("createSecretBodySchema / rotateSecretBodySchema", () => {
     expect(rotateSecretBodySchema.safeParse(body).success).toBe(true);
   });
 
+  it("accept an optional actorUserId", () => {
+    const body = { name: "github/api-token", value: "hunter2", actorUserId: "user_2c" };
+    expect(createSecretBodySchema.safeParse(body).success).toBe(true);
+    expect(rotateSecretBodySchema.safeParse(body).success).toBe(true);
+  });
+
   it("reject an unknown key, proving strictObject", () => {
     const body = { name: "github/api-token", value: "hunter2", extra: true };
+    expect(createSecretBodySchema.safeParse(body).success).toBe(false);
+    expect(rotateSecretBodySchema.safeParse(body).success).toBe(false);
+  });
+
+  it("reject an unknown key even alongside a valid actorUserId — pins that `.extend()` on a strictObject stays strict rather than reverting to a plain object on a future zod upgrade", () => {
+    const body = {
+      name: "github/api-token",
+      value: "hunter2",
+      actorUserId: "user_2c",
+      extra: true,
+    };
     expect(createSecretBodySchema.safeParse(body).success).toBe(false);
     expect(rotateSecretBodySchema.safeParse(body).success).toBe(false);
   });
@@ -183,6 +250,12 @@ describe("deleteSecretsBodySchema", () => {
     expect(deleteSecretsBodySchema.safeParse({ names: ["a"] }).success).toBe(true);
   });
 
+  it("accepts an optional actorUserId", () => {
+    expect(
+      deleteSecretsBodySchema.safeParse({ names: ["a"], actorUserId: "user_2c" }).success,
+    ).toBe(true);
+  });
+
   it("rejects an empty names array", () => {
     expect(deleteSecretsBodySchema.safeParse({ names: [] }).success).toBe(false);
   });
@@ -191,5 +264,12 @@ describe("deleteSecretsBodySchema", () => {
     const names = Array.from({ length: 101 }, (_unused, index) => `name-${index}`);
     expect(deleteSecretsBodySchema.safeParse({ names }).success).toBe(false);
     expect(deleteSecretsBodySchema.safeParse({ names: names.slice(0, 100) }).success).toBe(true);
+  });
+
+  it("rejects an unknown key even alongside a valid actorUserId, pinning that `.extend()` preserves strictObject strictness", () => {
+    expect(
+      deleteSecretsBodySchema.safeParse({ names: ["a"], actorUserId: "user_2c", extra: true })
+        .success,
+    ).toBe(false);
   });
 });

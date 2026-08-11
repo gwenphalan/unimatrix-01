@@ -105,6 +105,16 @@ cache as of this PR, but the two stacks share no network yet, so that PR has not
 - **The audit table (`secret_audit_log`) has no foreign keys, deliberately.** The client runs
   `foreign_keys = ON` (`src/db/client.ts`); an FK to `secrets(name)` with `onDelete: "cascade"` would
   erase the audit trail of exactly the deletion it exists to record.
+- **Create, rotate and delete accept an optional `actorUserId` and land it on the audit row they
+  write.** It is an assertion by the authenticated service-token caller, not a fact this service
+  verifies, and it feeds no authorization decision anywhere in `src/modules/secrets/index.ts` —
+  every guard still reads only the verified token
+  (`test/secrets-routes.test.ts`'s structural guard pins this). Omitting it lands `null`, which is
+  why every existing caller, including the host-local CLIs, keeps working unchanged.
+- **A duplicate name on create is a 409 `CONFLICT`, not a 400.** A zod body-validation failure is
+  also a 400 with code `VALIDATION_ERROR`, and `SecretsClientError` (`packages/secrets/src/client.ts`)
+  carries only `status` — a 400 here would be indistinguishable from a malformed request by status
+  alone.
 - **`secret_versions.id` must never contain `.`.** It is `SecretContext.versionId`
   (`packages/secrets/src/envelope.ts`), and `assertValidContext` rejects a dot because it is the
   envelope's field separator — generate a UUID or ULID, never a composite `name.n`.

@@ -94,16 +94,63 @@ export const listSecretsQuerySchema = z.strictObject({});
 
 export type ListSecretsQuery = z.output<typeof listSecretsQuerySchema>;
 
-export const createSecretBodySchema = z.strictObject({
+/**
+ * The id of the signed-in user an admin surface attributes a mutation to.
+ * The character class mirrors this repo's own Clerk fixtures
+ * (`apps/api/test/integration-routes.test.ts:47`, e.g.
+ * `user_2cccccccccccccccccccccccccc`). Clerk's own documentation was not
+ * checked, so a future id format outside `[A-Za-z0-9_-]` would be rejected
+ * here before it reached the store.
+ */
+export const secretActorUserIdSchema = z
+  .string()
+  .min(1)
+  .max(128)
+  .regex(/^[A-Za-z0-9_-]+$/);
+
+export type SecretActorUserId = z.output<typeof secretActorUserIdSchema>;
+
+/** The browser-facing create body — no `actorUserId`; the admin app never sends its own. */
+export const adminCreateSecretBodySchema = z.strictObject({
   name: secretNameSchema,
   value: secretValueSchema,
 });
 
-export type CreateSecretBody = z.output<typeof createSecretBodySchema>;
+export type AdminCreateSecretBody = z.output<typeof adminCreateSecretBodySchema>;
 
-export const rotateSecretBodySchema = z.strictObject({
+/** The browser-facing rotate body — no `actorUserId`; the admin app never sends its own. */
+export const adminRotateSecretBodySchema = z.strictObject({
   name: secretNameSchema,
   value: secretValueSchema,
+});
+
+export type AdminRotateSecretBody = z.output<typeof adminRotateSecretBodySchema>;
+
+/**
+ * A single name, not an array — narrower than the store's own bulk
+ * `deleteSecretsBodySchema` on purpose, so one compromised admin session
+ * cannot destroy up to 100 sealed credentials in a single call.
+ */
+export const adminDeleteSecretBodySchema = z.strictObject({
+  name: secretNameSchema,
+});
+
+export type AdminDeleteSecretBody = z.output<typeof adminDeleteSecretBodySchema>;
+
+/**
+ * The store-facing create body. `actorUserId` is optional: a host-local
+ * script holding a manage token has no session to attribute a mutation to,
+ * and requiring the field would break every existing caller for no gain.
+ */
+export const createSecretBodySchema = adminCreateSecretBodySchema.extend({
+  actorUserId: secretActorUserIdSchema.optional(),
+});
+
+export type CreateSecretBody = z.output<typeof createSecretBodySchema>;
+
+/** The store-facing rotate body — same optionality reasoning as `createSecretBodySchema`. */
+export const rotateSecretBodySchema = adminRotateSecretBodySchema.extend({
+  actorUserId: secretActorUserIdSchema.optional(),
 });
 
 export type RotateSecretBody = z.output<typeof rotateSecretBodySchema>;
@@ -111,11 +158,16 @@ export type RotateSecretBody = z.output<typeof rotateSecretBodySchema>;
 /**
  * Cap mirrors `postIdsSchema` in `./content.ts`: bounded so one request
  * cannot sweep an unbounded number of rows, non-empty so a no-op selection
- * is a validation error rather than a silent success.
+ * is a validation error rather than a silent success. `actorUserId` is
+ * optional for the same reason as the other two mutation bodies above.
  */
-export const deleteSecretsBodySchema = z.strictObject({
-  names: z.array(secretNameSchema).min(1).max(100),
-});
+export const deleteSecretsBodySchema = z
+  .strictObject({
+    names: z.array(secretNameSchema).min(1).max(100),
+  })
+  .extend({
+    actorUserId: secretActorUserIdSchema.optional(),
+  });
 
 export type DeleteSecretsBody = z.output<typeof deleteSecretsBodySchema>;
 
