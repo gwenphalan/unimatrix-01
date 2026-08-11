@@ -243,7 +243,7 @@ runbook:
    `SECRETS_KEKS` (new entry first, comma-separated), keeping the old entry,
    and redeploy. **Wait for the container to be recreated before step 4** — the
    deploy is queued rather than applied, and the old ring stays live for minutes
-   afterwards; see "A deploy is queued, not applied".
+   afterwards; see "A deploy is queued, not applied" above.
 4. `docker exec <container> node dist/cli/kek.js rotate --to-version <n>` —
    re-seals every `secret_versions` row, live and superseded, under version
    `<n>`. Refuses to start if `<n>` is not the ring's actual active version
@@ -392,13 +392,15 @@ input, update its README and Dokploy configuration in the same change.
 
 ## A deploy is queued, not applied
 
-`POST /api/compose.deploy` answers `200 {"success":true,"message":"Deployment
-queued"}`, and nothing in that response says when the new configuration takes
-effect. Measured on the `secrets` compose service on 2026-08-10: the container
-kept its previous environment for roughly seven minutes after the 200, while
-`docker ps` reported it `Up N minutes (healthy)` throughout. That is one
-observation rather than a bound — treat the lag as minutes of unpredictable
-length, not as a figure to code a timeout against.
+A Dokploy deploy is queued rather than applied, however it was triggered. Over
+the API, `POST /api/compose.deploy` answers
+`200 {"success":true,"message":"Deployment queued"}` and nothing in that response
+says when the new configuration takes effect; a redeploy clicked in the UI gives
+no completion signal at all. Measured on the `secrets` compose service on
+2026-08-10: the container kept its previous environment for roughly seven minutes
+after the 200, while `docker ps` reported it `Up N minutes (healthy)` throughout.
+That is one observation rather than a bound — treat the lag as minutes of
+unpredictable length, not as a figure to code a timeout against.
 
 The signal that a deploy landed is that the container was **recreated**:
 
@@ -406,19 +408,24 @@ The signal that a deploy landed is that the container was **recreated**:
 docker ps --filter name=<service> --format '{{.CreatedAt}}'
 ```
 
-Read it before the deploy and again after; the value changing is the
-confirmation. A 200 is not, and neither is a healthy status — the old container
-goes on reporting healthy while it runs the configuration you believe you
-replaced.
+Read it before the deploy and again after; the value changing tells you a deploy
+landed, though not which configuration it carried. A restart does not move it, so
+a crash loop cannot fake the signal. An empty result means the container is
+between the old one and the new one — `docker ps` lists running containers only —
+and looks identical to a mistyped service name, so confirm the filter matches
+before the deploy rather than after.
 
-This binds on any runbook that edits an environment variable in Dokploy's UI and
-then acts on the new value. The KEK rotation runbook under "Secrets service" is
+A 200 is not the signal, and neither is a healthy status: the old container goes
+on reporting healthy while it runs the configuration you believe you replaced.
+
+This binds on any runbook that edits an environment variable in Dokploy and then
+acts on the new value. The KEK rotation runbook under "Secrets service" below is
 the worst case, because acting inside the window re-seals rows under the very key
-that is about to be retired, and then deletes the key still holding them. That
-particular hole is closed by `kek rotate --to-version <n>` and
-`kek verify --expect-active <n>`, which both refuse when the ring is not the one
-named — but the guard lives in those two CLIs, while the lag belongs to Dokploy
-and applies to everything else that redeploys to change a value.
+that is about to be retired, and then deletes the key still holding them. Its
+steps 4 and 5 refuse outright when the ring is not the one they were told to
+expect, which closes that particular hole — but the guard lives in those two
+CLIs, while the lag belongs to Dokploy and reaches everything else that redeploys
+to change a value.
 
 ## Pull request preview deployments
 
