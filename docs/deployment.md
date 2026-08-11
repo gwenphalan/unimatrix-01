@@ -241,7 +241,9 @@ runbook:
    this step: `generate` says so on stderr and still prints a usable entry.
 3. In Dokploy's environment-variable UI, prepend the new entry to
    `SECRETS_KEKS` (new entry first, comma-separated), keeping the old entry,
-   and redeploy.
+   and redeploy. **Wait for the container to be recreated before step 4** — the
+   deploy is queued rather than applied, and the old ring stays live for minutes
+   afterwards; see "A deploy is queued, not applied".
 4. `docker exec <container> node dist/cli/kek.js rotate --to-version <n>` —
    re-seals every `secret_versions` row, live and superseded, under version
    `<n>`. Refuses to start if `<n>` is not the ring's actual active version
@@ -385,6 +387,36 @@ The lists include the app directory, directly imported workspace packages,
 shared root pnpm manifests, and the service-specific Compose file. When an app
 adds a workspace dependency, new bundled content, or another Docker build
 input, update its README and Dokploy configuration in the same change.
+
+## A deploy is queued, not applied
+
+`POST /api/compose.deploy` answers `200 {"success":true,"message":"Deployment
+queued"}`, and nothing in that response says when the new configuration takes
+effect. Measured on the `secrets` compose service on 2026-08-10: the container
+kept its previous environment for roughly seven minutes after the 200, while
+`docker ps` reported it `Up N minutes (healthy)` throughout. That is one
+observation rather than a bound — treat the lag as minutes of unpredictable
+length, not as a figure to code a timeout against.
+
+The signal that a deploy landed is that the container was **recreated**:
+
+```bash
+docker ps --filter name=<service> --format '{{.CreatedAt}}'
+```
+
+Read it before the deploy and again after; the value changing is the
+confirmation. A 200 is not, and neither is a healthy status — the old container
+goes on reporting healthy while it runs the configuration you believe you
+replaced.
+
+This binds on any runbook that edits an environment variable in Dokploy's UI and
+then acts on the new value. The KEK rotation runbook under "Secrets service" is
+the worst case, because acting inside the window re-seals rows under the very key
+that is about to be retired, and then deletes the key still holding them. That
+particular hole is closed by `kek rotate --to-version <n>` and
+`kek verify --expect-active <n>`, which both refuse when the ring is not the one
+named — but the guard lives in those two CLIs, while the lag belongs to Dokploy
+and applies to everything else that redeploys to change a value.
 
 ## Pull request preview deployments
 
