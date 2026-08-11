@@ -128,7 +128,16 @@ export const secretsModule: FastifyPluginAsync = (app) => {
       response: { 200: createSecretContract.responseSchema },
     },
     handler: (request) => {
-      const { name, value } = request.body;
+      // `actorUserId`, when present, is an assertion by this authenticated
+      // service caller about who asked for the mutation — not a verified
+      // fact. It participates in **no** authorization decision anywhere in
+      // this service: every decision below (`requireCapability`,
+      // `scopeCoversName`) reads only the verified service token, and
+      // `actorTokenId` remains the server-derived record of *what* acted.
+      // `actorUserId` only refines that to *who asked*, and carries exactly
+      // as much trust as the token that submitted it. If this value ever
+      // becomes an input to a decision, this design is wrong.
+      const { name, value, actorUserId } = request.body;
       const token = getServiceToken(request);
 
       if (!scopeCoversName(token.scopePrefix, name)) {
@@ -160,6 +169,7 @@ export const secretsModule: FastifyPluginAsync = (app) => {
           actorKind: "service-token",
           outcome: "success",
           actorTokenId: token.id,
+          ...(actorUserId === undefined ? {} : { actorUserId }),
           secretName: name,
           secretVersionId: versionId,
         });
@@ -178,7 +188,7 @@ export const secretsModule: FastifyPluginAsync = (app) => {
       response: { 200: rotateSecretContract.responseSchema },
     },
     handler: (request) => {
-      const { name, value } = request.body;
+      const { name, value, actorUserId } = request.body;
       const token = getServiceToken(request);
 
       if (!scopeCoversName(token.scopePrefix, name)) {
@@ -206,6 +216,7 @@ export const secretsModule: FastifyPluginAsync = (app) => {
           actorKind: "service-token",
           outcome: "success",
           actorTokenId: token.id,
+          ...(actorUserId === undefined ? {} : { actorUserId }),
           secretName: name,
           secretVersionId: versionId,
         });
@@ -224,7 +235,7 @@ export const secretsModule: FastifyPluginAsync = (app) => {
       response: { 200: deleteSecretsContract.responseSchema },
     },
     handler: (request) => {
-      const { names } = request.body;
+      const { names, actorUserId } = request.body;
       const token = getServiceToken(request);
 
       for (const name of names) {
@@ -254,6 +265,7 @@ export const secretsModule: FastifyPluginAsync = (app) => {
             actorKind: "service-token",
             outcome: "success",
             actorTokenId: token.id,
+            ...(actorUserId === undefined ? {} : { actorUserId }),
             secretName: name,
           });
         }
