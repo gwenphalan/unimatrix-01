@@ -43,7 +43,7 @@
     "jsdom": "^29.1.1",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
-    "shadcn": "^4.15.0",
+    "shadcn": "^4.16.0",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10"
   },
@@ -53,7 +53,7 @@
     "@codemirror/lang-markdown": "^6.5.1",
     "@codemirror/language": "^6.12.4",
     "@codemirror/state": "^6.7.1",
-    "@codemirror/view": "^6.43.6",
+    "@codemirror/view": "^6.43.7",
     "@fontsource-variable/geist-mono": "^5.2.7",
     "@remixicon/react": "^4.9.0",
     "class-variance-authority": "^0.7.1",
