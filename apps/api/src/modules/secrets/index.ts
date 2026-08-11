@@ -1,5 +1,5 @@
 import fastifyRateLimit from "@fastify/rate-limit";
-import { getAuthUserId, requireAdminSection } from "@unimatrix/auth/server";
+import { requireAdminSection } from "@unimatrix/auth/server";
 import { SecretsClientError } from "@unimatrix/secrets/client";
 import {
   adminCreateSecretBodySchema,
@@ -13,30 +13,9 @@ import {
 import type { FastifyPluginAsync, FastifyRequest } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 
+import { getRequiredAuthUserId } from "../../lib/http/auth.js";
 import { ApiError } from "../../lib/http/errors.js";
 import { SECRETS_ADMIN_RATE_LIMIT_OPTIONS } from "../../plugins/rate-limit.js";
-
-/**
- * Mirrors `getRequiredAuthUserId` in `../user-data/index.ts`: every route in
- * this module runs behind `requireAdminSection("secrets")`, so a `null`
- * result here is the defensive case, not a normal control-flow path. Never
- * read the acting user from `request.body` instead — the admin body schemas
- * are `strictObject` and carry no such field, so a browser that sends one is
- * rejected by schema validation before a handler ever runs.
- */
-function getRequiredAuthUserId(request: FastifyRequest): string {
-  const userId = getAuthUserId(request);
-
-  if (userId === null) {
-    throw new ApiError({
-      statusCode: 401,
-      code: "UNAUTHORIZED",
-      message: "Authentication is required to access this resource.",
-    });
-  }
-
-  return userId;
-}
 
 /**
  * Maps a rejection from `app.secretsManagement` to the `ApiError` this
@@ -140,7 +119,10 @@ export const secretsAdminModule: FastifyPluginAsync = async (app) => {
       try {
         return await app.secretsManagement.listSecrets();
       } catch (error) {
-        toApiError(request, error, "No secret with that name is reachable.");
+        // This route names no secret, so the store has nothing to report as
+        // absent — a 404 here would mean the store's own route is gone, not
+        // that something was not found. The message says only what is known.
+        toApiError(request, error, "The secrets store did not answer this request.");
       }
     },
   });

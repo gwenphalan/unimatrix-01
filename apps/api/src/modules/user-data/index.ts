@@ -1,6 +1,6 @@
 import fastifyMultipart from "@fastify/multipart";
 import fastifyRateLimit from "@fastify/rate-limit";
-import { getAuthUserId, requireAuth } from "@unimatrix/auth/server";
+import { requireAuth } from "@unimatrix/auth/server";
 import {
   dataKeySchema,
   dataNamespaceSchema,
@@ -19,9 +19,10 @@ import {
   userFileMetadataSchema,
   type UserFileMetadata,
 } from "@unimatrix/shared";
-import type { FastifyPluginAsync, FastifyRequest } from "fastify";
+import type { FastifyPluginAsync } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 
+import { getRequiredAuthUserId } from "../../lib/http/auth.js";
 import { resolveContentDisposition } from "../../lib/http/content-types.js";
 import { ApiError } from "../../lib/http/errors.js";
 import {
@@ -39,27 +40,6 @@ import {
   putDocument,
   putFile,
 } from "./store.js";
-
-/**
- * Every route in this module is gated by `requireAuth()`, and the acting
- * user is always the verified Clerk session's user id — NEVER a value
- * supplied by client input. `requireAuth()` already rejects requests with
- * no session before a handler runs, so a `null` result here is an
- * unexpected/defensive case rather than a normal control-flow path.
- */
-function getRequiredAuthUserId(request: FastifyRequest): string {
-  const userId = getAuthUserId(request);
-
-  if (userId === null) {
-    throw new ApiError({
-      statusCode: 401,
-      code: "UNAUTHORIZED",
-      message: "Authentication is required to access this resource.",
-    });
-  }
-
-  return userId;
-}
 
 export const userDataModule: FastifyPluginAsync = async (app) => {
   const { clerk } = app.runtimeConfig;
