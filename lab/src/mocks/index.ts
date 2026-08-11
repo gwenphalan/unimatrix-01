@@ -17,9 +17,10 @@ export { createLabAssetUploader, LAB_ASSET_ACCEPT, LabAssetUploadError } from ".
 
 export { mockAssets, mockDocuments, mockFiles, mockPosts } from "./fixtures.js";
 
-export type { LabSession, MockAccountControlProps } from "./session.js";
+export type { AdminSection, LabSession, MockAccountControlProps } from "./session.js";
 export {
   labAdminSession,
+  labSessionCanAccessAdminSection,
   labSessionHasPermission,
   labSignedOutSession,
   labViewerSession,
