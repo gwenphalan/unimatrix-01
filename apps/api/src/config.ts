@@ -61,6 +61,15 @@ export interface ApiSecretsStoreConfig {
   baseUrl: string;
   serviceToken: string;
   integrationNames: readonly string[];
+  /**
+   * A `manage`-capability token, present only when `SECRETS_MANAGE_TOKEN` is
+   * set. `null` when absent — the admin secrets routes are unregistered in
+   * that case, the same "absent rather than broken" shape
+   * `integrationsModule` uses for a missing `secretsStore`. See
+   * {@link parseSecretsStoreConfig} for why this can never equal
+   * `serviceToken`.
+   */
+  manageToken: string | null;
 }
 
 export interface ApiRuntimeConfig {
@@ -95,6 +104,7 @@ export interface ApiRuntimeEnv {
   CLERK_JWT_KEY?: string | undefined;
   SECRETS_BASE_URL?: string | undefined;
   SECRETS_SERVICE_TOKEN?: string | undefined;
+  SECRETS_MANAGE_TOKEN?: string | undefined;
   SECRETS_INTEGRATION_NAMES?: string | undefined;
   MAX_UPLOAD_BYTES?: string | undefined;
   MAX_USER_STORAGE_BYTES?: string | undefined;
@@ -612,27 +622,54 @@ function parseIntegrationNames(value: string | undefined): readonly string[] {
 }
 
 /**
- * Parses `SECRETS_BASE_URL`/`SECRETS_SERVICE_TOKEN`/`SECRETS_INTEGRATION_NAMES`
- * into an {@link ApiSecretsStoreConfig}, or `null` when the store is not
- * configured. Unlike {@link parseClerkConfig}, neither var is required in any
- * environment — no integration is configured yet — but the pair is still
- * all-or-none: a lone `SECRETS_BASE_URL` or `SECRETS_SERVICE_TOKEN` is a
- * misconfiguration, and a non-empty `SECRETS_INTEGRATION_NAMES` with the store
- * unconfigured names credentials that can never be fetched.
+ * Parses `SECRETS_BASE_URL`/`SECRETS_SERVICE_TOKEN`/`SECRETS_MANAGE_TOKEN`/
+ * `SECRETS_INTEGRATION_NAMES` into an {@link ApiSecretsStoreConfig}, or `null`
+ * when the store is not configured. Unlike {@link parseClerkConfig}, neither
+ * of the first two vars is required in any environment — no integration is
+ * configured yet — but the pair is still all-or-none: a lone
+ * `SECRETS_BASE_URL` or `SECRETS_SERVICE_TOKEN` is a misconfiguration, and a
+ * non-empty `SECRETS_INTEGRATION_NAMES` with the store unconfigured names
+ * credentials that can never be fetched. `SECRETS_MANAGE_TOKEN` follows the
+ * same all-or-none shape as `SECRETS_INTEGRATION_NAMES`: it may only be set
+ * once the store itself is configured.
+ *
+ * The one rule that matters most here is `manageToken !== serviceToken`.
+ * `apps/secrets` answers a wrong-capability caller with a byte-identical 404
+ * to "not found" (`denySecretAccess`) — there is nothing in that response
+ * that distinguishes "this name does not exist" from "this token cannot do
+ * that". Pasting the read token into both env vars would boot cleanly, the
+ * admin console would render, `GET /secrets/admin` would list nothing (the
+ * read token cannot reach the store's list route), and every create/rotate/
+ * delete would read as "not found" — nothing anywhere would say why. Failing
+ * at boot, in this loader, is the only point where the mistake is cheap to
+ * catch.
  */
 function parseSecretsStoreConfig(env: ApiRuntimeEnv): ApiSecretsStoreConfig | null {
   const baseUrl = parseSecretsBaseUrl(env.SECRETS_BASE_URL);
   const serviceToken = readOptionalTrimmedValue("SECRETS_SERVICE_TOKEN", env.SECRETS_SERVICE_TOKEN);
+  const manageToken = readOptionalTrimmedValue("SECRETS_MANAGE_TOKEN", env.SECRETS_MANAGE_TOKEN);
   const integrationNames = parseIntegrationNames(env.SECRETS_INTEGRATION_NAMES);
 
   if (baseUrl !== undefined && serviceToken !== undefined) {
-    return { baseUrl, serviceToken, integrationNames };
+    if (manageToken === serviceToken) {
+      throw createApiConfigError(
+        "SECRETS_MANAGE_TOKEN must not equal SECRETS_SERVICE_TOKEN — the store answers a wrong-capability caller with the same 404 it uses for a missing name, so a shared token boots cleanly and fails silently.",
+      );
+    }
+
+    return { baseUrl, serviceToken, integrationNames, manageToken: manageToken ?? null };
   }
 
   if (baseUrl === undefined && serviceToken === undefined) {
     if (integrationNames.length > 0) {
       throw createApiConfigError(
         "SECRETS_INTEGRATION_NAMES must not be set unless SECRETS_BASE_URL and SECRETS_SERVICE_TOKEN are both configured.",
+      );
+    }
+
+    if (manageToken !== undefined) {
+      throw createApiConfigError(
+        "SECRETS_MANAGE_TOKEN must not be set unless SECRETS_BASE_URL and SECRETS_SERVICE_TOKEN are both configured.",
       );
     }
 
