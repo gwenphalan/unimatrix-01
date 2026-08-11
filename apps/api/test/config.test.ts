@@ -37,6 +37,7 @@ void test("loadApiRuntimeConfig uses documented defaults", () => {
       ],
     },
     clerk: null,
+    secretsStore: null,
     maxUploadBytes: 5_242_880,
     maxUserStorageBytes: 52_428_800,
     runDatabaseMigrations: false,
@@ -92,6 +93,7 @@ void test("loadApiRuntimeConfig trims and validates explicit values", () => {
         publishableKey: "pk_test_123",
         jwtKey: "jwt_key_123",
       },
+      secretsStore: null,
       maxUploadBytes: 5_242_880,
       maxUserStorageBytes: 52_428_800,
       runDatabaseMigrations: false,
@@ -406,5 +408,100 @@ void test("loadApiRuntimeConfig rejects a blank MAX_USER_STORAGE_BYTES", () => {
   assert.throws(
     () => loadApiRuntimeConfig({ MAX_USER_STORAGE_BYTES: "   " }),
     /MAX_USER_STORAGE_BYTES must not be empty when it is set/,
+  );
+});
+
+void test("loadApiRuntimeConfig defaults secretsStore to null when both vars are absent, including in production", () => {
+  assert.equal(loadApiRuntimeConfig({ NODE_ENV: "development" }).secretsStore, null);
+  assert.equal(
+    loadApiRuntimeConfig({
+      NODE_ENV: "production",
+      CLERK_SECRET_KEY: "sk_test_123",
+      CLERK_PUBLISHABLE_KEY: "pk_test_123",
+      CLERK_JWT_KEY: "jwt_key_123",
+    }).secretsStore,
+    null,
+  );
+});
+
+void test("loadApiRuntimeConfig populates secretsStore when both vars are present", () => {
+  assert.deepEqual(
+    loadApiRuntimeConfig({
+      SECRETS_BASE_URL: " http://secrets.internal:3002 ",
+      SECRETS_SERVICE_TOKEN: " svc_test_token ",
+    }).secretsStore,
+    {
+      baseUrl: "http://secrets.internal:3002",
+      serviceToken: "svc_test_token",
+      integrationNames: [],
+    },
+  );
+});
+
+void test("loadApiRuntimeConfig throws when only SECRETS_BASE_URL is set", () => {
+  assert.throws(
+    () => loadApiRuntimeConfig({ SECRETS_BASE_URL: "http://secrets.internal:3002" }),
+    /SECRETS_BASE_URL and SECRETS_SERVICE_TOKEN must be set together/,
+  );
+});
+
+void test("loadApiRuntimeConfig throws when only SECRETS_SERVICE_TOKEN is set", () => {
+  assert.throws(
+    () => loadApiRuntimeConfig({ SECRETS_SERVICE_TOKEN: "svc_test_token" }),
+    /SECRETS_BASE_URL and SECRETS_SERVICE_TOKEN must be set together/,
+  );
+});
+
+void test("loadApiRuntimeConfig rejects a blank SECRETS_BASE_URL", () => {
+  assert.throws(
+    () => loadApiRuntimeConfig({ SECRETS_BASE_URL: "   " }),
+    /SECRETS_BASE_URL must not be empty when it is set/,
+  );
+});
+
+void test("loadApiRuntimeConfig rejects a blank SECRETS_SERVICE_TOKEN", () => {
+  assert.throws(
+    () =>
+      loadApiRuntimeConfig({
+        SECRETS_BASE_URL: "http://secrets.internal:3002",
+        SECRETS_SERVICE_TOKEN: "   ",
+      }),
+    /SECRETS_SERVICE_TOKEN must not be empty when it is set/,
+  );
+});
+
+void test("loadApiRuntimeConfig rejects an unparsable SECRETS_BASE_URL", () => {
+  assert.throws(
+    () => loadApiRuntimeConfig({ SECRETS_BASE_URL: "not-a-url" }),
+    /SECRETS_BASE_URL must be a valid http:\/\/ or https:\/\/ URL/,
+  );
+});
+
+void test("loadApiRuntimeConfig rejects a non-http(s) SECRETS_BASE_URL", () => {
+  assert.throws(
+    () => loadApiRuntimeConfig({ SECRETS_BASE_URL: "ftp://secrets.internal" }),
+    /SECRETS_BASE_URL must use http:\/\/ or https:\/\//,
+  );
+});
+
+void test("loadApiRuntimeConfig parses and trims SECRETS_INTEGRATION_NAMES, dropping empty entries", () => {
+  assert.deepEqual(
+    loadApiRuntimeConfig({
+      SECRETS_BASE_URL: "http://secrets.internal:3002",
+      SECRETS_SERVICE_TOKEN: "svc_test_token",
+      SECRETS_INTEGRATION_NAMES: " github/token ,, discord/webhook ,",
+    }).secretsStore,
+    {
+      baseUrl: "http://secrets.internal:3002",
+      serviceToken: "svc_test_token",
+      integrationNames: ["github/token", "discord/webhook"],
+    },
+  );
+});
+
+void test("loadApiRuntimeConfig throws when SECRETS_INTEGRATION_NAMES is set without a configured store", () => {
+  assert.throws(
+    () => loadApiRuntimeConfig({ SECRETS_INTEGRATION_NAMES: "github/token" }),
+    /SECRETS_INTEGRATION_NAMES must not be set unless SECRETS_BASE_URL and SECRETS_SERVICE_TOKEN are both configured/,
   );
 });

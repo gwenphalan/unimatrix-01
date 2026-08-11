@@ -170,6 +170,9 @@ importers:
       '@unimatrix/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@unimatrix/secrets':
+        specifier: workspace:*
+        version: link:../../packages/secrets
       '@unimatrix/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -938,6 +941,10 @@ importers:
         version: 6.0.3
 
   packages/secrets:
+    dependencies:
+      '@unimatrix/shared':
+        specifier: workspace:*
+        version: link:../shared
     devDependencies:
       '@types/node':
         specifier: ^24.13.3

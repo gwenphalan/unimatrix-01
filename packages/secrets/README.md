@@ -1,6 +1,6 @@
 # @unimatrix/secrets
 
-Pure, I/O-free AES-256-GCM value sealing under a versioned key ring, plus redaction. See `AGENTS.md` for the package's behaviors and boundaries.
+Two entry points. `.` is pure, I/O-free AES-256-GCM value sealing under a versioned key ring, plus redaction. `./client` is an HTTP client for the secrets service's scoped read route (`apps/secrets`), consumed by `apps/api`. See `AGENTS.md` for the package's behaviors and boundaries.
 
 ## `SECRETS_KEKS` format
 

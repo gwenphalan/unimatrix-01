@@ -292,12 +292,14 @@ shared network explicitly. It is off here and does not need turning on, because
 a domainless stack is not attached in the first place. Unverified: whether
 adding a domain, or a later redeploy, changes this stack's attachment.
 
-**A cross-stack client needs a network arranged for it.** `apps/api` is a
-separate Compose stack and shares no network with this one, so it cannot reach
-the store as things stand. The item that makes it a client is where the two get
-an explicitly declared shared network — and adding one puts the store back
-within reach of whatever else sits on that network, which is the trade the
-service token exists to cover.
+**A cross-stack client needs a network arranged for it.** `apps/api` now has
+the client and the boot-time cache (`SECRETS_BASE_URL`/`SECRETS_SERVICE_TOKEN`/
+`SECRETS_INTEGRATION_NAMES`, all-or-none), but `apps/api` is still a separate
+Compose stack that shares no network with this one, so it cannot reach the
+store in production yet — the feature is code-complete and off. The item that
+makes it a client is where the two get an explicitly declared shared network —
+and adding one puts the store back within reach of whatever else sits on that
+network, which is the trade the service token exists to cover.
 
 ## Traefik expectations
 

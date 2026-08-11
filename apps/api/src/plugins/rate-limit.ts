@@ -58,6 +58,21 @@ export const DOCUMENT_WRITE_RATE_LIMIT_OPTIONS = {
 } as const;
 
 /**
+ * A tighter ceiling for `POST /integrations/admin/credentials/refresh`.
+ *
+ * One authorized call here fans out to N outbound requests against the
+ * secrets service (N = the configured `SECRETS_INTEGRATION_NAMES` count), so
+ * the global 300/min would let one admin session drive up to 300 × N
+ * requests at the store. 10/min is well above a real rotation workflow —
+ * an operator clicking "refresh" after rotating a credential — while
+ * keeping the fan-out bounded to at most 10 × N per minute.
+ */
+export const INTEGRATION_CREDENTIALS_REFRESH_RATE_LIMIT_OPTIONS = {
+  max: 10,
+  timeWindow: RATE_LIMIT_WINDOW,
+} as const;
+
+/**
  * Registers a global request ceiling.
  *
  * Global rather than per-route. Every authenticated route is a candidate — an
