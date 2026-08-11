@@ -17,10 +17,10 @@ import { index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
  *   implicit encoding of "the CLI did it", which fails silently the moment a
  *   third actor appears.
  * - `actorTokenId` is the token that acted. Null for CLI rows.
- * - `actorUserId` is the user id attributed by the calling, service-token-
- *   authenticated caller — an assertion by that caller, not a fact this
- *   service verifies. Null for the CLI, which has no session, and never
- *   accepted from a browser: none can reach this service.
+ * - `actorUserId` is the user id attributed by the service-token-authenticated
+ *   caller — an assertion by that caller, not a fact this service verifies.
+ *   Null for the CLI, which has no session, and never accepted from a browser:
+ *   none can reach this service.
  * - `serviceTokenId` is the token a `service_token.*` row is *about*, which is
  *   a different thing from the token that performed the action.
  *

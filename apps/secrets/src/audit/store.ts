@@ -25,7 +25,7 @@ export type SecretAuditOutcome = "success" | "failure";
 
 /**
  * Never the value and never the ciphertext — a name, an action, an actor and a
- * time is the whole record. `actorUserId` is attributed by the calling,
+ * time is the whole record. `actorUserId` is attributed by the
  * service-token-authenticated caller — an assertion by that caller, not a
  * fact this service verifies — and is never accepted from a browser: none
  * can reach this service.

@@ -98,9 +98,9 @@ export type ListSecretsQuery = z.output<typeof listSecretsQuerySchema>;
  * The id of the signed-in user an admin surface attributes a mutation to.
  * The character class mirrors this repo's own Clerk fixtures
  * (`apps/api/test/integration-routes.test.ts:47`, e.g.
- * `user_2cccccccccccccccccccccccccc`) rather than Clerk's own documentation,
- * which was not checked — labelled honestly rather than implied verified
- * against the vendor.
+ * `user_2cccccccccccccccccccccccccc`). Clerk's own documentation was not
+ * checked, so a future id format outside `[A-Za-z0-9_-]` would be rejected
+ * here before it reached the store.
  */
 export const secretActorUserIdSchema = z
   .string()
