@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { createSecretsClient, createSecretsManagementClient, SecretsClientError } from "../src/client.js";
+import {
+  createSecretsClient,
+  createSecretsManagementClient,
+  SecretsClientError,
+} from "../src/client.js";
 import { SecretValue } from "../src/secret-value.js";
 
 const BASE_URL = "http://secrets.internal:3002";
@@ -308,7 +312,9 @@ describe("createSecretsManagementClient", () => {
     it("throws for a body that fails schema validation and never quotes the body in the error", async () => {
       const fetchImpl = vi.fn(() =>
         Promise.resolve(
-          jsonResponse(200, { secrets: [{ ...METADATA, extra: "unexpected", maskedPrefix: PLAINTEXT }] }),
+          jsonResponse(200, {
+            secrets: [{ ...METADATA, extra: "unexpected", maskedPrefix: PLAINTEXT }],
+          }),
         ),
       ) as unknown as typeof fetch;
       const client = createSecretsManagementClient({
@@ -347,7 +353,9 @@ describe("createSecretsManagementClient", () => {
 
       expect(result).toEqual(METADATA);
       expect(capturedInit?.method).toBe("POST");
-      expect(capturedInit?.body).toBe(JSON.stringify({ name: "github/api-token", value: PLAINTEXT }));
+      expect(capturedInit?.body).toBe(
+        JSON.stringify({ name: "github/api-token", value: PLAINTEXT }),
+      );
       const headers = capturedInit?.headers as Record<string, string>;
       expect(headers.authorization).toBe(`Bearer ${SERVICE_TOKEN}`);
       expect(headers["content-type"]).toBe("application/json");
@@ -391,7 +399,9 @@ describe("createSecretsManagementClient", () => {
 
     it("throws for a body that fails schema validation and never quotes the body in the error", async () => {
       const fetchImpl = vi.fn(() =>
-        Promise.resolve(jsonResponse(200, { ...METADATA, extra: "unexpected", maskedPrefix: PLAINTEXT })),
+        Promise.resolve(
+          jsonResponse(200, { ...METADATA, extra: "unexpected", maskedPrefix: PLAINTEXT }),
+        ),
       ) as unknown as typeof fetch;
       const client = createSecretsManagementClient({
         baseUrl: BASE_URL,
@@ -471,7 +481,9 @@ describe("createSecretsManagementClient", () => {
 
     it("throws for a body that fails schema validation and never quotes the body in the error", async () => {
       const fetchImpl = vi.fn(() =>
-        Promise.resolve(jsonResponse(200, { ...METADATA, extra: "unexpected", maskedPrefix: PLAINTEXT })),
+        Promise.resolve(
+          jsonResponse(200, { ...METADATA, extra: "unexpected", maskedPrefix: PLAINTEXT }),
+        ),
       ) as unknown as typeof fetch;
       const client = createSecretsManagementClient({
         baseUrl: BASE_URL,

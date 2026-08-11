@@ -160,11 +160,7 @@ export const secretsAdminModule: FastifyPluginAsync = async (app) => {
       try {
         return await app.secretsManagement.createSecret({ name, value, actorUserId });
       } catch (error) {
-        toApiError(
-          request,
-          error,
-          "That name is outside the namespace this console manages.",
-        );
+        toApiError(request, error, "That name is outside the namespace this console manages.");
       }
     },
   });

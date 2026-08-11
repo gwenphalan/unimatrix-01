@@ -204,9 +204,12 @@ async function performManagementRequest<TContract extends ApiContract, TBody = u
   }
 
   if (!response.ok) {
-    throw new SecretsClientError(`${contract.method} ${contract.path} failed with status ${response.status}.`, {
-      status: response.status,
-    });
+    throw new SecretsClientError(
+      `${contract.method} ${contract.path} failed with status ${response.status}.`,
+      {
+        status: response.status,
+      },
+    );
   }
 
   let payload: unknown;
@@ -216,9 +219,12 @@ async function performManagementRequest<TContract extends ApiContract, TBody = u
   } catch {
     // No `cause`: `JSON.parse`'s `SyntaxError` can quote a fragment of the
     // malformed body — see `SecretsClientError`'s docstring.
-    throw new SecretsClientError(`${contract.method} ${contract.path} returned a non-JSON response.`, {
-      status: response.status,
-    });
+    throw new SecretsClientError(
+      `${contract.method} ${contract.path} returned a non-JSON response.`,
+      {
+        status: response.status,
+      },
+    );
   }
 
   const parsed = contract.responseSchema.safeParse(payload);

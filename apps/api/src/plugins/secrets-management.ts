@@ -1,4 +1,7 @@
-import { createSecretsManagementClient, type SecretsManagementClient } from "@unimatrix/secrets/client";
+import {
+  createSecretsManagementClient,
+  type SecretsManagementClient,
+} from "@unimatrix/secrets/client";
 import type { FastifyInstance } from "fastify";
 
 declare module "fastify" {

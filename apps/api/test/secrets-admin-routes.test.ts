@@ -7,7 +7,11 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { createDatabase } from "@unimatrix/db";
-import type { AdminDeleteSecretResponse, ListSecretsResponse, SecretMetadata } from "@unimatrix/shared";
+import type {
+  AdminDeleteSecretResponse,
+  ListSecretsResponse,
+  SecretMetadata,
+} from "@unimatrix/shared";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 
 import { buildApp, type BuildApiAppOptions } from "../src/app.js";
@@ -139,7 +143,8 @@ function createFakeStoreFetch(
   respond: (request: CapturedRequest) => Response,
 ): typeof fetch {
   const impl: typeof fetch = (input, init) => {
-    const url = input instanceof URL ? input : input instanceof Request ? new URL(input.url) : new URL(input);
+    const url =
+      input instanceof URL ? input : input instanceof Request ? new URL(input.url) : new URL(input);
     const headers = init?.headers as Record<string, string> | undefined;
     const rawBody = init?.body;
     const body: unknown =
@@ -438,7 +443,11 @@ void test("list resolves 200 with the store's response, parsed against the share
   try {
     await app.ready();
 
-    const response = await app.inject({ method: "GET", url: LIST_URL, headers: adminAuthHeaders() });
+    const response = await app.inject({
+      method: "GET",
+      url: LIST_URL,
+      headers: adminAuthHeaders(),
+    });
 
     assert.equal(response.statusCode, 200);
     const body: ListSecretsResponse = response.json();
@@ -610,7 +619,11 @@ for (const status of [401, 403]) {
     try {
       await app.ready();
 
-      const response = await app.inject({ method: "GET", url: LIST_URL, headers: adminAuthHeaders() });
+      const response = await app.inject({
+        method: "GET",
+        url: LIST_URL,
+        headers: adminAuthHeaders(),
+      });
 
       assert.equal(response.statusCode, 502);
       const body: ApiErrorEnvelope = response.json();
@@ -636,7 +649,11 @@ void test("a 429 from the store maps to 429 RATE_LIMITED", async () => {
   try {
     await app.ready();
 
-    const response = await app.inject({ method: "GET", url: LIST_URL, headers: adminAuthHeaders() });
+    const response = await app.inject({
+      method: "GET",
+      url: LIST_URL,
+      headers: adminAuthHeaders(),
+    });
 
     assert.equal(response.statusCode, 429);
     const body: ApiErrorEnvelope = response.json();
@@ -657,7 +674,11 @@ void test("a network failure maps to 502 INTERNAL_ERROR", async () => {
   try {
     await app.ready();
 
-    const response = await app.inject({ method: "GET", url: LIST_URL, headers: adminAuthHeaders() });
+    const response = await app.inject({
+      method: "GET",
+      url: LIST_URL,
+      headers: adminAuthHeaders(),
+    });
 
     assert.equal(response.statusCode, 502);
     const body: ApiErrorEnvelope = response.json();
@@ -726,11 +747,17 @@ void test("the plaintext value never appears in a captured log line or in any er
         payload,
       });
 
-      assert.ok(!JSON.stringify(response.json()).includes(PLAINTEXT), "error envelope leaked plaintext");
+      assert.ok(
+        !JSON.stringify(response.json()).includes(PLAINTEXT),
+        "error envelope leaked plaintext",
+      );
     }
 
     assert.ok(chunks.length > 0, "expected at least one captured log record");
-    assert.ok(chunks.every((chunk) => !chunk.includes(PLAINTEXT)), "a log line leaked plaintext");
+    assert.ok(
+      chunks.every((chunk) => !chunk.includes(PLAINTEXT)),
+      "a log line leaked plaintext",
+    );
   } finally {
     await app.close();
     cleanup();
