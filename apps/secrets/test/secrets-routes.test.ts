@@ -111,11 +111,11 @@ void test("create rejects a duplicate name", async () => {
 
     const second = await create();
 
-    assert.equal(second.statusCode, 400);
+    assert.equal(second.statusCode, 409);
 
     const body: { error: { code: string } } = second.json();
 
-    assert.equal(body.error.code, "VALIDATION_ERROR");
+    assert.equal(body.error.code, "CONFLICT");
   } finally {
     await app.close();
   }

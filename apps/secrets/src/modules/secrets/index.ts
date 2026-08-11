@@ -145,9 +145,13 @@ export const secretsModule: FastifyPluginAsync = (app) => {
       }
 
       if (getLiveSecretVersion(app.db, name) !== undefined) {
+        // 409, not 400: a zod body-validation failure is also a 400 with
+        // code `VALIDATION_ERROR` (`../../lib/http/errors.ts`), and
+        // `SecretsClientError` carries only `status` — so a 400 here would
+        // be indistinguishable from a malformed request by status alone.
         throw new SecretsHttpError({
-          statusCode: 400,
-          code: "VALIDATION_ERROR",
+          statusCode: 409,
+          code: "CONFLICT",
           message: "A secret with this name already exists.",
         });
       }
