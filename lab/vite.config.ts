@@ -62,6 +62,10 @@ export function createLabViteConfig(): UserConfig {
           replacement: fileURLToPath(new URL("../packages/ui/src/public.ts", import.meta.url)),
         },
         {
+          find: /^@unimatrix\/ui\/editor$/,
+          replacement: fileURLToPath(new URL("../packages/ui/src/editor.ts", import.meta.url)),
+        },
+        {
           find: /^@unimatrix\/ui$/,
           replacement: fileURLToPath(new URL("../packages/ui/src/index.ts", import.meta.url)),
         },
