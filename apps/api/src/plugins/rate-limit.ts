@@ -73,6 +73,29 @@ export const INTEGRATION_CREDENTIALS_REFRESH_RATE_LIMIT_OPTIONS = {
 } as const;
 
 /**
+ * A tighter ceiling for the four `/secrets/admin*` routes, shared across all
+ * of them in one encapsulated scope (a single bucket, not one per route —
+ * see the note where it is registered).
+ *
+ * `apps/secrets` enforces its own global ceiling of 60/min keyed by IP with
+ * `trustProxy` unset, which makes the whole API container one key — every
+ * outbound call this API makes to the store, from every plugin and module,
+ * draws from that same 60. `INTEGRATION_CREDENTIALS_REFRESH_RATE_LIMIT_OPTIONS`
+ * is 10/min fanning out to N configured integration names, so the worst-case
+ * draw against the store is `20 + 10N` (this ceiling plus that one). That
+ * stays under 60 through N = 3 inclusive and leaves headroom at N = 4. 20 was
+ * chosen over 30 for exactly that margin — 30 would already hit the ceiling
+ * at N = 3. The failure this avoids is not an admin session drawing a 429
+ * here (a 4xx, correctly not retried) — it is the API's own boot-time
+ * integration-credential refresh being rejected by the store's ceiling and
+ * `setupIntegrationCredentials` booting with an empty cache.
+ */
+export const SECRETS_ADMIN_RATE_LIMIT_OPTIONS = {
+  max: 20,
+  timeWindow: RATE_LIMIT_WINDOW,
+} as const;
+
+/**
  * Registers a global request ceiling.
  *
  * Global rather than per-route. Every authenticated route is a candidate — an
