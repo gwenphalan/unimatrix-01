@@ -50,6 +50,19 @@ export interface ApiClerkConfig {
   jwtKey: string;
 }
 
+/**
+ * Which integration credentials to fetch from the secrets service, present
+ * only when both `SECRETS_BASE_URL` and `SECRETS_SERVICE_TOKEN` are set. See
+ * {@link loadApiRuntimeConfig} for the all-or-none rule — unlike Clerk,
+ * neither var is required in production, because no integration is
+ * configured yet.
+ */
+export interface ApiSecretsStoreConfig {
+  baseUrl: string;
+  serviceToken: string;
+  integrationNames: readonly string[];
+}
+
 export interface ApiRuntimeConfig {
   host: string;
   port: number;
@@ -58,6 +71,7 @@ export interface ApiRuntimeConfig {
   trustProxy: ApiTrustProxy;
   cors: ApiCorsConfig;
   clerk: ApiClerkConfig | null;
+  secretsStore: ApiSecretsStoreConfig | null;
   maxUploadBytes: number;
   /**
    * Cumulative ceiling on the bytes one user may keep in `user_documents`
@@ -79,6 +93,9 @@ export interface ApiRuntimeEnv {
   CLERK_SECRET_KEY?: string | undefined;
   CLERK_PUBLISHABLE_KEY?: string | undefined;
   CLERK_JWT_KEY?: string | undefined;
+  SECRETS_BASE_URL?: string | undefined;
+  SECRETS_SERVICE_TOKEN?: string | undefined;
+  SECRETS_INTEGRATION_NAMES?: string | undefined;
   MAX_UPLOAD_BYTES?: string | undefined;
   MAX_USER_STORAGE_BYTES?: string | undefined;
   DB_MIGRATE_ON_START?: string | undefined;
@@ -496,7 +513,7 @@ export function isApiCorsOriginAllowed(
   });
 }
 
-function readOptionalClerkValue(
+function readOptionalTrimmedValue(
   variableName: keyof ApiRuntimeEnv,
   value: string | undefined,
 ): string | undefined {
@@ -520,9 +537,12 @@ function readOptionalClerkValue(
  * absent (a partial set is treated as a misconfiguration and throws).
  */
 function parseClerkConfig(env: ApiRuntimeEnv, nodeEnv: ApiNodeEnv): ApiClerkConfig | null {
-  const secretKey = readOptionalClerkValue("CLERK_SECRET_KEY", env.CLERK_SECRET_KEY);
-  const publishableKey = readOptionalClerkValue("CLERK_PUBLISHABLE_KEY", env.CLERK_PUBLISHABLE_KEY);
-  const jwtKey = readOptionalClerkValue("CLERK_JWT_KEY", env.CLERK_JWT_KEY);
+  const secretKey = readOptionalTrimmedValue("CLERK_SECRET_KEY", env.CLERK_SECRET_KEY);
+  const publishableKey = readOptionalTrimmedValue(
+    "CLERK_PUBLISHABLE_KEY",
+    env.CLERK_PUBLISHABLE_KEY,
+  );
+  const jwtKey = readOptionalTrimmedValue("CLERK_JWT_KEY", env.CLERK_JWT_KEY);
 
   if (secretKey !== undefined && publishableKey !== undefined && jwtKey !== undefined) {
     return { secretKey, publishableKey, jwtKey };
@@ -545,6 +565,85 @@ function parseClerkConfig(env: ApiRuntimeEnv, nodeEnv: ApiNodeEnv): ApiClerkConf
   );
 }
 
+function parseSecretsBaseUrl(value: string | undefined): string | undefined {
+  const trimmedValue = readOptionalTrimmedValue("SECRETS_BASE_URL", value);
+
+  if (trimmedValue === undefined) {
+    return undefined;
+  }
+
+  let url: URL;
+
+  try {
+    url = new URL(trimmedValue);
+  } catch {
+    throw createApiConfigError(
+      `SECRETS_BASE_URL must be a valid http:// or https:// URL. Received ${JSON.stringify(trimmedValue)}.`,
+    );
+  }
+
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    throw createApiConfigError(
+      `SECRETS_BASE_URL must use http:// or https://. Received ${JSON.stringify(trimmedValue)}.`,
+    );
+  }
+
+  return trimmedValue;
+}
+
+/**
+ * Comma-separated, trimmed, empty entries dropped, default empty. Shape
+ * validation of each name (`secretNameSchema`) is the plugin's job, not this
+ * loader's — this module imports no workspace package (see the docstring on
+ * {@link ApiRuntimeConfig.secretsStore} and `apps/secrets/src/config.ts` for
+ * why: `infra/scripts/validate-deploy-config.mjs` imports this file directly,
+ * before anything is built, and `@unimatrix/shared` resolves only through a
+ * `dist` that does not exist yet at that point).
+ */
+function parseIntegrationNames(value: string | undefined): readonly string[] {
+  if (value === undefined) {
+    return [];
+  }
+
+  return value
+    .split(",")
+    .map((token) => token.trim())
+    .filter((token) => token.length > 0);
+}
+
+/**
+ * Parses `SECRETS_BASE_URL`/`SECRETS_SERVICE_TOKEN`/`SECRETS_INTEGRATION_NAMES`
+ * into an {@link ApiSecretsStoreConfig}, or `null` when the store is not
+ * configured. Unlike {@link parseClerkConfig}, neither var is required in any
+ * environment — no integration is configured yet — but the pair is still
+ * all-or-none: a lone `SECRETS_BASE_URL` or `SECRETS_SERVICE_TOKEN` is a
+ * misconfiguration, and a non-empty `SECRETS_INTEGRATION_NAMES` with the store
+ * unconfigured names credentials that can never be fetched.
+ */
+function parseSecretsStoreConfig(env: ApiRuntimeEnv): ApiSecretsStoreConfig | null {
+  const baseUrl = parseSecretsBaseUrl(env.SECRETS_BASE_URL);
+  const serviceToken = readOptionalTrimmedValue("SECRETS_SERVICE_TOKEN", env.SECRETS_SERVICE_TOKEN);
+  const integrationNames = parseIntegrationNames(env.SECRETS_INTEGRATION_NAMES);
+
+  if (baseUrl !== undefined && serviceToken !== undefined) {
+    return { baseUrl, serviceToken, integrationNames };
+  }
+
+  if (baseUrl === undefined && serviceToken === undefined) {
+    if (integrationNames.length > 0) {
+      throw createApiConfigError(
+        "SECRETS_INTEGRATION_NAMES must not be set unless SECRETS_BASE_URL and SECRETS_SERVICE_TOKEN are both configured.",
+      );
+    }
+
+    return null;
+  }
+
+  throw createApiConfigError(
+    "SECRETS_BASE_URL and SECRETS_SERVICE_TOKEN must be set together, or both left unset.",
+  );
+}
+
 export function loadApiRuntimeConfig(env: ApiRuntimeEnv = process.env): ApiRuntimeConfig {
   const nodeEnv = parseNodeEnv(env.NODE_ENV);
 
@@ -556,6 +655,7 @@ export function loadApiRuntimeConfig(env: ApiRuntimeEnv = process.env): ApiRunti
     trustProxy: parseTrustProxy(env.TRUST_PROXY),
     cors: parseCorsAllowedOrigins(env.CORS_ALLOWED_ORIGINS),
     clerk: parseClerkConfig(env, nodeEnv),
+    secretsStore: parseSecretsStoreConfig(env),
     maxUploadBytes: parseByteCount(
       "MAX_UPLOAD_BYTES",
       env.MAX_UPLOAD_BYTES,

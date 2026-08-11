@@ -147,6 +147,54 @@ const AUTH_ENTRY_POINT_CONFIGS = [
   },
 ];
 
+/**
+ * `packages/secrets` ships two entry points: `.` (crypto, no I/O) and
+ * `./client` (the secrets-service HTTP client, which depends on
+ * `@unimatrix/shared`). Mirrors {@link AUTH_ENTRY_POINT_CONFIGS} — the crypto
+ * entry must stay dependency-free of the client, and the client must stay
+ * out of the crypto internals it has no business reaching around
+ * `secret-value.ts`, which both entry points legitimately share.
+ *
+ * Scoped by file rather than by workspace, so it lives outside the table above.
+ */
+const SECRETS_ENTRY_POINT_CONFIGS = [
+  {
+    files: [
+      "src/index.ts",
+      "src/envelope.ts",
+      "src/keyring.ts",
+      "src/errors.ts",
+      "src/secret-value.ts",
+    ],
+    restrictions: [
+      {
+        group: ["./client", "./client.js"],
+        message:
+          "The `.` entry point of `@unimatrix/secrets` must stay crypto-only and I/O-free: it may not pull in the HTTP client.",
+      },
+      {
+        // Banning `./client` alone would not keep the promise: the `.` entry is
+        // dependency-free only while nothing under it reaches the dependency
+        // `./client` introduced. `src/client.ts` is the one file permitted to
+        // import it.
+        group: ["@unimatrix/shared", "@unimatrix/shared/*"],
+        message:
+          "The `.` entry point of `@unimatrix/secrets` has no runtime dependencies. Contract and schema imports belong in `src/client.ts`, the only file in this package that may reach `@unimatrix/shared`.",
+      },
+    ],
+  },
+  {
+    files: ["src/client.ts"],
+    restrictions: [
+      {
+        group: ["./envelope", "./envelope.js", "./keyring", "./keyring.js"],
+        message:
+          "`@unimatrix/secrets/client` talks to the secrets service over HTTP; it has no business reaching into the crypto internals. `./secret-value.js` (the plaintext wrapper) is the one crossing it needs.",
+      },
+    ],
+  },
+];
+
 function workspaceIdOf(tsconfigRootDir) {
   const group = path.basename(path.dirname(tsconfigRootDir));
   return `${group}/${path.basename(tsconfigRootDir)}`;
@@ -174,6 +222,17 @@ export function createRestrictedImportConfigs({ tsconfigRootDir }) {
 
   if (workspaceId === "packages/auth") {
     for (const entry of AUTH_ENTRY_POINT_CONFIGS) {
+      configs.push({
+        files: entry.files,
+        rules: {
+          "@typescript-eslint/no-restricted-imports": ["error", { patterns: entry.restrictions }],
+        },
+      });
+    }
+  }
+
+  if (workspaceId === "packages/secrets") {
+    for (const entry of SECRETS_ENTRY_POINT_CONFIGS) {
       configs.push({
         files: entry.files,
         rules: {

@@ -4,7 +4,7 @@ import { isResponseSerializationError } from "fastify-type-provider-zod";
 
 import type { ApiRuntimeConfig } from "./config.js";
 import { createNotFoundErrorEnvelope, normalizeError } from "./lib/http/errors.js";
-import { buildLoggerOptions } from "./lib/http/logging.js";
+import { buildLoggerOptions, type ApiLoggerStream } from "./lib/http/logging.js";
 import { registerModules } from "./modules/index.js";
 import { setupCorePlugins } from "./plugins/index.js";
 
@@ -15,22 +15,46 @@ declare module "fastify" {
   }
 }
 
-export function buildAppOptions(config: ApiRuntimeConfig) {
+export interface BuildApiAppOptions {
+  /** Where log records go instead of stdout, so tests can assert on redaction. */
+  loggerStream?: ApiLoggerStream;
+  /** Test seam: the `fetch` the integration-credentials plugin uses instead of the global. */
+  secretsFetch?: typeof globalThis.fetch;
+}
+
+export function buildAppOptions(
+  config: ApiRuntimeConfig,
+  options: Pick<BuildApiAppOptions, "loggerStream"> = {},
+) {
   return {
     forceCloseConnections: true,
     // Fastify's own per-request lines are redundant here: the `onResponse` hook in
     // `src/plugins/observability.ts` emits the app's `request completed` record.
     logController: new LogController({ disableRequestLogging: true }),
-    logger: buildLoggerOptions(config),
+    logger:
+      options.loggerStream === undefined
+        ? buildLoggerOptions(config)
+        : buildLoggerOptions(config, { stream: options.loggerStream }),
     trustProxy: config.trustProxy,
   } satisfies FastifyServerOptions;
 }
 
-export function buildApp(config: ApiRuntimeConfig): FastifyInstance {
-  const app: FastifyInstance = Fastify(buildAppOptions(config));
+export function buildApp(
+  config: ApiRuntimeConfig,
+  options: BuildApiAppOptions = {},
+): FastifyInstance {
+  const app: FastifyInstance = Fastify(
+    buildAppOptions(
+      config,
+      options.loggerStream === undefined ? {} : { loggerStream: options.loggerStream },
+    ),
+  );
 
   app.decorate("runtimeConfig", config);
-  setupCorePlugins(app);
+  setupCorePlugins(
+    app,
+    options.secretsFetch === undefined ? {} : { secretsFetch: options.secretsFetch },
+  );
 
   app.setErrorHandler((error, request, reply) => {
     const requestId = String(request.id);

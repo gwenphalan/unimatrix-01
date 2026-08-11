@@ -82,6 +82,12 @@ describe("APP_SLUGS", () => {
   });
 });
 
+describe("ADMIN_SECTIONS", () => {
+  it("includes the secrets section", () => {
+    expect(ADMIN_SECTIONS).toContain("secrets");
+  });
+});
+
 describe("canAccessAdminSection", () => {
   it.each(ADMIN_SECTIONS)("allows an auth admin into the %s section", (section) => {
     expect(canAccessAdminSection({ permissions: { auth: ["admin"] } }, section)).toBe(true);

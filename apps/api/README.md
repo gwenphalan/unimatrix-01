@@ -13,6 +13,7 @@ apps/api/**
 packages/auth/**
 packages/config-typescript/**
 packages/db/**
+packages/secrets/**
 packages/shared/**
 infra/docker/api-compose.yaml
 package.json

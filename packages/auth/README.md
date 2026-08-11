@@ -34,7 +34,7 @@ Permissions are stored in Clerk `user.publicMetadata` under a single `permission
 
 ### Admin sections
 
-`ADMIN_SECTIONS` names the admin sections — today just `"content"`. Every admin gate, UI and API alike, must read through one predicate rather than open-coding the check:
+`ADMIN_SECTIONS` names the admin sections — `"content"` and `"secrets"` today. Every admin gate, UI and API alike, must read through one predicate rather than open-coding the check:
 
 ```ts
 import { canAccessAdminSection } from "@unimatrix/auth";

@@ -49,7 +49,7 @@ const ALLOWED_PACKAGE_IMPORTS = {
   // granularity, so this grant is workspace-wide even though only that script
   // uses it; `@unimatrix/content` stays a devDependency of `apps/api` so it is
   // absent from the deployable image.
-  "apps/api": ["auth", "content", "db", "deploy-config", "shared"],
+  "apps/api": ["auth", "content", "db", "deploy-config", "secrets", "shared"],
   // Never `db`: this service's SQLite file lives on its own volume, not
   // packages/db's (single-writer, already owned by the API container) — see
   // apps/secrets/AGENTS.md.
@@ -82,13 +82,17 @@ const ALLOWED_PACKAGE_IMPORTS = {
   // into its dependency tree.
   "packages/chrome": ["ui"],
   "packages/user-data": ["api-client", "auth", "shared"],
+  // Its `.` entry is a leaf, but `./client` (the secrets-service HTTP client)
+  // consumes `getSecretValueContract`/`getSecretQuerySchema` from `shared` —
+  // the rule has no per-entry-point granularity, so the grant is
+  // workspace-wide even though `.` itself imports nothing from it.
+  "packages/secrets": ["shared"],
   // Leaves. `packages/shared` in particular must stay free of transport, UI,
   // and content-loading code, which starts with importing none of it.
   "packages/ui": [],
   "packages/shared": [],
   "packages/content": [],
   "packages/db": [],
-  "packages/secrets": [],
   "packages/auth": [],
   // A leaf, and listed even though it imports no sibling package: `default` is
   // "disallow", so a workspace with no policy of its own cannot even resolve its
