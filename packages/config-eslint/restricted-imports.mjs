@@ -172,6 +172,15 @@ const SECRETS_ENTRY_POINT_CONFIGS = [
         message:
           "The `.` entry point of `@unimatrix/secrets` must stay crypto-only and I/O-free: it may not pull in the HTTP client.",
       },
+      {
+        // Banning `./client` alone would not keep the promise: the `.` entry is
+        // dependency-free only while nothing under it reaches the dependency
+        // `./client` introduced. `src/client.ts` is the one file permitted to
+        // import it.
+        group: ["@unimatrix/shared", "@unimatrix/shared/*"],
+        message:
+          "The `.` entry point of `@unimatrix/secrets` has no runtime dependencies. Contract and schema imports belong in `src/client.ts`, the only file in this package that may reach `@unimatrix/shared`.",
+      },
     ],
   },
   {
