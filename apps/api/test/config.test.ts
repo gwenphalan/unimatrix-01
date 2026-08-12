@@ -435,6 +435,7 @@ void test("loadApiRuntimeConfig populates secretsStore when both vars are presen
       serviceToken: "svc_test_token",
       integrationsManageToken: null,
       platformWriteToken: null,
+      caCertificatePem: null,
     },
   );
 });
@@ -498,7 +499,70 @@ void test("loadApiRuntimeConfig populates both admin tokens alongside a configur
       serviceToken: "svc_read_token",
       integrationsManageToken: "svc_integrations_manage_token",
       platformWriteToken: "svc_platform_write_token",
+      caCertificatePem: null,
     },
+  );
+});
+
+const TEST_CERT_PEM = "-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----\n";
+const TEST_CERT_BASE64 = Buffer.from(TEST_CERT_PEM).toString("base64");
+
+void test("loadApiRuntimeConfig decodes the store certificate for an https base URL", () => {
+  assert.deepEqual(
+    loadApiRuntimeConfig({
+      SECRETS_BASE_URL: "https://secrets:3001",
+      SECRETS_SERVICE_TOKEN: "svc_read_token",
+      SECRETS_TLS_CERT_BASE64: TEST_CERT_BASE64,
+    }).secretsStore,
+    {
+      baseUrl: "https://secrets:3001",
+      serviceToken: "svc_read_token",
+      integrationsManageToken: null,
+      platformWriteToken: null,
+      caCertificatePem: TEST_CERT_PEM,
+    },
+  );
+});
+
+void test("loadApiRuntimeConfig throws when an https base URL has no certificate", () => {
+  assert.throws(
+    () =>
+      loadApiRuntimeConfig({
+        SECRETS_BASE_URL: "https://secrets:3001",
+        SECRETS_SERVICE_TOKEN: "svc_read_token",
+      }),
+    /SECRETS_TLS_CERT_BASE64 must be set when SECRETS_BASE_URL is https/,
+  );
+});
+
+void test("loadApiRuntimeConfig throws when an http base URL carries a certificate", () => {
+  assert.throws(
+    () =>
+      loadApiRuntimeConfig({
+        SECRETS_BASE_URL: "http://secrets:3001",
+        SECRETS_SERVICE_TOKEN: "svc_read_token",
+        SECRETS_TLS_CERT_BASE64: TEST_CERT_BASE64,
+      }),
+    /SECRETS_TLS_CERT_BASE64 must not be set when SECRETS_BASE_URL is http/,
+  );
+});
+
+void test("loadApiRuntimeConfig rejects a certificate that does not decode to PEM", () => {
+  assert.throws(
+    () =>
+      loadApiRuntimeConfig({
+        SECRETS_BASE_URL: "https://secrets:3001",
+        SECRETS_SERVICE_TOKEN: "svc_read_token",
+        SECRETS_TLS_CERT_BASE64: Buffer.from("not a certificate").toString("base64"),
+      }),
+    /SECRETS_TLS_CERT_BASE64 must be a base64-encoded PEM certificate/,
+  );
+});
+
+void test("loadApiRuntimeConfig throws when the certificate is set without a configured store", () => {
+  assert.throws(
+    () => loadApiRuntimeConfig({ SECRETS_TLS_CERT_BASE64: TEST_CERT_BASE64 }),
+    /SECRETS_TLS_CERT_BASE64 must not be set unless SECRETS_BASE_URL/,
   );
 });
 

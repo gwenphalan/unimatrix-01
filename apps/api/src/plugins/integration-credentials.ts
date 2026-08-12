@@ -96,7 +96,14 @@ export function setupIntegrationCredentials(
   const client = createSecretsClient({
     baseUrl: secretsStore.baseUrl,
     serviceToken: secretsStore.serviceToken,
-    ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
+    // Never both: `createSecretsClient` throws when a fetch implementation and
+    // a pin arrive together, and the test seam has to win so a test can run
+    // against a plain-HTTP fake.
+    ...(options.fetch === undefined
+      ? secretsStore.caCertificatePem === null
+        ? {}
+        : { caCertificatePem: secretsStore.caCertificatePem }
+      : { fetch: options.fetch }),
   });
 
   const cache = new Map<string, SecretValue>();
