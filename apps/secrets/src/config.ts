@@ -12,6 +12,21 @@ export type SecretsLogLevel = (typeof SECRETS_LOG_LEVELS)[number];
  * imports this module directly, before anything has been built, and `@unimatrix/secrets`'s exports
  * map points at `dist` — see `src/keyring.ts` for where the keyring (and the import) actually live.
  */
+/**
+ * The server certificate and its private key, PEM text decoded from the
+ * base64 the two environment variables carry. Base64 rather than raw PEM
+ * because a deployment platform's environment editor is a single-line field
+ * and a truncated key is a boot failure with a confusing message.
+ *
+ * The certificate is public — `apps/api` is configured with a copy of it.
+ * The key is not, and is one of the credentials that can never live in the
+ * store this service runs (`packages/secrets/AGENTS.md` §4).
+ */
+export interface SecretsTlsConfig {
+  certificatePem: string;
+  privateKeyPem: string;
+}
+
 export interface SecretsRuntimeConfigBase {
   host: string;
   port: number;
@@ -19,6 +34,8 @@ export interface SecretsRuntimeConfigBase {
   logLevel: SecretsLogLevel;
   databaseFilePath: string;
   runDatabaseMigrations: boolean;
+  /** `null` serves plain HTTP — which is what local dev and every test do. */
+  tls: SecretsTlsConfig | null;
 }
 
 export interface SecretsRuntimeEnv {
@@ -29,6 +46,8 @@ export interface SecretsRuntimeEnv {
   SECRETS_DATABASE_URL?: string | undefined;
   DB_MIGRATE_ON_START?: string | undefined;
   SECRETS_KEKS?: string | undefined;
+  SECRETS_TLS_CERT_BASE64?: string | undefined;
+  SECRETS_TLS_KEY_BASE64?: string | undefined;
 }
 
 const DEFAULT_HOST = "127.0.0.1";
@@ -51,6 +70,24 @@ function readOptionalString(
 ): string {
   if (value === undefined) {
     return fallback;
+  }
+
+  const trimmedValue = value.trim();
+
+  if (trimmedValue.length === 0) {
+    throw createSecretsConfigError(`${variableName} must not be empty when it is set.`);
+  }
+
+  return trimmedValue;
+}
+
+/** As {@link readOptionalString}, but with no fallback: absent stays absent. */
+function readOptionalTrimmedValue(
+  variableName: keyof SecretsRuntimeEnv,
+  value: string | undefined,
+): string | undefined {
+  if (value === undefined) {
+    return undefined;
   }
 
   const trimmedValue = value.trim();
@@ -185,6 +222,55 @@ function assertSecretsKeksIsSet(value: string | undefined): void {
 }
 
 /**
+ * Decodes one base64-encoded PEM. The `-----BEGIN` check is what separates a
+ * value that decoded into nonsense from one that did not decode at all:
+ * `Buffer.from` ignores every character outside the base64 alphabet and
+ * returns a short buffer rather than throwing, so without it a mangled paste
+ * would reach Node's TLS layer as an opaque error at listen time.
+ */
+function parseBase64Pem(variableName: keyof SecretsRuntimeEnv, value: string): string {
+  const pem = Buffer.from(value.trim(), "base64").toString("utf8");
+
+  if (!pem.includes("-----BEGIN")) {
+    throw createSecretsConfigError(
+      `${variableName} must be a base64-encoded PEM document. The decoded value contains no "-----BEGIN" line.`,
+    );
+  }
+
+  return pem;
+}
+
+/**
+ * All-or-none, and neither is the supported case: local dev and every test
+ * run this service over plain HTTP, so a missing pair must not be an error.
+ * Exactly one set is always a mistake — a certificate with no key cannot
+ * serve, and a key with no certificate would silently fall back to HTTP while
+ * the operator believes TLS is on.
+ */
+function parseTlsConfig(env: SecretsRuntimeEnv): SecretsTlsConfig | null {
+  const certificate = readOptionalTrimmedValue(
+    "SECRETS_TLS_CERT_BASE64",
+    env.SECRETS_TLS_CERT_BASE64,
+  );
+  const privateKey = readOptionalTrimmedValue("SECRETS_TLS_KEY_BASE64", env.SECRETS_TLS_KEY_BASE64);
+
+  if (certificate === undefined && privateKey === undefined) {
+    return null;
+  }
+
+  if (certificate === undefined || privateKey === undefined) {
+    throw createSecretsConfigError(
+      "SECRETS_TLS_CERT_BASE64 and SECRETS_TLS_KEY_BASE64 must be set together, or both left unset.",
+    );
+  }
+
+  return {
+    certificatePem: parseBase64Pem("SECRETS_TLS_CERT_BASE64", certificate),
+    privateKeyPem: parseBase64Pem("SECRETS_TLS_KEY_BASE64", privateKey),
+  };
+}
+
+/**
  * The database file path alone, with no keyring requirement. `drizzle.config.ts`
  * calls this directly (never {@link loadSecretsRuntimeConfig}) so that
  * `db:generate`/`db:migrate` work without `SECRETS_KEKS` ever being set.
@@ -214,5 +300,6 @@ export function loadSecretsRuntimeConfig(
     logLevel: parseLogLevel(env.LOG_LEVEL, nodeEnv),
     databaseFilePath: resolveSecretsDatabaseFilePath(env),
     runDatabaseMigrations: parseRunDatabaseMigrations(env.DB_MIGRATE_ON_START),
+    tls: parseTlsConfig(env),
   };
 }

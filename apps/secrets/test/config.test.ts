@@ -143,5 +143,53 @@ void test("loadSecretsRuntimeConfig rejects a blank DB_MIGRATE_ON_START", () => 
   );
 });
 
+const TEST_CERT_PEM = "-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----\n";
+const TEST_KEY_PEM = "-----BEGIN PRIVATE KEY-----\nMIIE\n-----END PRIVATE KEY-----\n";
+const TEST_CERT_BASE64 = Buffer.from(TEST_CERT_PEM).toString("base64");
+const TEST_KEY_BASE64 = Buffer.from(TEST_KEY_PEM).toString("base64");
+
+void test("loadSecretsRuntimeConfig leaves tls null when neither TLS variable is set", () => {
+  assert.equal(loadSecretsRuntimeConfig({ SECRETS_KEKS: TEST_KEK }).tls, null);
+});
+
+void test("loadSecretsRuntimeConfig decodes both TLS variables into PEM text", () => {
+  assert.deepEqual(
+    loadSecretsRuntimeConfig({
+      SECRETS_KEKS: TEST_KEK,
+      SECRETS_TLS_CERT_BASE64: TEST_CERT_BASE64,
+      SECRETS_TLS_KEY_BASE64: TEST_KEY_BASE64,
+    }).tls,
+    { certificatePem: TEST_CERT_PEM, privateKeyPem: TEST_KEY_PEM },
+  );
+});
+
+void test("loadSecretsRuntimeConfig rejects exactly one TLS variable, either way round", () => {
+  assert.throws(
+    () =>
+      loadSecretsRuntimeConfig({
+        SECRETS_KEKS: TEST_KEK,
+        SECRETS_TLS_CERT_BASE64: TEST_CERT_BASE64,
+      }),
+    /must be set together, or both left unset/,
+  );
+  assert.throws(
+    () =>
+      loadSecretsRuntimeConfig({ SECRETS_KEKS: TEST_KEK, SECRETS_TLS_KEY_BASE64: TEST_KEY_BASE64 }),
+    /must be set together, or both left unset/,
+  );
+});
+
+void test("loadSecretsRuntimeConfig rejects a TLS value that does not decode to PEM", () => {
+  assert.throws(
+    () =>
+      loadSecretsRuntimeConfig({
+        SECRETS_KEKS: TEST_KEK,
+        SECRETS_TLS_CERT_BASE64: Buffer.from("not a certificate").toString("base64"),
+        SECRETS_TLS_KEY_BASE64: TEST_KEY_BASE64,
+      }),
+    /SECRETS_TLS_CERT_BASE64 must be a base64-encoded PEM document/,
+  );
+});
+
 // The composed-config redaction assertion (base config + keyring, as src/server.ts builds it) lives
 // in test/keyring.test.ts, since composing them is what src/keyring.ts's exports are for.
