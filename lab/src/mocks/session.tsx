@@ -1,6 +1,11 @@
-import type { AppSlug, Role, UserPermissionsMetadata } from "@unimatrix/auth";
-import { APP_SLUGS, hasPermission } from "@unimatrix/auth";
+import type { AdminSection, AppSlug, Role, UserPermissionsMetadata } from "@unimatrix/auth";
+import { APP_SLUGS, canAccessAdminSection, hasPermission } from "@unimatrix/auth";
 import { Avatar, AvatarFallback } from "@unimatrix/ui";
+
+// Re-exported so `labSessionCanAccessAdminSection` callers can name a section
+// without a second import from `@unimatrix/auth`. `AppSlug` and `Role` stay
+// unexported here — nothing in this file's public surface needs them named.
+export type { AdminSection };
 
 /**
  * A stand-in for a Clerk session.
@@ -73,6 +78,15 @@ export const labSignedOutSession = null;
  * The real `hasPermission` from `@unimatrix/auth`, not a reimplementation — a
  * mock that answers permission questions differently from production is worse
  * than no mock, because the view it produces is one nobody will ever see.
+ *
+ * Not the check for an admin section, and nothing stops calling it as if it
+ * were: `labSessionHasPermission(session, "admin", "admin")` reads correct
+ * and asks a different question, because the real section table maps every
+ * section to `auth:admin`, not `admin:admin`. `labAdminSession` holds `admin`
+ * on every slug in `APP_SLUGS`, so both calls answer `true` and nothing
+ * surfaces the difference — it still compiles and still returns `true`. Use
+ * {@link labSessionCanAccessAdminSection} for a section gate; this comment
+ * and that wrapper are the only mitigation there is.
  */
 export function labSessionHasPermission(
   session: LabSession | null,
@@ -80,6 +94,21 @@ export function labSessionHasPermission(
   role: Role,
 ): boolean {
   return session !== null && hasPermission(session.permissions, appSlug, role);
+}
+
+/**
+ * Whether `session` may access admin `section`.
+ *
+ * The real `canAccessAdminSection` from `@unimatrix/auth`, not a
+ * reimplementation, for the same reason {@link labSessionHasPermission} wraps
+ * `hasPermission`: a mock that answers this question differently from
+ * production is worse than no mock.
+ */
+export function labSessionCanAccessAdminSection(
+  session: LabSession | null,
+  section: AdminSection,
+): boolean {
+  return session !== null && canAccessAdminSection(session.permissions, section);
 }
 
 /**

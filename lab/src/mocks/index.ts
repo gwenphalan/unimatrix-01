@@ -12,11 +12,15 @@ export { assertLocalhostUrl, LAB_API_BASE_URL } from "./api-base-url.js";
 export type { CreateLabApiClientOptions, LabApiClient } from "./api.js";
 export { createLabApiClient, LabApiError } from "./api.js";
 
+export type { CreateLabAssetUploaderOptions, LabAssetUploader } from "./asset-upload.js";
+export { createLabAssetUploader, LAB_ASSET_ACCEPT, LabAssetUploadError } from "./asset-upload.js";
+
 export { mockAssets, mockDocuments, mockFiles, mockPosts } from "./fixtures.js";
 
-export type { LabSession, MockAccountControlProps } from "./session.js";
+export type { AdminSection, LabSession, MockAccountControlProps } from "./session.js";
 export {
   labAdminSession,
+  labSessionCanAccessAdminSection,
   labSessionHasPermission,
   labSignedOutSession,
   labViewerSession,

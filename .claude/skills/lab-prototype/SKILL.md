@@ -24,6 +24,7 @@ Before designing against `@/mocks`, compare:
 | --- | --- |
 | `LabApiClient` (`lab/src/mocks/api.ts`) | `ApiClient` (`packages/api-client/src/client.ts`) |
 | `LabUserStore` (`lab/src/mocks/user-data.ts`) | `UserStore` (`packages/user-data/src/types.ts`) |
+| `LabAssetUploader` (`lab/src/mocks/asset-upload.ts`) | `asset-upload.ts` (`apps/admin/src/features/content/asset-upload.ts`) |
 
 Both are structurally copied rather than imported, so typecheck cannot see either one diverge, and
 importing the real thing to end the problem is off the table — `lab/AGENTS.md` says why.
