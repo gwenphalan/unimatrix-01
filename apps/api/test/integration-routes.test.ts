@@ -7,10 +7,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { createDatabase } from "@unimatrix/db";
-import type {
-  RefreshIntegrationCredentialsResponse,
-  SecretRegistryEntry,
-} from "@unimatrix/shared";
+import type { RefreshIntegrationCredentialsResponse, SecretRegistryEntry } from "@unimatrix/shared";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 
 import { buildApp, type BuildApiAppOptions } from "../src/app.js";
