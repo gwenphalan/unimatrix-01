@@ -7,9 +7,18 @@ import { setupDatabase } from "./database.js";
 import { setupIntegrationCredentials } from "./integration-credentials.js";
 import { setupObservability } from "./observability.js";
 import { setupRateLimit } from "./rate-limit.js";
+import { setupSecretsManagement } from "./secrets-management.js";
 import { setupSecurity } from "./security.js";
 
 export interface SetupCorePluginsOptions {
+  /**
+   * A fake `fetch` for the secrets service, shared by both
+   * `setupIntegrationCredentials` (a read-capability client) and
+   * `setupSecretsManagement` (a manage-capability client) — one test seam
+   * for both, since `registerModules` receives no options of its own
+   * (`apps/api/src/app.ts`) and this is the point where a test harness can
+   * still reach either plugin's construction.
+   */
   secretsFetch?: typeof globalThis.fetch;
 }
 
@@ -29,6 +38,10 @@ export function setupCorePlugins(
   // independent of Clerk configuration, unlike setupAuth().
   setupDatabase(app);
   setupIntegrationCredentials(
+    app,
+    options.secretsFetch === undefined ? {} : { fetch: options.secretsFetch },
+  );
+  setupSecretsManagement(
     app,
     options.secretsFetch === undefined ? {} : { fetch: options.secretsFetch },
   );

@@ -1,6 +1,10 @@
 import {
+  adminCreateSecretContract,
+  adminDeleteSecretContract,
   adminGetPostContract,
   adminListPostsContract,
+  adminListSecretsContract,
+  adminRotateSecretContract,
   createPostContract,
   deleteDocumentContract,
   deleteFileContract,
@@ -15,7 +19,11 @@ import {
   putDocumentContract,
   setPostsStateContract,
   updatePostContract,
+  type AdminCreateSecretBody,
+  type AdminDeleteSecretBody,
+  type AdminDeleteSecretResponse,
   type AdminListPostsQuery,
+  type AdminRotateSecretBody,
   type ApiContract,
   type ApiContractBody,
   type ApiContractQuery,
@@ -37,7 +45,9 @@ import {
   type ListFilesResponse,
   type ListPostsQuery,
   type ListPostsResponse,
+  type ListSecretsResponse,
   type PutDocumentBody,
+  type SecretMetadata,
   type SetPostsStateBody,
   type UpdatePostBody,
   type UserDocument,
@@ -86,6 +96,17 @@ export interface ApiClient {
   setPostsState(body: SetPostsStateBody): Promise<BulkResult>;
   deletePosts(body: DeletePostsBody): Promise<BulkResult>;
   listAssets(): Promise<ListAssetsResponse>;
+  /**
+   * Admin secrets-management operations. Every one of these is rejected with
+   * 403 unless the configured `getAuthToken` yields a session holding the
+   * `secrets` admin section — the client cannot and does not check that
+   * itself. None of these ever returns a decrypted value; `apps/api` has no
+   * route that does.
+   */
+  adminListSecrets(): Promise<ListSecretsResponse>;
+  adminCreateSecret(body: AdminCreateSecretBody): Promise<SecretMetadata>;
+  adminRotateSecret(body: AdminRotateSecretBody): Promise<SecretMetadata>;
+  adminDeleteSecret(body: AdminDeleteSecretBody): Promise<AdminDeleteSecretResponse>;
   request<TContract extends ApiContract>(
     contract: TContract,
     ...args: RequiresRequestOptions<TContract> extends true
@@ -357,6 +378,13 @@ export function createApiClient(config: ApiClientConfig): ApiClient {
     deletePosts: (body: DeletePostsBody) =>
       request<typeof deletePostsContract>(deletePostsContract, { body }),
     listAssets: () => request<typeof listAssetsContract>(listAssetsContract),
+    adminListSecrets: () => request<typeof adminListSecretsContract>(adminListSecretsContract),
+    adminCreateSecret: (body: AdminCreateSecretBody) =>
+      request<typeof adminCreateSecretContract>(adminCreateSecretContract, { body }),
+    adminRotateSecret: (body: AdminRotateSecretBody) =>
+      request<typeof adminRotateSecretContract>(adminRotateSecretContract, { body }),
+    adminDeleteSecret: (body: AdminDeleteSecretBody) =>
+      request<typeof adminDeleteSecretContract>(adminDeleteSecretContract, { body }),
     request,
   };
 }

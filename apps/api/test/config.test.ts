@@ -434,6 +434,7 @@ void test("loadApiRuntimeConfig populates secretsStore when both vars are presen
       baseUrl: "http://secrets.internal:3002",
       serviceToken: "svc_test_token",
       integrationNames: [],
+      manageToken: null,
     },
   );
 });
@@ -495,6 +496,7 @@ void test("loadApiRuntimeConfig parses and trims SECRETS_INTEGRATION_NAMES, drop
       baseUrl: "http://secrets.internal:3002",
       serviceToken: "svc_test_token",
       integrationNames: ["github/token", "discord/webhook"],
+      manageToken: null,
     },
   );
 });
@@ -503,5 +505,52 @@ void test("loadApiRuntimeConfig throws when SECRETS_INTEGRATION_NAMES is set wit
   assert.throws(
     () => loadApiRuntimeConfig({ SECRETS_INTEGRATION_NAMES: "github/token" }),
     /SECRETS_INTEGRATION_NAMES must not be set unless SECRETS_BASE_URL and SECRETS_SERVICE_TOKEN are both configured/,
+  );
+});
+
+void test("loadApiRuntimeConfig populates manageToken when set alongside a configured store", () => {
+  assert.deepEqual(
+    loadApiRuntimeConfig({
+      SECRETS_BASE_URL: "http://secrets.internal:3002",
+      SECRETS_SERVICE_TOKEN: "svc_read_token",
+      SECRETS_MANAGE_TOKEN: " svc_manage_token ",
+    }).secretsStore,
+    {
+      baseUrl: "http://secrets.internal:3002",
+      serviceToken: "svc_read_token",
+      integrationNames: [],
+      manageToken: "svc_manage_token",
+    },
+  );
+});
+
+void test("loadApiRuntimeConfig throws when SECRETS_MANAGE_TOKEN is set without a configured store", () => {
+  assert.throws(
+    () => loadApiRuntimeConfig({ SECRETS_MANAGE_TOKEN: "svc_manage_token" }),
+    /SECRETS_MANAGE_TOKEN must not be set unless SECRETS_BASE_URL and SECRETS_SERVICE_TOKEN are both configured/,
+  );
+});
+
+void test("loadApiRuntimeConfig rejects a blank SECRETS_MANAGE_TOKEN", () => {
+  assert.throws(
+    () =>
+      loadApiRuntimeConfig({
+        SECRETS_BASE_URL: "http://secrets.internal:3002",
+        SECRETS_SERVICE_TOKEN: "svc_read_token",
+        SECRETS_MANAGE_TOKEN: "   ",
+      }),
+    /SECRETS_MANAGE_TOKEN must not be empty when it is set/,
+  );
+});
+
+void test("loadApiRuntimeConfig throws when SECRETS_MANAGE_TOKEN equals SECRETS_SERVICE_TOKEN", () => {
+  assert.throws(
+    () =>
+      loadApiRuntimeConfig({
+        SECRETS_BASE_URL: "http://secrets.internal:3002",
+        SECRETS_SERVICE_TOKEN: "svc_shared_token",
+        SECRETS_MANAGE_TOKEN: "svc_shared_token",
+      }),
+    /SECRETS_MANAGE_TOKEN must not equal SECRETS_SERVICE_TOKEN/,
   );
 });
