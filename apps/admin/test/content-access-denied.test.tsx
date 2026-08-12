@@ -8,17 +8,19 @@ const { mockUseAuth } = vi.hoisted(() => ({ mockUseAuth: vi.fn() }));
 
 vi.mock("@unimatrix/auth/react", () => ({ useAuth: mockUseAuth }));
 
-const { AdminAccessDenied } = await import("@/features/content/content-panel");
+const { SectionAccessDenied } = await import("@/features/sections/section-panel");
 
 afterEach(() => {
   mockUseAuth.mockReset();
 });
 
-describe("AdminAccessDenied", () => {
+describe("SectionAccessDenied", () => {
   it("sends a signed-out visitor to the auth hub with a return address", () => {
     mockUseAuth.mockReturnValue({ isSignedIn: false });
 
-    render(<AdminAccessDenied authAppUrl="https://auth.example.test" />);
+    render(
+      <SectionAccessDenied authAppUrl="https://auth.example.test" description="Manages things." />,
+    );
 
     const signIn = screen.getByRole("link", { name: "Sign in" });
     expect(signIn).toHaveAttribute(
@@ -31,10 +33,25 @@ describe("AdminAccessDenied", () => {
   it("tells a signed-in visitor the account lacks access, and offers no sign-in link", () => {
     mockUseAuth.mockReturnValue({ isSignedIn: true });
 
-    render(<AdminAccessDenied authAppUrl="https://auth.example.test" />);
+    render(
+      <SectionAccessDenied authAppUrl="https://auth.example.test" description="Manages things." />,
+    );
 
     expect(screen.queryByRole("link", { name: "Sign in" })).not.toBeInTheDocument();
     expect(screen.getByText(/does not carry admin access/)).toBeInTheDocument();
+  });
+
+  it("renders the caller's description of what the section manages", () => {
+    mockUseAuth.mockReturnValue({ isSignedIn: true });
+
+    render(
+      <SectionAccessDenied
+        authAppUrl="https://auth.example.test"
+        description="This tool manages integration credentials."
+      />,
+    );
+
+    expect(screen.getByText(/manages integration credentials/)).toBeInTheDocument();
   });
 
   it.each([false, true])(
@@ -42,7 +59,12 @@ describe("AdminAccessDenied", () => {
     (isSignedIn) => {
       mockUseAuth.mockReturnValue({ isSignedIn });
 
-      render(<AdminAccessDenied authAppUrl="https://auth.example.test" />);
+      render(
+        <SectionAccessDenied
+          authAppUrl="https://auth.example.test"
+          description="Manages things."
+        />,
+      );
 
       // A router `Link to="/"` here resolves to the admin root, not the site.
       // Asserting the absolute href is what catches that regression.

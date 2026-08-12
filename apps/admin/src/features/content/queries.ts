@@ -1,6 +1,8 @@
 import { queryOptions, type QueryClient } from "@tanstack/react-query";
-import { ApiClientError, type ApiClient } from "@unimatrix/api-client";
+import type { ApiClient } from "@unimatrix/api-client";
 import type { ContentPostSummary, ContentPostType, ListPostsResponse } from "@unimatrix/shared";
+
+import { retryUnlessClientError } from "@/lib/retry";
 
 /**
  * Admin reads, keyed separately from the public ones. The two answer different
@@ -12,26 +14,6 @@ export const adminQueryKeys = {
   all: ["admin", "content"] as const,
   list: (type?: ContentPostType) => ["admin", "content", "list", type ?? "all"] as const,
 };
-
-/**
- * Never retried. Every admin call needs a valid `auth:admin` session, so a
- * failure here is a 401 or a 403 far more often than a blip, and retrying it
- * only delays telling the admin their session is the problem.
- *
- * A `retry` option is safe here, unlike on the public content queries, because
- * these are read through `useQuery` inside components that render their own
- * pending and error states. Do not move one of these into a route loader
- * without also setting `retry: false` — awaited through `ensureQueryData`, any
- * retry above `0` leaves the promise unsettled and the route renders nothing
- * at all.
- */
-function retryUnlessClientError(failureCount: number, error: Error): boolean {
-  if (error instanceof ApiClientError && error.status >= 400 && error.status < 500) {
-    return false;
-  }
-
-  return failureCount < 1;
-}
 
 /**
  * Every post in a collection, in every publication state.

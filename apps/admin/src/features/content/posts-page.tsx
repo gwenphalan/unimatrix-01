@@ -41,8 +41,8 @@ import {
 import { useMemo, useState } from "react";
 
 import { useApiClient } from "@/lib/api-client";
+import { SectionPanel } from "@/features/sections/section-panel";
 
-import { AdminPanel } from "./content-panel";
 import { describeAdminError, useDeletePosts, useSetPostsState } from "./mutations";
 import { adminPostsQueryOptions } from "./queries";
 
@@ -85,7 +85,7 @@ export function PostsPage() {
     // two collections wide enough to read as a rendering fault.
     <div className="grid min-h-0 flex-1 content-start items-start gap-4 overflow-y-auto pb-2 xl:grid-cols-2">
       {COLLECTIONS.map((collection) => (
-        <AdminPanel
+        <SectionPanel
           actions={
             <Button asChild className="gap-2" size="sm" variant="outline">
               <Link search={{ type: collection.type }} to="/content/posts/new">
@@ -108,7 +108,7 @@ export function PostsPage() {
             isPending={isPending}
             posts={posts.filter((post) => post.type === collection.type)}
           />
-        </AdminPanel>
+        </SectionPanel>
       ))}
     </div>
   );
