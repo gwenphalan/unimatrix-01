@@ -537,6 +537,9 @@ function AddCredentialDialog({ onClose }: { onClose: () => void }) {
   const [value, setValue] = useState("");
   const setSecretValue = useSetSecretValue();
   const nameFieldId = useId();
+  // The rule is the only stated reason the submit button is disabled, so it has
+  // to reach a screen reader through the field rather than by proximity.
+  const nameHintId = useId();
 
   const name = `${INTEGRATION_NAME_PREFIX}${suffix}`;
   const isNameValid = secretNameSchema.safeParse(name).success;
@@ -575,6 +578,8 @@ function AddCredentialDialog({ onClose }: { onClose: () => void }) {
                   {INTEGRATION_NAME_PREFIX}
                 </span>
                 <Input
+                  aria-describedby={nameHintId}
+                  aria-invalid={suffix.length > 0 && !isNameValid}
                   autoComplete="off"
                   autoFocus
                   className="font-mono"
@@ -593,6 +598,7 @@ function AddCredentialDialog({ onClose }: { onClose: () => void }) {
                     ? "text-xs text-destructive"
                     : "text-xs text-muted-foreground"
                 }
+                id={nameHintId}
               >
                 Lowercase letters, digits and hyphens, with <code>/</code> between segments. No
                 underscores, no dots.
