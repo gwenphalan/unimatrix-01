@@ -72,6 +72,17 @@ function panel(name: "Platform credentials" | "Integrations") {
   return within(screen.getByRole("region", { name }));
 }
 
+/** The `li` a credential's name sits in — the row, now that there is no `tr`. */
+function row(name: string): HTMLElement {
+  const element = screen.getByText(name).closest("li");
+
+  if (element === null) {
+    throw new Error(`No row found for ${name}`);
+  }
+
+  return element;
+}
+
 async function renderPage() {
   const { SecretsPage } = await import("@/features/secrets/secrets-page");
 
@@ -109,30 +120,38 @@ describe("SecretsPage", () => {
   });
 
   /**
-   * The four faults the first build shipped, asserted as absences: an
-   * implementation note above the table, a KEK column reading `1` forever, a
-   * `Created` column nobody acts on, and icon-only row actions.
+   * The faults the first build shipped, asserted as absences: an implementation
+   * note above the list, a panel description explaining its own heading, a KEK
+   * column reading `1` forever, a `Created` column nobody acts on, and the
+   * table chrome itself — four credentials do not repay column headers.
    */
-  it("carries no implementation note, no KEK column and no Created column", async () => {
+  it("carries no implementation note, no panel description and no table", async () => {
     await renderPage();
 
     expect(screen.queryByText(/never display a credential/u)).not.toBeInTheDocument();
-    expect(screen.queryByRole("columnheader", { name: "KEK version" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("columnheader", { name: "Created" })).not.toBeInTheDocument();
-    expect(screen.getAllByRole("columnheader", { name: "Rotated" })).toHaveLength(2);
+    expect(screen.queryByText(/Credentials the system itself runs on/u)).not.toBeInTheDocument();
+    expect(screen.queryByText(/the outside services this system calls/u)).not.toBeInTheDocument();
+    expect(screen.queryAllByRole("columnheader")).toHaveLength(0);
+    expect(screen.queryAllByRole("table")).toHaveLength(0);
   });
 
-  it("says how stale a value is beside the date it was rotated", async () => {
+  /**
+   * `consumedBy` is what a destructive dialog needs, not what a row at rest
+   * needs — on the row it doubled every credential's height for prose the
+   * operator acts on once.
+   */
+  it("says what is stored and how stale it is, and nothing else", async () => {
     await renderPage();
 
-    expect(panel("Platform credentials").getAllByText("08-01-26").length).toBeGreaterThan(0);
-    // A row with no value has nothing to date, and must not read as rotated
-    // at the epoch.
-    const notSetRow = panel("Platform credentials")
-      .getByText("platform/clerk-jwt-key")
-      .closest("tr");
-    expect(notSetRow).not.toBeNull();
-    expect(within(notSetRow as HTMLElement).getAllByText("—")).toHaveLength(2);
+    const setRow = row("platform/clerk-secret-key");
+
+    expect(setRow).toHaveTextContent("sk_l…");
+    expect(setRow).toHaveTextContent(/rotated/u);
+    expect(setRow).not.toHaveTextContent(/Clerk backend calls/u);
+
+    // A row with no value has nothing to date, and must not read as rotated at
+    // the epoch.
+    expect(row("platform/clerk-jwt-key")).toHaveTextContent("No value stored");
   });
 
   it("badges only the row sealed under an older key", async () => {
@@ -141,7 +160,7 @@ describe("SecretsPage", () => {
     const badges = screen.getAllByText("Sealed under an older key");
 
     expect(badges).toHaveLength(1);
-    expect(badges[0]?.closest("tr")).toHaveTextContent("integrations/stripe/api-key");
+    expect(badges[0]?.closest("li")).toHaveTextContent("integrations/stripe/api-key");
   });
 
   it("offers Set value, not Rotate, for a name the store has nothing for", async () => {
@@ -330,8 +349,9 @@ describe("SecretsPage", () => {
 
     renderInRouter(<SecretsPage />);
 
-    expect(await screen.findByText("No integrations yet.")).toBeInTheDocument();
-    expect(screen.getByText(/Add one when you wire a provider up/u)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/Add a credential when you wire a provider up/u),
+    ).toBeInTheDocument();
     expect(screen.queryByText(/Create one to see it listed here/u)).not.toBeInTheDocument();
   });
 });

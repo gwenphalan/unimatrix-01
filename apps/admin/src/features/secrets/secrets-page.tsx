@@ -30,12 +30,6 @@ import {
   Input,
   Label,
   Skeleton,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
 } from "@unimatrix/ui/editor";
 import { useId, useMemo, useState, type ReactNode } from "react";
 
@@ -59,33 +53,26 @@ import {
 /** The prefix every name in the integrations panel lives under. */
 const INTEGRATION_NAME_PREFIX = "integrations/";
 
+/**
+ * No panel descriptions. This console has one operator, who knows what a
+ * platform credential is; a sentence under each heading explaining the heading
+ * is onboarding copy for a reader who does not exist, and it pushes the rows —
+ * the only thing on the page worth reading — below the fold.
+ */
 const PANELS: readonly {
   tier: SecretTier;
   title: string;
-  description: string;
-  emptyTitle: string;
-  emptyDescription: string;
+  empty: string;
 }[] = [
   {
     tier: "platform",
     title: "Platform credentials",
-    // The last clause is the thing an operator would otherwise get wrong: the
-    // page looks like a control panel for the running system, and for this
-    // tier it is not one yet.
-    description:
-      "Credentials the system itself runs on. Each service still reads these from its own deploy environment, so setting one here does not change anything that is currently running.",
-    emptyTitle: "No platform credentials are declared.",
-    emptyDescription:
-      "These names come from the registry in the codebase, not from this console. Declare one there and it appears here.",
+    empty: "Nothing declared. These names come from the registry in the codebase.",
   },
   {
     tier: "integration",
     title: "Integrations",
-    description:
-      "Credentials for the outside services this system calls. The API loads them when it starts.",
-    emptyTitle: "No integrations yet.",
-    emptyDescription:
-      "This is where the keys and tokens for other providers live. Add one when you wire a provider up.",
+    empty: "Nothing yet. Add a credential when you wire a provider up.",
   },
 ];
 
@@ -152,13 +139,11 @@ export function SecretsPage() {
             null
           }
           className="min-w-0"
-          description={panel.description}
           key={panel.tier}
           title={panel.title}
         >
-          <SecretsTable
-            emptyDescription={panel.emptyDescription}
-            emptyTitle={panel.emptyTitle}
+          <SecretsList
+            empty={panel.empty}
             error={error}
             isPending={isPending}
             onAct={(action, row) => {
@@ -189,16 +174,27 @@ export function SecretsPage() {
   );
 }
 
-function SecretsTable({
-  emptyDescription,
-  emptyTitle,
+/**
+ * Settings rows, not a table.
+ *
+ * Four credentials do not repay column headers: `Name`, `Status` and `Actions`
+ * label content that is already self-evident, and the header row costs the same
+ * vertical space as a credential. Every secrets UI worth copying — Actions
+ * secrets, Vercel env vars — is a hairline-separated list for the same reason.
+ *
+ * What each row says is deliberately short: the name, its state, and one muted
+ * line of "what is in there and how old is it". `consumedBy` is not on the row
+ * — it matters at the moment you are about to clear something, so it lives in
+ * that dialog and nowhere else.
+ */
+function SecretsList({
+  empty,
   error,
   isPending,
   onAct,
   rows,
 }: {
-  emptyDescription: string;
-  emptyTitle: string;
+  empty: string;
   error: Error | null;
   isPending: boolean;
   onAct: (action: SecretRowAction, row: SecretRowDescription) => void;
@@ -218,79 +214,75 @@ function SecretsTable({
   if (isPending) {
     return (
       <div className="grid gap-2">
-        <Skeleton className="h-10 w-full" />
-        <Skeleton className="h-10 w-full" />
+        <Skeleton className="h-12 w-full" />
+        <Skeleton className="h-12 w-full" />
       </div>
     );
   }
 
   if (rows.length === 0) {
-    return (
-      <Empty>
-        <EmptyHeader>
-          <EmptyTitle>{emptyTitle}</EmptyTitle>
-          <EmptyDescription>{emptyDescription}</EmptyDescription>
-        </EmptyHeader>
-      </Empty>
-    );
+    return <p className="py-2 text-sm text-muted-foreground">{empty}</p>;
   }
 
   return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>Name</TableHead>
-          <TableHead>Status</TableHead>
-          <TableHead>Value</TableHead>
-          <TableHead>Rotated</TableHead>
-          <TableHead className="text-right">Actions</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {rows.map((row) => (
-          <TableRow key={row.name}>
-            <TableCell className="align-top">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="font-mono text-sm text-foreground">{row.name}</span>
-                {row.needsReseal ? (
-                  // Outline and worded plainly. A row sealed under a
-                  // superseded key still decrypts — this is work outstanding,
-                  // not a fault, and colouring it as one would train the
-                  // operator to ignore the colour that does mean a fault.
-                  <Badge variant="outline">Sealed under an older key</Badge>
-                ) : null}
-              </div>
-              {row.consumedBy === null ? null : (
-                <p className="mt-1 max-w-prose text-xs text-muted-foreground">{row.consumedBy}</p>
-              )}
-            </TableCell>
-            <TableCell className="align-top">
+    <ul className="grid">
+      {rows.map((row) => (
+        <li
+          className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-border py-3 first:pt-0 last:border-b-0 last:pb-0"
+          key={row.name}
+        >
+          <div className="grid min-w-0 gap-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="truncate font-mono text-sm text-foreground">{row.name}</span>
               <StatusBadge row={row} />
-            </TableCell>
-            <TableCell className="align-top font-mono text-sm text-muted-foreground">
-              {row.maskedValue ?? "—"}
-            </TableCell>
-            <TableCell className="align-top text-sm text-muted-foreground">
-              <RotatedCell rotatedAt={row.rotatedAt} />
-            </TableCell>
-            <TableCell className="align-top">
-              <div className="flex flex-wrap items-center justify-end gap-2">
-                {row.actions.map((action) => (
-                  <RowActionButton
-                    action={action}
-                    key={action}
-                    onClick={() => {
-                      onAct(action, row);
-                    }}
-                    row={row}
-                  />
-                ))}
-              </div>
-            </TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+              {row.needsReseal ? (
+                // Outline and worded plainly. A row sealed under a superseded
+                // key still decrypts — this is work outstanding, not a fault,
+                // and colouring it as one would train the operator to ignore
+                // the colour that does mean a fault.
+                <Badge variant="outline">Sealed under an older key</Badge>
+              ) : null}
+            </div>
+            <RowMeta row={row} />
+          </div>
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            {row.actions.map((action) => (
+              <RowActionButton
+                action={action}
+                key={action}
+                onClick={() => {
+                  onAct(action, row);
+                }}
+                row={row}
+              />
+            ))}
+          </div>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/**
+ * One muted line under the name: the masked value, then how stale it is.
+ * A row with no value has neither, and says so with a single em-dash rather
+ * than two empty columns.
+ */
+function RowMeta({ row }: { row: SecretRowDescription }) {
+  if (row.rotatedAt === null) {
+    return <p className="text-xs text-muted-foreground">No value stored</p>;
+  }
+
+  // `formatAge` returns null for a timestamp it cannot read; the absolute date
+  // is the honest fallback, not a blank.
+  const age = formatAge(row.rotatedAt) ?? formatPublishedDate(row.rotatedAt);
+
+  return (
+    <p className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
+      <span className="font-mono">{row.maskedValue}</span>
+      <span aria-hidden="true">·</span>
+      <span>rotated {age}</span>
+    </p>
   );
 }
 
@@ -308,21 +300,6 @@ function StatusBadge({ row }: { row: SecretRowDescription }) {
     <Badge className={row.status === "not-set" ? "border-dashed" : undefined} variant="outline">
       {row.statusLabel}
     </Badge>
-  );
-}
-
-function RotatedCell({ rotatedAt }: { rotatedAt: string | null }) {
-  if (rotatedAt === null) {
-    return "—";
-  }
-
-  const age = formatAge(rotatedAt);
-
-  return (
-    <div className="grid gap-0.5">
-      <span>{formatPublishedDate(rotatedAt)}</span>
-      {age === null ? null : <span className="text-xs">{age}</span>}
-    </div>
   );
 }
 
@@ -382,7 +359,17 @@ function RowActionButton({
   );
 }
 
-/** The credential a dialog is acting on, named once and prominently. */
+/**
+ * The credential a dialog is acting on, named once and prominently — and the
+ * one place `consumedBy` appears, because what breaks without a credential
+ * matters when you are about to change it and never while it sits in a list.
+ *
+ * The platform note is here for the same reason. The page looks like a control
+ * panel for the running system, and for this tier it is not one yet: nothing
+ * reads a platform value out of the store, so writing one changes no running
+ * service. Stated on the row it would be noise on every render; stated here it
+ * lands exactly when the operator would otherwise expect an effect.
+ */
 function DialogSubject({ row }: { row: SecretRowDescription }) {
   return (
     <div className="grid gap-1 border border-border/60 px-3 py-2">
@@ -390,6 +377,12 @@ function DialogSubject({ row }: { row: SecretRowDescription }) {
       {row.consumedBy === null ? null : (
         <p className="text-xs text-muted-foreground">{row.consumedBy}</p>
       )}
+      {row.tier === "platform" ? (
+        <p className="text-xs text-muted-foreground">
+          Each service still reads this from its own deploy environment, so saving it here does not
+          change anything currently running.
+        </p>
+      ) : null}
     </div>
   );
 }
