@@ -124,7 +124,7 @@ void test("issuance rejects a duplicate name, a bad name, a bad scope, and a bad
           scopePrefix: "github",
           capability: unknownCapability as ServiceTokenCapability,
         }),
-      /capability must be read or manage/u,
+      /capability must be read, write or manage/u,
     );
   });
 });

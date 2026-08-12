@@ -4,8 +4,10 @@ import { z } from "zod";
  * These shapes back the secrets store served by `apps/secrets` — a Fastify
  * service with its own Drizzle schema, distinct from `@unimatrix/secrets`
  * (crypto, no I/O) and from `@unimatrix/db`. The scoped read route needs a
- * `read`-capability service token; create, rotate, delete and list metadata
- * need `manage`. No route reachable by a `manage` token returns a value.
+ * `read`-capability service token; create and rotate need `write` or
+ * `manage`; delete needs `manage` alone; list metadata needs `write` or
+ * `manage` too, so a write-only token can still see the rows it holds. No
+ * route reachable by a `write` or `manage` token returns a value.
  */
 
 /**
@@ -79,8 +81,15 @@ export const secretMetadataSchema = z.strictObject({
 
 export type SecretMetadata = z.output<typeof secretMetadataSchema>;
 
+/**
+ * The keyring's active KEK version, read live rather than derived from the
+ * listed rows — `max(kekVersion)` across `secrets` would read as current
+ * immediately after a rotation, which is exactly when every row is stale and
+ * none of them should show as behind.
+ */
 export const listSecretsResponseSchema = z.strictObject({
   secrets: z.array(secretMetadataSchema),
+  activeKekVersion: z.number().int().positive(),
 });
 
 export type ListSecretsResponse = z.output<typeof listSecretsResponseSchema>;

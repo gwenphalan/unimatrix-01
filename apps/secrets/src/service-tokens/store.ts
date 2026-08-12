@@ -71,7 +71,7 @@ export function issueServiceToken(
 
   if (!isServiceTokenCapability(options.capability)) {
     throw createServiceTokenError(
-      `capability must be read or manage. Received ${JSON.stringify(options.capability)}.`,
+      `capability must be read, write or manage. Received ${JSON.stringify(options.capability)}.`,
     );
   }
 

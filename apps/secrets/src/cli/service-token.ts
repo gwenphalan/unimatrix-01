@@ -25,7 +25,7 @@ import { parseFlags, requireFlag, writeAtomically } from "./support.js";
 
 const USAGE = [
   "Usage:",
-  "  service-token issue --name <name> --scope <secret-name-prefix> --capability <read|manage>",
+  "  service-token issue --name <name> --scope <secret-name-prefix> --capability <read|write|manage>",
   "  service-token revoke --name <name>",
   "  service-token list",
 ].join("\n");
@@ -39,10 +39,10 @@ function runIssue(argv: readonly string[], deps: ServiceTokenCliDeps): void {
   const flags = parseFlags(argv, ["--name", "--scope", "--capability"], USAGE);
   const capability = requireFlag(flags, "--capability", USAGE);
 
-  // No default. Defaulting either way silently mints the wrong kind of
-  // credential, and the two are mutually exclusive by design.
+  // No default. Defaulting mints the wrong kind of credential silently, and
+  // capability is single-valued by design.
   if (!isServiceTokenCapability(capability)) {
-    throw new Error(`--capability must be read or manage.\n\n${USAGE}`);
+    throw new Error(`--capability must be read, write or manage.\n\n${USAGE}`);
   }
 
   const name = requireFlag(flags, "--name", USAGE);

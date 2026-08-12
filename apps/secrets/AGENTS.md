@@ -6,14 +6,16 @@ under a versioned KEK ring (`@unimatrix/secrets`). `/health` is the only URL ans
 bearer service token: an unauthenticated request to anything else is a 401, including a URL
 matching no route, and only an authenticated one gets a 404 for an unmatched URL.
 
-Five routes sit behind that guard, split by the caller's token capability. `GET /secrets/value`
-needs a `read`-capability token and is the **only** route anywhere in this service permitted to
-return a decrypted value. `POST /secrets`, `POST /secrets/rotate`, `DELETE /secrets` and
-`GET /secrets` need `manage` and return metadata — a masked prefix, never a value. There is no
-read-back route reachable by a `manage` token and no debug flag that adds one. The host-local
-`secret read` CLI (`src/cli/secret.ts`) can still print a value — that is not a bypass of this rule:
-it needs host access in addition to a service token's worth of KEK material, and it writes the same
-`secret.read` audit row the route does.
+Five routes sit behind that guard, split by the caller's token capability — `read`, `write`, or
+`manage` (`src/service-tokens/capability.ts`). `GET /secrets/value` needs `read` and is the
+**only** route anywhere in this service permitted to return a decrypted value. `POST /secrets`,
+`POST /secrets/rotate` and `GET /secrets` accept `write` or `manage`; `DELETE /secrets` accepts
+`manage` alone — `write` may create and rotate but never delete. Create, rotate and list return
+metadata — a masked prefix, never a value; the list route adds the keyring's active version, and
+`DELETE /secrets` returns a count alone. There is no read-back route reachable by a `write` or
+`manage` token and no debug flag that adds one. The host-local `secret read` CLI (`src/cli/secret.ts`) can still
+print a value — that is not a bypass of this rule: it needs host access in addition to a service
+token's worth of KEK material, and it writes the same `secret.read` audit row the route does.
 
 Transport is a bearer token over plain HTTP. TLS with a pinned self-signed server
 certificate is the decided follow-up, landing with the PR that gives the two stacks a shared network
@@ -39,8 +41,9 @@ cache as of this PR, but the two stacks share no network yet, so that PR has not
 - `src/plugins`: `index.ts` wires the Zod type-provider compilers, the database, the rate limiter and
   the service-token guard — no CORS, no security headers, no request-id/observability plugin. This
   service has no browser caller for any of those to serve.
-- `src/service-tokens`: token generation and hashing (`format.ts`), the `read`/`manage` capability
-  (`capability.ts`), segment-boundary prefix matching (`scope.ts`), and the Drizzle-backed store.
+- `src/service-tokens`: token generation and hashing (`format.ts`), the `read`/`write`/`manage`
+  capability (`capability.ts`), segment-boundary prefix matching (`scope.ts`), and the
+  Drizzle-backed store.
 - `src/audit`: the append-only writer for `secret_audit_log`. One export, and that is the property —
   SQLite cannot make a table append-only, so nothing here may gain an update or delete.
 - `src/cli/service-token.ts`: host-local token issuance, revocation and listing. Under `src/` rather

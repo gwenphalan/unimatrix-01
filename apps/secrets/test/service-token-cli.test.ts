@@ -71,7 +71,7 @@ void test("issue refuses a missing or unknown capability rather than choosing on
     assert.throws(() => run("issue", "--name", "api", "--scope", "github"), /--capability/u);
     assert.throws(
       () => run("issue", "--name", "api", "--scope", "github", "--capability", "admin"),
-      /--capability must be read or manage/u,
+      /--capability must be read, write or manage/u,
     );
     assert.throws(
       () => run("issue", "--name", "api", "--capability", "read"),

@@ -186,12 +186,23 @@ describe("createSecretBodySchema / rotateSecretBodySchema", () => {
 
 describe("listSecretsResponseSchema", () => {
   it("accepts a minimal valid response", () => {
-    expect(listSecretsResponseSchema.safeParse({ secrets: [VALID_METADATA] }).success).toBe(true);
+    expect(
+      listSecretsResponseSchema.safeParse({ secrets: [VALID_METADATA], activeKekVersion: 1 })
+        .success,
+    ).toBe(true);
+  });
+
+  it("rejects a response missing activeKekVersion", () => {
+    expect(listSecretsResponseSchema.safeParse({ secrets: [VALID_METADATA] }).success).toBe(false);
   });
 
   it("rejects an unknown key, proving strictObject", () => {
     expect(
-      listSecretsResponseSchema.safeParse({ secrets: [VALID_METADATA], extra: true }).success,
+      listSecretsResponseSchema.safeParse({
+        secrets: [VALID_METADATA],
+        activeKekVersion: 1,
+        extra: true,
+      }).success,
     ).toBe(false);
   });
 });
