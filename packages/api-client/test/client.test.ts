@@ -545,6 +545,7 @@ describe("api client", () => {
                   rotatedAt: "2026-07-01T00:00:00.000Z",
                 },
               ],
+              activeKekVersion: 1,
             }),
           ok: true,
           status: 200,
