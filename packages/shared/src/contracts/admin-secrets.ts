@@ -2,8 +2,8 @@ import {
   adminCreateSecretBodySchema,
   adminDeleteSecretBodySchema,
   adminDeleteSecretResponseSchema,
+  adminListSecretsResponseSchema,
   adminRotateSecretBodySchema,
-  listSecretsResponseSchema,
   secretMetadataSchema,
 } from "../schemas/secrets.js";
 import { defineApiContract } from "./api-contract.js";
@@ -21,7 +21,7 @@ import { defineApiContract } from "./api-contract.js";
 export const adminListSecretsContract = defineApiContract({
   method: "GET",
   path: "/secrets/admin",
-  responseSchema: listSecretsResponseSchema,
+  responseSchema: adminListSecretsResponseSchema,
 });
 
 export type AdminListSecretsContract = typeof adminListSecretsContract;
