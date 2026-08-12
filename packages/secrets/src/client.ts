@@ -1,3 +1,5 @@
+import { Agent, fetch as undiciFetch } from "undici";
+
 import {
   createSecretContract,
   deleteSecretsContract,
@@ -21,12 +23,25 @@ import { SecretValue } from "./secret-value.js";
 const DEFAULT_TIMEOUT_MS = 5000;
 
 export interface SecretsClientConfig {
-  /** Origin of the secrets service, e.g. `http://secrets:3002`. */
+  /** Origin of the secrets service, e.g. `https://secrets:3001`. */
   baseUrl: string;
   serviceToken: string;
   fetch?: typeof globalThis.fetch;
   /** Milliseconds before a request is aborted. Defaults to {@link DEFAULT_TIMEOUT_MS}. */
   timeoutMs?: number;
+  /**
+   * The one certificate this client will accept, PEM-encoded. Supplying it
+   * replaces the system trust store for this client's connections rather
+   * than adding to it, so a certificate signed by anything else — including a
+   * public CA — fails the handshake. Hostname verification stays on: the
+   * store's certificate carries its Compose service name as its SAN, so
+   * `baseUrl` must use that same name.
+   *
+   * Mutually exclusive with {@link SecretsClientConfig.fetch}: a caller's
+   * `fetch` is free to ignore a dispatcher, so accepting both would look
+   * pinned and not be.
+   */
+  caCertificatePem?: string;
 }
 
 export interface GetSecretValueOptions {
@@ -92,6 +107,43 @@ function resolveFetch(fetchImpl: typeof globalThis.fetch | undefined): typeof gl
   }
 
   return globalThis.fetch.bind(globalThis);
+}
+
+/**
+ * The `fetch` a factory will use for every request it makes. With a pin, the
+ * undici `Agent` is built here — once per factory rather than once per
+ * request, since each `Agent` owns a connection pool and a per-request one
+ * leaks sockets for the life of the process.
+ *
+ * `setGlobalDispatcher` would do the same job with no wrapper and is
+ * deliberately not used: it re-routes every outbound `fetch` in the process,
+ * including the ones this package knows nothing about.
+ */
+function resolveClientFetch(config: SecretsClientConfig): typeof globalThis.fetch {
+  if (config.caCertificatePem === undefined) {
+    return resolveFetch(config.fetch);
+  }
+
+  if (config.fetch !== undefined) {
+    throw new SecretsClientError(
+      "The secrets client accepts either a fetch implementation or caCertificatePem, not both — " +
+        "a supplied fetch may ignore the dispatcher that carries the pin.",
+      { status: null },
+    );
+  }
+
+  const dispatcher = new Agent({ connect: { ca: config.caCertificatePem } });
+
+  // undici's own `fetch`, not the global one, and the cast is that choice:
+  // the `Agent` and the `fetch` receiving it must come from the same copy of
+  // undici. Handing this package's `Agent` to Node's built-in `fetch` — which
+  // carries its own bundled undici — throws
+  // `InvalidArgumentError: invalid onRequestStart method` at request time on
+  // Node 24.18.0 with undici 8 (measured), because the dispatcher's handler
+  // protocol differs between the two majors. No version range in package.json
+  // keeps those two aligned.
+  return ((input: Parameters<typeof undiciFetch>[0], init: Parameters<typeof undiciFetch>[1]) =>
+    undiciFetch(input, { ...init, dispatcher })) as unknown as typeof globalThis.fetch;
 }
 
 function buildRequestUrl(baseUrl: string, name: string): URL {
@@ -256,7 +308,7 @@ async function performManagementRequest<TContract extends ApiContract, TBody = u
 export function createSecretsManagementClient(
   config: SecretsClientConfig,
 ): SecretsManagementClient {
-  const fetchImpl = resolveFetch(config.fetch);
+  const fetchImpl = resolveClientFetch(config);
   const timeoutMs = config.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
   return {
@@ -299,7 +351,7 @@ export function createSecretsManagementClient(
 }
 
 export function createSecretsClient(config: SecretsClientConfig): SecretsClient {
-  const fetchImpl = resolveFetch(config.fetch);
+  const fetchImpl = resolveClientFetch(config);
   const timeoutMs = config.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
   return {

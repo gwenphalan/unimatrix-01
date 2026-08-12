@@ -1,7 +1,7 @@
 # AGENTS.md
 
 ## 1. Overview
-`packages/secrets` ships two deliberately separate entry points. `.` is pure, I/O-free AES-256-GCM value sealing under a versioned key ring, plus redaction — Node-only, zero runtime dependencies, no `@unimatrix/db`, no persistence, no network. `./client` is an HTTP client for `apps/secrets`' scoped read route: it depends on `@unimatrix/shared` for the contract and schema, and on nothing else in this package's crypto internals beyond `SecretValue`. `apps/secrets` consumes `.` (it is the only consumer of the crypto); `apps/api` consumes `./client`.
+`packages/secrets` ships two deliberately separate entry points. `.` is pure, I/O-free AES-256-GCM value sealing under a versioned key ring, plus redaction — Node-only, importing nothing outside `node:` builtins, no `@unimatrix/db`, no persistence, no network. `./client` is an HTTP client for `apps/secrets`' scoped read route: it depends on `@unimatrix/shared` for the contract and schema, on `undici` for certificate pinning, and on nothing else in this package's crypto internals beyond `SecretValue`. The package's two runtime dependencies both belong to `./client` alone — importing `.` pulls in neither. `apps/secrets` consumes `.` (it is the only consumer of the crypto); `apps/api` consumes `./client`.
 
 ## 2. Folder Structure
 - `src/errors.ts`: `SecretsError` and every `SecretsErrorCode` this package can raise.
@@ -15,6 +15,7 @@
 - **Never reads `process.env`.** `loadSecretsKeyring` takes the encoded key string as an argument, same rule `packages/auth` follows. This package never boots anything and never calls `process.exit`; a caller decides what a thrown `SecretsError` means for its own startup.
 - **AAD and plaintext-release**: see `envelope.ts`'s `buildAad` and `openSecretEnvelope` for what the AAD binds and why decryption has to happen as one expression — both are load-bearing comments on the lines that matter. The one thing worth repeating here: the AAD's granularity (binding `versionId`, not just `name`) is fixed the moment the first row is sealed under it; changing it means re-encrypting the whole store.
 - **Redaction bounds logs and serialization, not memory.** A JS string cannot be zeroized. `SecretValue`'s `toString`/`toJSON`/inspect override stop a value from leaking into a log line or a `JSON.stringify`; they say nothing about a value already scraped from process memory. Do not describe this package as protecting against the stronger property.
+- **A pinned client fetches through `undici`'s own `fetch`, never the global one.** An `Agent` from this package's undici handed to Node's built-in `fetch` throws `InvalidArgumentError: invalid onRequestStart method` at request time (measured, Node 24.18.0 + undici 8) — the built-in carries its own bundled undici and the dispatcher handler protocol differs across majors. `setGlobalDispatcher` is rejected for a different reason: it re-routes every outbound fetch in the process.
 - **Contract shapes live in `@unimatrix/shared`**, not here — `secretMetadataSchema` and friends in `packages/shared/src/schemas/secrets.ts`. The `.` entry owns crypto and redaction only; `./client` is the one place in this package permitted to import them.
 
 ## 4. Scope
