@@ -13,13 +13,26 @@ import { mockAssets } from "./fixtures.js";
  * no app is a dependency of any workspace here.
  *
  * Kept in step with the API's `isInlineSafeContentType` allowlist
- * (`apps/api/src/lib/http/content-types.ts`) by hand. This is the third
- * hand-kept copy of that list — admin's own `ASSET_ACCEPT` is already one —
- * and nothing reconciles the three.
+ * (`apps/api/src/lib/http/content-types.ts`) by hand. Another hand-written
+ * copy of a list the API owns — admin's `ASSET_ACCEPT` is one too, and its
+ * test pins it to itself rather than to the API, so nothing cross-checks any
+ * of them.
  */
 export const LAB_ASSET_ACCEPT = "image/png,image/jpeg,image/gif,image/webp,image/avif";
 
 const LAB_ASSET_ACCEPT_TYPES = new Set(LAB_ASSET_ACCEPT.split(","));
+
+/**
+ * Lowercases before the membership test, the way the API's
+ * `isInlineSafeContentType` does. One function rather than a `.toLowerCase()`
+ * at each call site: an uploaded `file.type` and a seeded row's `contentType`
+ * must be judged the same way, and the version of this that lowercased only
+ * one of them sent an uppercase seeded row down the no-bytes branch, which
+ * renders broken and reads as a deliberate signal.
+ */
+function isLabInlineSafe(contentType: string): boolean {
+  return LAB_ASSET_ACCEPT_TYPES.has(contentType.toLowerCase());
+}
 
 export class LabAssetUploadError extends Error {
   constructor(message: string) {
@@ -39,7 +52,7 @@ export interface CreateLabAssetUploaderOptions {
 
 export interface LabAssetUploader {
   uploadAsset(file: File): Promise<ContentAssetMetadata>;
-  /** The delivery URL an uploaded or seeded asset resolves to. See the module doc comment for the three branches. */
+  /** The delivery URL an asset resolves to. See {@link createLabAssetUploader} for the three branches. */
   assetUrl(hash: string): string;
 }
 
@@ -80,7 +93,14 @@ function seededPlaceholderUrl(originalFilename: string): string {
     `text-anchor="middle" dominant-baseline="middle">${label}</text>` +
     `</svg>`;
 
-  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+  // Parentheses too, which `encodeURIComponent` leaves alone as unreserved
+  // marks. This URL's destination is `![alt](url)` in the editor, and both
+  // remark and `parseImage` in `@unimatrix/ui`'s live preview end the URL at
+  // the first `)` — so a seeded row named `hero (final).png` would truncate
+  // the image to literal text with nothing reporting it.
+  const encoded = encodeURIComponent(svg).replaceAll("(", "%28").replaceAll(")", "%29");
+
+  return `data:image/svg+xml;charset=utf-8,${encoded}`;
 }
 
 /**
@@ -93,13 +113,22 @@ function seededPlaceholderUrl(originalFilename: string): string {
  * picker or asset-library prototype: an upload here succeeds and the list a
  * `LabApiClient` returns does not change.
  *
- * Two more limits worth knowing before reaching for this in a prototype:
+ * `assetUrl` resolves a hash through three branches, which is also why this is
+ * a factory rather than a pair of free functions: the real `assetUrl` is a
+ * pure string builder, and this one has to reach the bytes the store holds.
+ * Uploaded this session — the blob object URL. A seeded row with an
+ * allowlisted content type — a labelled SVG placeholder, since a seeded row
+ * carries metadata and no bytes. Anything else — the real URL shape under
+ * `LAB_API_BASE_URL`, which renders broken because nothing serves that port.
+ *
+ * Three more limits worth knowing before reaching for this in a prototype:
  *
  * - **`blob:` and `data:` URLs never render inside `PublicMarkdown`.**
  *   `sanitizeMarkdownImageSource`
  *   (`packages/ui/src/components/public-markdown.tsx`) accepts only
  *   root-relative or `https?:` sources; anything else renders as a muted
- *   `<span>` with the alt text and no `<img>` at all. So an `assetUrl()`
+ *   `<span>` holding the alt text, or nothing at all when the alt is empty,
+ *   and no `<img>` either way. So an `assetUrl()`
  *   result — uploaded blob, seeded placeholder, or unseeded fallback alike —
  *   is silently blank wherever a prototype renders a post body through that
  *   component. It renders fine in a plain `<img>` and in the editor's live
@@ -111,6 +140,11 @@ function seededPlaceholderUrl(originalFilename: string): string {
  *   `revokeAll`/`dispose` method. One would exist only to be called by a
  *   prototype that then renders a broken image, a failure mode this mock
  *   would be inventing rather than mirroring.
+ * - **`uploadAsset` needs a secure context.** `crypto.subtle` is `undefined`
+ *   outside one, so serving the harness over a LAN address —
+ *   `vite --host`, which the `dev` script does not pass — makes this throw a
+ *   bare `TypeError` rather than a `LabAssetUploadError`. `localhost` is a
+ *   secure context by spec and is the only way the lab is served.
  */
 export function createLabAssetUploader(
   options: CreateLabAssetUploaderOptions = {},
@@ -132,20 +166,25 @@ export function createLabAssetUploader(
       // flight, so a prototype needs a visible window to design one against.
       await delay(latencyMs);
 
+      // Type before size, matching the route: the API tests
+      // `isInlineSafeContentType(file.mimetype)` and 415s before it ever calls
+      // `toBuffer()`, which is the only thing that can raise the 413. So a
+      // wrong-type file is always a type error there, whatever its size, and
+      // a mock that answered "too large" for an oversized PDF would have a
+      // prototype design its rejection copy around a message the CMS never
+      // shows.
+      if (!isLabInlineSafe(file.type)) {
+        throw new LabAssetUploadError(`Unsupported image type: ${file.type || "unknown"}.`);
+      }
+
       if (file.size > maxBytes) {
         throw new LabAssetUploadError("That image is too large to upload.");
       }
 
-      // Lowercased once, up front, and reused everywhere below — the API's
-      // `isInlineSafeContentType` lowercases before comparing, so checking
-      // against the raw `file.type` here would reject an uppercase MIME the
-      // API accepts, and writing the raw type into the stored metadata would
-      // make the same asset compare unequal to itself on a second upload.
+      // Stored lowercased, matching the `file.mimetype.toLowerCase()` the API
+      // writes: the raw type would make the same asset compare unequal to
+      // itself on a second upload.
       const contentType = file.type.toLowerCase();
-
-      if (!LAB_ASSET_ACCEPT_TYPES.has(contentType)) {
-        throw new LabAssetUploadError(`Unsupported image type: ${file.type || "unknown"}.`);
-      }
 
       const hash = await hashFile(file);
       const existing = uploaded.get(hash);
@@ -180,7 +219,7 @@ export function createLabAssetUploader(
 
       const seededRow = seeded.find((asset) => asset.hash === hash);
 
-      if (seededRow !== undefined && LAB_ASSET_ACCEPT_TYPES.has(seededRow.contentType)) {
+      if (seededRow !== undefined && isLabInlineSafe(seededRow.contentType)) {
         return seededPlaceholderUrl(seededRow.originalFilename);
       }
 
