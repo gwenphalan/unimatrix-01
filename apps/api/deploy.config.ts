@@ -48,6 +48,48 @@ export default nodeApiApp({
       ],
     },
     {
+      name: "SECRETS_BASE_URL",
+      value: { kind: "variable", name: "SECRETS_BASE_URL" },
+      comment: [
+        "How this API reaches the secrets store, over the shared",
+        "unimatrix-secrets network declared below. The host must be the store's",
+        "Compose service name (`https://secrets:3001`) — that name is the SAN on",
+        "its certificate, and hostname verification is on.",
+        "",
+        "All five of these are bare references with no default on purpose. An",
+        "unset variable reaches the container as an empty string, not as absent,",
+        "and this API's loader refuses an empty value — so a stack deployed",
+        "before its values exist restart-loops, which reads from outside as",
+        "every content route 404ing. Set all five in the deployment platform",
+        "before deploying this stack.",
+      ],
+    },
+    { name: "SECRETS_SERVICE_TOKEN", value: { kind: "variable", name: "SECRETS_SERVICE_TOKEN" } },
+    {
+      name: "SECRETS_INTEGRATIONS_MANAGE_TOKEN",
+      value: { kind: "variable", name: "SECRETS_INTEGRATIONS_MANAGE_TOKEN" },
+      comment: [
+        "One scoped token per tier, and no two of the three may hold the same",
+        "value — the store answers a wrong-capability caller with the same 404",
+        "it uses for a missing name, so a shared token boots cleanly and then",
+        "reports every call it cannot make as a credential that is not set.",
+      ],
+    },
+    {
+      name: "SECRETS_PLATFORM_WRITE_TOKEN",
+      value: { kind: "variable", name: "SECRETS_PLATFORM_WRITE_TOKEN" },
+    },
+    {
+      name: "SECRETS_TLS_CERT_BASE64",
+      value: { kind: "variable", name: "SECRETS_TLS_CERT_BASE64" },
+      comment: [
+        "The store's certificate — the same base64 PEM its own stack carries,",
+        "and only that one. The private key belongs to the store alone and must",
+        "never appear here. Supplying the certificate pins it: it replaces the",
+        "system trust store for these connections rather than widening it.",
+      ],
+    },
+    {
       name: "DB_MIGRATE_ON_START",
       value: { kind: "literal", value: '"true"' },
       comment: [
@@ -58,4 +100,26 @@ export default nodeApiApp({
     },
   ],
   volumes: [{ name: "api-data", mountPath: "/data" }],
+  networks: [
+    {
+      name: "unimatrix-secrets",
+      external: true,
+      comment: [
+        "Create it on the host before the first deploy:",
+        "`docker network create unimatrix-secrets`.",
+      ],
+    },
+    {
+      name: "dokploy-network",
+      external: true,
+      comment: [
+        "Declared explicitly because naming any network at all drops the",
+        "implicit default, and Dokploy attaches this one from outside the",
+        "compose file so that attachment cannot be relied on to survive. Without",
+        "it Traefik loses its route to this service and the public API answers",
+        "502. It is an attachable swarm overlay, which is what lets a plain",
+        "Compose stack join it (measured on the host, 2026-08-12).",
+      ],
+    },
+  ],
 });

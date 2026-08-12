@@ -44,12 +44,27 @@ const composeDir = join(repoRoot, "infra", "docker");
  * with. A var whose parser validates a format needs an entry here that
  * satisfies it.
  */
+/** Base64 of a one-line fake PEM. Both config loaders check for `-----BEGIN` and nothing more. */
+const placeholderPem = (label) =>
+  Buffer.from(`-----BEGIN ${label}-----\nplaceholder\n-----END ${label}-----\n`).toString("base64");
+
 const PLACEHOLDERS = {
   CORS_ALLOWED_ORIGINS: "https://placeholder.example",
   // `<version>:<base64key>`; the key is 32 zero bytes base64-encoded — long
   // enough to pass `KEK_LENGTH` in packages/secrets/src/keyring.ts, obviously
   // not a real key.
   SECRETS_KEKS: "1:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+  // https, so the probe exercises the branch production runs and the
+  // certificate below is required rather than refused.
+  SECRETS_BASE_URL: "https://secrets:3001",
+  // Three *distinct* values, and they have to stay distinct: apps/api's loader
+  // refuses two secrets tokens that share a value, so the single
+  // DEFAULT_PLACEHOLDER would fail this probe rather than pass it.
+  SECRETS_SERVICE_TOKEN: "svc_placeholder_read",
+  SECRETS_INTEGRATIONS_MANAGE_TOKEN: "svc_placeholder_integrations_manage",
+  SECRETS_PLATFORM_WRITE_TOKEN: "svc_placeholder_platform_write",
+  SECRETS_TLS_CERT_BASE64: placeholderPem("CERTIFICATE"),
+  SECRETS_TLS_KEY_BASE64: placeholderPem("PRIVATE KEY"),
 };
 const DEFAULT_PLACEHOLDER = "placeholder";
 

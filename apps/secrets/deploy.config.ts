@@ -38,6 +38,24 @@ export default nodeApiApp({
       ],
     },
     {
+      name: "SECRETS_TLS_CERT_BASE64",
+      value: { kind: "variable", name: "SECRETS_TLS_CERT_BASE64" },
+      comment: [
+        "The server certificate and its key, each a base64-encoded PEM (the",
+        "platform's env editor is a single-line field). Generated once on the",
+        "host, never in the image and never at boot: an image layer would ship",
+        "the private key to the registry, and a fresh key per restart would",
+        "invalidate the API's pinned copy within minutes. The certificate's SAN",
+        "must be this Compose service name — `secrets` — because that is the",
+        "host the API connects to and hostname verification stays on.",
+        "",
+        "All-or-none: set both or neither. Set exactly one, or leave one empty,",
+        "and this service refuses to boot rather than quietly serving cleartext",
+        "on a port the API now expects TLS on.",
+      ],
+    },
+    { name: "SECRETS_TLS_KEY_BASE64", value: { kind: "variable", name: "SECRETS_TLS_KEY_BASE64" } },
+    {
       name: "DB_MIGRATE_ON_START",
       value: { kind: "literal", value: '"true"' },
       comment: [
@@ -49,4 +67,22 @@ export default nodeApiApp({
     },
   ],
   volumes: [{ name: "secrets-data", mountPath: "/data" }],
+  networks: [
+    {
+      name: "unimatrix-secrets",
+      external: true,
+      aliases: ["secrets"],
+      comment: [
+        "Create it on the host before the first deploy — an external network",
+        "must already exist: `docker network create unimatrix-secrets`. A plain",
+        "bridge; both stacks are Compose on one host, so an overlay buys",
+        "nothing.",
+        "",
+        "Deliberately not dokploy-network: every container there is one Traefik",
+        "serves, so joining it would put this store within reach of every app",
+        "on the host. This service has no domain and needs no Traefik route.",
+      ],
+    },
+  ],
+  healthcheckScheme: "https",
 });
