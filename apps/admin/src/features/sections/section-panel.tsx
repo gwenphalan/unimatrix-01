@@ -4,10 +4,10 @@ import { useId, type ReactNode } from "react";
 import { PUBLIC_SITE_URL, buildSignInHref } from "@/lib/config";
 
 /**
- * A titled panel inside the Content section, used for each managed collection
+ * A titled panel inside a gated section, used for each managed collection
  * and for the editor page.
  */
-export function AdminPanel({
+export function SectionPanel({
   actions,
   children,
   className,
@@ -58,7 +58,8 @@ export function AdminPanel({
 const EXIT_LINK_CLASS = "text-sm text-primary underline underline-offset-4";
 
 /**
- * Shown in place of the Content section for a visitor without `auth:admin`.
+ * Shown in place of a gated section for a visitor without the permission it
+ * requires.
  *
  * Both links are plain anchors: the site and the auth hub are separate origins
  * from this one, so neither is reachable by a router `Link`.
@@ -70,14 +71,21 @@ const EXIT_LINK_CLASS = "text-sm text-primary underline underline-offset-4";
  * `apps/web` no longer has one, so without this the panel is the end of the
  * road.
  */
-export function AdminAccessDenied({ authAppUrl }: { authAppUrl: string }) {
+export function SectionAccessDenied({
+  authAppUrl,
+  description,
+}: {
+  authAppUrl: string;
+  /** What the section manages, named so the denied panel says what was blocked. */
+  description: string;
+}) {
   const { isSignedIn } = useAuth();
 
   return (
     <div className="site-panel space-y-3 px-5 py-5 lg:px-6 lg:py-6">
       <h2 className="text-lg font-medium text-foreground">You do not have access to this page.</h2>
       <p className="text-sm text-muted-foreground">
-        This tool manages the site&rsquo;s blog posts and projects.{" "}
+        {description}{" "}
         {isSignedIn === true
           ? "Your account does not carry admin access."
           : "Sign in with an admin account to use it."}

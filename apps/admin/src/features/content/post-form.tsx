@@ -24,7 +24,8 @@ import {
 } from "@unimatrix/ui/editor";
 import { useId, useRef, useState } from "react";
 
-import { AdminPanel } from "./content-panel";
+import { SectionPanel } from "@/features/sections/section-panel";
+
 import { ASSET_ACCEPT, assetUrl, uploadAsset } from "./asset-upload";
 import { useCreatePost, useUpdatePost } from "./mutations";
 import { slugifyTitle } from "./slugify";
@@ -155,7 +156,7 @@ export interface PostFormProps {
  * so a collision comes back as a 400 with a message rather than being
  * prevented by a guess here.
  *
- * The form owns its {@link AdminPanel} rather than being placed inside one by
+ * The form owns its {@link SectionPanel} rather than being placed inside one by
  * the route: the publication state belongs in the panel header, beside the
  * title, and it has to stay inside the `<form>` element to be part of the same
  * submission and to keep its `<label for>` association.
@@ -239,7 +240,7 @@ export function PostForm({ baseUrl, post, type, title, onDone }: PostFormProps) 
         void handleSubmit(event);
       }}
     >
-      <AdminPanel className={bodyExpanded ? "" : "flex min-h-0 flex-1 flex-col"} title={title}>
+      <SectionPanel className={bodyExpanded ? "" : "flex min-h-0 flex-1 flex-col"} title={title}>
         <div className="grid gap-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="grid gap-2">
@@ -462,7 +463,7 @@ export function PostForm({ baseUrl, post, type, title, onDone }: PostFormProps) 
             </Button>
           </div>
         </div>
-      </AdminPanel>
+      </SectionPanel>
     </form>
   );
 }

@@ -4,8 +4,8 @@ import type { ContentPost, ContentPostType } from "@unimatrix/shared";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle, Skeleton } from "@unimatrix/ui/editor";
 
 import { useApiClient } from "@/lib/api-client";
+import { SectionPanel } from "@/features/sections/section-panel";
 
-import { AdminPanel } from "./content-panel";
 import { describeAdminError } from "./mutations";
 import { PostForm } from "./post-form";
 import { adminPostsQueryOptions } from "./queries";
@@ -81,14 +81,14 @@ export function PostFormPage({ baseUrl, postId, type }: PostFormPageProps) {
 
   if (error !== null) {
     return (
-      <AdminPanel title="Edit post">
+      <SectionPanel title="Edit post">
         <Empty>
           <EmptyHeader>
             <EmptyTitle>This post could not be loaded.</EmptyTitle>
             <EmptyDescription>{describeAdminError(error)}</EmptyDescription>
           </EmptyHeader>
         </Empty>
-      </AdminPanel>
+      </SectionPanel>
     );
   }
 
@@ -96,26 +96,26 @@ export function PostFormPage({ baseUrl, postId, type }: PostFormPageProps) {
   // hand-typed URL. Distinct from "still loading", which shows skeletons.
   if (!list.isPending && summary === undefined) {
     return (
-      <AdminPanel title="Edit post">
+      <SectionPanel title="Edit post">
         <Empty>
           <EmptyHeader>
             <EmptyTitle>That post no longer exists.</EmptyTitle>
             <EmptyDescription>It may have been deleted from another tab.</EmptyDescription>
           </EmptyHeader>
         </Empty>
-      </AdminPanel>
+      </SectionPanel>
     );
   }
 
   if (detail.data === undefined) {
     return (
-      <AdminPanel title="Edit post">
+      <SectionPanel title="Edit post">
         <div className="grid gap-3">
           <Skeleton className="h-10 w-full" />
           <Skeleton className="h-10 w-full" />
           <Skeleton className="h-64 w-full" />
         </div>
-      </AdminPanel>
+      </SectionPanel>
     );
   }
 
