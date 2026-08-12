@@ -9,8 +9,7 @@ import { SERVICE_TOKEN_CAPABILITIES } from "../../service-tokens/capability.js";
  * unique index, which a salted digest could not support. See
  * `../../service-tokens/format.ts` for why a KDF is the wrong tool here.
  *
- * `capability` is single-valued and its two values are mutually exclusive:
- * see `../../service-tokens/capability.ts`.
+ * `capability` is single-valued: see `../../service-tokens/capability.ts`.
  *
  * There is no expiry column. Revocation is the entire lifecycle.
  */

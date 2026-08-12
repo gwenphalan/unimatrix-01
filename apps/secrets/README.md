@@ -10,9 +10,9 @@ service over the network is not authorization.
 | Route | Capability | Returns |
 | --- | --- | --- |
 | `GET /secrets/value` | `read` | The decrypted value for one in-scope name — the only route anywhere in this service that returns one |
-| `GET /secrets` | `manage` | Metadata (masked prefix, KEK version, timestamps) for every in-scope name |
-| `POST /secrets` | `manage` | Metadata for a newly created secret |
-| `POST /secrets/rotate` | `manage` | Metadata for a freshly sealed version of an existing secret |
+| `GET /secrets` | `write` or `manage` | Metadata (masked prefix, KEK version, timestamps) for every in-scope name, plus the active KEK version |
+| `POST /secrets` | `write` or `manage` | Metadata for a newly created secret |
+| `POST /secrets/rotate` | `write` or `manage` | Metadata for a freshly sealed version of an existing secret |
 | `DELETE /secrets` | `manage` | `{ affected: <count> }`; denies the whole request if any submitted name is out of scope or absent |
 
 A caller's token scope also governs every route above: a name reaches a route only when the
@@ -89,8 +89,9 @@ In the container, against the live volume:
       issue --name api --scope github --capability read
 
 `--capability` has no default: `read` may fetch values under its scope,
-`manage` may create, rotate and delete but never read one back. The two are
-mutually exclusive, so a consumer needing both takes two tokens.
+`write` may create and rotate but never delete or read one back, and `manage`
+may create, rotate and delete but never read one back. Capability is
+single-valued, so a consumer needing more than one takes more than one token.
 
 The plaintext is printed once and only its SHA-256 digest is stored, so a lost
 token is reissued rather than recovered. `list` shows every token with its
