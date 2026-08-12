@@ -10,9 +10,10 @@ Five routes sit behind that guard, split by the caller's token capability — `r
 `manage` (`src/service-tokens/capability.ts`). `GET /secrets/value` needs `read` and is the
 **only** route anywhere in this service permitted to return a decrypted value. `POST /secrets`,
 `POST /secrets/rotate` and `GET /secrets` accept `write` or `manage`; `DELETE /secrets` accepts
-`manage` alone — `write` may create and rotate but never delete. All four return metadata — a
-masked prefix, never a value. There is no read-back route reachable by a `write` or `manage` token
-and no debug flag that adds one. The host-local `secret read` CLI (`src/cli/secret.ts`) can still
+`manage` alone — `write` may create and rotate but never delete. Create, rotate and list return
+metadata — a masked prefix, never a value; the list route adds the keyring's active version, and
+`DELETE /secrets` returns a count alone. There is no read-back route reachable by a `write` or
+`manage` token and no debug flag that adds one. The host-local `secret read` CLI (`src/cli/secret.ts`) can still
 print a value — that is not a bypass of this rule: it needs host access in addition to a service
 token's worth of KEK material, and it writes the same `secret.read` audit row the route does.
 
