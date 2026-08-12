@@ -20,6 +20,8 @@ export interface SetupCorePluginsOptions {
    * still reach either plugin's construction.
    */
   secretsFetch?: typeof globalThis.fetch;
+  /** Test seam — see `SetupIntegrationCredentialsOptions.names`. */
+  integrationNames?: readonly string[];
 }
 
 export function setupCorePlugins(
@@ -37,10 +39,10 @@ export function setupCorePlugins(
   // Registered unconditionally: it is cheap (a single SQLite connection) and
   // independent of Clerk configuration, unlike setupAuth().
   setupDatabase(app);
-  setupIntegrationCredentials(
-    app,
-    options.secretsFetch === undefined ? {} : { fetch: options.secretsFetch },
-  );
+  setupIntegrationCredentials(app, {
+    ...(options.secretsFetch === undefined ? {} : { fetch: options.secretsFetch }),
+    ...(options.integrationNames === undefined ? {} : { names: options.integrationNames }),
+  });
   setupSecretsManagement(
     app,
     options.secretsFetch === undefined ? {} : { fetch: options.secretsFetch },

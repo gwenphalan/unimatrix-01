@@ -20,6 +20,8 @@ export interface BuildApiAppOptions {
   loggerStream?: ApiLoggerStream;
   /** Test seam: the `fetch` the integration-credentials plugin uses instead of the global. */
   secretsFetch?: typeof globalThis.fetch;
+  /** Test seam: the integration names to fetch instead of the registry's. */
+  integrationNames?: readonly string[];
 }
 
 export function buildAppOptions(
@@ -51,10 +53,12 @@ export function buildApp(
   );
 
   app.decorate("runtimeConfig", config);
-  setupCorePlugins(
-    app,
-    options.secretsFetch === undefined ? {} : { secretsFetch: options.secretsFetch },
-  );
+  setupCorePlugins(app, {
+    ...(options.secretsFetch === undefined ? {} : { secretsFetch: options.secretsFetch }),
+    ...(options.integrationNames === undefined
+      ? {}
+      : { integrationNames: options.integrationNames }),
+  });
 
   app.setErrorHandler((error, request, reply) => {
     const requestId = String(request.id);

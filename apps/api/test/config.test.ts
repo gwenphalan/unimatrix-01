@@ -433,8 +433,8 @@ void test("loadApiRuntimeConfig populates secretsStore when both vars are presen
     {
       baseUrl: "http://secrets.internal:3002",
       serviceToken: "svc_test_token",
-      integrationNames: [],
-      manageToken: null,
+      integrationsManageToken: null,
+      platformWriteToken: null,
     },
   );
 });
@@ -485,72 +485,86 @@ void test("loadApiRuntimeConfig rejects a non-http(s) SECRETS_BASE_URL", () => {
   );
 });
 
-void test("loadApiRuntimeConfig parses and trims SECRETS_INTEGRATION_NAMES, dropping empty entries", () => {
-  assert.deepEqual(
-    loadApiRuntimeConfig({
-      SECRETS_BASE_URL: "http://secrets.internal:3002",
-      SECRETS_SERVICE_TOKEN: "svc_test_token",
-      SECRETS_INTEGRATION_NAMES: " github/token ,, discord/webhook ,",
-    }).secretsStore,
-    {
-      baseUrl: "http://secrets.internal:3002",
-      serviceToken: "svc_test_token",
-      integrationNames: ["github/token", "discord/webhook"],
-      manageToken: null,
-    },
-  );
-});
-
-void test("loadApiRuntimeConfig throws when SECRETS_INTEGRATION_NAMES is set without a configured store", () => {
-  assert.throws(
-    () => loadApiRuntimeConfig({ SECRETS_INTEGRATION_NAMES: "github/token" }),
-    /SECRETS_INTEGRATION_NAMES must not be set unless SECRETS_BASE_URL and SECRETS_SERVICE_TOKEN are both configured/,
-  );
-});
-
-void test("loadApiRuntimeConfig populates manageToken when set alongside a configured store", () => {
+void test("loadApiRuntimeConfig populates both admin tokens alongside a configured store", () => {
   assert.deepEqual(
     loadApiRuntimeConfig({
       SECRETS_BASE_URL: "http://secrets.internal:3002",
       SECRETS_SERVICE_TOKEN: "svc_read_token",
-      SECRETS_MANAGE_TOKEN: " svc_manage_token ",
+      SECRETS_INTEGRATIONS_MANAGE_TOKEN: " svc_integrations_manage_token ",
+      SECRETS_PLATFORM_WRITE_TOKEN: " svc_platform_write_token ",
     }).secretsStore,
     {
       baseUrl: "http://secrets.internal:3002",
       serviceToken: "svc_read_token",
-      integrationNames: [],
-      manageToken: "svc_manage_token",
+      integrationsManageToken: "svc_integrations_manage_token",
+      platformWriteToken: "svc_platform_write_token",
     },
   );
 });
 
-void test("loadApiRuntimeConfig throws when SECRETS_MANAGE_TOKEN is set without a configured store", () => {
-  assert.throws(
-    () => loadApiRuntimeConfig({ SECRETS_MANAGE_TOKEN: "svc_manage_token" }),
-    /SECRETS_MANAGE_TOKEN must not be set unless SECRETS_BASE_URL and SECRETS_SERVICE_TOKEN are both configured/,
-  );
-});
+for (const variableName of [
+  "SECRETS_INTEGRATIONS_MANAGE_TOKEN",
+  "SECRETS_PLATFORM_WRITE_TOKEN",
+] as const) {
+  void test(`loadApiRuntimeConfig throws when ${variableName} is set without a configured store`, () => {
+    assert.throws(
+      () => loadApiRuntimeConfig({ [variableName]: "svc_admin_token" }),
+      new RegExp(`${variableName} must not be set unless SECRETS_BASE_URL`),
+    );
+  });
 
-void test("loadApiRuntimeConfig rejects a blank SECRETS_MANAGE_TOKEN", () => {
-  assert.throws(
-    () =>
-      loadApiRuntimeConfig({
-        SECRETS_BASE_URL: "http://secrets.internal:3002",
-        SECRETS_SERVICE_TOKEN: "svc_read_token",
-        SECRETS_MANAGE_TOKEN: "   ",
-      }),
-    /SECRETS_MANAGE_TOKEN must not be empty when it is set/,
-  );
-});
+  void test(`loadApiRuntimeConfig rejects a blank ${variableName}`, () => {
+    assert.throws(
+      () =>
+        loadApiRuntimeConfig({
+          SECRETS_BASE_URL: "http://secrets.internal:3002",
+          SECRETS_SERVICE_TOKEN: "svc_read_token",
+          [variableName]: "   ",
+        }),
+      new RegExp(`${variableName} must not be empty when it is set`),
+    );
+  });
+}
 
-void test("loadApiRuntimeConfig throws when SECRETS_MANAGE_TOKEN equals SECRETS_SERVICE_TOKEN", () => {
+/**
+ * All three tokens must differ. The store answers a wrong-capability or
+ * out-of-scope caller with the same 404 it uses for a missing name, so any two
+ * of these sharing a value boots cleanly and then reports every call the
+ * shared token cannot make as "not found".
+ */
+void test("loadApiRuntimeConfig throws when the integrations manage token equals the read token", () => {
   assert.throws(
     () =>
       loadApiRuntimeConfig({
         SECRETS_BASE_URL: "http://secrets.internal:3002",
         SECRETS_SERVICE_TOKEN: "svc_shared_token",
-        SECRETS_MANAGE_TOKEN: "svc_shared_token",
+        SECRETS_INTEGRATIONS_MANAGE_TOKEN: "svc_shared_token",
       }),
-    /SECRETS_MANAGE_TOKEN must not equal SECRETS_SERVICE_TOKEN/,
+    /SECRETS_INTEGRATIONS_MANAGE_TOKEN must not equal SECRETS_SERVICE_TOKEN/,
+  );
+});
+
+void test("loadApiRuntimeConfig throws when the platform write token equals the read token", () => {
+  assert.throws(
+    () =>
+      loadApiRuntimeConfig({
+        SECRETS_BASE_URL: "http://secrets.internal:3002",
+        SECRETS_SERVICE_TOKEN: "svc_shared_token",
+        SECRETS_PLATFORM_WRITE_TOKEN: "svc_shared_token",
+      }),
+    /SECRETS_PLATFORM_WRITE_TOKEN must not equal SECRETS_SERVICE_TOKEN/,
+  );
+});
+
+void test("loadApiRuntimeConfig throws when the two admin tokens are the same value", () => {
+  assert.throws(
+    () =>
+      loadApiRuntimeConfig({
+        SECRETS_BASE_URL: "http://secrets.internal:3002",
+        SECRETS_SERVICE_TOKEN: "svc_read_token",
+        SECRETS_INTEGRATIONS_MANAGE_TOKEN: "svc_shared_admin_token",
+        SECRETS_PLATFORM_WRITE_TOKEN: "svc_shared_admin_token",
+      }),
+    /SECRETS_PLATFORM_WRITE_TOKEN must not equal SECRETS_INTEGRATIONS_MANAGE_TOKEN/,
   );
 });

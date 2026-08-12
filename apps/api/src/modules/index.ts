@@ -29,15 +29,16 @@ export const registerModules: FastifyPluginAsync = (app) => {
     app.register(integrationsModule);
   }
 
-  // Needs Clerk (same reason as integrationsModule above) plus a manage
-  // token specifically, not just a configured store: `setupSecretsManagement`
-  // only decorates `app.secretsManagement` when `secretsStore.manageToken`
-  // is set, and admin secrets routes with no client to call are better
-  // absent than 500ing on every request.
+  // Needs Clerk (same reason as integrationsModule above) plus both scoped
+  // tokens, not just a configured store: `setupSecretsManagement` only
+  // decorates `app.secretsManagement` when it can build a client for each
+  // tier, and a console that can reach one tier would render the other as
+  // "not set" rather than "not reachable".
   if (
     app.runtimeConfig.clerk !== null &&
     app.runtimeConfig.secretsStore !== null &&
-    app.runtimeConfig.secretsStore.manageToken !== null
+    app.runtimeConfig.secretsStore.integrationsManageToken !== null &&
+    app.runtimeConfig.secretsStore.platformWriteToken !== null
   ) {
     app.register(secretsAdminModule);
   }

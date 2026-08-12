@@ -7,10 +7,13 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { createDatabase } from "@unimatrix/db";
-import type {
-  AdminDeleteSecretResponse,
-  ListSecretsResponse,
-  SecretMetadata,
+import {
+  SECRET_REGISTRY,
+  type AdminDeleteSecretResponse,
+  type AdminListSecretsResponse,
+  type AdminSecretRow,
+  type SecretMetadata,
+  type SecretRegistryEntry,
 } from "@unimatrix/shared";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 
@@ -40,12 +43,14 @@ const CLERK_ENV: ApiRuntimeEnv = {
 };
 
 const READ_TOKEN = "svc_read_token";
-const MANAGE_TOKEN = "svc_manage_token";
+const INTEGRATIONS_TOKEN = "svc_integrations_manage_token";
+const PLATFORM_TOKEN = "svc_platform_write_token";
 
 const SECRETS_ENV: ApiRuntimeEnv = {
   SECRETS_BASE_URL: "http://secrets.internal:3002",
   SECRETS_SERVICE_TOKEN: READ_TOKEN,
-  SECRETS_MANAGE_TOKEN: MANAGE_TOKEN,
+  SECRETS_INTEGRATIONS_MANAGE_TOKEN: INTEGRATIONS_TOKEN,
+  SECRETS_PLATFORM_WRITE_TOKEN: PLATFORM_TOKEN,
 };
 
 const ADMIN_USER = "user_2cccccccccccccccccccccccccc";
@@ -172,6 +177,18 @@ function jsonResponse(status: number, body: unknown): Response {
   });
 }
 
+/** Undeclared on purpose: the registry's integration tier is empty. */
+const INTEGRATION_NAME = "integrations/github/token";
+const PLATFORM_NAME = "platform/clerk-secret-key";
+
+function secretRegistryEntry(name: string): SecretRegistryEntry {
+  const entry = SECRET_REGISTRY.find((candidate) => candidate.name === name);
+
+  assert.ok(entry, `${name} is expected to be declared in SECRET_REGISTRY`);
+
+  return entry;
+}
+
 const METADATA: SecretMetadata = {
   name: "github/api-token",
   maskedPrefix: PLAINTEXT.slice(0, 4),
@@ -188,6 +205,28 @@ const METADATA: SecretMetadata = {
  */
 const ACTIVE_KEK_VERSION = 1;
 
+/**
+ * `GET /secrets/admin` makes one list call per scoped token, so a stub has to
+ * answer both. Keyed by the outbound bearer token, which is the only thing
+ * distinguishing the two requests — same method, same path.
+ */
+function listResponder(lists: {
+  platform?: SecretMetadata[];
+  integrations?: SecretMetadata[];
+  activeKekVersion?: { platform: number; integrations: number };
+}): (request: CapturedRequest) => Response {
+  return (request) => {
+    const isPlatform = request.authorization === `Bearer ${PLATFORM_TOKEN}`;
+
+    return jsonResponse(200, {
+      secrets: (isPlatform ? lists.platform : lists.integrations) ?? [],
+      activeKekVersion: isPlatform
+        ? (lists.activeKekVersion?.platform ?? ACTIVE_KEK_VERSION)
+        : (lists.activeKekVersion?.integrations ?? ACTIVE_KEK_VERSION),
+    });
+  };
+}
+
 const LIST_URL = "/secrets/admin";
 const CREATE_URL = "/secrets/admin";
 const ROTATE_URL = "/secrets/admin/rotate";
@@ -197,9 +236,7 @@ const DELETE_URL = "/secrets/admin";
 
 void test("every admin secrets route is absent without Clerk, even with a fully configured store", async () => {
   const { app, cleanup } = createTestApp(SECRETS_ENV, {
-    secretsFetch: createFakeStoreFetch([], () =>
-      jsonResponse(200, { secrets: [], activeKekVersion: ACTIVE_KEK_VERSION }),
-    ),
+    secretsFetch: createFakeStoreFetch([], listResponder({})),
   });
 
   try {
@@ -239,35 +276,46 @@ void test("every admin secrets route is absent without a configured store, even 
   }
 });
 
-void test("every admin secrets route is absent with Clerk and a store but no manage token", async () => {
-  const { app, cleanup } = createTestApp(
-    {
-      ...CLERK_ENV,
-      SECRETS_BASE_URL: SECRETS_ENV.SECRETS_BASE_URL,
-      SECRETS_SERVICE_TOKEN: SECRETS_ENV.SECRETS_SERVICE_TOKEN,
-    },
-    {
-      secretsFetch: createFakeStoreFetch([], () =>
-        jsonResponse(200, { secrets: [], activeKekVersion: ACTIVE_KEK_VERSION }),
-      ),
-    },
-  );
+/**
+ * Both scoped tokens or no console at all. With one, the tier it cannot reach
+ * would render as "this credential is not set" — a token fault shown as a
+ * missing credential is the silent wrong answer this page exists to avoid.
+ */
+for (const configured of [
+  {
+    label: "only the integrations token",
+    env: { SECRETS_INTEGRATIONS_MANAGE_TOKEN: INTEGRATIONS_TOKEN },
+  },
+  { label: "only the platform token", env: { SECRETS_PLATFORM_WRITE_TOKEN: PLATFORM_TOKEN } },
+  { label: "neither admin token", env: {} },
+]) {
+  void test(`every admin secrets route is absent with Clerk, a store, and ${configured.label}`, async () => {
+    const { app, cleanup } = createTestApp(
+      {
+        ...CLERK_ENV,
+        SECRETS_BASE_URL: SECRETS_ENV.SECRETS_BASE_URL,
+        SECRETS_SERVICE_TOKEN: SECRETS_ENV.SECRETS_SERVICE_TOKEN,
+        ...configured.env,
+      },
+      { secretsFetch: createFakeStoreFetch([], listResponder({})) },
+    );
 
-  try {
-    await app.ready();
+    try {
+      await app.ready();
 
-    const response = await app.inject({
-      method: "GET",
-      url: LIST_URL,
-      headers: adminAuthHeaders(),
-    });
+      const response = await app.inject({
+        method: "GET",
+        url: LIST_URL,
+        headers: adminAuthHeaders(),
+      });
 
-    assert.equal(response.statusCode, 404);
-  } finally {
-    await app.close();
-    cleanup();
-  }
-});
+      assert.equal(response.statusCode, 404);
+    } finally {
+      await app.close();
+      cleanup();
+    }
+  });
+}
 
 // --- 2. Non-admin sessions ----------------------------------------------
 
@@ -275,9 +323,7 @@ void test("a signed-in session lacking auth:admin is refused with 403 on every r
   const { app, cleanup } = createTestApp(
     { ...CLERK_ENV, ...SECRETS_ENV },
     {
-      secretsFetch: createFakeStoreFetch([], () =>
-        jsonResponse(200, { secrets: [], activeKekVersion: ACTIVE_KEK_VERSION }),
-      ),
+      secretsFetch: createFakeStoreFetch([], listResponder({})),
     },
   );
 
@@ -389,10 +435,58 @@ void test("delete forwards actorUserId equal to the signed token's sub, and a si
     const capturedBody = call?.body as { actorUserId?: string; names?: string[] } | undefined;
     assert.equal(capturedBody?.actorUserId, ADMIN_USER);
     assert.deepEqual(capturedBody?.names, ["github/api-token"]);
+    assert.equal(call?.authorization, `Bearer ${INTEGRATIONS_TOKEN}`);
   } finally {
     await app.close();
     cleanup();
   }
+});
+
+// --- 3b. A platform name can never be deleted here -----------------------
+
+void test("deleting a platform name is refused before the store is called, and says why", async () => {
+  const captured: CapturedRequest[] = [];
+  const { app, cleanup } = createTestApp(
+    { ...CLERK_ENV, ...SECRETS_ENV },
+    { secretsFetch: createFakeStoreFetch(captured, () => jsonResponse(200, { affected: 1 })) },
+  );
+
+  try {
+    await app.ready();
+
+    const response = await app.inject({
+      method: "DELETE",
+      url: DELETE_URL,
+      headers: adminAuthHeaders(),
+      payload: { name: PLATFORM_NAME },
+    });
+
+    assert.equal(response.statusCode, 403);
+    const body: ApiErrorEnvelope = response.json();
+    assert.equal(body.error.code, "FORBIDDEN");
+    assert.match(body.error.message, /Platform credentials cannot be deleted here/);
+    assert.equal(captured.length, 0, "the store must never see a platform delete");
+  } finally {
+    await app.close();
+    cleanup();
+  }
+});
+
+/**
+ * The other half of the same rule, and the half that survives someone deleting
+ * the route check: delete is wired to the integrations client, whose token is
+ * scoped to `integrations` and so cannot name a `platform/*` secret at all.
+ * The platform token additionally holds `write`, which cannot delete anything.
+ */
+void test("the module's only deleteSecrets call site is the integrations client", () => {
+  const source = readFileSync(
+    fileURLToPath(new URL("../src/modules/secrets/index.ts", import.meta.url)),
+    "utf8",
+  );
+
+  const callSites = source.match(/[\w.]*\.deleteSecrets\(/gu) ?? [];
+
+  assert.deepEqual(callSites, ["app.secretsManagement.integrations.deleteSecrets("]);
 });
 
 // --- 4. A browser-supplied actorUserId never reaches the store ----------
@@ -422,17 +516,13 @@ void test("a browser-supplied actorUserId in the body is a 400 and never reaches
   }
 });
 
-// --- 5. The manage token, not the read token, goes out on the wire -------
+// --- 5. Which token goes out on the wire --------------------------------
 
-void test("the outbound authorization header carries the manage token, not the read token", async () => {
+void test("list calls the store once per scoped token, and never with the read token", async () => {
   const captured: CapturedRequest[] = [];
   const { app, cleanup } = createTestApp(
     { ...CLERK_ENV, ...SECRETS_ENV },
-    {
-      secretsFetch: createFakeStoreFetch(captured, () =>
-        jsonResponse(200, { secrets: [], activeKekVersion: ACTIVE_KEK_VERSION }),
-      ),
-    },
+    { secretsFetch: createFakeStoreFetch(captured, listResponder({})) },
   );
 
   try {
@@ -445,25 +535,69 @@ void test("the outbound authorization header carries the manage token, not the r
     });
 
     assert.equal(response.statusCode, 200);
-    const call = captured.at(-1);
-    assert.equal(call?.authorization, `Bearer ${MANAGE_TOKEN}`);
-    assert.notEqual(call?.authorization, `Bearer ${READ_TOKEN}`);
+    assert.deepEqual(
+      captured.map((call) => call.authorization).sort(),
+      [`Bearer ${INTEGRATIONS_TOKEN}`, `Bearer ${PLATFORM_TOKEN}`].sort(),
+    );
+    assert.ok(captured.every((call) => call.authorization !== `Bearer ${READ_TOKEN}`));
   } finally {
     await app.close();
     cleanup();
   }
 });
 
-// --- 6. Store status mapping ----------------------------------------------
+/**
+ * A service token carries one scope prefix and no wildcard, so a mutation sent
+ * on the wrong token comes back as the store's 404 — which reads as "no such
+ * secret" and says nothing about scope.
+ */
+for (const mutation of [
+  { url: CREATE_URL, label: "create" },
+  { url: ROTATE_URL, label: "rotate" },
+]) {
+  void test(`${mutation.label} sends a platform name on the platform token and an integration name on the integrations token`, async () => {
+    const captured: CapturedRequest[] = [];
+    const { app, cleanup } = createTestApp(
+      { ...CLERK_ENV, ...SECRETS_ENV },
+      { secretsFetch: createFakeStoreFetch(captured, () => jsonResponse(200, METADATA)) },
+    );
 
-void test("list resolves 200 with the store's response, parsed against the shared schema", async () => {
+    try {
+      await app.ready();
+
+      for (const expected of [
+        { name: PLATFORM_NAME, token: PLATFORM_TOKEN },
+        { name: INTEGRATION_NAME, token: INTEGRATIONS_TOKEN },
+      ]) {
+        const response = await app.inject({
+          method: "POST",
+          url: mutation.url,
+          headers: adminAuthHeaders(),
+          payload: { name: expected.name, value: "ghp_newvalue" },
+        });
+
+        assert.equal(response.statusCode, 200, expected.name);
+        assert.equal(captured.at(-1)?.authorization, `Bearer ${expected.token}`, expected.name);
+      }
+    } finally {
+      await app.close();
+      cleanup();
+    }
+  });
+}
+
+// --- 6. The union list ----------------------------------------------------
+
+function rowFor(body: AdminListSecretsResponse, name: string): AdminSecretRow | undefined {
+  return body.secrets.find((row) => row.name === name);
+}
+
+async function listAsAdmin(
+  lists: Parameters<typeof listResponder>[0],
+): Promise<{ statusCode: number; body: AdminListSecretsResponse }> {
   const { app, cleanup } = createTestApp(
     { ...CLERK_ENV, ...SECRETS_ENV },
-    {
-      secretsFetch: createFakeStoreFetch([], () =>
-        jsonResponse(200, { secrets: [METADATA], activeKekVersion: ACTIVE_KEK_VERSION }),
-      ),
-    },
+    { secretsFetch: createFakeStoreFetch([], listResponder(lists)) },
   );
 
   try {
@@ -475,14 +609,101 @@ void test("list resolves 200 with the store's response, parsed against the share
       headers: adminAuthHeaders(),
     });
 
-    assert.equal(response.statusCode, 200);
-    const body: ListSecretsResponse = response.json();
-    assert.deepEqual(body, { secrets: [METADATA], activeKekVersion: ACTIVE_KEK_VERSION });
+    return { statusCode: response.statusCode, body: response.json() };
   } finally {
     await app.close();
     cleanup();
   }
+}
+
+void test("a registry name the store does not hold is listed with no metadata", async () => {
+  const { statusCode, body } = await listAsAdmin({});
+
+  assert.equal(statusCode, 200);
+
+  for (const entry of SECRET_REGISTRY) {
+    assert.deepEqual(rowFor(body, entry.name), {
+      name: entry.name,
+      tier: entry.tier,
+      metadata: null,
+      consumedBy: entry.consumedBy,
+    });
+  }
 });
+
+void test("a registry name the store holds carries its metadata and its consumedBy", async () => {
+  const stored: SecretMetadata = { ...METADATA, name: PLATFORM_NAME };
+  const { statusCode, body } = await listAsAdmin({ platform: [stored] });
+
+  assert.equal(statusCode, 200);
+  assert.deepEqual(rowFor(body, PLATFORM_NAME), {
+    name: PLATFORM_NAME,
+    tier: "platform",
+    metadata: stored,
+    consumedBy: secretRegistryEntry(PLATFORM_NAME).consumedBy,
+  });
+});
+
+void test("a stored name the registry does not declare is listed with no consumedBy", async () => {
+  const stored: SecretMetadata = { ...METADATA, name: INTEGRATION_NAME };
+  const { statusCode, body } = await listAsAdmin({ integrations: [stored] });
+
+  assert.equal(statusCode, 200);
+  assert.deepEqual(rowFor(body, INTEGRATION_NAME), {
+    name: INTEGRATION_NAME,
+    tier: "integration",
+    metadata: stored,
+    consumedBy: null,
+  });
+});
+
+void test("the response carries the higher active KEK version when a rotation lands mid-request", async () => {
+  const { body } = await listAsAdmin({ activeKekVersion: { platform: 2, integrations: 1 } });
+
+  assert.equal(body.activeKekVersion, 2);
+});
+
+/**
+ * The whole point of the union: an unreachable tier must never render as
+ * "missing", which would tell an operator the system lacks a credential it
+ * actually has. Either list failing takes the whole route down instead.
+ */
+for (const failing of [
+  { label: "the platform list", token: PLATFORM_TOKEN },
+  { label: "the integrations list", token: INTEGRATIONS_TOKEN },
+]) {
+  void test(`a store failure on ${failing.label} makes the whole route a 502`, async () => {
+    const { app, cleanup } = createTestApp(
+      { ...CLERK_ENV, ...SECRETS_ENV },
+      {
+        secretsFetch: createFakeStoreFetch([], (request) =>
+          request.authorization === `Bearer ${failing.token}`
+            ? jsonResponse(500, { error: { code: "INTERNAL" } })
+            : jsonResponse(200, { secrets: [METADATA], activeKekVersion: ACTIVE_KEK_VERSION }),
+        ),
+      },
+    );
+
+    try {
+      await app.ready();
+
+      const response = await app.inject({
+        method: "GET",
+        url: LIST_URL,
+        headers: adminAuthHeaders(),
+      });
+
+      assert.equal(response.statusCode, 502);
+      const body: ApiErrorEnvelope = response.json();
+      assert.equal(body.error.code, "INTERNAL_ERROR");
+    } finally {
+      await app.close();
+      cleanup();
+    }
+  });
+}
+
+// --- 6b. Store status mapping ---------------------------------------------
 
 void test("a 409 from the store on create maps to 409 CLIENT_ERROR", async () => {
   const { app, cleanup } = createTestApp(

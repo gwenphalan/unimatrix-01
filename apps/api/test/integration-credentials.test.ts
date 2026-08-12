@@ -6,6 +6,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { createDatabase } from "@unimatrix/db";
+import { integrationSecretNames } from "@unimatrix/shared";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 
 import { buildApp, type BuildApiAppOptions } from "../src/app.js";
@@ -17,6 +18,14 @@ const SECRETS_ENV: ApiRuntimeEnv = {
   SECRETS_BASE_URL: "http://secrets.internal:3002",
   SECRETS_SERVICE_TOKEN: "svc_test_token",
 };
+
+/**
+ * The registry's integration tier is empty, so these stand in for it through
+ * `BuildApiAppOptions.integrationNames` — the plugin's degradation behaviour
+ * is what these tests are about, not which names it happens to declare.
+ */
+const GITHUB_ONLY = ["github/token"];
+const GITHUB_AND_DISCORD = ["github/token", "discord/webhook"];
 
 /** Never appears in a captured log line — see the redaction test below. */
 const PLAINTEXT = "TOTALLY-SECRET-PLAINTEXT-VALUE";
@@ -116,10 +125,10 @@ function createTestApp(env: ApiRuntimeEnv, options: BuildApiAppOptions = {}): Te
 }
 
 void test("a boot fetch populates the cache and get(name) returns the value", async () => {
-  const { app, cleanup } = createTestApp(
-    { ...SECRETS_ENV, SECRETS_INTEGRATION_NAMES: "github/token" },
-    { secretsFetch: createFakeSecretsFetch({ "github/token": { status: 200, value: "abc123" } }) },
-  );
+  const { app, cleanup } = createTestApp(SECRETS_ENV, {
+    integrationNames: GITHUB_ONLY,
+    secretsFetch: createFakeSecretsFetch({ "github/token": { status: 200, value: "abc123" } }),
+  });
 
   try {
     await app.ready();
@@ -133,10 +142,10 @@ void test("a boot fetch populates the cache and get(name) returns the value", as
 });
 
 void test("a fetch that rejects leaves the app answering /health with an empty cache", async () => {
-  const { app, cleanup } = createTestApp(
-    { ...SECRETS_ENV, SECRETS_INTEGRATION_NAMES: "github/token" },
-    { secretsFetch: createFakeSecretsFetch({}) },
-  );
+  const { app, cleanup } = createTestApp(SECRETS_ENV, {
+    integrationNames: GITHUB_ONLY,
+    secretsFetch: createFakeSecretsFetch({}),
+  });
 
   try {
     await app.ready();
@@ -153,15 +162,13 @@ void test("a fetch that rejects leaves the app answering /health with an empty c
 });
 
 void test("a 404 for one name records it denied while a second name still loads", async () => {
-  const { app, cleanup } = createTestApp(
-    { ...SECRETS_ENV, SECRETS_INTEGRATION_NAMES: "github/token,discord/webhook" },
-    {
-      secretsFetch: createFakeSecretsFetch({
-        "github/token": { status: 404 },
-        "discord/webhook": { status: 200, value: "webhook-value" },
-      }),
-    },
-  );
+  const { app, cleanup } = createTestApp(SECRETS_ENV, {
+    integrationNames: GITHUB_AND_DISCORD,
+    secretsFetch: createFakeSecretsFetch({
+      "github/token": { status: 404 },
+      "discord/webhook": { status: 200, value: "webhook-value" },
+    }),
+  });
 
   try {
     await app.ready();
@@ -185,10 +192,10 @@ void test("a failed refresh leaves a previously cached value in place", async ()
   const responses: Record<string, FakeSecretsResponse> = {
     "github/token": { status: 200, value: "first-value" },
   };
-  const { app, cleanup } = createTestApp(
-    { ...SECRETS_ENV, SECRETS_INTEGRATION_NAMES: "github/token" },
-    { secretsFetch: createFakeSecretsFetch(responses) },
-  );
+  const { app, cleanup } = createTestApp(SECRETS_ENV, {
+    integrationNames: GITHUB_ONLY,
+    secretsFetch: createFakeSecretsFetch(responses),
+  });
 
   try {
     await app.ready();
@@ -217,10 +224,10 @@ void test("refresh() re-fetches and returns a rotated value", async () => {
   const responses: Record<string, FakeSecretsResponse> = {
     "github/token": { status: 200, value: "original-value" },
   };
-  const { app, cleanup } = createTestApp(
-    { ...SECRETS_ENV, SECRETS_INTEGRATION_NAMES: "github/token" },
-    { secretsFetch: createFakeSecretsFetch(responses) },
-  );
+  const { app, cleanup } = createTestApp(SECRETS_ENV, {
+    integrationNames: GITHUB_ONLY,
+    secretsFetch: createFakeSecretsFetch(responses),
+  });
 
   try {
     await app.ready();
@@ -249,10 +256,10 @@ void test("every configured name is fetched concurrently, so a hang does not mul
     return fetchImpl(input, init);
   };
 
-  const { app, cleanup } = createTestApp(
-    { ...SECRETS_ENV, SECRETS_INTEGRATION_NAMES: "github/token,discord/webhook" },
-    { secretsFetch: trackedFetch },
-  );
+  const { app, cleanup } = createTestApp(SECRETS_ENV, {
+    integrationNames: GITHUB_AND_DISCORD,
+    secretsFetch: trackedFetch,
+  });
 
   try {
     await app.ready();
@@ -296,7 +303,29 @@ void test("with secretsStore null nothing is decorated and no fetch is attempted
   }
 });
 
-void test("a malformed configured name throws at setup", () => {
+void test("without an override the plugin fetches exactly the registry's integration names", async () => {
+  const fetched: string[] = [];
+  const trackedFetch: typeof fetch = (input, init) => {
+    const url = new URL(
+      input instanceof URL ? input : input instanceof Request ? input.url : input,
+    );
+    fetched.push(url.searchParams.get("name") ?? "");
+    return createFakeSecretsFetch({})(input, init);
+  };
+
+  const { app, cleanup } = createTestApp(SECRETS_ENV, { secretsFetch: trackedFetch });
+
+  try {
+    await app.ready();
+
+    assert.deepEqual(fetched, [...integrationSecretNames()]);
+  } finally {
+    await app.close();
+    cleanup();
+  }
+});
+
+void test("a malformed declared name throws at setup", () => {
   const directory = mkdtempSync(join(tmpdir(), "unimatrix-integration-credentials-"));
   const filePath = join(directory, "integration-credentials.sqlite");
   const previousDatabaseUrl = process.env.DATABASE_URL;
@@ -310,15 +339,10 @@ void test("a malformed configured name throws at setup", () => {
   try {
     assert.throws(
       () =>
-        buildApp(
-          loadApiRuntimeConfig({
-            LOG_LEVEL: "error",
-            NODE_ENV: "test",
-            ...SECRETS_ENV,
-            SECRETS_INTEGRATION_NAMES: "Not A Valid Name!",
-          }),
-          { secretsFetch: createFakeSecretsFetch({}) },
-        ),
+        buildApp(loadApiRuntimeConfig({ LOG_LEVEL: "error", NODE_ENV: "test", ...SECRETS_ENV }), {
+          integrationNames: ["Not A Valid Name!"],
+          secretsFetch: createFakeSecretsFetch({}),
+        }),
       /malformed name/,
     );
   } finally {
@@ -334,12 +358,9 @@ void test("a malformed configured name throws at setup", () => {
 void test("no log record emitted during a boot fetch contains the plaintext", async () => {
   const chunks: string[] = [];
   const { app, cleanup } = createTestApp(
+    { ...SECRETS_ENV, LOG_LEVEL: "warn" },
     {
-      ...SECRETS_ENV,
-      SECRETS_INTEGRATION_NAMES: "github/token,discord/webhook",
-      LOG_LEVEL: "warn",
-    },
-    {
+      integrationNames: GITHUB_AND_DISCORD,
       // One name loads (carrying the plaintext) and one is denied — the
       // denial guarantees at least one `warn`-level log record exists to
       // assert against, since a successful load logs nothing on its own.
