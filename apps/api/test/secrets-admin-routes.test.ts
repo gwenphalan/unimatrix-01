@@ -546,6 +546,39 @@ void test("a 404 from the store on create maps to 404 NOT_FOUND with the out-of-
   }
 });
 
+void test("a 404 from the store on list maps to 502, never a client-side 404", async () => {
+  const { app, cleanup } = createTestApp(
+    { ...CLERK_ENV, ...SECRETS_ENV },
+    {
+      secretsFetch: createFakeStoreFetch([], () =>
+        jsonResponse(404, { error: { code: "NOT_FOUND" } }),
+      ),
+    },
+  );
+
+  try {
+    await app.ready();
+
+    const response = await app.inject({
+      method: "GET",
+      url: LIST_URL,
+      headers: adminAuthHeaders(),
+    });
+
+    // The list route names no secret, so an upstream 404 can only mean the
+    // store's route is missing or this API's token lacks `manage` — faults on
+    // our side, not the caller's. Reporting them as a client 404 would send an
+    // operator hunting a secret that was never named.
+    assert.equal(response.statusCode, 502);
+    const body: ApiErrorEnvelope = response.json();
+    assert.equal(body.error.code, "INTERNAL_ERROR");
+    assert.match(body.error.message, /The secrets store is unavailable/);
+  } finally {
+    await app.close();
+    cleanup();
+  }
+});
+
 void test("a 404 from the store on rotate maps to 404 NOT_FOUND with the unreachable message", async () => {
   const { app, cleanup } = createTestApp(
     { ...CLERK_ENV, ...SECRETS_ENV },

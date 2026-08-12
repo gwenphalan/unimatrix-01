@@ -29,8 +29,18 @@ import { SECRETS_ADMIN_RATE_LIMIT_OPTIONS } from "../../plugins/rate-limit.js";
  * while rotate and delete return 404 for a name that is not there at all —
  * two different facts that deserve two different messages, even though the
  * store answers both with the same status.
+ *
+ * Pass `null` from a route that names no secret. There, an upstream 404 can
+ * only mean the store's own route is missing or this API's token lacks the
+ * `manage` capability — both faults on our side of the call, so it falls
+ * through to the 502 branch rather than telling the browser a client-side
+ * "not found" about a resource it never asked for.
  */
-function toApiError(request: FastifyRequest, error: unknown, notFoundMessage: string): never {
+function toApiError(
+  request: FastifyRequest,
+  error: unknown,
+  notFoundMessage: string | null,
+): never {
   if (!(error instanceof SecretsClientError)) {
     throw error;
   }
@@ -51,10 +61,23 @@ function toApiError(request: FastifyRequest, error: unknown, notFoundMessage: st
         cause: error,
       });
     case 404:
+      if (notFoundMessage !== null) {
+        throw new ApiError({
+          statusCode: 404,
+          code: "NOT_FOUND",
+          message: notFoundMessage,
+          cause: error,
+        });
+      }
+
+      request.log.error(
+        { status: error.status },
+        "the secrets store answered 404 for a route that names no secret",
+      );
       throw new ApiError({
-        statusCode: 404,
-        code: "NOT_FOUND",
-        message: notFoundMessage,
+        statusCode: 502,
+        code: "INTERNAL_ERROR",
+        message: "The secrets store is unavailable.",
         cause: error,
       });
     case 401:
@@ -119,10 +142,7 @@ export const secretsAdminModule: FastifyPluginAsync = async (app) => {
       try {
         return await app.secretsManagement.listSecrets();
       } catch (error) {
-        // This route names no secret, so the store has nothing to report as
-        // absent — a 404 here would mean the store's own route is gone, not
-        // that something was not found. The message says only what is known.
-        toApiError(request, error, "The secrets store did not answer this request.");
+        toApiError(request, error, null);
       }
     },
   });
