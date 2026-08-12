@@ -180,6 +180,14 @@ const METADATA: SecretMetadata = {
   rotatedAt: "2026-07-01T00:00:00.000Z",
 };
 
+/**
+ * The store reports the keyring's active version on every list response, so a
+ * stub that omits it is not a valid store response — the client parses these
+ * against the shared schema and a missing field surfaces as a 502, not as a
+ * malformed body the route passes through.
+ */
+const ACTIVE_KEK_VERSION = 1;
+
 const LIST_URL = "/secrets/admin";
 const CREATE_URL = "/secrets/admin";
 const ROTATE_URL = "/secrets/admin/rotate";
@@ -189,7 +197,9 @@ const DELETE_URL = "/secrets/admin";
 
 void test("every admin secrets route is absent without Clerk, even with a fully configured store", async () => {
   const { app, cleanup } = createTestApp(SECRETS_ENV, {
-    secretsFetch: createFakeStoreFetch([], () => jsonResponse(200, { secrets: [] })),
+    secretsFetch: createFakeStoreFetch([], () =>
+      jsonResponse(200, { secrets: [], activeKekVersion: ACTIVE_KEK_VERSION }),
+    ),
   });
 
   try {
@@ -236,7 +246,11 @@ void test("every admin secrets route is absent with Clerk and a store but no man
       SECRETS_BASE_URL: SECRETS_ENV.SECRETS_BASE_URL,
       SECRETS_SERVICE_TOKEN: SECRETS_ENV.SECRETS_SERVICE_TOKEN,
     },
-    { secretsFetch: createFakeStoreFetch([], () => jsonResponse(200, { secrets: [] })) },
+    {
+      secretsFetch: createFakeStoreFetch([], () =>
+        jsonResponse(200, { secrets: [], activeKekVersion: ACTIVE_KEK_VERSION }),
+      ),
+    },
   );
 
   try {
@@ -260,7 +274,11 @@ void test("every admin secrets route is absent with Clerk and a store but no man
 void test("a signed-in session lacking auth:admin is refused with 403 on every route", async () => {
   const { app, cleanup } = createTestApp(
     { ...CLERK_ENV, ...SECRETS_ENV },
-    { secretsFetch: createFakeStoreFetch([], () => jsonResponse(200, { secrets: [] })) },
+    {
+      secretsFetch: createFakeStoreFetch([], () =>
+        jsonResponse(200, { secrets: [], activeKekVersion: ACTIVE_KEK_VERSION }),
+      ),
+    },
   );
 
   try {
@@ -410,7 +428,11 @@ void test("the outbound authorization header carries the manage token, not the r
   const captured: CapturedRequest[] = [];
   const { app, cleanup } = createTestApp(
     { ...CLERK_ENV, ...SECRETS_ENV },
-    { secretsFetch: createFakeStoreFetch(captured, () => jsonResponse(200, { secrets: [] })) },
+    {
+      secretsFetch: createFakeStoreFetch(captured, () =>
+        jsonResponse(200, { secrets: [], activeKekVersion: ACTIVE_KEK_VERSION }),
+      ),
+    },
   );
 
   try {
@@ -437,7 +459,11 @@ void test("the outbound authorization header carries the manage token, not the r
 void test("list resolves 200 with the store's response, parsed against the shared schema", async () => {
   const { app, cleanup } = createTestApp(
     { ...CLERK_ENV, ...SECRETS_ENV },
-    { secretsFetch: createFakeStoreFetch([], () => jsonResponse(200, { secrets: [METADATA] })) },
+    {
+      secretsFetch: createFakeStoreFetch([], () =>
+        jsonResponse(200, { secrets: [METADATA], activeKekVersion: ACTIVE_KEK_VERSION }),
+      ),
+    },
   );
 
   try {
@@ -451,7 +477,7 @@ void test("list resolves 200 with the store's response, parsed against the share
 
     assert.equal(response.statusCode, 200);
     const body: ListSecretsResponse = response.json();
-    assert.deepEqual(body, { secrets: [METADATA] });
+    assert.deepEqual(body, { secrets: [METADATA], activeKekVersion: ACTIVE_KEK_VERSION });
   } finally {
     await app.close();
     cleanup();
