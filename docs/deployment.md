@@ -315,20 +315,31 @@ the host the API connects to and hostname verification stays on. Ten years is
 deliberate: a certificate pinned by value gains nothing from expiring, and an
 expired one is an outage with a confusing error.
 
-Order matters, and none of these steps is optional:
+Order matters, and none of these steps is optional. Steps 1 to 3 happen
+**before the compose changes reach `main`**, not after. Both services carry
+`autoDeploy: true` on `main` with their own compose file in `watchPaths` (read
+from Dokploy's `compose.one`), so the merge is the deploy — and an unset
+variable reaches the container as an empty string, present rather than absent,
+which both loaders refuse. Merging first restart-loops the store and the API,
+and with the store down step 3's tokens cannot be minted at all: the CLI that
+mints them runs inside the running container.
+
+Setting the variables early is safe. The deployed compose files do not
+reference them until the change lands.
 
 1. `docker network create unimatrix-secrets` on the host. Compose does not
    create an external network; it fails when one is missing.
-2. Set `SECRETS_TLS_CERT_BASE64` and `SECRETS_TLS_KEY_BASE64` on the **secrets**
-   stack.
-3. Deploy secrets. Confirm `"scheme":"https"` in the boot log and the
-   container reporting `healthy`. A deploy is queued rather than applied — see
-   "A deploy is queued, not applied" above.
-4. Set all five `SECRETS_*` variables on the **api** stack: the base URL
-   `https://secrets:3001`, the three distinct service tokens, and the
-   certificate. Never the private key.
-5. Deploy api, then check the public API through Traefik immediately. A 502
-   means the explicit `networks:` block cost the service its Traefik
+2. Generate the certificate as above and set `SECRETS_TLS_CERT_BASE64` and
+   `SECRETS_TLS_KEY_BASE64` on the **secrets** stack.
+3. Mint the three service tokens against the still-running store, then set all
+   five `SECRETS_*` variables on the **api** stack: the base URL
+   `https://secrets:3001`, the three distinct tokens, and the certificate.
+   Never the private key.
+4. Merge. Both stacks deploy on their own compose file changing, and a deploy
+   is queued rather than applied — see "A deploy is queued, not applied" above.
+5. Confirm `"scheme":"https"` in the store's boot log and the container
+   reporting `healthy`, then check the public API through Traefik immediately.
+   A 502 means the explicit `networks:` block cost the service its Traefik
    attachment.
 
 **Telling a misconfigured token from a missing secret.** The store answers a
