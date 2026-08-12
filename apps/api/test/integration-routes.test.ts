@@ -7,7 +7,10 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { createDatabase } from "@unimatrix/db";
-import type { RefreshIntegrationCredentialsResponse } from "@unimatrix/shared";
+import type {
+  RefreshIntegrationCredentialsResponse,
+  SecretRegistryEntry,
+} from "@unimatrix/shared";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 
 import { buildApp, type BuildApiAppOptions } from "../src/app.js";
@@ -48,7 +51,13 @@ const SECRETS_ENV: ApiRuntimeEnv = {
  * nothing without the `integrationNames` seam — and a route that returns
  * three empty arrays proves nothing about whether it re-fetched.
  */
-const INTEGRATION_NAMES = ["github/token"];
+const GITHUB_TOKEN_SECRET: SecretRegistryEntry = {
+  name: "github/token",
+  tier: "integration",
+  consumedBy: "stand-in for github/token",
+};
+
+const INTEGRATION_NAMES = [GITHUB_TOKEN_SECRET.name];
 
 const ADMIN_USER = "user_2cccccccccccccccccccccccccc";
 const NON_ADMIN_USER = "user_2ddddddddddddddddddddddddd";
@@ -251,7 +260,7 @@ void test("an admin session gets 200 with the refreshed result, and the cache is
     // trigger a second fetch — "value-2" — proving the handler calls
     // `refresh()` rather than serving the boot-time cache back unchanged.
     assert.equal(
-      app.integrationCredentials.get("github/token")?.reveal(),
+      app.integrationCredentials.get(GITHUB_TOKEN_SECRET)?.reveal(),
       "value-1",
       "boot fetch precondition",
     );
@@ -267,7 +276,7 @@ void test("an admin session gets 200 with the refreshed result, and the cache is
     const body: RefreshIntegrationCredentialsResponse = response.json();
 
     assert.deepEqual(body, { loaded: ["github/token"], denied: [], failed: [] });
-    assert.equal(app.integrationCredentials.get("github/token")?.reveal(), "value-2");
+    assert.equal(app.integrationCredentials.get(GITHUB_TOKEN_SECRET)?.reveal(), "value-2");
   } finally {
     await app.close();
     cleanup();

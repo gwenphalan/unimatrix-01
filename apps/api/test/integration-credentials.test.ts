@@ -6,7 +6,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { createDatabase } from "@unimatrix/db";
-import { integrationSecretNames } from "@unimatrix/shared";
+import { integrationSecretNames, type SecretRegistryEntry } from "@unimatrix/shared";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 
 import { buildApp, type BuildApiAppOptions } from "../src/app.js";
@@ -22,10 +22,19 @@ const SECRETS_ENV: ApiRuntimeEnv = {
 /**
  * The registry's integration tier is empty, so these stand in for it through
  * `BuildApiAppOptions.integrationNames` — the plugin's degradation behaviour
- * is what these tests are about, not which names it happens to declare.
+ * is what these tests are about, not which names it happens to declare. The
+ * entries stand in for the registry constants `get()` takes; the seam itself
+ * still takes names, because that is what the client fetches.
  */
-const GITHUB_ONLY = ["github/token"];
-const GITHUB_AND_DISCORD = ["github/token", "discord/webhook"];
+function fakeRegistryEntry(name: string): SecretRegistryEntry {
+  return { name, tier: "integration", consumedBy: `stand-in for ${name}` };
+}
+
+const GITHUB_TOKEN_SECRET = fakeRegistryEntry("github/token");
+const DISCORD_WEBHOOK_SECRET = fakeRegistryEntry("discord/webhook");
+
+const GITHUB_ONLY = [GITHUB_TOKEN_SECRET.name];
+const GITHUB_AND_DISCORD = [GITHUB_TOKEN_SECRET.name, DISCORD_WEBHOOK_SECRET.name];
 
 /** Never appears in a captured log line — see the redaction test below. */
 const PLAINTEXT = "TOTALLY-SECRET-PLAINTEXT-VALUE";
@@ -124,7 +133,7 @@ function createTestApp(env: ApiRuntimeEnv, options: BuildApiAppOptions = {}): Te
   };
 }
 
-void test("a boot fetch populates the cache and get(name) returns the value", async () => {
+void test("a boot fetch populates the cache and get(entry) returns the value", async () => {
   const { app, cleanup } = createTestApp(SECRETS_ENV, {
     integrationNames: GITHUB_ONLY,
     secretsFetch: createFakeSecretsFetch({ "github/token": { status: 200, value: "abc123" } }),
@@ -133,7 +142,7 @@ void test("a boot fetch populates the cache and get(name) returns the value", as
   try {
     await app.ready();
 
-    assert.equal(app.integrationCredentials.get("github/token")?.reveal(), "abc123");
+    assert.equal(app.integrationCredentials.get(GITHUB_TOKEN_SECRET)?.reveal(), "abc123");
     assert.notEqual(app.integrationCredentials.loadedAt, null);
   } finally {
     await app.close();
@@ -150,7 +159,7 @@ void test("a fetch that rejects leaves the app answering /health with an empty c
   try {
     await app.ready();
 
-    assert.equal(app.integrationCredentials.get("github/token"), undefined);
+    assert.equal(app.integrationCredentials.get(GITHUB_TOKEN_SECRET), undefined);
 
     const health = await app.inject({ method: "GET", url: "/health" });
 
@@ -180,8 +189,8 @@ void test("a 404 for one name records it denied while a second name still loads"
 
     assert.deepEqual(result.denied, ["github/token"]);
     assert.deepEqual(result.loaded, ["discord/webhook"]);
-    assert.equal(app.integrationCredentials.get("discord/webhook")?.reveal(), "webhook-value");
-    assert.equal(app.integrationCredentials.get("github/token"), undefined);
+    assert.equal(app.integrationCredentials.get(DISCORD_WEBHOOK_SECRET)?.reveal(), "webhook-value");
+    assert.equal(app.integrationCredentials.get(GITHUB_TOKEN_SECRET), undefined);
   } finally {
     await app.close();
     cleanup();
@@ -199,7 +208,7 @@ void test("a failed refresh leaves a previously cached value in place", async ()
 
   try {
     await app.ready();
-    assert.equal(app.integrationCredentials.get("github/token")?.reveal(), "first-value");
+    assert.equal(app.integrationCredentials.get(GITHUB_TOKEN_SECRET)?.reveal(), "first-value");
 
     // The fake fetch reads `responses` on every call, so removing the entry
     // makes the next `refresh()` reject for this name without rebuilding the
@@ -210,7 +219,7 @@ void test("a failed refresh leaves a previously cached value in place", async ()
 
     assert.deepEqual(result.failed, ["github/token"]);
     assert.equal(
-      app.integrationCredentials.get("github/token")?.reveal(),
+      app.integrationCredentials.get(GITHUB_TOKEN_SECRET)?.reveal(),
       "first-value",
       "a failed refresh must not empty a working cache",
     );
@@ -231,14 +240,14 @@ void test("refresh() re-fetches and returns a rotated value", async () => {
 
   try {
     await app.ready();
-    assert.equal(app.integrationCredentials.get("github/token")?.reveal(), "original-value");
+    assert.equal(app.integrationCredentials.get(GITHUB_TOKEN_SECRET)?.reveal(), "original-value");
 
     responses["github/token"] = { status: 200, value: "rotated-value" };
 
     const result = await app.integrationCredentials.refresh();
 
     assert.deepEqual(result.loaded, ["github/token"]);
-    assert.equal(app.integrationCredentials.get("github/token")?.reveal(), "rotated-value");
+    assert.equal(app.integrationCredentials.get(GITHUB_TOKEN_SECRET)?.reveal(), "rotated-value");
   } finally {
     await app.close();
     cleanup();
@@ -379,7 +388,7 @@ void test("no log record emitted during a boot fetch contains the plaintext", as
   try {
     await app.ready();
 
-    assert.equal(app.integrationCredentials.get("github/token")?.reveal(), PLAINTEXT);
+    assert.equal(app.integrationCredentials.get(GITHUB_TOKEN_SECRET)?.reveal(), PLAINTEXT);
     assert.ok(chunks.length > 0, "expected at least the denial's warn-level log record");
     assert.ok(chunks.every((chunk) => !chunk.includes(PLAINTEXT)));
   } finally {

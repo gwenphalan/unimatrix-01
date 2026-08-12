@@ -12,14 +12,39 @@ export interface SecretRegistryEntry {
 }
 
 /**
- * What the system expects to exist. The admin console lists this union'd with
- * whatever the store actually holds, so a credential the running code needs
- * and the store lacks is visible rather than simply absent.
+ * Every entry is a named constant, and a consumer passes the constant rather
+ * than the name — `app.integrationCredentials.get(GITHUB_TOKEN_SECRET)`. A
+ * rename is then a compile error at the consumer instead of a runtime
+ * `undefined` that the plugin's `denied` bucket would report as a credential
+ * the store lacks.
+ *
+ * The declaration stays here rather than beside the code that consumes it
+ * because consumers can share an integration: two modules needing the same
+ * credential would leave neither owning the declaration.
  *
  * Every name must satisfy `secretNameSchema` — lowercase, no underscores, no
  * dots — or it can never be stored. `test/secrets-registry.test.ts` asserts
- * that over the whole array, so a name that cannot be stored fails there
+ * that over the whole registry, so a name that cannot be stored fails there
  * rather than at runtime.
+ */
+export const CLERK_SECRET_KEY_SECRET = {
+  name: "platform/clerk-secret-key",
+  tier: "platform",
+  consumedBy:
+    "apps/api's Clerk backend calls. Without it the API boots with auth and every account-scoped route disabled; with a wrong value every signed-in request fails.",
+} as const satisfies SecretRegistryEntry;
+
+export const CLERK_JWT_KEY_SECRET = {
+  name: "platform/clerk-jwt-key",
+  tier: "platform",
+  consumedBy:
+    "Networkless verification of Clerk session tokens in apps/api. A wrong value rejects every signed-in request, including the admin console's own.",
+} as const satisfies SecretRegistryEntry;
+
+/**
+ * What the system expects to exist. The admin console lists this union'd with
+ * whatever the store actually holds, so a credential the running code needs
+ * and the store lacks is visible rather than simply absent.
  *
  * Nothing reads a `platform` name out of the store today: the two Clerk keys
  * reach `apps/api` as environment variables. They are declared here because
@@ -27,18 +52,8 @@ export interface SecretRegistryEntry {
  * currently fetches.
  */
 export const SECRET_REGISTRY: readonly SecretRegistryEntry[] = [
-  {
-    name: "platform/clerk-secret-key",
-    tier: "platform",
-    consumedBy:
-      "apps/api's Clerk backend calls. Without it the API boots with auth and every account-scoped route disabled; with a wrong value every signed-in request fails.",
-  },
-  {
-    name: "platform/clerk-jwt-key",
-    tier: "platform",
-    consumedBy:
-      "Networkless verification of Clerk session tokens in apps/api. A wrong value rejects every signed-in request, including the admin console's own.",
-  },
+  CLERK_SECRET_KEY_SECRET,
+  CLERK_JWT_KEY_SECRET,
 ];
 
 /**
