@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   adminCreateSecretBodySchema,
+  adminListSecretsResponseSchema,
   adminDeleteSecretBodySchema,
   adminRotateSecretBodySchema,
   createSecretBodySchema,
@@ -202,6 +203,67 @@ describe("listSecretsResponseSchema", () => {
         secrets: [VALID_METADATA],
         activeKekVersion: 1,
         extra: true,
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe("adminListSecretsResponseSchema", () => {
+  const STORED_ROW = {
+    name: "integrations/github/token",
+    tier: "integration",
+    metadata: VALID_METADATA,
+    consumedBy: "Nothing yet.",
+  };
+  const MISSING_ROW = {
+    name: "platform/clerk-secret-key",
+    tier: "platform",
+    metadata: null,
+    consumedBy: "apps/api's Clerk backend calls.",
+  };
+  const UNLISTED_ROW = { ...STORED_ROW, consumedBy: null };
+
+  it("accepts a stored row, a missing row, and an unlisted one", () => {
+    expect(
+      adminListSecretsResponseSchema.safeParse({
+        secrets: [STORED_ROW, MISSING_ROW, UNLISTED_ROW],
+        activeKekVersion: 2,
+      }).success,
+    ).toBe(true);
+  });
+
+  it("rejects a row carrying an unknown tier", () => {
+    expect(
+      adminListSecretsResponseSchema.safeParse({
+        secrets: [{ ...STORED_ROW, tier: "bootstrap" }],
+        activeKekVersion: 1,
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejects a row omitting metadata rather than nulling it", () => {
+    expect(
+      adminListSecretsResponseSchema.safeParse({
+        secrets: [{ name: STORED_ROW.name, tier: STORED_ROW.tier, consumedBy: null }],
+        activeKekVersion: 1,
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejects an empty consumedBy, which would render as a blank warning", () => {
+    expect(
+      adminListSecretsResponseSchema.safeParse({
+        secrets: [{ ...STORED_ROW, consumedBy: "" }],
+        activeKekVersion: 1,
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejects an unknown key, proving strictObject", () => {
+    expect(
+      adminListSecretsResponseSchema.safeParse({
+        secrets: [{ ...STORED_ROW, extra: true }],
+        activeKekVersion: 1,
       }).success,
     ).toBe(false);
   });

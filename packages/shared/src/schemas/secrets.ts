@@ -104,6 +104,49 @@ export const listSecretsQuerySchema = z.strictObject({});
 export type ListSecretsQuery = z.output<typeof listSecretsQuerySchema>;
 
 /**
+ * Which half of the system a credential belongs to. `platform` names back the
+ * services themselves (Clerk, and anything else a deployment needs to boot);
+ * `integration` names back an outbound provider call. The tier decides what
+ * the admin console permits — platform names can be created and rotated there
+ * but never deleted — so it is a property of the name, declared in
+ * `../secrets-registry.ts`, not of an environment.
+ */
+export const secretTierSchema = z.enum(["platform", "integration"]);
+
+export type SecretTier = z.output<typeof secretTierSchema>;
+
+/**
+ * One row of the admin console's list: what the system expects, and what the
+ * store holds for it. `metadata` is `null` for a registry name the store does
+ * not hold — the row still renders, because "expected and missing" is the
+ * question the console exists to answer. `consumedBy` is `null` for a stored
+ * name the registry does not declare, which is the other asymmetry: nothing
+ * in this repo can say what such a name is for.
+ */
+export const adminSecretRowSchema = z.strictObject({
+  name: secretNameSchema,
+  tier: secretTierSchema,
+  metadata: secretMetadataSchema.nullable(),
+  consumedBy: z.string().min(1).nullable(),
+});
+
+export type AdminSecretRow = z.output<typeof adminSecretRowSchema>;
+
+/**
+ * Deliberately not {@link listSecretsResponseSchema}, which is the store's own
+ * wire format and is shared with `apps/secrets`' list route. This one is the
+ * union across both tiers that only `apps/api` can assemble, and widening the
+ * store's shape to carry it would put registry knowledge in a service that has
+ * none.
+ */
+export const adminListSecretsResponseSchema = z.strictObject({
+  secrets: z.array(adminSecretRowSchema),
+  activeKekVersion: z.number().int().positive(),
+});
+
+export type AdminListSecretsResponse = z.output<typeof adminListSecretsResponseSchema>;
+
+/**
  * The id of the signed-in user an admin surface attributes a mutation to.
  * The character class mirrors this repo's own Clerk fixtures
  * (`apps/api/test/integration-routes.test.ts:47`, e.g.

@@ -4,9 +4,21 @@ import {
 } from "@unimatrix/secrets/client";
 import type { FastifyInstance } from "fastify";
 
+/**
+ * One client per tier, named for the scope its token holds, because that is
+ * the question a reader of a call site needs answered: `integrations` cannot
+ * touch a `platform/*` name, and `platform` holds a `write` capability that
+ * cannot delete anything at all. A single client would make "which token went
+ * out on the wire" a fact you had to trace back through configuration.
+ */
+export interface SecretsManagementClients {
+  integrations: SecretsManagementClient;
+  platform: SecretsManagementClient;
+}
+
 declare module "fastify" {
   interface FastifyInstance {
-    secretsManagement: SecretsManagementClient;
+    secretsManagement: SecretsManagementClients;
   }
 }
 
@@ -21,17 +33,21 @@ export interface SetupSecretsManagementOptions {
 
 /**
  * Registers `app.secretsManagement`, or logs and returns without decorating
- * when the store is unconfigured or carries no manage token — the same
+ * when the store is unconfigured or either scoped token is missing — the same
  * no-op shape `setupIntegrationCredentials` uses for a missing
- * `secretsStore`. `secretsAdminModule` reads this decoration's presence
- * (via `app.runtimeConfig.secretsStore`) to decide whether to register at
- * all, so an absent decoration and an absent module are the same fact
- * checked in two places.
+ * `secretsStore`. `secretsAdminModule` reads the same condition (via
+ * `app.runtimeConfig.secretsStore`) to decide whether to register at all, so
+ * an absent decoration and an absent module are the same fact checked in two
+ * places.
  *
- * Always built with `secretsStore.manageToken`, never `.serviceToken` — see
- * `apps/api/src/config.ts`'s `SECRETS_MANAGE_TOKEN` guard for why the two
- * must never be interchangeable: the store answers a wrong-capability
- * caller with the same 404 it uses for a missing name.
+ * Both tokens or neither: a console holding only one would render the tier it
+ * cannot reach as "this credential is not set", which is the one answer this
+ * page must never give.
+ *
+ * Neither client is ever built with `secretsStore.serviceToken` — see
+ * `apps/api/src/config.ts`'s three-way token guard for why the read token and
+ * these two must all differ: the store answers a wrong-capability caller with
+ * the same 404 it uses for a missing name.
  */
 export function setupSecretsManagement(
   app: FastifyInstance,
@@ -39,18 +55,29 @@ export function setupSecretsManagement(
 ): void {
   const { secretsStore } = app.runtimeConfig;
 
-  if (secretsStore === null || secretsStore.manageToken === null) {
+  if (
+    secretsStore === null ||
+    secretsStore.integrationsManageToken === null ||
+    secretsStore.platformWriteToken === null
+  ) {
     app.log.info(
-      "Secrets management is disabled: SECRETS_BASE_URL/SECRETS_SERVICE_TOKEN/SECRETS_MANAGE_TOKEN are not fully configured.",
+      "Secrets management is disabled: SECRETS_BASE_URL/SECRETS_SERVICE_TOKEN/SECRETS_INTEGRATIONS_MANAGE_TOKEN/SECRETS_PLATFORM_WRITE_TOKEN are not fully configured.",
     );
     return;
   }
 
-  const client = createSecretsManagementClient({
-    baseUrl: secretsStore.baseUrl,
-    serviceToken: secretsStore.manageToken,
-    ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
-  });
+  const fetchOption = options.fetch === undefined ? {} : { fetch: options.fetch };
 
-  app.decorate("secretsManagement", client);
+  app.decorate("secretsManagement", {
+    integrations: createSecretsManagementClient({
+      baseUrl: secretsStore.baseUrl,
+      serviceToken: secretsStore.integrationsManageToken,
+      ...fetchOption,
+    }),
+    platform: createSecretsManagementClient({
+      baseUrl: secretsStore.baseUrl,
+      serviceToken: secretsStore.platformWriteToken,
+      ...fetchOption,
+    }),
+  });
 }

@@ -61,7 +61,7 @@ export const DOCUMENT_WRITE_RATE_LIMIT_OPTIONS = {
  * A tighter ceiling for `POST /integrations/admin/credentials/refresh`.
  *
  * One authorized call here fans out to N outbound requests against the
- * secrets service (N = the configured `SECRETS_INTEGRATION_NAMES` count), so
+ * secrets service (N = the registry's integration-tier name count), so
  * the global 300/min would let one admin session drive up to 300 × N
  * requests at the store. 10/min is well above a real rotation workflow —
  * an operator clicking "refresh" after rotating a credential — while
@@ -81,11 +81,15 @@ export const INTEGRATION_CREDENTIALS_REFRESH_RATE_LIMIT_OPTIONS = {
  * `trustProxy` unset, which makes the whole API container one key — every
  * outbound call this API makes to the store, from every plugin and module,
  * draws from that same 60. `INTEGRATION_CREDENTIALS_REFRESH_RATE_LIMIT_OPTIONS`
- * is 10/min fanning out to N configured integration names, so the worst-case
- * draw against the store is `20 + 10N` (this ceiling plus that one). That
- * stays under 60 through N = 3 inclusive and leaves headroom at N = 4. 20 was
- * chosen over 30 for exactly that margin — 30 would already hit the ceiling
- * at N = 3. The failure this avoids is not an admin session drawing a 429
+ * is 10/min fanning out to N declared integration names, and the list route
+ * spends two of the store's calls per request (one per scoped token), so the
+ * worst-case draw against the store is `40 + 10N` — this ceiling doubled,
+ * plus that one. That stays under 60 only through N = 1, and the registry
+ * declares no integration name today. **Declaring the second one is the point
+ * at which these two ceilings need re-deriving rather than re-reading**, and
+ * neither number can be validated before then.
+ *
+ * The failure this avoids is not an admin session drawing a 429
  * here (a 4xx, correctly not retried) — it is the API's own boot-time
  * integration-credential refresh being rejected by the store's ceiling and
  * `setupIntegrationCredentials` booting with an empty cache.

@@ -41,8 +41,14 @@ const CLERK_ENV: ApiRuntimeEnv = {
 const SECRETS_ENV: ApiRuntimeEnv = {
   SECRETS_BASE_URL: "http://secrets.internal:3002",
   SECRETS_SERVICE_TOKEN: "svc_test_token",
-  SECRETS_INTEGRATION_NAMES: "github/token",
 };
+
+/**
+ * The registry's integration tier is empty, so this route would refresh
+ * nothing without the `integrationNames` seam — and a route that returns
+ * three empty arrays proves nothing about whether it re-fetched.
+ */
+const INTEGRATION_NAMES = ["github/token"];
 
 const ADMIN_USER = "user_2cccccccccccccccccccccccccc";
 const NON_ADMIN_USER = "user_2ddddddddddddddddddddddddd";
@@ -156,6 +162,7 @@ const REFRESH_URL = "/integrations/admin/credentials/refresh";
 
 void test("the route is absent when Clerk is not configured, even with a secrets store", async () => {
   const { app, cleanup } = createTestApp(SECRETS_ENV, {
+    integrationNames: INTEGRATION_NAMES,
     secretsFetch: fakeSecretsFetch({ value: 0 }),
   });
 
@@ -193,7 +200,7 @@ void test("the route is absent when the secrets store is not configured, even wi
 void test("an unauthenticated request is refused with 401", async () => {
   const { app, cleanup } = createTestApp(
     { ...CLERK_ENV, ...SECRETS_ENV },
-    { secretsFetch: fakeSecretsFetch({ value: 0 }) },
+    { integrationNames: INTEGRATION_NAMES, secretsFetch: fakeSecretsFetch({ value: 0 }) },
   );
 
   try {
@@ -211,7 +218,7 @@ void test("an unauthenticated request is refused with 401", async () => {
 void test("a signed-in session lacking auth:admin is refused with 403", async () => {
   const { app, cleanup } = createTestApp(
     { ...CLERK_ENV, ...SECRETS_ENV },
-    { secretsFetch: fakeSecretsFetch({ value: 0 }) },
+    { integrationNames: INTEGRATION_NAMES, secretsFetch: fakeSecretsFetch({ value: 0 }) },
   );
 
   try {
@@ -233,7 +240,7 @@ void test("a signed-in session lacking auth:admin is refused with 403", async ()
 void test("an admin session gets 200 with the refreshed result, and the cache is observably re-fetched", async () => {
   const { app, cleanup } = createTestApp(
     { ...CLERK_ENV, ...SECRETS_ENV },
-    { secretsFetch: fakeSecretsFetch({ value: 0 }) },
+    { integrationNames: INTEGRATION_NAMES, secretsFetch: fakeSecretsFetch({ value: 0 }) },
   );
 
   try {

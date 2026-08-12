@@ -127,8 +127,13 @@ export interface SecretsManagementRequestOptions {
 }
 
 /**
- * The store's `manage`-capability surface: create, rotate, list metadata and
- * bulk-delete by name. Deliberately has **no `getSecretValue`** — that stays
+ * The store's write surface: create, rotate, list metadata and bulk-delete by
+ * name. A `write`-capability token reaches everything here except
+ * `deleteSecrets`, which needs `manage` — the store answers the difference
+ * with the same 404 it uses for a missing name, so the caller decides which
+ * methods it may use by which token it hands this factory.
+ *
+ * Deliberately has **no `getSecretValue`** — that stays
  * on {@link SecretsClient}, which authenticates with a `read`-capability
  * token instead. This split is the type-level expression of the store's own
  * capability asymmetry (`apps/secrets/src/service-tokens/capability.ts`):
@@ -245,8 +250,8 @@ async function performManagementRequest<TContract extends ApiContract, TBody = u
 /**
  * Config shape reused from {@link SecretsClientConfig}: `serviceToken` here
  * is whichever token the caller authenticates with, which for this client
- * must be a `manage`-capability token — see `apps/api/src/config.ts`'s
- * `SECRETS_MANAGE_TOKEN` guard for what happens when it is not.
+ * must carry `write` or `manage` — see the three-way token guard in
+ * `apps/api/src/config.ts` for what happens when it is a read token instead.
  */
 export function createSecretsManagementClient(
   config: SecretsClientConfig,

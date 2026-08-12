@@ -1,6 +1,6 @@
 import fastifyRateLimit from "@fastify/rate-limit";
 import { requireAdminSection } from "@unimatrix/auth/server";
-import { SecretsClientError } from "@unimatrix/secrets/client";
+import { SecretsClientError, type SecretsManagementClient } from "@unimatrix/secrets/client";
 import {
   adminCreateSecretBodySchema,
   adminCreateSecretContract,
@@ -16,6 +16,7 @@ import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { getRequiredAuthUserId } from "../../lib/http/auth.js";
 import { ApiError } from "../../lib/http/errors.js";
 import { SECRETS_ADMIN_RATE_LIMIT_OPTIONS } from "../../plugins/rate-limit.js";
+import { mergeAdminSecretRows, tierForName } from "./rows.js";
 
 /**
  * Maps a rejection from `app.secretsManagement` to the `ApiError` this
@@ -31,8 +32,8 @@ import { SECRETS_ADMIN_RATE_LIMIT_OPTIONS } from "../../plugins/rate-limit.js";
  * store answers both with the same status.
  *
  * Pass `null` from a route that names no secret. There, an upstream 404 can
- * only mean the store's own route is missing or this API's token lacks the
- * `manage` capability — both faults on our side of the call, so it falls
+ * only mean the store's own route is missing or the token this API sent
+ * cannot list — both faults on our side of the call, so it falls
  * through to the 502 branch rather than telling the browser a client-side
  * "not found" about a resource it never asked for.
  */
@@ -82,11 +83,11 @@ function toApiError(
       });
     case 401:
     case 403:
-      // The API's own manage token is the thing that's wrong here, not
-      // anything the caller sent — never say that to the browser.
+      // One of the API's own scoped tokens is the thing that's wrong here,
+      // not anything the caller sent — never say that to the browser.
       request.log.error(
         { status: error.status },
-        "the secrets store rejected the API's own manage token",
+        "the secrets store rejected one of the API's own scoped tokens",
       );
       throw new ApiError({
         statusCode: 502,
@@ -112,11 +113,11 @@ function toApiError(
 }
 
 /**
- * Registered only when Clerk, the secrets store, and a manage token are all
+ * Registered only when Clerk, the secrets store, and both scoped tokens are
  * configured — see `src/modules/index.ts`. `requireAdminSection` needs
  * `registerClerkAuth` to have run (same reason `integrationsModule` is
- * conditional), and admin secrets routes with no manage-capability client to
- * call are better absent than 500ing on every request.
+ * conditional), and admin secrets routes with no client to call are better
+ * absent than 500ing on every request.
  *
  * `schema.body` on every mutation route takes the `admin*BodySchema`
  * constants directly rather than `contract.bodySchema` — that field is
@@ -131,6 +132,17 @@ export const secretsAdminModule: FastifyPluginAsync = async (app) => {
   // four routes below share this one bucket.
   await app.register(fastifyRateLimit, SECRETS_ADMIN_RATE_LIMIT_OPTIONS);
 
+  /**
+   * A service token carries one scope prefix and no wildcard, so create and
+   * rotate have to go out on the token whose scope covers the name. The
+   * platform client's `write` capability can do both and nothing else.
+   */
+  function clientForName(name: string): SecretsManagementClient {
+    return tierForName(name) === "platform"
+      ? app.secretsManagement.platform
+      : app.secretsManagement.integrations;
+  }
+
   app.withTypeProvider<ZodTypeProvider>().route({
     method: adminListSecretsContract.method,
     url: adminListSecretsContract.path,
@@ -140,7 +152,27 @@ export const secretsAdminModule: FastifyPluginAsync = async (app) => {
     },
     handler: async (request) => {
       try {
-        return await app.secretsManagement.listSecrets();
+        // Both lists or none. A partial answer would render the unreachable
+        // tier's names as "not set" — telling an operator the system lacks a
+        // credential it actually holds, which is the one wrong answer this
+        // route exists to prevent. `Promise.all` rejecting on the first
+        // failure is what makes that a 502 rather than a half-truth.
+        const [platform, integrations] = await Promise.all([
+          app.secretsManagement.platform.listSecrets(),
+          app.secretsManagement.integrations.listSecrets(),
+        ]);
+
+        return {
+          secrets: mergeAdminSecretRows({
+            platform: platform.secrets,
+            integration: integrations.secrets,
+          }),
+          // Both calls hit the same store and therefore the same keyring, so
+          // these agree except when a rotation lands between two concurrent
+          // requests. Taking the higher one keeps a row sealed under the older
+          // key showing as behind, which is the direction that cannot mislead.
+          activeKekVersion: Math.max(platform.activeKekVersion, integrations.activeKekVersion),
+        };
       } catch (error) {
         toApiError(request, error, null);
       }
@@ -160,7 +192,7 @@ export const secretsAdminModule: FastifyPluginAsync = async (app) => {
       const actorUserId = getRequiredAuthUserId(request);
 
       try {
-        return await app.secretsManagement.createSecret({ name, value, actorUserId });
+        return await clientForName(name).createSecret({ name, value, actorUserId });
       } catch (error) {
         toApiError(request, error, "That name is outside the namespace this console manages.");
       }
@@ -180,7 +212,7 @@ export const secretsAdminModule: FastifyPluginAsync = async (app) => {
       const actorUserId = getRequiredAuthUserId(request);
 
       try {
-        return await app.secretsManagement.rotateSecret({ name, value, actorUserId });
+        return await clientForName(name).rotateSecret({ name, value, actorUserId });
       } catch (error) {
         toApiError(request, error, "No secret with that name is reachable.");
       }
@@ -199,8 +231,24 @@ export const secretsAdminModule: FastifyPluginAsync = async (app) => {
       const { name } = request.body;
       const actorUserId = getRequiredAuthUserId(request);
 
+      // The second of two guards, and the only one that can explain itself:
+      // the platform token holds `write`, so the store would refuse this
+      // anyway — with the same 404 it uses for a missing name, which would
+      // send an operator hunting a credential that is sitting right there.
+      if (tierForName(name) === "platform") {
+        throw new ApiError({
+          statusCode: 403,
+          code: "FORBIDDEN",
+          message:
+            "Platform credentials cannot be deleted here. Rotate it instead, or remove it with the secrets service's host CLI.",
+        });
+      }
+
       try {
-        const { affected } = await app.secretsManagement.deleteSecrets({
+        // Always the integrations client, never a tier-dependent one: the
+        // request is then impossible to make against `platform/*` even if the
+        // guard above were removed.
+        const { affected } = await app.secretsManagement.integrations.deleteSecrets({
           names: [name],
           actorUserId,
         });

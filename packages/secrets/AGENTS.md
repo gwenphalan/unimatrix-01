@@ -18,8 +18,14 @@
 - **Contract shapes live in `@unimatrix/shared`**, not here — `secretMetadataSchema` and friends in `packages/shared/src/schemas/secrets.ts`. The `.` entry owns crypto and redaction only; `./client` is the one place in this package permitted to import them.
 
 ## 4. Scope
-Platform secrets — `CLERK_SECRET_KEY`, `CLERK_JWT_KEY`, the database path, the Dokploy API token, and this package's own KEK — stay in compose env and never enter the store this package will back. Deployment-env materialization (pushing a value into Dokploy) and Dokploy-token handling are permanently out of scope for this package, not just for now: a separate trust level and a separate future spec. This package does not enforce that the KEK stays unreachable from any particular app — that is a property of the service and route design in later items, not of the crypto here.
+Platform credentials belong in the store this package's crypto backs, alongside integration ones — `SECRET_REGISTRY` in `@unimatrix/shared` is where each is declared, with the tier that decides what the admin console permits.
+
+Exactly three can never live there, because nothing could bootstrap them: `SECRETS_KEKS` (the store cannot decrypt its own KEK), the store's bootstrap **read** token (needed to reach the store at all), and the **Dokploy API token** (held by the automation that writes deployment env — a separate trust level). The floor is one root, and it cannot be zero.
+
+Nothing fetches a platform credential out of the store at runtime, and nothing should: `apps/api` verifies Clerk sessions with keys from its own environment, and having it fetch them at boot would make a bad key or an unreachable store lock the admin console out of the only tool that could fix either.
+
+Deployment-env materialization (pushing a value into Dokploy) and Dokploy-token handling stay permanently out of scope for this package: a separate trust level and a separate spec. This package does not enforce that the KEK stays unreachable from any particular app — that is a property of the service and route design, not of the crypto here.
 
 ## 5. Conventions
-- **Naming**: `load*` for the one env-shaped entry point (`loadSecretsKeyring`); `seal*`/`open*` for envelope functions; `create*` for the `./client` factory (`createSecretsClient`).
+- **Naming**: `load*` for the one env-shaped entry point (`loadSecretsKeyring`); `seal*`/`open*` for envelope functions; `create*` for the `./client` factories (`createSecretsClient`, `createSecretsManagementClient`).
 - **Errors**: every `.` entry point throws `SecretsError` with a `SecretsErrorCode`, never a bare `Error`, and its messages never contain key material, plaintext, or ciphertext field contents. `./client` throws `SecretsClientError` instead — a different failure class (HTTP, not crypto) with its own rule: neither `message` nor any other property may contain a fragment of a response body, since the route it calls can return a decrypted credential.

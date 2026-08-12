@@ -296,10 +296,12 @@ adding a domain, or a later redeploy, changes this stack's attachment.
 
 **A cross-stack client needs a network arranged for it.** `apps/api` now has
 the read client and its boot-time cache (`SECRETS_BASE_URL`/
-`SECRETS_SERVICE_TOKEN`/`SECRETS_INTEGRATION_NAMES`, all-or-none) and an
-admin management client behind four admin-only routes (`SECRETS_MANAGE_TOKEN`,
-additionally requiring the pair above and a value distinct from
-`SECRETS_SERVICE_TOKEN`), but `apps/api` is still a separate Compose stack
+`SECRETS_SERVICE_TOKEN`, all-or-none; which names it fetches comes from
+`SECRET_REGISTRY` in `@unimatrix/shared`, not from env) and one admin
+management client per credential tier behind four admin-only routes
+(`SECRETS_INTEGRATIONS_MANAGE_TOKEN` and `SECRETS_PLATFORM_WRITE_TOKEN`, both
+required for those routes to exist, additionally requiring the pair above and
+all three token values distinct), but `apps/api` is still a separate Compose stack
 that shares no network with this one, so it cannot reach the store in
 production yet — the feature is code-complete and off. The item that makes
 it a client is where the two get an explicitly declared shared network — and

@@ -1,6 +1,6 @@
 import { createSecretsClient, SecretsClientError } from "@unimatrix/secrets/client";
 import type { SecretValue } from "@unimatrix/secrets";
-import { secretNameSchema } from "@unimatrix/shared";
+import { integrationSecretNames, secretNameSchema } from "@unimatrix/shared";
 import type { FastifyInstance } from "fastify";
 
 /**
@@ -32,10 +32,16 @@ declare module "fastify" {
 
 export interface SetupIntegrationCredentialsOptions {
   fetch?: typeof globalThis.fetch;
+  /**
+   * Test seam: the names to fetch instead of `integrationSecretNames()`. The
+   * registry's integration tier is empty, so nothing else can exercise the
+   * refresh bucketing this plugin exists for. Production passes nothing.
+   */
+  names?: readonly string[];
 }
 
 /**
- * One deadline shared across every configured name, not a per-name timeout.
+ * One deadline shared across every declared name, not a per-name timeout.
  * `refresh()` runs inside `onReady`, which Fastify fully awaits before
  * `listen()` binds the socket — a per-name timeout would multiply the
  * unreachable window by the name count, during which every route (public
@@ -49,6 +55,10 @@ const BOOT_DEADLINE_MS = 10_000;
  * populates it, or logs and returns without decorating when no store is
  * configured — following `setupAuth`'s no-op shape rather than decorating an
  * always-empty `get()` that would read as configured when it is not.
+ *
+ * The names come from `SECRET_REGISTRY`'s integration tier, not from env: a
+ * tier is a property of a name rather than of an environment, and the prose
+ * the console shows before a destructive action cannot live in a comma-list.
  */
 export function setupIntegrationCredentials(
   app: FastifyInstance,
@@ -63,13 +73,16 @@ export function setupIntegrationCredentials(
     return;
   }
 
-  // Boot-time configuration error, the same class as a bad env var — loud
-  // and immediate. The route-facing name shape (`secretNameSchema`) is
-  // checked once, here, rather than on every refresh.
-  for (const name of secretsStore.integrationNames) {
+  const names = options.names ?? integrationSecretNames();
+
+  // Loud and immediate rather than a per-refresh 404 the store would report
+  // as `denied`. `packages/shared`'s own test asserts this over the whole
+  // registry, so in production this can only fire on a name that never ran a
+  // test — which is exactly when a boot failure is the cheapest outcome.
+  for (const name of names) {
     if (!secretNameSchema.safeParse(name).success) {
       throw new Error(
-        `Invalid API runtime configuration: SECRETS_INTEGRATION_NAMES contains a malformed name ${JSON.stringify(name)}.`,
+        `Invalid API runtime configuration: the secret registry contains a malformed name ${JSON.stringify(name)}.`,
       );
     }
   }
@@ -80,7 +93,6 @@ export function setupIntegrationCredentials(
     ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
   });
 
-  const names = secretsStore.integrationNames;
   const cache = new Map<string, SecretValue>();
 
   const credentials: IntegrationCredentials = {
