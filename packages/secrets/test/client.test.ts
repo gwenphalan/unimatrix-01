@@ -258,7 +258,7 @@ describe("createSecretsManagementClient", () => {
       const fetchImpl = vi.fn((input: Parameters<typeof fetch>[0], init?: RequestInit) => {
         capturedUrl = input as URL;
         capturedInit = init;
-        return Promise.resolve(jsonResponse(200, { secrets: [METADATA] }));
+        return Promise.resolve(jsonResponse(200, { secrets: [METADATA], activeKekVersion: 1 }));
       }) as unknown as typeof fetch;
 
       const client = createSecretsManagementClient({
@@ -269,6 +269,7 @@ describe("createSecretsManagementClient", () => {
       const result = await client.listSecrets();
 
       expect(result.secrets).toEqual([METADATA]);
+      expect(result.activeKekVersion).toBe(1);
       expect(capturedUrl?.pathname).toBe("/secrets");
       expect(capturedInit?.method).toBe("GET");
       const headers = capturedInit?.headers as Record<string, string>;

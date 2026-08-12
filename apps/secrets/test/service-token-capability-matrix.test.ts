@@ -39,7 +39,11 @@ function createTestApp(
   );
 }
 
-function issueToken(app: FastifyInstance, capability: ServiceTokenCapability, suffix: string): string {
+function issueToken(
+  app: FastifyInstance,
+  capability: ServiceTokenCapability,
+  suffix: string,
+): string {
   return issueServiceToken(app.db, {
     name: `probe-${capability}-${suffix}`,
     scopePrefix: "matrix",
