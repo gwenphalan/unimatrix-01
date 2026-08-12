@@ -17,10 +17,12 @@ metadata — a masked prefix, never a value; the list route adds the keyring's a
 print a value — that is not a bypass of this rule: it needs host access in addition to a service
 token's worth of KEK material, and it writes the same `secret.read` audit row the route does.
 
-Transport is a bearer token over plain HTTP. TLS with a pinned self-signed server
-certificate is the decided follow-up, landing with the PR that gives the two stacks a shared network
-and a live service token — not an omission. `apps/api` already carries the client and the boot-time
-cache as of this PR, but the two stacks share no network yet, so that PR has not happened.
+Transport is a bearer token over TLS, with the server certificate pinned by value at the client
+(`packages/secrets/src/client.ts`). The certificate's SAN must be this service's Compose service
+name — `secrets` — because that is the host `apps/api` connects to and hostname verification stays
+on; renaming the service means reissuing the certificate. TLS is all-or-none and off by default:
+with neither `SECRETS_TLS_CERT_BASE64` nor `SECRETS_TLS_KEY_BASE64` set, this service serves plain
+HTTP, which is what local dev and every test do.
 
 ## 2. Folder Structure
 - `src/app.ts`: Fastify construction, `runtimeConfig`/`db` decoration, the error handler, and the

@@ -21,7 +21,7 @@
 ## 4. Scope
 Platform credentials belong in the store this package's crypto backs, alongside integration ones — `SECRET_REGISTRY` in `@unimatrix/shared` is where each is declared, with the tier that decides what the admin console permits.
 
-Exactly three can never live there, because nothing could bootstrap them: `SECRETS_KEKS` (the store cannot decrypt its own KEK), the store's bootstrap **read** token (needed to reach the store at all), and the **Dokploy API token** (held by the automation that writes deployment env — a separate trust level). The floor is one root, and it cannot be zero.
+Exactly four can never live there, because nothing could bootstrap them: `SECRETS_KEKS` (the store cannot decrypt its own KEK), the store's bootstrap **read** token (needed to reach the store at all), the store's **TLS private key** (needed to answer the connection that would fetch it — the certificate is public and travels to `apps/api` in the clear, the key never leaves the store's own stack), and the **Dokploy API token** (held by the automation that writes deployment env — a separate trust level). The floor is one root, and it cannot be zero.
 
 Nothing fetches a platform credential out of the store at runtime, and nothing should: `apps/api` verifies Clerk sessions with keys from its own environment, and having it fetch them at boot would make a bad key or an unreachable store lock the admin console out of the only tool that could fix either.
 
