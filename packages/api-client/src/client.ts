@@ -17,12 +17,14 @@ import {
   listFilesContract,
   listPostsContract,
   putDocumentContract,
+  refreshIntegrationCredentialsContract,
   setPostsStateContract,
   updatePostContract,
   type AdminCreateSecretBody,
   type AdminDeleteSecretBody,
   type AdminDeleteSecretResponse,
   type AdminListPostsQuery,
+  type AdminListSecretsResponse,
   type AdminRotateSecretBody,
   type ApiContract,
   type ApiContractBody,
@@ -45,8 +47,8 @@ import {
   type ListFilesResponse,
   type ListPostsQuery,
   type ListPostsResponse,
-  type ListSecretsResponse,
   type PutDocumentBody,
+  type RefreshIntegrationCredentialsResponse,
   type SecretMetadata,
   type SetPostsStateBody,
   type UpdatePostBody,
@@ -103,10 +105,17 @@ export interface ApiClient {
    * itself. None of these ever returns a decrypted value; `apps/api` has no
    * route that does.
    */
-  adminListSecrets(): Promise<ListSecretsResponse>;
+  adminListSecrets(): Promise<AdminListSecretsResponse>;
   adminCreateSecret(body: AdminCreateSecretBody): Promise<SecretMetadata>;
   adminRotateSecret(body: AdminRotateSecretBody): Promise<SecretMetadata>;
   adminDeleteSecret(body: AdminDeleteSecretBody): Promise<AdminDeleteSecretResponse>;
+  /**
+   * Makes the API re-fetch every integration credential it declares and
+   * report the outcome per name. Names only — no value and no masked prefix
+   * crosses back. Gated on the same `secrets` admin section as the methods
+   * above.
+   */
+  refreshIntegrationCredentials(): Promise<RefreshIntegrationCredentialsResponse>;
   request<TContract extends ApiContract>(
     contract: TContract,
     ...args: RequiresRequestOptions<TContract> extends true
@@ -385,6 +394,8 @@ export function createApiClient(config: ApiClientConfig): ApiClient {
       request<typeof adminRotateSecretContract>(adminRotateSecretContract, { body }),
     adminDeleteSecret: (body: AdminDeleteSecretBody) =>
       request<typeof adminDeleteSecretContract>(adminDeleteSecretContract, { body }),
+    refreshIntegrationCredentials: () =>
+      request<typeof refreshIntegrationCredentialsContract>(refreshIntegrationCredentialsContract),
     request,
   };
 }

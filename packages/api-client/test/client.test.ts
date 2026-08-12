@@ -538,11 +538,22 @@ describe("api client", () => {
             Promise.resolve({
               secrets: [
                 {
-                  name: "github/api-token",
-                  maskedPrefix: "ghp_",
-                  kekVersion: 1,
-                  createdAt: "2026-07-01T00:00:00.000Z",
-                  rotatedAt: "2026-07-01T00:00:00.000Z",
+                  name: "integrations/github/token",
+                  tier: "integration",
+                  metadata: {
+                    name: "integrations/github/token",
+                    maskedPrefix: "ghp_",
+                    kekVersion: 1,
+                    createdAt: "2026-07-01T00:00:00.000Z",
+                    rotatedAt: "2026-07-01T00:00:00.000Z",
+                  },
+                  consumedBy: null,
+                },
+                {
+                  name: "platform/clerk-secret-key",
+                  tier: "platform",
+                  metadata: null,
+                  consumedBy: "apps/api's Clerk backend calls.",
                 },
               ],
               activeKekVersion: 1,
@@ -563,7 +574,37 @@ describe("api client", () => {
       "https://api.example.test/secrets/admin",
       expect.objectContaining({ method: "GET" }),
     );
-    expect(result.secrets).toHaveLength(1);
+    expect(result.secrets).toHaveLength(2);
+    expect(result.secrets[1]?.metadata).toBeNull();
+  });
+
+  it("refreshes integration credentials via refreshIntegrationCredentials", async () => {
+    const fetchMock = vi.fn(() =>
+      Promise.resolve(
+        createResponse({
+          json: () =>
+            Promise.resolve({
+              loaded: ["integrations/github/token"],
+              denied: [],
+              failed: [],
+            }),
+          ok: true,
+          status: 200,
+        }),
+      ),
+    );
+    const client = createApiClient({
+      baseUrl: "https://api.example.test",
+      fetch: fetchMock,
+    });
+
+    const result = await client.refreshIntegrationCredentials();
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.example.test/integrations/admin/credentials/refresh",
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(result).toEqual({ loaded: ["integrations/github/token"], denied: [], failed: [] });
   });
 
   it("creates a secret via adminCreateSecret", async () => {
