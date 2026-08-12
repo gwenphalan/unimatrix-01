@@ -376,7 +376,7 @@ export const secretsModule: FastifyPluginAsync = (app) => {
         scopeCoversName(token.scopePrefix, row.name),
       );
 
-      return { secrets };
+      return { secrets, activeKekVersion: app.runtimeConfig.keyring.activeVersion };
     },
   });
 
