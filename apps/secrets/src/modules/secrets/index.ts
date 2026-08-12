@@ -87,12 +87,12 @@ export function getServiceToken(request: FastifyRequest): AuthenticatedServiceTo
  * route below stalled silently until this returned a `Promise`).
  */
 function requireCapability(
-  capability: ServiceTokenCapability,
+  ...capabilities: ServiceTokenCapability[]
 ): (request: FastifyRequest) => Promise<void> {
   return (request) => {
     const token = getServiceToken(request);
 
-    if (token.capability !== capability) {
+    if (!capabilities.includes(token.capability)) {
       denySecretAccess(request, "wrong_capability");
     }
 
@@ -122,7 +122,7 @@ export const secretsModule: FastifyPluginAsync = (app) => {
   app.withTypeProvider<ZodTypeProvider>().route({
     method: createSecretContract.method,
     url: createSecretContract.path,
-    preValidation: requireCapability("manage"),
+    preValidation: requireCapability("write", "manage"),
     schema: {
       body: createSecretBodySchema,
       response: { 200: createSecretContract.responseSchema },
@@ -186,7 +186,7 @@ export const secretsModule: FastifyPluginAsync = (app) => {
   app.withTypeProvider<ZodTypeProvider>().route({
     method: rotateSecretContract.method,
     url: rotateSecretContract.path,
-    preValidation: requireCapability("manage"),
+    preValidation: requireCapability("write", "manage"),
     schema: {
       body: rotateSecretBodySchema,
       response: { 200: rotateSecretContract.responseSchema },
@@ -362,7 +362,7 @@ export const secretsModule: FastifyPluginAsync = (app) => {
   app.withTypeProvider<ZodTypeProvider>().route({
     method: listSecretsContract.method,
     url: listSecretsContract.path,
-    preValidation: requireCapability("manage"),
+    preValidation: requireCapability("write", "manage"),
     schema: {
       querystring: listSecretsQuerySchema,
       response: { 200: listSecretsContract.responseSchema },
