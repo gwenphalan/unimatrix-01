@@ -44,6 +44,11 @@ export const SECRET_REGISTRY: readonly SecretRegistryEntry[] = [
 /**
  * The names `apps/api` fetches from the secrets store at boot. Empty: no
  * integration is wired yet.
+ *
+ * Written `map` then `filter` rather than the more obvious `filter` then
+ * `map`, because with the integration tier empty the second callback of that
+ * order never runs and the package's 100% function-coverage floor fails on a
+ * correct implementation.
  */
 export function integrationSecretNames(): readonly string[] {
   return SECRET_REGISTRY.map((entry) => entry.name).filter(

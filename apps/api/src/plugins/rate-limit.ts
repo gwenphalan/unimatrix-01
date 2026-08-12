@@ -84,9 +84,12 @@ export const INTEGRATION_CREDENTIALS_REFRESH_RATE_LIMIT_OPTIONS = {
  * is 10/min fanning out to N declared integration names, and the list route
  * spends two of the store's calls per request (one per scoped token), so the
  * worst-case draw against the store is `40 + 10N` — this ceiling doubled,
- * plus that one. That stays under 60 only through N = 1. The registry declares
- * no integration name today; declaring the second is the point at which these
- * two ceilings need re-deriving rather than re-reading. The failure this avoids is not an admin session drawing a 429
+ * plus that one. That stays under 60 only through N = 1, and the registry
+ * declares no integration name today. **Declaring the second one is the point
+ * at which these two ceilings need re-deriving rather than re-reading**, and
+ * neither number can be validated before then.
+ *
+ * The failure this avoids is not an admin session drawing a 429
  * here (a 4xx, correctly not retried) — it is the API's own boot-time
  * integration-credential refresh being rejected by the store's ceiling and
  * `setupIntegrationCredentials` booting with an empty cache.
