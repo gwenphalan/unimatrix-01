@@ -1,6 +1,7 @@
 import { createSecretsClient, SecretsClientError } from "@unimatrix/secrets/client";
 import type { SecretValue } from "@unimatrix/secrets";
 import { integrationSecretNames, secretNameSchema } from "@unimatrix/shared";
+import type { SecretRegistryEntry } from "@unimatrix/shared";
 import type { FastifyInstance } from "fastify";
 
 /**
@@ -19,7 +20,12 @@ export interface RefreshResult {
 }
 
 export interface IntegrationCredentials {
-  get(name: string): SecretValue | undefined;
+  /**
+   * Takes the registry constant, not its name: a renamed entry is then a
+   * compile error here rather than an `undefined` indistinguishable from a
+   * credential the store never returned.
+   */
+  get(entry: SecretRegistryEntry): SecretValue | undefined;
   loadedAt: string | null;
   refresh(): Promise<RefreshResult>;
 }
@@ -96,7 +102,7 @@ export function setupIntegrationCredentials(
   const cache = new Map<string, SecretValue>();
 
   const credentials: IntegrationCredentials = {
-    get: (name) => cache.get(name),
+    get: (entry) => cache.get(entry.name),
     loadedAt: null,
     refresh: () => refresh(),
   };
