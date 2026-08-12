@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { createSecretsClient, SecretsClientError } from "../src/client.js";
+import {
+  createSecretsClient,
+  createSecretsManagementClient,
+  SecretsClientError,
+} from "../src/client.js";
 import { SecretValue } from "../src/secret-value.js";
 
 const BASE_URL = "http://secrets.internal:3002";
@@ -234,5 +238,386 @@ describe("createSecretsClient / getSecretValue", () => {
     } finally {
       globalThis.fetch = previousFetch;
     }
+  });
+});
+
+const METADATA = {
+  name: "github/api-token",
+  maskedPrefix: PLAINTEXT.slice(0, 4),
+  kekVersion: 1,
+  createdAt: "2026-07-01T00:00:00.000Z",
+  rotatedAt: "2026-07-01T00:00:00.000Z",
+};
+
+describe("createSecretsManagementClient", () => {
+  describe("listSecrets", () => {
+    it("sends the bearer token and resolves the parsed response", async () => {
+      let capturedUrl: URL | undefined;
+      let capturedInit: RequestInit | undefined;
+
+      const fetchImpl = vi.fn((input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+        capturedUrl = input as URL;
+        capturedInit = init;
+        return Promise.resolve(jsonResponse(200, { secrets: [METADATA] }));
+      }) as unknown as typeof fetch;
+
+      const client = createSecretsManagementClient({
+        baseUrl: BASE_URL,
+        serviceToken: SERVICE_TOKEN,
+        fetch: fetchImpl,
+      });
+      const result = await client.listSecrets();
+
+      expect(result.secrets).toEqual([METADATA]);
+      expect(capturedUrl?.pathname).toBe("/secrets");
+      expect(capturedInit?.method).toBe("GET");
+      const headers = capturedInit?.headers as Record<string, string>;
+      expect(headers.authorization).toBe(`Bearer ${SERVICE_TOKEN}`);
+    });
+
+    it("throws SecretsClientError with the response status for a non-2xx response", async () => {
+      const fetchImpl = vi.fn(() =>
+        Promise.resolve(jsonResponse(500, { error: { code: "INTERNAL" } })),
+      ) as unknown as typeof fetch;
+      const client = createSecretsManagementClient({
+        baseUrl: BASE_URL,
+        serviceToken: SERVICE_TOKEN,
+        fetch: fetchImpl,
+      });
+
+      await expect(client.listSecrets()).rejects.toMatchObject({ status: 500 });
+    });
+
+    it("throws for a non-JSON body and never quotes the body in the error", async () => {
+      const fetchImpl = vi.fn(() =>
+        Promise.resolve(nonJsonResponse(200)),
+      ) as unknown as typeof fetch;
+      const client = createSecretsManagementClient({
+        baseUrl: BASE_URL,
+        serviceToken: SERVICE_TOKEN,
+        fetch: fetchImpl,
+      });
+
+      let caught: unknown;
+      try {
+        await client.listSecrets();
+      } catch (error) {
+        caught = error;
+      }
+
+      assertNoPlaintextLeak(caught);
+      expect((caught as SecretsClientError).status).toBe(200);
+    });
+
+    it("throws for a body that fails schema validation and never quotes the body in the error", async () => {
+      const fetchImpl = vi.fn(() =>
+        Promise.resolve(
+          jsonResponse(200, {
+            secrets: [{ ...METADATA, extra: "unexpected", maskedPrefix: PLAINTEXT }],
+          }),
+        ),
+      ) as unknown as typeof fetch;
+      const client = createSecretsManagementClient({
+        baseUrl: BASE_URL,
+        serviceToken: SERVICE_TOKEN,
+        fetch: fetchImpl,
+      });
+
+      let caught: unknown;
+      try {
+        await client.listSecrets();
+      } catch (error) {
+        caught = error;
+      }
+
+      assertNoPlaintextLeak(caught);
+      expect((caught as SecretsClientError).status).toBe(200);
+    });
+  });
+
+  describe("createSecret", () => {
+    it("sends the bearer token, JSON content-type, and body, and resolves the parsed metadata", async () => {
+      let capturedInit: RequestInit | undefined;
+
+      const fetchImpl = vi.fn((_input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+        capturedInit = init;
+        return Promise.resolve(jsonResponse(200, METADATA));
+      }) as unknown as typeof fetch;
+
+      const client = createSecretsManagementClient({
+        baseUrl: BASE_URL,
+        serviceToken: SERVICE_TOKEN,
+        fetch: fetchImpl,
+      });
+      const result = await client.createSecret({ name: "github/api-token", value: PLAINTEXT });
+
+      expect(result).toEqual(METADATA);
+      expect(capturedInit?.method).toBe("POST");
+      expect(capturedInit?.body).toBe(
+        JSON.stringify({ name: "github/api-token", value: PLAINTEXT }),
+      );
+      const headers = capturedInit?.headers as Record<string, string>;
+      expect(headers.authorization).toBe(`Bearer ${SERVICE_TOKEN}`);
+      expect(headers["content-type"]).toBe("application/json");
+    });
+
+    it("throws SecretsClientError with the response status for a non-2xx response", async () => {
+      const fetchImpl = vi.fn(() =>
+        Promise.resolve(jsonResponse(409, { error: { code: "CLIENT_ERROR" } })),
+      ) as unknown as typeof fetch;
+      const client = createSecretsManagementClient({
+        baseUrl: BASE_URL,
+        serviceToken: SERVICE_TOKEN,
+        fetch: fetchImpl,
+      });
+
+      await expect(
+        client.createSecret({ name: "github/api-token", value: PLAINTEXT }),
+      ).rejects.toMatchObject({ status: 409 });
+    });
+
+    it("throws for a non-JSON body and never quotes the body in the error", async () => {
+      const fetchImpl = vi.fn(() =>
+        Promise.resolve(nonJsonResponse(200)),
+      ) as unknown as typeof fetch;
+      const client = createSecretsManagementClient({
+        baseUrl: BASE_URL,
+        serviceToken: SERVICE_TOKEN,
+        fetch: fetchImpl,
+      });
+
+      let caught: unknown;
+      try {
+        await client.createSecret({ name: "github/api-token", value: PLAINTEXT });
+      } catch (error) {
+        caught = error;
+      }
+
+      assertNoPlaintextLeak(caught);
+      expect((caught as SecretsClientError).status).toBe(200);
+    });
+
+    it("throws for a body that fails schema validation and never quotes the body in the error", async () => {
+      const fetchImpl = vi.fn(() =>
+        Promise.resolve(
+          jsonResponse(200, { ...METADATA, extra: "unexpected", maskedPrefix: PLAINTEXT }),
+        ),
+      ) as unknown as typeof fetch;
+      const client = createSecretsManagementClient({
+        baseUrl: BASE_URL,
+        serviceToken: SERVICE_TOKEN,
+        fetch: fetchImpl,
+      });
+
+      let caught: unknown;
+      try {
+        await client.createSecret({ name: "github/api-token", value: PLAINTEXT });
+      } catch (error) {
+        caught = error;
+      }
+
+      assertNoPlaintextLeak(caught);
+      expect((caught as SecretsClientError).status).toBe(200);
+    });
+  });
+
+  describe("rotateSecret", () => {
+    it("sends the bearer token, JSON content-type, and body, and resolves the parsed metadata", async () => {
+      let capturedInit: RequestInit | undefined;
+
+      const fetchImpl = vi.fn((_input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+        capturedInit = init;
+        return Promise.resolve(jsonResponse(200, METADATA));
+      }) as unknown as typeof fetch;
+
+      const client = createSecretsManagementClient({
+        baseUrl: BASE_URL,
+        serviceToken: SERVICE_TOKEN,
+        fetch: fetchImpl,
+      });
+      const result = await client.rotateSecret({ name: "github/api-token", value: PLAINTEXT });
+
+      expect(result).toEqual(METADATA);
+      expect(capturedInit?.method).toBe("POST");
+      const headers = capturedInit?.headers as Record<string, string>;
+      expect(headers.authorization).toBe(`Bearer ${SERVICE_TOKEN}`);
+    });
+
+    it("throws SecretsClientError with the response status for a non-2xx response", async () => {
+      const fetchImpl = vi.fn(() =>
+        Promise.resolve(jsonResponse(404, { error: { code: "NOT_FOUND" } })),
+      ) as unknown as typeof fetch;
+      const client = createSecretsManagementClient({
+        baseUrl: BASE_URL,
+        serviceToken: SERVICE_TOKEN,
+        fetch: fetchImpl,
+      });
+
+      await expect(
+        client.rotateSecret({ name: "github/api-token", value: PLAINTEXT }),
+      ).rejects.toMatchObject({ status: 404 });
+    });
+
+    it("throws for a non-JSON body and never quotes the body in the error", async () => {
+      const fetchImpl = vi.fn(() =>
+        Promise.resolve(nonJsonResponse(200)),
+      ) as unknown as typeof fetch;
+      const client = createSecretsManagementClient({
+        baseUrl: BASE_URL,
+        serviceToken: SERVICE_TOKEN,
+        fetch: fetchImpl,
+      });
+
+      let caught: unknown;
+      try {
+        await client.rotateSecret({ name: "github/api-token", value: PLAINTEXT });
+      } catch (error) {
+        caught = error;
+      }
+
+      assertNoPlaintextLeak(caught);
+      expect((caught as SecretsClientError).status).toBe(200);
+    });
+
+    it("throws for a body that fails schema validation and never quotes the body in the error", async () => {
+      const fetchImpl = vi.fn(() =>
+        Promise.resolve(
+          jsonResponse(200, { ...METADATA, extra: "unexpected", maskedPrefix: PLAINTEXT }),
+        ),
+      ) as unknown as typeof fetch;
+      const client = createSecretsManagementClient({
+        baseUrl: BASE_URL,
+        serviceToken: SERVICE_TOKEN,
+        fetch: fetchImpl,
+      });
+
+      let caught: unknown;
+      try {
+        await client.rotateSecret({ name: "github/api-token", value: PLAINTEXT });
+      } catch (error) {
+        caught = error;
+      }
+
+      assertNoPlaintextLeak(caught);
+      expect((caught as SecretsClientError).status).toBe(200);
+    });
+  });
+
+  describe("deleteSecrets", () => {
+    it("sends the bearer token, JSON content-type, and the bulk body, and resolves the affected count", async () => {
+      let capturedInit: RequestInit | undefined;
+
+      const fetchImpl = vi.fn((_input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+        capturedInit = init;
+        return Promise.resolve(jsonResponse(200, { affected: 1 }));
+      }) as unknown as typeof fetch;
+
+      const client = createSecretsManagementClient({
+        baseUrl: BASE_URL,
+        serviceToken: SERVICE_TOKEN,
+        fetch: fetchImpl,
+      });
+      const result = await client.deleteSecrets({ names: ["github/api-token"] });
+
+      expect(result).toEqual({ affected: 1 });
+      expect(capturedInit?.method).toBe("DELETE");
+      expect(capturedInit?.body).toBe(JSON.stringify({ names: ["github/api-token"] }));
+      const headers = capturedInit?.headers as Record<string, string>;
+      expect(headers.authorization).toBe(`Bearer ${SERVICE_TOKEN}`);
+    });
+
+    it("throws SecretsClientError with the response status for a non-2xx response", async () => {
+      const fetchImpl = vi.fn(() =>
+        Promise.resolve(jsonResponse(500, { error: { code: "INTERNAL" } })),
+      ) as unknown as typeof fetch;
+      const client = createSecretsManagementClient({
+        baseUrl: BASE_URL,
+        serviceToken: SERVICE_TOKEN,
+        fetch: fetchImpl,
+      });
+
+      await expect(client.deleteSecrets({ names: ["github/api-token"] })).rejects.toMatchObject({
+        status: 500,
+      });
+    });
+
+    it("throws for a non-JSON body and never quotes the body in the error", async () => {
+      const fetchImpl = vi.fn(() =>
+        Promise.resolve(nonJsonResponse(200)),
+      ) as unknown as typeof fetch;
+      const client = createSecretsManagementClient({
+        baseUrl: BASE_URL,
+        serviceToken: SERVICE_TOKEN,
+        fetch: fetchImpl,
+      });
+
+      let caught: unknown;
+      try {
+        await client.deleteSecrets({ names: ["github/api-token"] });
+      } catch (error) {
+        caught = error;
+      }
+
+      assertNoPlaintextLeak(caught);
+      expect((caught as SecretsClientError).status).toBe(200);
+    });
+
+    it("throws for a body that fails schema validation and never quotes the body in the error", async () => {
+      const fetchImpl = vi.fn(() =>
+        Promise.resolve(jsonResponse(200, { affected: 1, extra: PLAINTEXT })),
+      ) as unknown as typeof fetch;
+      const client = createSecretsManagementClient({
+        baseUrl: BASE_URL,
+        serviceToken: SERVICE_TOKEN,
+        fetch: fetchImpl,
+      });
+
+      let caught: unknown;
+      try {
+        await client.deleteSecrets({ names: ["github/api-token"] });
+      } catch (error) {
+        caught = error;
+      }
+
+      assertNoPlaintextLeak(caught);
+      expect((caught as SecretsClientError).status).toBe(200);
+    });
+  });
+
+  it("throws SecretsClientError for a network failure, forwarding the native error as cause", async () => {
+    const networkError = new Error("connection reset");
+    const fetchImpl = vi.fn(() => Promise.reject(networkError)) as unknown as typeof fetch;
+    const client = createSecretsManagementClient({
+      baseUrl: BASE_URL,
+      serviceToken: SERVICE_TOKEN,
+      fetch: fetchImpl,
+    });
+
+    let caught: unknown;
+    try {
+      await client.listSecrets();
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBeInstanceOf(SecretsClientError);
+    expect((caught as SecretsClientError).status).toBeNull();
+    expect((caught as SecretsClientError).cause).toBe(networkError);
+  });
+
+  it("aborts when the caller's signal fires, independent of the configured timeout", async () => {
+    const controller = new AbortController();
+    const client = createSecretsManagementClient({
+      baseUrl: BASE_URL,
+      serviceToken: SERVICE_TOKEN,
+      fetch: neverResolvingFetch(),
+      timeoutMs: 60_000,
+    });
+
+    const pending = client.listSecrets({ signal: controller.signal });
+
+    controller.abort();
+
+    await expect(pending).rejects.toBeInstanceOf(SecretsClientError);
   });
 });

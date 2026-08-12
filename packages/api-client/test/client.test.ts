@@ -529,4 +529,140 @@ describe("api client", () => {
     );
     expect(result).toEqual({ deleted: true });
   });
+
+  it("lists secrets via adminListSecrets", async () => {
+    const fetchMock = vi.fn(() =>
+      Promise.resolve(
+        createResponse({
+          json: () =>
+            Promise.resolve({
+              secrets: [
+                {
+                  name: "github/api-token",
+                  maskedPrefix: "ghp_",
+                  kekVersion: 1,
+                  createdAt: "2026-07-01T00:00:00.000Z",
+                  rotatedAt: "2026-07-01T00:00:00.000Z",
+                },
+              ],
+            }),
+          ok: true,
+          status: 200,
+        }),
+      ),
+    );
+    const client = createApiClient({
+      baseUrl: "https://api.example.test",
+      fetch: fetchMock,
+    });
+
+    const result = await client.adminListSecrets();
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.example.test/secrets/admin",
+      expect.objectContaining({ method: "GET" }),
+    );
+    expect(result.secrets).toHaveLength(1);
+  });
+
+  it("creates a secret via adminCreateSecret", async () => {
+    const fetchMock = vi.fn(() =>
+      Promise.resolve(
+        createResponse({
+          json: () =>
+            Promise.resolve({
+              name: "github/api-token",
+              maskedPrefix: "ghp_",
+              kekVersion: 1,
+              createdAt: "2026-07-01T00:00:00.000Z",
+              rotatedAt: "2026-07-01T00:00:00.000Z",
+            }),
+          ok: true,
+          status: 200,
+        }),
+      ),
+    );
+    const client = createApiClient({
+      baseUrl: "https://api.example.test",
+      fetch: fetchMock,
+    });
+
+    const result = await client.adminCreateSecret({
+      name: "github/api-token",
+      value: "ghp_secretvalue",
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.example.test/secrets/admin",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ name: "github/api-token", value: "ghp_secretvalue" }),
+      }),
+    );
+    expect(result.name).toBe("github/api-token");
+  });
+
+  it("rotates a secret via adminRotateSecret", async () => {
+    const fetchMock = vi.fn(() =>
+      Promise.resolve(
+        createResponse({
+          json: () =>
+            Promise.resolve({
+              name: "github/api-token",
+              maskedPrefix: "ghp_",
+              kekVersion: 2,
+              createdAt: "2026-07-01T00:00:00.000Z",
+              rotatedAt: "2026-07-05T00:00:00.000Z",
+            }),
+          ok: true,
+          status: 200,
+        }),
+      ),
+    );
+    const client = createApiClient({
+      baseUrl: "https://api.example.test",
+      fetch: fetchMock,
+    });
+
+    const result = await client.adminRotateSecret({
+      name: "github/api-token",
+      value: "ghp_newvalue",
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.example.test/secrets/admin/rotate",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ name: "github/api-token", value: "ghp_newvalue" }),
+      }),
+    );
+    expect(result.kekVersion).toBe(2);
+  });
+
+  it("deletes a secret via adminDeleteSecret", async () => {
+    const fetchMock = vi.fn(() =>
+      Promise.resolve(
+        createResponse({
+          json: () => Promise.resolve({ deleted: true }),
+          ok: true,
+          status: 200,
+        }),
+      ),
+    );
+    const client = createApiClient({
+      baseUrl: "https://api.example.test",
+      fetch: fetchMock,
+    });
+
+    const result = await client.adminDeleteSecret({ name: "github/api-token" });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.example.test/secrets/admin",
+      expect.objectContaining({
+        method: "DELETE",
+        body: JSON.stringify({ name: "github/api-token" }),
+      }),
+    );
+    expect(result).toEqual({ deleted: true });
+  });
 });

@@ -174,3 +174,17 @@ export type DeleteSecretsBody = z.output<typeof deleteSecretsBodySchema>;
 // A bulk delete's result reuses `bulkResultSchema` from `./content.js`
 // (already re-exported through this barrel) rather than defining a second
 // schema for the same shape.
+
+/**
+ * The response for a single-name admin delete. `bulkResultSchema`'s
+ * `{ affected: number }` is built for a request that can name up to 100
+ * rows and needs a count; a request that names exactly one has only two
+ * outcomes, so this mirrors `deleteResultSchema` in `./user-data.ts`
+ * (`{ deleted: boolean }`) rather than carrying a count that can only ever
+ * read `0` or `1`.
+ */
+export const adminDeleteSecretResponseSchema = z.strictObject({
+  deleted: z.boolean(),
+});
+
+export type AdminDeleteSecretResponse = z.output<typeof adminDeleteSecretResponseSchema>;
