@@ -117,21 +117,25 @@ row on the same PR as the budget being spent for now, not as a cooldown that jus
    A window that has already lapsed still reads "rate limited" — check the arithmetic before
    assuming you must keep waiting.
 
-### Wait out the cooldown and re-ping — do not merge unreviewed just because you were refused
+### Ride out a short cooldown; escalate past a long one — never merge unreviewed just because you were refused
 
-A refusal is not a review. **Default to waiting**, and merge unreviewed only when waiting is the
-thing that costs something. Two cases where waiting is clearly right:
+A refusal is not a review, and a short cooldown is worth riding out: that is cheaper than merging
+blind and cheaper than the follow-up PR a missed finding turns into.
 
-- **The cooldown is short.** Under about 30 minutes, wait — that is cheaper than merging blind and
-  cheaper than the follow-up PR a missed finding turns into.
-- **The owner is asleep or away, or you are working an overnight batch.** Then wall-clock is free and
-  there is nobody the delay inconveniences. Wait however long the window takes, even hours. Nothing
-  merges into a review the owner will read in the morning anyway, so trading time for a real review
-  is pure gain.
+**How short is not yours to judge.** `watch-pr.sh` rides one out up to `SHIP_PR_MAX_COOLDOWN` and
+refuses anything longer, printing `refused: rate limited, cooldown <n>m exceeds threshold`. When it
+refuses, **that is the answer** — CodeRabbit is not reviewing this PR. Do not re-arm the watcher
+behind a `sleep`, do not poll for the window to lapse, and do not raise the variable to make a long
+one fit. A free wall-clock is not a reason to wait: a reviewer arriving an hour later reviews a PR
+the session has already moved past, and the ladder in `SKILL.md` has readers that answer in minutes.
 
-Merge unreviewed when the owner is actively waiting on this PR, when it blocks other work, when the
-window is long and the diff is trivial, or when the owner asks for an unreviewed merge outright. Say
-which in the merge report.
+So a refusal escalates rather than blocks. Take the next reader down the ladder — a
+`pr-review-toolkit` subagent on a small diff, the `code-review` workflow at `high` on a large one —
+and merge with `--no-review` below, naming in the report both that CodeRabbit never reviewed it and
+who did instead.
+
+Merge with no reader at all only when the owner is actively waiting on this PR, when it blocks other
+work, or when the owner asks for an unreviewed merge outright. Say which in the merge report.
 
 **Carry that out with `watch-pr.sh --no-review`, never with a merge you assemble yourself.** It waits
 for the required checks, then waits for every review thread to clear the same way the findings path

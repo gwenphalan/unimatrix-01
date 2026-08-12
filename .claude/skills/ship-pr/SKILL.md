@@ -383,8 +383,12 @@ deferring it. That is what makes the merge exceptions narrow, and why the defaul
 wait rather than merge.
 
 **A refused ping is not a review.** Rate-limited means nothing was read, so re-pinging after the
-cooldown is still the *first* review. Default to waiting: under ~30 minutes, or whenever the owner is
-away and wall-clock is free, waiting is the cheap side of the trade. When you do merge unreviewed, use
+cooldown is still the *first* review. **Waiting is bounded, and the bound is the script's rather than
+a judgement call**: `watch-pr.sh` rides out a cooldown up to `SHIP_PR_MAX_COOLDOWN` and refuses
+anything longer with `refused: rate limited, cooldown <n>m exceeds threshold`. That refusal is the
+answer — drop to the next reader on the ladder. Never re-arm the watcher behind a `sleep`, and never
+wait a long cooldown out by hand: a free wall-clock is not a reason to, because a reviewer arriving
+an hour later reviews a PR the session has already moved past. When you merge unreviewed, use
 `watch-pr.sh --no-review` rather than a merge you assemble yourself — it keeps every other guard.
 
 **Do not push while a review may still be finishing.** The body can land minutes before CodeRabbit is
