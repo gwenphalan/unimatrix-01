@@ -84,5 +84,9 @@ export default nodeApiApp({
       ],
     },
   ],
-  healthcheckScheme: "https",
+  // Whether this service serves TLS is decided by its environment, not by its
+  // image, so the probe reads the same variable the config loader does. A
+  // hardcoded https probe would mark a deliberately plain-HTTP deployment
+  // unhealthy forever while it served traffic fine.
+  healthcheckScheme: { kind: "variable", name: "SECRETS_TLS_CERT_BASE64" },
 });

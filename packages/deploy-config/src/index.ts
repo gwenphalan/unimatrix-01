@@ -91,8 +91,14 @@ export interface DeployNetwork {
   readonly comment?: readonly string[];
 }
 
-/** Which scheme the runtime container's own `HEALTHCHECK` probes. Defaults to `"http"`. */
-export type DeployHealthcheckScheme = "http" | "https";
+/**
+ * Which scheme the runtime container's own `HEALTHCHECK` probes. Defaults to
+ * `"http"`. The variable form defers the choice to container start: `https`
+ * when the named environment variable holds a non-empty value, `http`
+ * otherwise — for a service whose TLS is configured rather than compiled in.
+ */
+export type DeployHealthcheckScheme =
+  "http" | "https" | { readonly kind: "variable"; readonly name: string };
 
 export interface NodeApiAppConfig {
   readonly kind: "node-api";
@@ -226,6 +232,15 @@ export function validateAppConfig(config: DeployAppConfig): readonly string[] {
     }
   }
 
+  const scheme = config.healthcheckScheme;
+
+  if (typeof scheme === "object" && scheme.name.length === 0) {
+    failures.push(
+      `${label}: healthcheckScheme names an empty environment variable, so the probe would always ` +
+        `choose http and a TLS listener would never answer it.`,
+    );
+  }
+
   return failures;
 }
 
@@ -308,24 +323,36 @@ function staticSpaDockerfileBody(
  * hostname alone. It uses `node:https` rather than `fetch`, which cannot be
  * told to skip verification without an undici dispatcher the runtime image is
  * not guaranteed to carry.
+ *
+ * The variable form picks the module at container start rather than at image
+ * build, because whether the service serves TLS is a runtime decision: the
+ * same image serves plain HTTP when its certificate variables are unset. A
+ * build-time choice is wrong in one direction or the other, and both are the
+ * same failure — a container marked unhealthy for its whole life while it
+ * serves traffic fine, which on Dokploy reads as a deploy that never comes up.
  */
 function nodeApiHealthcheckLine(scheme: DeployHealthcheckScheme): string {
   const prefix =
     "HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 CMD node -e ";
 
-  if (scheme === "https") {
+  if (scheme === "http") {
     return (
       prefix +
-      "\"require('node:https').get({ host: '127.0.0.1', port: process.env.PORT ?? '3001', " +
-      "path: '/health', rejectUnauthorized: false }, (response) => { process.exit(" +
-      "response.statusCode === 200 ? 0 : 1); }).on('error', () => process.exit(1))\""
+      "\"fetch('http://127.0.0.1:' + (process.env.PORT ?? '3001') + '/health').then((response) => " +
+      '{ if (!response.ok) process.exit(1); }).catch(() => process.exit(1))"'
     );
   }
 
+  // `rejectUnauthorized` is inert on `node:http`, so one request body serves
+  // both modules and only the `require` differs.
+  const module =
+    scheme === "https" ? "'node:https'" : `process.env.${scheme.name} ? 'node:https' : 'node:http'`;
+
   return (
     prefix +
-    "\"fetch('http://127.0.0.1:' + (process.env.PORT ?? '3001') + '/health').then((response) => " +
-    '{ if (!response.ok) process.exit(1); }).catch(() => process.exit(1))"'
+    `"require(${module}).get({ host: '127.0.0.1', port: process.env.PORT ?? '3001', ` +
+    "path: '/health', rejectUnauthorized: false }, (response) => { process.exit(" +
+    "response.statusCode === 200 ? 0 : 1); }).on('error', () => process.exit(1))\""
   );
 }
 

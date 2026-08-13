@@ -211,6 +211,39 @@ describe("nodeApiApp / dockerfileFor / composeFor", () => {
     expect(dockerfile).not.toContain("fetch('http://127.0.0.1:'");
   });
 
+  it("defers the scheme to a variable when one is named", () => {
+    const deferred = nodeApiApp({
+      appDir: "secrets",
+      packageName: "@unimatrix/secrets-app",
+      dockerfileEnv: [],
+      composeEnv: [],
+      volumes: [],
+      healthcheckScheme: { kind: "variable", name: "SECRETS_TLS_CERT_BASE64" },
+    });
+
+    expect(dockerfileFor(deferred, API_FROM_LINES)).toContain(
+      "require(process.env.SECRETS_TLS_CERT_BASE64 ? 'node:https' : 'node:http')",
+    );
+  });
+
+  it("rejects a healthcheck variable with an empty name", () => {
+    expect(
+      validateAppConfig(
+        nodeApiApp({
+          appDir: "secrets",
+          packageName: "@unimatrix/secrets-app",
+          dockerfileEnv: [],
+          composeEnv: [],
+          volumes: [],
+          healthcheckScheme: { kind: "variable", name: "" },
+        }),
+      ),
+    ).toEqual([
+      "secrets: healthcheckScheme names an empty environment variable, so the probe " +
+        "would always choose http and a TLS listener would never answer it.",
+    ]);
+  });
+
   it("declares each network on the service and as external at the top level", () => {
     const networked = nodeApiApp({
       appDir: "secrets",
