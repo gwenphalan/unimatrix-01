@@ -162,8 +162,8 @@ importers:
         specifier: ^10.1.0
         version: 10.1.0
       '@fastify/rate-limit':
-        specifier: ^11.1.0
-        version: 11.1.0
+        specifier: ^11.2.0
+        version: 11.2.0
       '@unimatrix/auth':
         specifier: workspace:*
         version: link:../../packages/auth
@@ -405,8 +405,8 @@ importers:
   apps/secrets:
     dependencies:
       '@fastify/rate-limit':
-        specifier: ^11.1.0
-        version: 11.1.0
+        specifier: ^11.2.0
+        version: 11.2.0
       '@unimatrix/secrets':
         specifier: workspace:*
         version: link:../../packages/secrets
@@ -689,8 +689,8 @@ importers:
         specifier: ^5.61.6
         version: 5.61.9(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@clerk/fastify':
-        specifier: ^3.1.57
-        version: 3.1.57(fastify@5.10.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+        specifier: ^3.1.58
+        version: 3.1.58(fastify@5.10.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@clerk/themes':
         specifier: ^2.4.57
         version: 2.4.57(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -1408,8 +1408,8 @@ packages:
       react: ^18.0.0 || ~19.0.3 || ~19.1.4 || ~19.2.3 || ~19.3.0-0
       react-dom: ^18.0.0 || ~19.0.3 || ~19.1.4 || ~19.2.3 || ~19.3.0-0
 
-  '@clerk/fastify@3.1.57':
-    resolution: {integrity: sha512-Es2J4QTvzJWWK5L0DB3phsPn6LpLYLJPAfjNw+XgRX3f4zanOxreoWwUgwHEqN0xjr65AqEZhbxpEYTRqaqsDQ==}
+  '@clerk/fastify@3.1.58':
+    resolution: {integrity: sha512-84U4A7842eKdTG4VR0GoSvmdfxgSY3g/dGxHWcpB6RijYPCaUwyyDPzhc4vWPCzC633ZtQd1I5QgRFvEKlGrDQ==}
     engines: {node: '>=20.9.0'}
     peerDependencies:
       fastify: '>=5'
@@ -1946,8 +1946,8 @@ packages:
   '@fastify/proxy-addr@5.1.0':
     resolution: {integrity: sha512-INS+6gh91cLUjB+PVHfu1UqcB76Sqtpyp7bnL+FYojhjygvOPA9ctiD/JDKsyD9Xgu4hUhCSJBPig/w7duNajw==}
 
-  '@fastify/rate-limit@11.1.0':
-    resolution: {integrity: sha512-BeJ9tizLvmTXGD7deYU5G04OtHhwk5uHxbpEPVp09gKvUBIXmau/4Bshxhu9ci54MvVWfGjCEx4RzvsTntojwA==}
+  '@fastify/rate-limit@11.2.0':
+    resolution: {integrity: sha512-X7osJd4XSvMoejYrnJkSZYYjY1eNYoBqhjlzf1RakC2204qExFqZFTKj5+T7VuzA/iUI9Z3UoSqQRkB2HpG0oQ==}
 
   '@fastify/swagger@9.7.0':
     resolution: {integrity: sha512-Vp1SC1GC2Hrkd3faFILv86BzUNyFz5N4/xdExqtCgkGASOzn/x+eMe4qXIGq7cdT6wif/P/oa6r1Ruqx19paZA==}
@@ -7693,7 +7693,7 @@ snapshots:
       react-dom: 19.2.8(react@19.2.8)
       tslib: 2.8.1
 
-  '@clerk/fastify@3.1.57(fastify@5.10.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
+  '@clerk/fastify@3.1.58(fastify@5.10.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
     dependencies:
       '@clerk/backend': 3.16.1(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@clerk/shared': 4.27.1(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -8152,10 +8152,11 @@ snapshots:
       '@fastify/forwarded': 3.0.1
       ipaddr.js: 2.4.0
 
-  '@fastify/rate-limit@11.1.0':
+  '@fastify/rate-limit@11.2.0':
     dependencies:
       '@lukeed/ms': 2.0.2
       fastify-plugin: 6.0.0
+      ip-address: 10.4.0
       toad-cache: 3.7.4
 
   '@fastify/swagger@9.7.0':
