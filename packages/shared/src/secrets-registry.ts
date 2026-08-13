@@ -6,8 +6,9 @@ import type { SecretTier } from "./schemas/secrets.js";
  * is the reason this registry is code and not a comma-separated env var.
  *
  * What belongs here is a **key the deployment needs**, not only a value that
- * must stay hidden. The Clerk publishable key ships inside every browser
- * bundle and is confidential from nobody, and it is still listed: an operator
+ * must stay hidden. The Clerk publishable key ships inside the `apps/admin`
+ * and `apps/auth` bundles and is confidential from nobody, and it is still
+ * listed: an operator
  * asking "what keys does this system take" is asking about the inventory, and
  * a key missing from it is a manual step nothing records.
  */
@@ -66,7 +67,7 @@ export const CLERK_PUBLISHABLE_KEY_SECRET = {
   name: "platform/clerk-publishable-key",
   tier: "platform",
   consumedBy:
-    "Clerk's browser SDK in apps/admin and apps/auth, inlined at image build, and apps/api's Clerk client. Public — it ships in every bundle. A wrong value makes sign-in fail on both SPAs, and mismatches the API's instance.",
+    "Clerk's browser SDK in apps/admin and apps/auth, inlined at image build, and apps/api's Clerk client. Public — it ships in those two bundles. A wrong value makes sign-in fail on both SPAs, and mismatches the API's instance.",
 } as const satisfies SecretRegistryEntry;
 
 /**
