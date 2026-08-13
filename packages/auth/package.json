@@ -30,7 +30,7 @@
   },
   "dependencies": {
     "@clerk/clerk-react": "^5.61.6",
-    "@clerk/fastify": "^3.1.57",
+    "@clerk/fastify": "^3.1.58",
     "@clerk/themes": "^2.4.57"
   },
   "peerDependencies": {
@@ -58,7 +58,7 @@
     "@unimatrix/config-vitest": "workspace:*",
     "@vitest/coverage-v8": "^4.1.10",
     "eslint": "^10.0.0",
-    "fastify": "^5.6.1",
+    "fastify": "^5.11.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "typescript": "^6.0.3",
