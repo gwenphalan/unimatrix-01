@@ -350,8 +350,10 @@ can a log line. What does distinguish them:
 1. A 401 is unambiguous — an invalid or revoked token. Everything else is a
    404.
 2. `/secrets/admin` answering 404 rather than 401 when unauthenticated means
-   the module never registered, so at least one of the four API variables is
-   missing.
+   the module never registered, so the store's base URL or one of its three
+   scoped tokens is missing. A missing certificate is not this symptom: with an
+   `https://` base URL the API refuses to boot at all rather than serving
+   without the module.
 3. Every row reading "Not set" while the store holds values means a manage
    token scoped to the wrong tier.
 4. Authoritative, and host-local:

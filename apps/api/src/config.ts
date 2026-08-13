@@ -719,7 +719,11 @@ function parseSecretsStoreConfig(env: ApiRuntimeEnv): ApiSecretsStoreConfig | nu
       );
     }
 
-    const isHttps = baseUrl.startsWith("https:");
+    // Through the parsed URL rather than the raw string: `parseSecretsBaseUrl`
+    // returns what was configured, and `HTTPS://secrets:3001` is a valid URL
+    // whose `protocol` normalises to `https:` while a `startsWith` check on the
+    // original text reads it as plain HTTP.
+    const isHttps = new URL(baseUrl).protocol === "https:";
 
     if (isHttps && encodedCaCertificate === undefined) {
       throw createApiConfigError(

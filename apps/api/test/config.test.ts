@@ -524,6 +524,29 @@ void test("loadApiRuntimeConfig decodes the store certificate for an https base 
   );
 });
 
+void test("loadApiRuntimeConfig reads the scheme from the parsed URL, not the raw text", () => {
+  // `HTTPS://` is a valid URL whose protocol normalises to `https:`, so it must
+  // demand the certificate exactly as the lowercase form does.
+  assert.throws(
+    () =>
+      loadApiRuntimeConfig({
+        SECRETS_BASE_URL: "HTTPS://secrets:3001",
+        SECRETS_SERVICE_TOKEN: "svc_read_token",
+      }),
+    /SECRETS_TLS_CERT_BASE64 must be set when SECRETS_BASE_URL is https/,
+  );
+
+  assert.throws(
+    () =>
+      loadApiRuntimeConfig({
+        SECRETS_BASE_URL: "HTTP://secrets:3001",
+        SECRETS_SERVICE_TOKEN: "svc_read_token",
+        SECRETS_TLS_CERT_BASE64: TEST_CERT_BASE64,
+      }),
+    /SECRETS_TLS_CERT_BASE64 must not be set when SECRETS_BASE_URL is http/,
+  );
+});
+
 void test("loadApiRuntimeConfig throws when an https base URL has no certificate", () => {
   assert.throws(
     () =>
