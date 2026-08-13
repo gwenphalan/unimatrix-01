@@ -69,6 +69,37 @@ export interface DeployVolume {
   readonly mountPath: string;
 }
 
+/**
+ * A Docker network the compose service joins. Naming any network at all
+ * replaces the implicit `default` one, so a config that declares these must
+ * list every network the service needs — including the one Dokploy would
+ * otherwise attach for Traefik.
+ */
+export interface DeployNetwork {
+  readonly name: string;
+  /**
+   * Always `true` in practice, and {@link validateAppConfig} rejects `false`:
+   * a non-external network of the same name is created per Compose project,
+   * so two stacks naming it would each get a private copy, boot cleanly, and
+   * never reach each other. Declared rather than assumed so the compose file
+   * says which pre-existing network it expects.
+   */
+  readonly external: boolean;
+  /** Extra DNS names this service answers to on that network. */
+  readonly aliases?: readonly string[];
+  /** Multi-line comment placed above this network's per-service entry. */
+  readonly comment?: readonly string[];
+}
+
+/**
+ * Which scheme the runtime container's own `HEALTHCHECK` probes. Defaults to
+ * `"http"`. The variable form defers the choice to container start: `https`
+ * when the named environment variable holds a non-empty value, `http`
+ * otherwise — for a service whose TLS is configured rather than compiled in.
+ */
+export type DeployHealthcheckScheme =
+  "http" | "https" | { readonly kind: "variable"; readonly name: string };
+
 export interface NodeApiAppConfig {
   readonly kind: "node-api";
   readonly appDir: string;
@@ -78,6 +109,16 @@ export interface NodeApiAppConfig {
   /** The compose service's `environment:` block — deploy-time overrides. */
   readonly composeEnv: readonly NodeApiComposeEnvVar[];
   readonly volumes: readonly DeployVolume[];
+  /** Omitted means the implicit compose `default` network and nothing else. */
+  readonly networks?: readonly DeployNetwork[];
+  /**
+   * Must follow the scheme the service actually listens with: the probe runs
+   * inside the container, so an `http://` probe against a TLS listener never
+   * succeeds and the container is marked unhealthy for its whole life — which
+   * on Dokploy reads as a deploy that never comes up while the service serves
+   * traffic fine.
+   */
+  readonly healthcheckScheme?: DeployHealthcheckScheme;
 }
 
 export type DeployAppConfig = StaticSpaAppConfig | NodeApiAppConfig;
@@ -173,6 +214,33 @@ export function validateAppConfig(config: DeployAppConfig): readonly string[] {
     }
   }
 
+  const seenNetworks = new Set<string>();
+  for (const network of config.networks ?? []) {
+    if (network.name.length === 0) {
+      failures.push(`${label}: a network has an empty name.`);
+    } else if (seenNetworks.has(network.name)) {
+      failures.push(`${label}: network ${network.name} is declared more than once.`);
+    }
+    seenNetworks.add(network.name);
+
+    if (!network.external) {
+      failures.push(
+        `${label}: network ${network.name} is not external. Compose would create a separate ` +
+          `network of that name per project, so each stack naming it would get a private copy, ` +
+          `boot cleanly, and never reach the other.`,
+      );
+    }
+  }
+
+  const scheme = config.healthcheckScheme;
+
+  if (typeof scheme === "object" && scheme.name.length === 0) {
+    failures.push(
+      `${label}: healthcheckScheme names an empty environment variable, so the probe would always ` +
+        `choose http and a TLS listener would never answer it.`,
+    );
+  }
+
   return failures;
 }
 
@@ -246,6 +314,48 @@ function staticSpaDockerfileBody(
   return lines;
 }
 
+/**
+ * The `https` probe skips certificate verification, and that is correct only
+ * because it is a loopback liveness check inside the very container the
+ * certificate belongs to: there is no third party on that connection to
+ * authenticate, and the service's certificate is issued for its Compose
+ * service name rather than `127.0.0.1`, so verification would fail on the
+ * hostname alone. It uses `node:https` rather than `fetch`, which cannot be
+ * told to skip verification without an undici dispatcher the runtime image is
+ * not guaranteed to carry.
+ *
+ * The variable form picks the module at container start rather than at image
+ * build, because whether the service serves TLS is a runtime decision: the
+ * same image serves plain HTTP when its certificate variables are unset. A
+ * build-time choice is wrong in one direction or the other, and both are the
+ * same failure — a container marked unhealthy for its whole life while it
+ * serves traffic fine, which on Dokploy reads as a deploy that never comes up.
+ */
+function nodeApiHealthcheckLine(scheme: DeployHealthcheckScheme): string {
+  const prefix =
+    "HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 CMD node -e ";
+
+  if (scheme === "http") {
+    return (
+      prefix +
+      "\"fetch('http://127.0.0.1:' + (process.env.PORT ?? '3001') + '/health').then((response) => " +
+      '{ if (!response.ok) process.exit(1); }).catch(() => process.exit(1))"'
+    );
+  }
+
+  // `rejectUnauthorized` is inert on `node:http`, so one request body serves
+  // both modules and only the `require` differs.
+  const module =
+    scheme === "https" ? "'node:https'" : `process.env.${scheme.name} ? 'node:https' : 'node:http'`;
+
+  return (
+    prefix +
+    `"require(${module}).get({ host: '127.0.0.1', port: process.env.PORT ?? '3001', ` +
+    "path: '/health', rejectUnauthorized: false }, (response) => { process.exit(" +
+    "response.statusCode === 200 ? 0 : 1); }).on('error', () => process.exit(1))\""
+  );
+}
+
 function nodeApiDockerfileBody(
   config: NodeApiAppConfig,
   fromLines: DeployDockerfileFromLines,
@@ -293,9 +403,7 @@ function nodeApiDockerfileBody(
   lines.push(
     "USER node",
     "EXPOSE 3001",
-    "HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 CMD node -e " +
-      "\"fetch('http://127.0.0.1:' + (process.env.PORT ?? '3001') + '/health').then((response) => " +
-      '{ if (!response.ok) process.exit(1); }).catch(() => process.exit(1))"',
+    nodeApiHealthcheckLine(config.healthcheckScheme ?? "http"),
     'CMD ["node", "dist/server.js"]',
   );
 
@@ -350,6 +458,26 @@ export function composeFor(config: DeployAppConfig): string {
         lines.push(`      - ${volume.name}:${volume.mountPath}`);
       }
     }
+
+    const networks = config.networks ?? [];
+
+    if (networks.length > 0) {
+      // Mapping form throughout, even with no aliases: compose rejects a
+      // service that mixes the list and mapping forms, so one network gaining
+      // an alias would otherwise have to rewrite its siblings.
+      lines.push("    networks:");
+      for (const network of networks) {
+        lines.push(...formatCommentLines(network.comment).map((line) => `      ${line}`));
+        lines.push(`      ${network.name}:`);
+        const aliases = network.aliases ?? [];
+        if (aliases.length > 0) {
+          lines.push("        aliases:");
+          for (const alias of aliases) {
+            lines.push(`          - ${alias}`);
+          }
+        }
+      }
+    }
   }
 
   lines.push("    restart: unless-stopped");
@@ -358,6 +486,13 @@ export function composeFor(config: DeployAppConfig): string {
     lines.push("", "volumes:");
     for (const volume of config.volumes) {
       lines.push(`  ${volume.name}:`);
+    }
+  }
+
+  if (config.kind === "node-api" && (config.networks ?? []).length > 0) {
+    lines.push("", "networks:");
+    for (const network of config.networks ?? []) {
+      lines.push(`  ${network.name}:`, `    external: ${String(network.external)}`);
     }
   }
 

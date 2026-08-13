@@ -44,7 +44,17 @@ export function buildApp(
       ? buildLoggerOptions(config)
       : buildLoggerOptions(config, { stream: options.loggerStream });
 
+  // Fastify decides HTTP vs HTTPS from the presence of `https`, so the option
+  // is spread in rather than set to `null`: `https: null` is the documented
+  // way to ask for plain HTTP, but the type is narrower than that and the
+  // spread keeps both branches honest without a cast.
+  const httpsOptions =
+    config.tls === null
+      ? {}
+      : { https: { cert: config.tls.certificatePem, key: config.tls.privateKeyPem } };
+
   const appOptions = {
+    ...httpsOptions,
     bodyLimit: REQUEST_BODY_LIMIT_BYTES,
     forceCloseConnections: true,
     logController: new LogController({ disableRequestLogging: true }),

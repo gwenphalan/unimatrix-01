@@ -192,6 +192,83 @@ describe("nodeApiApp / dockerfileFor / composeFor", () => {
     expect(compose).toContain("- api-data:/data");
     expect(compose).toContain("- api-uploads:/uploads");
   });
+
+  it("probes http by default and https when the scheme says so", () => {
+    expect(dockerfileFor(config, API_FROM_LINES)).toContain("fetch('http://127.0.0.1:'");
+
+    const tlsConfig = nodeApiApp({
+      appDir: "secrets",
+      packageName: "@unimatrix/secrets-app",
+      dockerfileEnv: [],
+      composeEnv: [],
+      volumes: [],
+      healthcheckScheme: "https",
+    });
+
+    const dockerfile = dockerfileFor(tlsConfig, API_FROM_LINES);
+    expect(dockerfile).toContain("require('node:https')");
+    expect(dockerfile).toContain("rejectUnauthorized: false");
+    expect(dockerfile).not.toContain("fetch('http://127.0.0.1:'");
+  });
+
+  it("defers the scheme to a variable when one is named", () => {
+    const deferred = nodeApiApp({
+      appDir: "secrets",
+      packageName: "@unimatrix/secrets-app",
+      dockerfileEnv: [],
+      composeEnv: [],
+      volumes: [],
+      healthcheckScheme: { kind: "variable", name: "SECRETS_TLS_CERT_BASE64" },
+    });
+
+    expect(dockerfileFor(deferred, API_FROM_LINES)).toContain(
+      "require(process.env.SECRETS_TLS_CERT_BASE64 ? 'node:https' : 'node:http')",
+    );
+  });
+
+  it("rejects a healthcheck variable with an empty name", () => {
+    expect(
+      validateAppConfig(
+        nodeApiApp({
+          appDir: "secrets",
+          packageName: "@unimatrix/secrets-app",
+          dockerfileEnv: [],
+          composeEnv: [],
+          volumes: [],
+          healthcheckScheme: { kind: "variable", name: "" },
+        }),
+      ),
+    ).toEqual([
+      "secrets: healthcheckScheme names an empty environment variable, so the probe " +
+        "would always choose http and a TLS listener would never answer it.",
+    ]);
+  });
+
+  it("declares each network on the service and as external at the top level", () => {
+    const networked = nodeApiApp({
+      appDir: "secrets",
+      packageName: "@unimatrix/secrets-app",
+      dockerfileEnv: [],
+      composeEnv: [],
+      volumes: [],
+      networks: [
+        { name: "unimatrix-secrets", external: true, aliases: ["secrets"], comment: ["Shared."] },
+        { name: "dokploy-network", external: true },
+      ],
+    });
+
+    const compose = composeFor(networked);
+    expect(compose).toContain(
+      "    networks:\n      # Shared.\n      unimatrix-secrets:\n        aliases:\n          - secrets\n      dokploy-network:\n",
+    );
+    expect(compose).toContain(
+      "\nnetworks:\n  unimatrix-secrets:\n    external: true\n  dokploy-network:\n    external: true\n",
+    );
+  });
+
+  it("emits no networks block at all when none are declared", () => {
+    expect(composeFor(config)).not.toContain("networks:");
+  });
 });
 
 describe("validateAppConfig", () => {
@@ -271,6 +348,26 @@ describe("validateAppConfig", () => {
     expect(validateAppConfig(config).some((message) => message.includes("not absolute"))).toBe(
       true,
     );
+  });
+
+  it("rejects a non-external network, a duplicate one, and an empty name", () => {
+    const config = nodeApiApp({
+      appDir: "api",
+      packageName: "@unimatrix/api",
+      dockerfileEnv: [],
+      composeEnv: [],
+      volumes: [],
+      networks: [
+        { name: "unimatrix-secrets", external: false },
+        { name: "unimatrix-secrets", external: true },
+        { name: "", external: true },
+      ],
+    });
+
+    const failures = validateAppConfig(config);
+    expect(failures.some((message) => message.includes("is not external"))).toBe(true);
+    expect(failures.some((message) => message.includes("declared more than once"))).toBe(true);
+    expect(failures.some((message) => message.includes("empty name"))).toBe(true);
   });
 
   it("rejects an empty appDir", () => {

@@ -94,6 +94,15 @@ Clerk auth is required in production: set `CLERK_SECRET_KEY`,
 `CLERK_PUBLISHABLE_KEY`, and `CLERK_JWT_KEY` in Dokploy's UI (all three, never
 just some). See "Clerk setup" below.
 
+Five more variables connect this service to the secrets store —
+`SECRETS_BASE_URL`, `SECRETS_SERVICE_TOKEN`,
+`SECRETS_INTEGRATIONS_MANAGE_TOKEN`, `SECRETS_PLATFORM_WRITE_TOKEN` and
+`SECRETS_TLS_CERT_BASE64`. All five must exist in Dokploy before this stack is
+deployed: an unset variable named in the compose file reaches the container as
+an empty string rather than as absent, and the API's loader refuses an empty
+value, so the stack restart-loops and every content route 404s. The ordered
+procedure is under "Secrets service" below.
+
 ### CFLOP service
 
 - application type: Compose
@@ -199,10 +208,12 @@ placeholder route safe; see `apps/admin/AGENTS.md`.
 - compose path: `infra/docker/secrets-compose.yaml`
 - no Domains page entry — this service is deliberately unrouted, with no
   public hostname and no container port exposed through Traefik
-- required environment variable (set in Dokploy's UI, not in the file):
+- required environment variables (set in Dokploy's UI, not in the file):
   `SECRETS_KEKS` (see `packages/secrets/AGENTS.md` for its format; there is no
   default, so a missing value fails the service at startup rather than
-  silently sealing values under a placeholder key)
+  silently sealing values under a placeholder key), plus
+  `SECRETS_TLS_CERT_BASE64` and `SECRETS_TLS_KEY_BASE64` — see "Shared network
+  and TLS" below
 
 **Persistent storage:** `secrets-compose.yaml` declares a `secrets-data`
 volume mounted at `/data` (where the DB defaults to `/data/secrets.sqlite`)
@@ -277,36 +288,80 @@ The volume name is prefixed with the Dokploy project name by Compose — read
 the actual name from `docker volume ls` rather than copying `secrets-data`
 from `secrets-compose.yaml` directly.
 
-**No Domains entry also means no shared network.** Dokploy attaches a stack to
-the shared overlay `dokploy-network` when Traefik has to reach it — which is
-when the stack has a domain. This service has none, and measured on the host
-2026-08-09 its container sits on its own per-stack bridge and nothing else,
-while `apps/api`'s sits on both that overlay and its own. Every container on
-`dokploy-network` is one Traefik serves. So no other stack on the host can open
-a socket to this one today.
+**Shared network and TLS.** This stack and the API stack both join one
+external Docker network, `unimatrix-secrets`, and the store serves HTTPS on it
+with a self-signed certificate the API pins by value. The network is what puts
+the store within reach of another stack at all; the pin is what stops three
+long-lived bearer tokens crossing it in cleartext.
 
-Do not read that as the boundary. Network position is not authorization: every
-request but `GET /health` is rejected without a valid service token, and that is
-what carries the boundary whatever the container is attached to.
+The store still has no Domains entry and stays off `dokploy-network`, where
+every container is one Traefik serves. Network position was never the boundary
+in either direction: every request but `GET /health` is rejected without a
+valid service token.
 
-Dokploy's **Advanced → Isolated Deployment** toggle forces a stack off the
-shared network explicitly. It is off here and does not need turning on, because
-a domainless stack is not attached in the first place. Unverified: whether
-adding a domain, or a later redeploy, changes this stack's attachment.
+Generate the certificate on the host, once. Not in the image — the private key
+would land in a registry layer. Not at boot — it would change on every restart
+and the API's pinned copy would be stale within minutes.
 
-**A cross-stack client needs a network arranged for it.** `apps/api` now has
-the read client and its boot-time cache (`SECRETS_BASE_URL`/
-`SECRETS_SERVICE_TOKEN`, all-or-none; which names it fetches comes from
-`SECRET_REGISTRY` in `@unimatrix/shared`, not from env) and one admin
-management client per credential tier behind four admin-only routes
-(`SECRETS_INTEGRATIONS_MANAGE_TOKEN` and `SECRETS_PLATFORM_WRITE_TOKEN`, both
-required for those routes to exist, additionally requiring the pair above and
-all three token values distinct), but `apps/api` is still a separate Compose stack
-that shares no network with this one, so it cannot reach the store in
-production yet — the feature is code-complete and off. The item that makes
-it a client is where the two get an explicitly declared shared network — and
-adding one puts the store back within reach of whatever else sits on that
-network, which is the trade the service token exists to cover.
+```bash
+openssl req -x509 -newkey rsa:2048 -nodes -keyout key.pem -out cert.pem \
+  -days 3650 -subj "/CN=secrets" -addext "subjectAltName=DNS:secrets"
+base64 -w0 cert.pem   # -> SECRETS_TLS_CERT_BASE64 (both stacks)
+base64 -w0 key.pem    # -> SECRETS_TLS_KEY_BASE64 (this stack only)
+```
+
+The SAN must be `secrets`, the store's Compose service name, because that is
+the host the API connects to and hostname verification stays on. Ten years is
+deliberate: a certificate pinned by value gains nothing from expiring, and an
+expired one is an outage with a confusing error.
+
+Order matters, and none of these steps is optional. Steps 1 to 3 happen
+**before the compose changes reach `main`**, not after. Both services carry
+`autoDeploy: true` on `main` with their own compose file in `watchPaths` (read
+from Dokploy's `compose.one`), so the merge is the deploy — and an unset
+variable reaches the container as an empty string, present rather than absent,
+which both loaders refuse. Merging first restart-loops the store and the API,
+and with the store down step 3's tokens cannot be minted at all: the CLI that
+mints them runs inside the running container.
+
+Setting the variables early is safe. The deployed compose files do not
+reference them until the change lands.
+
+1. `docker network create unimatrix-secrets` on the host. Compose does not
+   create an external network; it fails when one is missing.
+2. Generate the certificate as above and set `SECRETS_TLS_CERT_BASE64` and
+   `SECRETS_TLS_KEY_BASE64` on the **secrets** stack.
+3. Mint the three service tokens against the still-running store, then set all
+   five `SECRETS_*` variables on the **api** stack: the base URL
+   `https://secrets:3001`, the three distinct tokens, and the certificate.
+   Never the private key.
+4. Merge. Both stacks deploy on their own compose file changing, and a deploy
+   is queued rather than applied — see "A deploy is queued, not applied" above.
+5. Confirm `"scheme":"https"` in the store's boot log and the container
+   reporting `healthy`, then check the public API through Traefik immediately.
+   A 502 means the explicit `networks:` block cost the service its Traefik
+   attachment.
+
+**Telling a misconfigured token from a missing secret.** The store answers a
+wrong-capability caller, an out-of-scope name and an absent name with a
+byte-identical 404, so the admin console cannot distinguish them and neither
+can a log line. What does distinguish them:
+
+1. A 401 is unambiguous — an invalid or revoked token. Everything else is a
+   404.
+2. `/secrets/admin` answering 404 rather than 401 when unauthenticated means
+   the module never registered, so the store's base URL or one of its three
+   scoped tokens is missing. A missing certificate is not this symptom: with an
+   `https://` base URL the API refuses to boot at all rather than serving
+   without the module.
+3. Every row reading "Not set" while the store holds values means a manage
+   token scoped to the wrong tier.
+4. Authoritative, and host-local:
+   `docker exec <secrets> node dist/cli/service-token.js list` prints each
+   token's scope and capability, and `secret_audit_log` holds a row per read
+   attempt.
+5. As a positive control, create a throwaway credential in each tier from the
+   console.
 
 ## Traefik expectations
 

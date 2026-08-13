@@ -90,6 +90,16 @@ export interface ApiSecretsStoreConfig {
    * whatever capability it held.
    */
   platformWriteToken: string | null;
+  /**
+   * The store's own server certificate, PEM text decoded from
+   * `SECRETS_TLS_CERT_BASE64`. Required whenever `baseUrl` is `https://` and
+   * refused when it is `http://`, because the store's certificate is
+   * self-signed: with no pin the connection falls back to the system trust
+   * store, which does not carry it, and every read fails at runtime instead
+   * of at boot with a variable name attached. `null` only for a plain-HTTP
+   * base URL.
+   */
+  caCertificatePem: string | null;
 }
 
 export interface ApiRuntimeConfig {
@@ -126,6 +136,7 @@ export interface ApiRuntimeEnv {
   SECRETS_SERVICE_TOKEN?: string | undefined;
   SECRETS_INTEGRATIONS_MANAGE_TOKEN?: string | undefined;
   SECRETS_PLATFORM_WRITE_TOKEN?: string | undefined;
+  SECRETS_TLS_CERT_BASE64?: string | undefined;
   MAX_UPLOAD_BYTES?: string | undefined;
   MAX_USER_STORAGE_BYTES?: string | undefined;
   DB_MIGRATE_ON_START?: string | undefined;
@@ -621,6 +632,24 @@ function parseSecretsBaseUrl(value: string | undefined): string | undefined {
   return trimmedValue;
 }
 
+/**
+ * Decodes the store's certificate from base64 PEM. The `-----BEGIN` check
+ * mirrors `apps/secrets/src/config.ts`: `Buffer.from` drops characters
+ * outside the base64 alphabet rather than throwing, so a mangled paste would
+ * otherwise reach the TLS handshake as an opaque failure on the first read.
+ */
+function parseSecretsCaCertificate(value: string): string {
+  const pem = Buffer.from(value, "base64").toString("utf8");
+
+  if (!pem.includes("-----BEGIN")) {
+    throw createApiConfigError(
+      'SECRETS_TLS_CERT_BASE64 must be a base64-encoded PEM certificate. The decoded value contains no "-----BEGIN" line.',
+    );
+  }
+
+  return pem;
+}
+
 function createSharedSecretsTokenError(variableName: string, otherVariableName: string): Error {
   return createApiConfigError(
     `${variableName} must not equal ${otherVariableName} — the store answers a wrong-capability caller with the same 404 it uses for a missing name, so a shared token boots cleanly and fails silently.`,
@@ -640,7 +669,8 @@ function createUnconfiguredSecretsTokenError(variableName: string): Error {
  * in any environment — no integration is configured yet — but the first pair
  * is all-or-none: a lone `SECRETS_BASE_URL` or `SECRETS_SERVICE_TOKEN` is a
  * misconfiguration. Either admin token may only be set once the store itself
- * is configured.
+ * is configured, and `SECRETS_TLS_CERT_BASE64` tracks the base URL's scheme
+ * exactly — required for `https://`, refused for `http://`.
  *
  * The rule that matters most here is that no two of the three tokens may be
  * equal. `apps/secrets` answers a wrong-capability caller with a
@@ -662,6 +692,10 @@ function parseSecretsStoreConfig(env: ApiRuntimeEnv): ApiSecretsStoreConfig | nu
   const platformWriteToken = readOptionalTrimmedValue(
     "SECRETS_PLATFORM_WRITE_TOKEN",
     env.SECRETS_PLATFORM_WRITE_TOKEN,
+  );
+  const encodedCaCertificate = readOptionalTrimmedValue(
+    "SECRETS_TLS_CERT_BASE64",
+    env.SECRETS_TLS_CERT_BASE64,
   );
 
   if (baseUrl !== undefined && serviceToken !== undefined) {
@@ -685,11 +719,34 @@ function parseSecretsStoreConfig(env: ApiRuntimeEnv): ApiSecretsStoreConfig | nu
       );
     }
 
+    // Through the parsed URL rather than the raw string: `parseSecretsBaseUrl`
+    // returns what was configured, and `HTTPS://secrets:3001` is a valid URL
+    // whose `protocol` normalises to `https:` while a `startsWith` check on the
+    // original text reads it as plain HTTP.
+    const isHttps = new URL(baseUrl).protocol === "https:";
+
+    if (isHttps && encodedCaCertificate === undefined) {
+      throw createApiConfigError(
+        "SECRETS_TLS_CERT_BASE64 must be set when SECRETS_BASE_URL is https:// — the store's " +
+          "certificate is self-signed, so without it every read fails against the system trust " +
+          "store at runtime rather than here at boot.",
+      );
+    }
+
+    if (!isHttps && encodedCaCertificate !== undefined) {
+      throw createApiConfigError(
+        "SECRETS_TLS_CERT_BASE64 must not be set when SECRETS_BASE_URL is http:// — the " +
+          "certificate would be silently unused and the connection would stay in cleartext.",
+      );
+    }
+
     return {
       baseUrl,
       serviceToken,
       integrationsManageToken: integrationsManageToken ?? null,
       platformWriteToken: platformWriteToken ?? null,
+      caCertificatePem:
+        encodedCaCertificate === undefined ? null : parseSecretsCaCertificate(encodedCaCertificate),
     };
   }
 
@@ -700,6 +757,10 @@ function parseSecretsStoreConfig(env: ApiRuntimeEnv): ApiSecretsStoreConfig | nu
 
     if (platformWriteToken !== undefined) {
       throw createUnconfiguredSecretsTokenError("SECRETS_PLATFORM_WRITE_TOKEN");
+    }
+
+    if (encodedCaCertificate !== undefined) {
+      throw createUnconfiguredSecretsTokenError("SECRETS_TLS_CERT_BASE64");
     }
 
     return null;

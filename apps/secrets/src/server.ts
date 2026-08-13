@@ -62,8 +62,18 @@ async function startServer(): Promise<void> {
       port: config.port,
     });
 
+    // `scheme` is the cheapest production discriminator there is: the store's
+    // routes answer identically either way, so nothing else in a log or a
+    // response distinguishes a stack that lost its TLS variables from one
+    // serving them.
     app.log.info(
-      { address, host: config.host, port: config.port, nodeEnv: config.nodeEnv },
+      {
+        address,
+        host: config.host,
+        port: config.port,
+        nodeEnv: config.nodeEnv,
+        scheme: config.tls === null ? "http" : "https",
+      },
       "secrets server listening",
     );
   } catch (error) {
