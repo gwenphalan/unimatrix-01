@@ -32,9 +32,10 @@ describe("SECRET_REGISTRY", () => {
     expect(new Set(names).size).toBe(names.length);
   });
 
-  it("declares both Clerk keys in the platform tier", () => {
+  it("declares every Clerk key in the platform tier", () => {
     expect(secretTierForName("platform/clerk-secret-key")).toBe("platform");
     expect(secretTierForName("platform/clerk-jwt-key")).toBe("platform");
+    expect(secretTierForName("platform/clerk-publishable-key")).toBe("platform");
   });
 });
 

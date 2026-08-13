@@ -4,6 +4,13 @@ import type { SecretTier } from "./schemas/secrets.js";
  * `consumedBy` is prose, read by an operator in the admin console before a
  * destructive action: what breaks if this credential is missing or wrong. It
  * is the reason this registry is code and not a comma-separated env var.
+ *
+ * What belongs here is a **key the deployment needs**, not only a value that
+ * must stay hidden. The Clerk publishable key ships inside the `apps/admin`
+ * and `apps/auth` bundles and is confidential from nobody, and it is still
+ * listed: an operator
+ * asking "what keys does this system take" is asking about the inventory, and
+ * a key missing from it is a manual step nothing records.
  */
 export interface SecretRegistryEntry {
   name: string;
@@ -42,18 +49,41 @@ export const CLERK_JWT_KEY_SECRET = {
 } as const satisfies SecretRegistryEntry;
 
 /**
+ * Public, and listed anyway — it is a key the deployment needs. Its value is
+ * inlined into the `apps/admin` and `apps/auth` browser bundles at image
+ * build, so anyone can read it out of a page; storing it buys no secrecy, only
+ * a complete inventory. The console still never displays it, because the rule
+ * that no value reaches the browser is worth more than the one exception it
+ * would earn here.
+ *
+ * Note it reaches its three consumers under two different variable names and
+ * through two different mechanisms, which is why nothing links this entry to
+ * them in types: `VITE_CLERK_PUBLISHABLE_KEY` as a `docker build --build-arg`
+ * for the two SPAs, `CLERK_PUBLISHABLE_KEY` as container environment for
+ * `apps/api`. A deploy pipeline that writes only container environment cannot
+ * deliver it to the SPAs at all.
+ */
+export const CLERK_PUBLISHABLE_KEY_SECRET = {
+  name: "platform/clerk-publishable-key",
+  tier: "platform",
+  consumedBy:
+    "Clerk's browser SDK in apps/admin and apps/auth, inlined at image build, and apps/api's Clerk client. Public — it ships in those two bundles. A wrong value makes sign-in fail on both SPAs, and mismatches the API's instance.",
+} as const satisfies SecretRegistryEntry;
+
+/**
  * What the system expects to exist. The admin console lists this union'd with
  * whatever the store actually holds, so a credential the running code needs
  * and the store lacks is visible rather than simply absent.
  *
- * Nothing reads a `platform` name out of the store today: the two Clerk keys
- * reach `apps/api` as environment variables. They are declared here because
- * the console's question is what the system needs, not what some service
- * currently fetches.
+ * Nothing reads a `platform` name out of the store today: the Clerk keys reach
+ * their consumers as environment variables and, for the publishable key on the
+ * two SPAs, as a build argument. They are declared here because the console's
+ * question is what the system needs, not what some service currently fetches.
  */
 export const SECRET_REGISTRY: readonly SecretRegistryEntry[] = [
   CLERK_SECRET_KEY_SECRET,
   CLERK_JWT_KEY_SECRET,
+  CLERK_PUBLISHABLE_KEY_SECRET,
 ];
 
 /**
