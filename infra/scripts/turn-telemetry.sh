@@ -106,7 +106,7 @@ claim_regex() {
 # Every one of those biases the unbacked count *down*, which is the flattering
 # direction. `gate` is anchored for the same class of reason: unanchored,
 # `pnpm check:doc-script-refs` — a two-second filename grep — would satisfy a
-# `pnpm check` claim, and this repo ships eight `check:*` scripts.
+# `pnpm check` claim, and this repo ships many `check:*` scripts.
 evidence_regex() {
 	case "$1" in
 	build) printf '%s' 'vite build|docker build|tsc -b|(pnpm|turbo)[^&;|]*[[:space:]]build($|[[:space:]])' ;;

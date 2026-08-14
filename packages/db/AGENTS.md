@@ -12,7 +12,6 @@
 - `drizzle.config.ts`: Drizzle Kit configuration pointing at the schema barrel and migration output directory.
 - `drizzle`: generated migration SQL and metadata.
 - `local`: default local SQLite file location.
-- `test`: config and client coverage, including in-memory and temp-file flows.
 
 ## 3. Core Behaviors & Patterns
 - **Config-driven client creation**: `resolveDatabaseConfig(...)` shapes the database path, and `createSqliteClient(...)` plus `createDatabase(...)` build the raw SQLite and Drizzle clients from that config.

@@ -1,6 +1,6 @@
-# CodeRabbit is advisory here, and it is deliberately not a required status check (the ruleset
-# requires Verify, the five Images (*), Review dependency changes, Analyze and CodeQL). Its
-# reviews are therefore worth having but never worth blocking on.
+# CodeRabbit is advisory here, and it is deliberately not one of the repository
+# ruleset's required status checks. Its reviews are therefore worth having but
+# never worth blocking on.
 #
 # Automatic review is off so that a PR which does not need a review does not spend one. A
 # Dependabot bump or a doc-only change would otherwise take a slot from the next PR that does,

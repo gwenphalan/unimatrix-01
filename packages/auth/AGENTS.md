@@ -8,7 +8,6 @@
 - `src/index.ts`: barrel for the `.` entry point (re-exports `permissions.ts`).
 - `src/server.ts`: the `./server` entry point — `registerClerkAuth` (wraps `@clerk/fastify`'s `clerkPlugin`), `requireAuth`/`requirePermission`/`requireAdminSection` preHandler guards, `getAuthUserId`, `getSessionPermissionsClaim`, and the `AuthError` class. Node-only.
 - `src/react.tsx`: the `./react` entry point — `AuthProvider` (wraps `@clerk/clerk-react`'s `ClerkProvider` and applies the shared `unimatrixClerkAppearance`), the `usePermissions` hook, and thin re-exports of commonly used Clerk components/hooks. Browser-only.
-- `test/permissions.test.ts`: coverage for the pure `.` helpers, including malformed-input handling.
 
 ## 3. Core Behaviors & Patterns
 - **Three isolated entry points**: `.` is zero-runtime-dependency and safe to import anywhere; `./server` is Node-only and depends on `@clerk/fastify`/`fastify`; `./react` is browser-only and depends on `@clerk/clerk-react`/`react`. Never import `./server` from `./react` or vice versa, and never add a runtime dependency to `.`.
