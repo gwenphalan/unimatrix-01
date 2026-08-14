@@ -37,16 +37,12 @@ const workflowsDir = join(repoRoot, ".github", "workflows");
  */
 const HOSTED_LABEL = /^(?:ubuntu|windows|macos)-(?:latest|\d)[\w.-]*$/u;
 
-/**
- * Third-party managed runners, allowed by exact label.
- *
- * `blacksmith-4vcpu-ubuntu-2404` is Blacksmith's managed runner, adopted in
- * `f6b32c3`. It runs on Blacksmith's infrastructure, not the owner's hardware,
- * so the reason for the self-hosted ban is not engaged by it.
- */
-const MANAGED_LABELS = ["blacksmith-4vcpu-ubuntu-2404"];
-
-const isAllowed = (label) => HOSTED_LABEL.test(label) || MANAGED_LABELS.includes(label);
+// GitHub-hosted labels are the whole allowlist. A third-party managed runner is
+// not the hazard this file exists for — it is not the owner's hardware — but
+// admitting one is a vendor decision, so it takes an edit here rather than a
+// label nobody reviews. Standard runners are free and unmetered on a public
+// repository, which is what this repo is.
+const isAllowed = (label) => HOSTED_LABEL.test(label);
 
 let failures = 0;
 const fail = (msg) => {
