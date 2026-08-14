@@ -40,7 +40,14 @@ implying otherwise:
    a repository-ruleset write outside this repo's files, tracked as its own
    task in `.notes/01-todo/deploy.todo.md`.
 5. Set `DOKPLOY_BASE_URL` and `DOKPLOY_API_KEY` in Dokploy's environment-variable
-   UI before deploying.
+   UI before deploying. `DOKPLOY_BASE_URL` is `http://dokploy:3000`: the swarm
+   service is named `dokploy`, publishes target port 3000, and is attached to
+   `dokploy-network` (`docker service inspect dokploy` and
+   `docker network inspect dokploy-network` on the host, 2026-08-14). That the
+   name resolves from an attached Compose container is inferred from swarm's
+   embedded DNS, **not measured** — nothing has run in a container on that
+   network yet. Never the public hostname: that path measures Cloudflare and
+   Traefik as much as Dokploy, and costs two Access service-token secrets.
 
 ## Local development
 
