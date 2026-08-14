@@ -274,12 +274,21 @@ jobs:
   # runs on `pull_request` at all (see `if:` below), so it would report
   # green while verifying nothing.
   #
-  # `needs: [verify]` so a `main`-branch `Verify` flake cannot move the
-  # `:main` tag onto a bad commit. It costs roughly 5 minutes on a path
-  # nothing downstream waits on yet — no Dokploy service pulls these images.
+  # `needs: [verify, images]` so a `main`-branch failure cannot move the
+  # `:main` tag onto a bad commit.
+  #
+  # `images` is not redundant with this job's own build. It runs one assertion
+  # this job does not: `check-cflop-serving.sh` against the built cflop image,
+  # which is the only thing anywhere that proves cflop serves real 404s rather
+  # than a 200 with a not-found card. Without the dependency, a broken serving
+  # contract reddens `Images (cflop)` and publishes the image regardless.
+  #
+  # The wait costs nothing measurable — the whole `images` matrix finishes in
+  # well under a minute against `Verify`'s ~6, so `verify` is the long pole
+  # either way, on a path nothing downstream waits on yet.
   publish:
     name: Publish
-    needs: [verify]
+    needs: [verify, images]
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     # Both a push to main and a manual dispatch from any branch are allowed
