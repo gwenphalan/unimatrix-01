@@ -469,14 +469,16 @@ input, update its README and Dokploy configuration in the same change.
 
 ## The host reuses its layer cache between deploys
 
-Dokploy re-clones the repository into `/etc/dokploy/compose/<service>/code` for
-every deploy, so the prune stage's `COPY . .` never hits cache. The install layer
-does, because `turbo prune <package> --docker` emits a byte-identical `out/json`
-for a change that touches no manifest in that package's pruned scope.
+The prune stage's `COPY . .` misses on every deploy — each deploy builds a
+different commit and the whole repository is that stage's context. The install
+layer survives it anyway, because `turbo prune <package> --docker` emits an
+`out/json` that a change outside the package's pruned scope does not move.
 
 Measured on the `api` service across two consecutive deploys, 2026-08-14: b169a72
 at 07:17:43 UTC, then 96c4397 at 07:33:17 UTC — a change spanning `apps/cflop`, a
-new `packages/cube`, and the root `pnpm-lock.yaml`. The second build reported:
+new `packages/cube`, and the root `pnpm-lock.yaml`. Running
+`turbo prune @unimatrix/api --docker` at both commits and diffing gives a
+byte-identical `out/json`, and the second build reported:
 
 ```text
 #14 [build 1/5] COPY --from=prune /workspace/out/json/ .
@@ -487,23 +489,37 @@ new `packages/cube`, and the root `pnpm-lock.yaml`. The second build reported:
 #17 DONE 10.5s
 ```
 
-Nothing prunes the cache between deploys — `docker system df` reported 124
-build-cache records holding 12.85 GB the same day — and it is shared across
-services rather than held per service: the `web` compose deploy at 07:17:17 reused
-an install layer the `web-preview` application had built 78 seconds earlier.
+The cache is shared across services rather than held per service: the `web`
+compose deploy at 07:17:17 reused an install layer that a `main` deploy of the
+`web-preview` Application service had built 78 seconds earlier. That is an
+ordinary branch deploy — PR previews still produce nothing, see "Pull request
+preview deployments" below.
 
-Read it per deploy from the host, which is the only place the build output exists:
+It is not durable, though. The host carries no `/etc/docker/daemon.json`, so
+BuildKit's default garbage collection applies: read on 2026-08-14 at 07:37 UTC,
+the oldest surviving cache record was under three hours old. Treat a layer from a
+previous day as gone.
+
+Read the install step off the host per deploy:
 
 ```bash
 f=$(ls -t /etc/dokploy/logs/<service>/* | head -1)
-grep -B1 -E '^#[0-9]+ (CACHED|DONE)' "$f" | grep -A1 'pnpm install'
+awk '/RUN pnpm install --frozen-lockfile/ { id = $1 }
+     id && $1 == id && ($2 == "CACHED" || $2 == "DONE") { print; exit }' "$f"
 ```
 
-**The saving is seconds.** Install is roughly 10s on `api` and 13s on `web` here,
-against a whole-image build of 35-47s — `pnpm build` and `pnpm --prod deploy`
-dominate what is left. Those two totals come from a hand-run `docker build` pair on
-the host at b169a72, outside Dokploy, differing by one appended line in
-`apps/api/src/server.ts`.
+A `grep -B1 … | grep -A1 'pnpm install'` pipeline looks equivalent and fails
+silently: on a cache miss BuildKit prints progress lines between the step header
+and its `DONE`, so it matches nothing and prints the same empty output as a
+mistyped service name.
+
+**The saving is seconds.** On `api` the install step is about 10s (`#15 DONE 9.4s`
+on the 07:17:43 build) against a whole-image build of 35-47s, and
+`pnpm --filter "@unimatrix/api..." build` plus `pnpm --prod deploy` take most of
+what is left. Those two totals come from a hand-run `docker build` pair on the host
+at b169a72, outside Dokploy, differing by one appended line in
+`apps/api/src/server.ts`. On `web` the install step is 13.4s and the image has no
+`--prod deploy` stage at all — it hands its `dist/` to nginx.
 
 ## A deploy is queued, not applied
 
