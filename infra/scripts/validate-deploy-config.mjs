@@ -15,9 +15,10 @@
 //      the generator iterates *discovered configs*, never `apps/*`, so a
 //      deleted app's compose file would otherwise sit un-generated and
 //      un-checked forever. Also asserts a config's own `appDir` names the
-//      directory it actually lives in: `build.dockerfile`/`build.context`
-//      and the compose filename are derived from `appDir` inside the
-//      generator, so a mismatch here is what would let them drift.
+//      directory it actually lives in: the compose service name, the
+//      published image name and a static SPA's own `COPY` paths are all
+//      derived from `appDir` inside the generator, so a mismatch here is what
+//      would let them drift.
 //   2. The node-api runtime-config probe. Builds the effective env — the
 //      config's own `dockerfileEnv` overlaid by `composeEnv` — and feeds it to
 //      that app's real runtime config loader (`NODE_API_CONFIG_PROBES` below),
@@ -161,8 +162,9 @@ for (const app of appsWithConfig) {
   if (config.appDir !== app) {
     fail(
       `apps/${app}/deploy.config.ts declares appDir ${JSON.stringify(config.appDir)}, which does ` +
-        `not match the directory it lives in. build.dockerfile and the compose filename are both ` +
-        `derived from appDir, so a mismatch here is what lets them point at the wrong app.`,
+        `not match the directory it lives in. The compose service name, the published image name ` +
+        `and a static SPA's own COPY paths are all derived from appDir, so a mismatch here is ` +
+        `what lets them point at the wrong app.`,
     );
   }
 

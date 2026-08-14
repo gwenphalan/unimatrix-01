@@ -34,6 +34,13 @@ consequences:
   `devDependencies`, so it resolves only after `pnpm install`.
 
 ## 4. Conventions
+- **A compose file names `image:` and never `build:` — not even alongside it "for local
+  development".** With both keys present, `docker compose up -d --build` builds the Dockerfile
+  locally and tags the result with the registry name (`Successfully tagged
+  ghcr.io/unimatrixcore/unimatrix-demo:v1`), contacting no registry at all — measured. Dokploy
+  issues exactly that command for a Compose service whose own `command` field is empty, so the
+  published image would go unused while the build log, the tag and the deploy status all read as a
+  normal deploy. Build an app locally with `docker build -f apps/<app>/Dockerfile .` instead.
 - `nodeApiApp()` is a parameterised template with two call sites (`apps/api`, `apps/secrets`) — each
   supplies its own env and volume data as arguments, and the generator's Dockerfile/compose body stays
   identical between them.

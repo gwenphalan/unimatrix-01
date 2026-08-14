@@ -40,25 +40,29 @@ In this shape:
   deliberately unrouted. That makes it unreachable from the internet; it does
   not make it private. See "Secrets service" below
 
-### SPA build args now default in `deploy.config.ts`
+### SPA build args are baked into the published image
 
-`apps/web`, `apps/auth`, and `apps/admin` each build with production values
-as their `ARG` defaults (see `apps/<app>/deploy.config.ts`), so a
-`docker build` with no `--build-arg` produces a correct production image.
-The Dokploy environment variables listed per service below
-(`VITE_API_BASE_URL`, `VITE_CLERK_PUBLISHABLE_KEY`, `VITE_AUTH_APP_URL`) are
-consequently redundant with those defaults; they still take effect when
-Dokploy builds, since an explicit `--build-arg` overrides a Dockerfile
-default.
+`apps/web`, `apps/auth`, and `apps/admin` each declare production values as
+their `ARG` defaults (see `apps/<app>/deploy.config.ts`). CI builds each image
+with no `--build-arg` and the compose files pull that image rather than
+building one, so those defaults are the only values that ever reach a browser
+bundle: setting `VITE_API_BASE_URL`, `VITE_CLERK_PUBLISHABLE_KEY` or
+`VITE_AUTH_APP_URL` on a Dokploy service changes nothing at all. Pointing an
+app at a different API origin or Clerk instance means editing its
+`deploy.config.ts` default and publishing a new image.
 
 ## Published GHCR images
 
 CI's `Publish` job (`.github/workflows/ci.yml`) builds every `apps/*/Dockerfile`
 with no build args and pushes it to `ghcr.io/unimatrixcore/unimatrix-<app>` on
 every push to `main`, tagged with the commit SHA and a moving `main` tag. The
-packages are public. **Nothing deploys from them yet** — every Dokploy service
-below still builds from the `build:` block in its own
-`infra/docker/<app>-compose.yaml`, not by pulling a GHCR image.
+packages are public, so Dokploy pulls them unauthenticated.
+
+Every `infra/docker/<app>-compose.yaml` declares `image:` and no `build:`, so
+nothing is built on the deploy host: each stack pulls
+`ghcr.io/unimatrixcore/unimatrix-<app>:${IMAGE_TAG}`. `IMAGE_TAG` is a
+**project-level** Dokploy variable — one value shared by every service in the
+project, and the only thing that decides which commit production runs.
 
 ### A new app's package is private until someone makes it public by hand
 
@@ -91,16 +95,14 @@ application type (not the plain Dockerfile application type).
 
 - application type: Compose
 - compose path: `infra/docker/web-compose.yaml`
-- environment variables (set in Dokploy's UI, not in the file):
-  - `VITE_API_BASE_URL=https://api.example.com`
+- no service-level environment variables — `VITE_API_BASE_URL` is baked into
+  the published image (see "SPA build args are baked into the published image")
 - Domains page: route `site.example.com` to the `web` service, container port
   `8080`
 
-This `VITE_*` value is inlined into the bundle at **build** time, so it must be
-present before the image builds (the compose file passes it as a build arg).
 The public site is fully anonymous — no Clerk, no sign-in affordance, no
-account-scoped UI. That surface now lives on `apps/admin`; see the admin
-service below.
+account-scoped UI. That surface lives on `apps/admin`; see the admin service
+below.
 
 The web container is a static SPA container. Preserve SPA fallback behavior
 inside the web container regardless of routing.
@@ -214,9 +216,9 @@ visitor arrives with an empty profile.
 
 - application type: Compose
 - compose path: `infra/docker/auth-compose.yaml`
-- environment variables (set in Dokploy's UI, not in the file):
-  `VITE_API_BASE_URL=https://api.example.com`,
-  `VITE_CLERK_PUBLISHABLE_KEY=pk_live_...`
+- no service-level environment variables — `VITE_API_BASE_URL` and
+  `VITE_CLERK_PUBLISHABLE_KEY` are baked into the published image (see "SPA
+  build args are baked into the published image")
 - Domains page: route `auth.unimatrix-01.dev` to the `auth` service,
   container port `8080`
 
@@ -231,10 +233,9 @@ the API service to include
 
 - application type: Compose
 - compose path: `infra/docker/admin-compose.yaml`
-- environment variables (set in Dokploy's UI, not in the file):
-  `VITE_CLERK_PUBLISHABLE_KEY=pk_live_...`, `VITE_API_BASE_URL=https://api.example.com`,
-  and optionally `VITE_AUTH_APP_URL` (defaults to `https://auth.unimatrix-01.dev`) — see
-  "SPA build args now default in `deploy.config.ts`" above
+- no service-level environment variables — `VITE_CLERK_PUBLISHABLE_KEY`,
+  `VITE_API_BASE_URL` and `VITE_AUTH_APP_URL` are baked into the published
+  image (see "SPA build args are baked into the published image")
 - Domains page: route `admin.unimatrix-01.dev` to the `admin` service,
   container port `8080`
 
@@ -372,16 +373,15 @@ deliberate: a certificate pinned by value gains nothing from expiring, and an
 expired one is an outage with a confusing error.
 
 Order matters, and none of these steps is optional. Steps 1 to 3 happen
-**before the compose changes reach `main`**, not after. Both services carry
-`autoDeploy: true` on `main` with their own compose file in `watchPaths` (read
-from Dokploy's `compose.one`), so the merge is the deploy — and an unset
-variable reaches the container as an empty string, present rather than absent,
-which both loaders refuse. Merging first restart-loops the store and the API,
-and with the store down step 3's tokens cannot be minted at all: the CLI that
-mints them runs inside the running container.
+**before either stack is deployed with the new compose file**, not after: an
+unset variable reaches the container as an empty string, present rather than
+absent, and both loaders refuse an empty value. Deploy first and the store and
+the API both restart-loop — and with the store down, step 3's tokens cannot be
+minted at all, because the CLI that mints them runs inside the running
+container.
 
-Setting the variables early is safe. The deployed compose files do not
-reference them until the change lands.
+Setting the variables early is safe. The containers already running do not read
+them until a deploy replaces them.
 
 1. `docker network create unimatrix-secrets` on the host. Compose does not
    create an external network; it fails when one is missing.
@@ -391,8 +391,9 @@ reference them until the change lands.
    five `SECRETS_*` variables on the **api** stack: the base URL
    `https://secrets:3001`, the three distinct tokens, and the certificate.
    Never the private key.
-4. Merge. Both stacks deploy on their own compose file changing, and a deploy
-   is queued rather than applied — see "A deploy is queued, not applied" below.
+4. Merge, wait for `Publish` to push the new images, then deploy both stacks. A
+   deploy is queued rather than applied — see "A deploy is queued, not applied"
+   below.
 5. Confirm `"scheme":"https"` in the store's boot log and the container
    reporting `healthy`, then check the public API through Traefik immediately.
    A 502 means the explicit `networks:` block cost the service its Traefik
@@ -507,12 +508,17 @@ shared root pnpm manifests, and the service-specific Compose file. When an app
 adds a workspace dependency, new bundled content, or another Docker build
 input, update its README and Dokploy configuration in the same change.
 
-## The host reuses its layer cache between deploys
+## The host reuses its layer cache between builds
 
-The prune stage's `COPY . .` misses on every deploy — each deploy builds a
-different commit and the whole repository is that stage's context. The install
-layer survives it anyway, because `turbo prune <package> --docker` emits an
-`out/json` that a change outside the package's pruned scope does not move.
+Scope: the two preview **Application** services (see "Pull request preview
+deployments" below) are the only Dokploy services that still build on the host.
+Every Compose stack pulls a published image, so nothing below affects how long a
+production deploy takes.
+
+The prune stage's `COPY . .` misses on every build — each build is a different
+commit and the whole repository is that stage's context. The install layer
+survives it anyway, because `turbo prune <package> --docker` emits an `out/json`
+that a change outside the package's pruned scope does not move.
 
 Measured on the `api` service across two consecutive deploys, 2026-08-14: b169a72
 at 07:17:43 UTC, then 96c4397 at 07:33:17 UTC — a change spanning `apps/cflop`, a
@@ -529,9 +535,9 @@ byte-identical `out/json`, and the second build reported:
 #17 DONE 10.5s
 ```
 
-The cache is shared across services rather than held per service: the `web`
-compose deploy at 07:17:17 reused an install layer that a `main` deploy of the
-`web-preview` Application service had built 78 seconds earlier. That is an
+The cache is shared across services rather than held per service: in that same
+window, the `web` build at 07:17:17 reused an install layer a `main` deploy of
+the `web-preview` Application service had built 78 seconds earlier. That was an
 ordinary branch deploy — PR previews still produce nothing, see "Pull request
 preview deployments" below.
 
@@ -540,7 +546,7 @@ BuildKit's default garbage collection applies: read on 2026-08-14 at 07:37 UTC,
 the oldest surviving cache record was under three hours old. Treat a layer from a
 previous day as gone.
 
-Read the install step off the host per deploy:
+Read the install step off the host per build:
 
 ```bash
 f=$(ls -t /etc/dokploy/logs/<service>/* | head -1)
@@ -831,9 +837,5 @@ static-host 404.
   auto-detects a builder (Nixpacks) and cannot build this pnpm monorepo. Every
   service here must be a **Compose** application pointing at its
   `infra/docker/*-compose.yaml` file (see the per-service sections above), which
-  builds the app's `Dockerfile` with the repo root as the build context. Recreate
-  the service as a Compose application rather than editing the Nixpacks one.
-- **Build args resolve to empty** (e.g. a blank `VITE_CLERK_PUBLISHABLE_KEY` or
-  `VITE_API_BASE_URL` baked into the bundle): the compose files pass these through
-  as `${VAR}` build args, so they must be set in the Dokploy service's environment
-  before the build runs — Vite inlines them at build time, not runtime.
+  pulls a published image and builds nothing. Recreate the service as a Compose
+  application rather than editing the Nixpacks one.

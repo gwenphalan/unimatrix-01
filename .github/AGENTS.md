@@ -41,11 +41,14 @@ this file holds the mechanics, each of which was learned the hard way.
   unverified.**
 - `infra/scripts/check-app-wiring.sh` (run by `pnpm check`/`pnpm verify` and by the `App wiring`
   step in `Verify`, placed before `pnpm install` because it needs no `node_modules`) is the
-  mechanical guard on three things nothing else sees: an `@source` line resolving to
+  mechanical guard on four things nothing else sees: an `@source` line resolving to
   `packages/<name>/src` for every `packages/*` dependency that ships a `.tsx`, `@tanstack/react-router`
-  in its vite `dedupe`, and every `apps/*/Dockerfile` appearing in **every** `app: [...]` matrix array
+  in its vite `dedupe`, every `apps/*/Dockerfile` appearing in **every** `app: [...]` matrix array
   in `ci.yml` — today that is `Images` and `Publish`, and an app present in one and missing from the
-  other fails naming which matrix (`matrix #1`, `matrix #2`, ...) it is missing from. It walks
+  other fails naming which matrix (`matrix #1`, `matrix #2`, ...) it is missing from — and every
+  `infra/docker/<app>-compose.yaml` pulling the `ghcr.io/unimatrixcore/unimatrix-<app>` image
+  `Publish` pushes for that app, which is the only thing anywhere comparing the two spellings of
+  that registry path. It walks
   `apps/*` only, so `lab` carries the first two requirements unchecked. It is also the app template,
   but only for an app it can classify: a new Vite or Dockerized app satisfies it or the check goes
   red, while an `apps/*` directory with neither `vite.config.ts` nor `Dockerfile` is skipped and

@@ -1,8 +1,4 @@
 services:
   web:
-    build:
-      context: ../..
-      dockerfile: apps/web/Dockerfile
-      args:
-        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-https://api.unimatrix-01.dev}
+    image: ghcr.io/unimatrixcore/unimatrix-web:${IMAGE_TAG}
     restart: unless-stopped

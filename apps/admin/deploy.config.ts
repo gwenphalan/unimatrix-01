@@ -16,11 +16,6 @@ export default staticSpaApp({
         "CI-built image is correct without out-of-band configuration; override",
         "with --build-arg for a different Clerk instance.",
       ],
-      composeComment: [
-        "Defaults to the production Clerk instance's publishable key (public,",
-        "already shipped in the bundle). Inlined at build time, so override",
-        "here (not runtime env) for a different Clerk instance.",
-      ],
     },
   ],
 });

@@ -132,12 +132,12 @@ updates:
   # drift check (`check:deploy-config`) stays green through this bump for that
   # reason.
   #
-  # Base images live in `apps/*/Dockerfile`, NOT in `infra/docker/`. Every
-  # `infra/docker/*-compose.yaml` declares no `image:` at all — only `build:`
-  # plus a Dockerfile path — and Dependabot's `docker-compose` ecosystem parses
-  # only `image:` (or an inline `dockerfile_inline`), never a referenced Dockerfile.
-  # A `docker-compose` block would fetch those files and find nothing, forever.
-  # Do not add one.
+  # Base images live in `apps/*/Dockerfile`, NOT in `infra/docker/`. The
+  # `image:` line every `infra/docker/*-compose.yaml` carries names this repo's
+  # own published app image, built by this repo's CI from the very Dockerfile
+  # the directory list below already watches — so there is no upstream version
+  # there to bump, and a `docker-compose` block would only ever propose tags
+  # for images this repo publishes itself. Do not add one.
   #
   # Dependabot's Dockerfile scan is per-directory and not recursive, so
   # `directory: /` would find nothing and each app has to be listed explicitly.
