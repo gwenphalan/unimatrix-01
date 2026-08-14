@@ -1,4 +1,8 @@
-import type { DeployHealthResponse, HealthResponse, SecretsHealthResponse } from "../schemas/health.js";
+import type {
+  DeployHealthResponse,
+  HealthResponse,
+  SecretsHealthResponse,
+} from "../schemas/health.js";
 import {
   deployHealthResponseSchema,
   healthResponseSchema,

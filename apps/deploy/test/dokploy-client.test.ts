@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { createDokployClient, DokployClientError, loadDokployApiKey } from "../src/dokploy/client.js";
+import {
+  createDokployClient,
+  DokployClientError,
+  loadDokployApiKey,
+} from "../src/dokploy/client.js";
 
 const BASE_URL = "http://dokploy:3000";
 const API_KEY = "dokploy_super_secret_key";
@@ -118,15 +122,18 @@ void test("no thrown error ever carries the API key or a response-body fragment"
     fetch: () => Promise.resolve(jsonResponse(sensitiveBody, 500)),
   });
 
-  await assert.rejects(() => client.getDokployVersion(), (error: unknown) => {
-    assert.ok(error instanceof Error);
-    assert.ok(!error.message.includes(API_KEY));
-    assert.ok(!error.message.includes("secretEnvBlob"));
-    assert.ok(!error.message.includes("super-sensitive-value"));
-    const serialized = JSON.stringify(error, Object.getOwnPropertyNames(error));
-    assert.ok(!serialized.includes(API_KEY));
-    assert.ok(!serialized.includes("secretEnvBlob"));
-    assert.ok(!serialized.includes("super-sensitive-value"));
-    return true;
-  });
+  await assert.rejects(
+    () => client.getDokployVersion(),
+    (error: unknown) => {
+      assert.ok(error instanceof Error);
+      assert.ok(!error.message.includes(API_KEY));
+      assert.ok(!error.message.includes("secretEnvBlob"));
+      assert.ok(!error.message.includes("super-sensitive-value"));
+      const serialized = JSON.stringify(error, Object.getOwnPropertyNames(error));
+      assert.ok(!serialized.includes(API_KEY));
+      assert.ok(!serialized.includes("secretEnvBlob"));
+      assert.ok(!serialized.includes("super-sensitive-value"));
+      return true;
+    },
+  );
 });

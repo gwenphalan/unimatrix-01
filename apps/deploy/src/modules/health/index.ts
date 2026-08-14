@@ -1,6 +1,10 @@
 import type { FastifyPluginAsync } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
-import { deployHealthContract, healthQuerySchema, type DeployHealthResponse } from "@unimatrix/shared";
+import {
+  deployHealthContract,
+  healthQuerySchema,
+  type DeployHealthResponse,
+} from "@unimatrix/shared";
 
 const healthResponse: DeployHealthResponse = {
   service: "deploy",

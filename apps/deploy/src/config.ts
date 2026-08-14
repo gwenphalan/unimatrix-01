@@ -143,7 +143,9 @@ function parseDokployBaseUrl(value: string | undefined): string {
   try {
     parsed = new URL(trimmedValue);
   } catch {
-    throw createDeployConfigError(`DOKPLOY_BASE_URL must be a valid URL. Received ${JSON.stringify(trimmedValue)}.`);
+    throw createDeployConfigError(
+      `DOKPLOY_BASE_URL must be a valid URL. Received ${JSON.stringify(trimmedValue)}.`,
+    );
   }
 
   if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {

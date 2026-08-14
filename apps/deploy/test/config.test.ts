@@ -34,10 +34,7 @@ void test("loadDeployRuntimeConfig trims and validates explicit values", () => {
 });
 
 void test("loadDeployRuntimeConfig defaults LOG_LEVEL to info outside development", () => {
-  assert.equal(
-    loadDeployRuntimeConfig({ ...BASE_ENV, NODE_ENV: "test" }).logLevel,
-    "info",
-  );
+  assert.equal(loadDeployRuntimeConfig({ ...BASE_ENV, NODE_ENV: "test" }).logLevel, "info");
 });
 
 void test("loadDeployRuntimeConfig throws with no DOKPLOY_API_KEY", () => {
