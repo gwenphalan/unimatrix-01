@@ -10,7 +10,7 @@
     "pnpm": "10.30.3"
   },
   "scripts": {
-    "prepare": "node ./infra/scripts/install-git-hooks.mjs",
+    "prepare": "if [ -f infra/scripts/install-git-hooks.mjs ]; then node ./infra/scripts/install-git-hooks.mjs; fi",
     "dev": "node ./infra/scripts/dev.mjs",
     "setup:local": "node ./infra/scripts/setup-local.mjs",
     "setup:worktree": "node ./infra/scripts/setup-worktree.mjs",
