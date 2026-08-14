@@ -1,7 +1,7 @@
 # AGENTS.md
 
 ## 1. Overview
-`packages/cube` is the Rubik's Cube move engine, notation parser, and last-layer diagram geometry behind `apps/cflop`, its only consumer today. Two entry points: `.` (engine, notation, diagram geometry — no dependency of its own) and `./react` (the two diagram views, the one place this package touches React or `@unimatrix/ui`).
+`packages/cube` is the Rubik's Cube move engine, notation parser, and last-layer diagram geometry behind `apps/cflop`, its only consumer today. Two entry points: `.` (engine, notation, diagram geometry — no dependency of its own) and `./react` (the three diagram views, the one place this package touches React or `@unimatrix/ui`).
 
 ## 2. Core Behaviors & Patterns
 - `rewriteAsOuterMoves` emits quarter turns only (`R'` comes back as `R R R`); pass its result through `simplifyMoves` before it reaches `movesToString`, never hand it there directly.
