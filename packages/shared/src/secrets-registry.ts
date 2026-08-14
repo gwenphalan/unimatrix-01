@@ -58,10 +58,11 @@ export const CLERK_JWT_KEY_SECRET = {
  *
  * Note it reaches its three consumers under two different variable names and
  * through two different mechanisms, which is why nothing links this entry to
- * them in types: `VITE_CLERK_PUBLISHABLE_KEY` as a `docker build --build-arg`
- * for the two SPAs, `CLERK_PUBLISHABLE_KEY` as container environment for
- * `apps/api`. A deploy pipeline that writes only container environment cannot
- * deliver it to the SPAs at all.
+ * them in types: `VITE_CLERK_PUBLISHABLE_KEY` as an `ARG` default baked into
+ * the generated Dockerfile for the two SPAs (`apps/<app>/deploy.config.ts`),
+ * `CLERK_PUBLISHABLE_KEY` as container environment for `apps/api`. A deploy
+ * pipeline that writes only container environment cannot deliver it to the
+ * SPAs at all.
  */
 export const CLERK_PUBLISHABLE_KEY_SECRET = {
   name: "platform/clerk-publishable-key",
@@ -77,8 +78,9 @@ export const CLERK_PUBLISHABLE_KEY_SECRET = {
  *
  * Nothing reads a `platform` name out of the store today: the Clerk keys reach
  * their consumers as environment variables and, for the publishable key on the
- * two SPAs, as a build argument. They are declared here because the console's
- * question is what the system needs, not what some service currently fetches.
+ * two SPAs, as an `ARG` default in the generated Dockerfile. They are declared
+ * here because the console's question is what the system needs, not what some
+ * service currently fetches.
  */
 export const SECRET_REGISTRY: readonly SecretRegistryEntry[] = [
   CLERK_SECRET_KEY_SECRET,

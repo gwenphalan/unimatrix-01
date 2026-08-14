@@ -40,6 +40,47 @@ In this shape:
   deliberately unrouted. That makes it unreachable from the internet; it does
   not make it private. See "Secrets service" below
 
+### SPA build args now default in `deploy.config.ts`
+
+`apps/web`, `apps/auth`, and `apps/admin` each build with production values
+as their `ARG` defaults (see `apps/<app>/deploy.config.ts`), so a
+`docker build` with no `--build-arg` produces a correct production image.
+The Dokploy environment variables listed per service below
+(`VITE_API_BASE_URL`, `VITE_CLERK_PUBLISHABLE_KEY`, `VITE_AUTH_APP_URL`) are
+consequently redundant with those defaults; they still take effect when
+Dokploy builds, since an explicit `--build-arg` overrides a Dockerfile
+default.
+
+## Published GHCR images
+
+CI's `Publish` job (`.github/workflows/ci.yml`) builds every `apps/*/Dockerfile`
+with no build args and pushes it to `ghcr.io/unimatrixcore/unimatrix-<app>` on
+every push to `main`, tagged with the commit SHA and a moving `main` tag. The
+packages are public. **Nothing deploys from them yet** — every Dokploy service
+below still builds from the `build:` block in its own
+`infra/docker/<app>-compose.yaml`, not by pulling a GHCR image.
+
+### A new app's package is private until someone makes it public by hand
+
+Every package is created **private**, whatever the repository's visibility. A
+package linked to a repository inherits that repository's access permissions but
+never its visibility, so a public repo does not produce a public package. Adding
+a seventh app therefore carries one manual step, once, that nothing enforces:
+let the first `Publish` run create the package, then set it public at
+`https://github.com/orgs/unimatrixcore/packages/container/unimatrix-<app>/settings`.
+The organization must permit public packages at all — Settings → Packages →
+Package Creation → Public — or that per-package control is greyed out.
+
+**There is no API for this.** The Packages REST API lists, gets, deletes and
+restores packages and versions, and mutates visibility nowhere; `gh` cannot do
+it either, and the web UI is the only route. So no check can assert it, which is
+why it is written here rather than enforced somewhere.
+
+Miss it and Dokploy's unauthenticated pull fails as *image-not-found* —
+indistinguishable from a bad tag, so the obvious next move is to go and debug
+the tag scheme. Visibility is a property of the package rather than of each
+version, so this is once per app, not once per deploy.
+
 ## Dokploy service layout
 
 Create one Dokploy service per `infra/docker/*-compose.yaml`, all from the same
@@ -191,10 +232,9 @@ the API service to include
 - application type: Compose
 - compose path: `infra/docker/admin-compose.yaml`
 - environment variables (set in Dokploy's UI, not in the file):
-  `VITE_CLERK_PUBLISHABLE_KEY=pk_live_...` (required — `loadAdminAppRuntimeConfig`
-  throws without it, so a keyless image fails loudly in the browser),
-  `VITE_API_BASE_URL=https://api.example.com`, and optionally
-  `VITE_AUTH_APP_URL` (defaults to `https://auth.unimatrix-01.dev`)
+  `VITE_CLERK_PUBLISHABLE_KEY=pk_live_...`, `VITE_API_BASE_URL=https://api.example.com`,
+  and optionally `VITE_AUTH_APP_URL` (defaults to `https://auth.unimatrix-01.dev`) — see
+  "SPA build args now default in `deploy.config.ts`" above
 - Domains page: route `admin.unimatrix-01.dev` to the `admin` service,
   container port `8080`
 

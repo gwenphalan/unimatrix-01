@@ -18,14 +18,14 @@ RUN turbo prune @unimatrix/auth-app --docker
 FROM base AS build
 COPY --from=prune /workspace/out/json/ .
 RUN pnpm install --frozen-lockfile
-ARG VITE_API_BASE_URL=/api
+ARG VITE_API_BASE_URL=https://api.unimatrix-01.dev
 ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
-# The Clerk publishable key is public (safe to ship in a browser bundle),
-# but it is still an ARG->ENV pair rather than a hardcoded default: Vite
-# inlines `import.meta.env.VITE_*` values at build time, so this image
-# must be built with the real key for the target Clerk instance, e.g.:
-#   docker build --build-arg VITE_CLERK_PUBLISHABLE_KEY=pk_live_xxx ...
-ARG VITE_CLERK_PUBLISHABLE_KEY
+# The Clerk publishable key is public (safe to ship in a browser bundle,
+# and it already does): it base64-decodes to the Clerk frontend API
+# hostname (clerk.unimatrix-01.dev), nothing secret. Defaulted here so a
+# CI-built image is correct without out-of-band configuration; override
+# with --build-arg for a different Clerk instance.
+ARG VITE_CLERK_PUBLISHABLE_KEY=pk_live_Y2xlcmsudW5pbWF0cml4LTAxLmRldiQ
 ENV VITE_CLERK_PUBLISHABLE_KEY=${VITE_CLERK_PUBLISHABLE_KEY}
 COPY --from=prune /workspace/out/full/ .
 RUN pnpm --filter @unimatrix/auth-app build

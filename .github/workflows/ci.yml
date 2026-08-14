@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref_name }}
@@ -257,3 +258,98 @@ jobs:
       - name: cflop serving contract
         if: matrix.app == 'cflop'
         run: bash ./infra/scripts/check-cflop-serving.sh "unimatrix-cflop:ci"
+
+  # A separate job from `images` rather than a push step inside it, because
+  # `Images (<app>)` is a required check and must keep meaning "this image
+  # builds" — folding a registry push into it would make the same check mean
+  # "the image builds and the registry accepted it", and the second half can
+  # fail for reasons (GHCR auth, rate limits) that have nothing to do with
+  # whether the image is good.
+  #
+  # Deliberately **not** armed as a required check. The reason is not that it
+  # never reports — a job skipped by the `if:` below still produces a check
+  # run with conclusion `skipped`, and this repo's own `watch-pr.sh` maps
+  # `skipping` to green. The reason is that arming it would create a
+  # permanently-green required check on every pull request: this job never
+  # runs on `pull_request` at all (see `if:` below), so it would report
+  # green while verifying nothing.
+  #
+  # `needs: [verify, images]` so a `main`-branch failure cannot move the
+  # `:main` tag onto a bad commit.
+  #
+  # `images` is not redundant with this job's own build. It runs one assertion
+  # this job does not: `check-cflop-serving.sh` against the built cflop image,
+  # which is the only thing anywhere that proves cflop serves real 404s rather
+  # than a 200 with a not-found card. Without the dependency, a broken serving
+  # contract reddens `Images (cflop)` and publishes the image regardless.
+  #
+  # The wait costs nothing measurable — the whole `images` matrix finishes in
+  # well under a minute against `Verify`'s ~6, so `verify` is the long pole
+  # either way, on a path nothing downstream waits on yet.
+  publish:
+    name: Publish
+    needs: [verify, images]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    # Both a push to main and a manual dispatch from any branch are allowed
+    # to run; only the push-to-main path is permitted to move the `:main`
+    # tag (see the tag/push steps below).
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    permissions:
+      contents: read
+      packages: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [admin, api, auth, cflop, secrets, web]
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Log in to GHCR
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_ACTOR: ${{ github.actor }}
+        run: echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_ACTOR" --password-stdin
+
+      # No build args: Task 1 (deploy.config.ts) gave every SPA's ARG a
+      # production default, so the image built here is correct without any.
+      # No buildx, no QEMU, no `--platform` — same reasoning as `Images`
+      # above: the deploy host and this runner are both amd64, so a plain
+      # `docker build` against the runner's preinstalled Docker is enough.
+      - name: Build and tag ${{ matrix.app }} image
+        env:
+          APP: ${{ matrix.app }}
+          IMAGE: ghcr.io/unimatrixcore/unimatrix-${{ matrix.app }}
+          REVISION: ${{ github.sha }}
+          SOURCE_URL: ${{ github.server_url }}/${{ github.repository }}
+          IS_MAIN_PUSH: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+        run: |
+          tag_args=(--tag "$IMAGE:$REVISION")
+          if [ "$IS_MAIN_PUSH" = "true" ]; then
+            tag_args+=(--tag "$IMAGE:main")
+          fi
+          docker build \
+            --file "apps/$APP/Dockerfile" \
+            --label "org.opencontainers.image.source=$SOURCE_URL" \
+            --label "org.opencontainers.image.revision=$REVISION" \
+            "${tag_args[@]}" \
+            .
+
+      # The SHA tag always pushes; the moving `main` tag pushes only on a
+      # push to main (see `IS_MAIN_PUSH` above) — a `workflow_dispatch` run
+      # against a feature branch must never move `:main` onto a branch build.
+      - name: Push ${{ matrix.app }} image
+        env:
+          IMAGE: ghcr.io/unimatrixcore/unimatrix-${{ matrix.app }}
+          REVISION: ${{ github.sha }}
+          IS_MAIN_PUSH: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+        run: |
+          docker push "$IMAGE:$REVISION"
+          if [ "$IS_MAIN_PUSH" = "true" ]; then
+            docker push "$IMAGE:main"
+          fi

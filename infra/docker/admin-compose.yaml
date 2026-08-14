@@ -4,11 +4,10 @@ services:
       context: ../..
       dockerfile: apps/admin/Dockerfile
       args:
-        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api}
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-https://api.unimatrix-01.dev}
         VITE_AUTH_APP_URL: ${VITE_AUTH_APP_URL:-https://auth.unimatrix-01.dev}
-        # Required — `loadAdminAppRuntimeConfig` throws without it, so an image
-        # built without the key fails loudly rather than rendering an admin
-        # console that can never sign anyone in. Inlined at build time, so pass
-        # it here (not runtime env).
-        VITE_CLERK_PUBLISHABLE_KEY: ${VITE_CLERK_PUBLISHABLE_KEY}
+        # Defaults to the production Clerk instance's publishable key (public,
+        # already shipped in the bundle). Inlined at build time, so override
+        # here (not runtime env) for a different Clerk instance.
+        VITE_CLERK_PUBLISHABLE_KEY: ${VITE_CLERK_PUBLISHABLE_KEY:-pk_live_Y2xlcmsudW5pbWF0cml4LTAxLmRldiQ}
     restart: unless-stopped

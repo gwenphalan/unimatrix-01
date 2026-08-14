@@ -15,11 +15,16 @@ ungated placeholder routes safe.
 Vite inlines `import.meta.env.VITE_*` at build time, so these are build args
 rather than runtime env — setting them on the running container does nothing.
 
-| Build arg                     | Required | Default                          |
-| ----------------------------- | -------- | -------------------------------- |
-| `VITE_CLERK_PUBLISHABLE_KEY`  | yes      | none — the app throws without it |
-| `VITE_API_BASE_URL`           | no       | `/api`                           |
-| `VITE_AUTH_APP_URL`           | no       | `https://auth.unimatrix-01.dev`  |
+| Build arg                     | Required | Default                                  |
+| ----------------------------- | -------- | ----------------------------------------- |
+| `VITE_CLERK_PUBLISHABLE_KEY`  | no       | production Clerk instance's publishable key |
+| `VITE_API_BASE_URL`           | no       | `https://api.unimatrix-01.dev`            |
+| `VITE_AUTH_APP_URL`           | no       | `https://auth.unimatrix-01.dev`           |
+
+All three default to the production values, so `docker build` with no
+`--build-arg` produces a correct production image. `apps/admin/deploy.config.ts`
+is the source of these defaults; override any of them to target a different
+environment.
 
 ## Dokploy redeploy watch paths
 
