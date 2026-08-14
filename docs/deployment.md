@@ -51,6 +51,15 @@ consequently redundant with those defaults; they still take effect when
 Dokploy builds, since an explicit `--build-arg` overrides a Dockerfile
 default.
 
+## Published GHCR images
+
+CI's `Publish` job (`.github/workflows/ci.yml`) builds every `apps/*/Dockerfile`
+with no build args and pushes it to `ghcr.io/unimatrixcore/unimatrix-<app>` on
+every push to `main`, tagged with the commit SHA and a moving `main` tag. The
+packages are public. **Nothing deploys from them yet** — every Dokploy service
+below still builds from the `build:` block in its own
+`infra/docker/<app>-compose.yaml`, not by pulling a GHCR image.
+
 ## Dokploy service layout
 
 Create one Dokploy service per `infra/docker/*-compose.yaml`, all from the same
