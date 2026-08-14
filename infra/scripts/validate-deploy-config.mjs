@@ -58,6 +58,8 @@ const PLACEHOLDERS = {
   // https, so the probe exercises the branch production runs and the
   // certificate below is required rather than refused.
   SECRETS_BASE_URL: "https://secrets:3001",
+  // Any http(s) URL passes apps/deploy's own parser; DEFAULT_PLACEHOLDER alone would fail it.
+  DOKPLOY_BASE_URL: "http://dokploy:3000",
   // Three *distinct* values, and they have to stay distinct: apps/api's loader
   // refuses two secrets tokens that share a value, so the single
   // DEFAULT_PLACEHOLDER would fail this probe rather than pass it.
@@ -77,6 +79,10 @@ const DEFAULT_PLACEHOLDER = "placeholder";
  */
 const NODE_API_CONFIG_PROBES = {
   api: { configPath: ["apps", "api", "src", "config.ts"], loaderName: "loadApiRuntimeConfig" },
+  deploy: {
+    configPath: ["apps", "deploy", "src", "config.ts"],
+    loaderName: "loadDeployRuntimeConfig",
+  },
   secrets: {
     configPath: ["apps", "secrets", "src", "config.ts"],
     loaderName: "loadSecretsRuntimeConfig",

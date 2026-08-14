@@ -1,0 +1,15 @@
+{
+  "extends": "@unimatrix/config-typescript/base.json",
+  "compilerOptions": {
+    "allowImportingTsExtensions": true,
+    "rewriteRelativeImportExtensions": true,
+    "paths": {
+      "@unimatrix/deploy-config": ["../../packages/deploy-config/src/index.ts"],
+      "@unimatrix/shared": ["../../packages/shared/src/index.ts"]
+    },
+    "types": ["node"]
+  },
+  // `deploy.config.ts` is checked but deliberately absent from `tsconfig.build.json`: it is not
+  // part of the deployable server build, only read by tooling through Node type stripping.
+  "include": ["deploy.config.ts", "src/**/*.ts", "test/**/*.ts"]
+}
