@@ -5,8 +5,8 @@ import {
   CORNER_SILHOUETTE,
   CORNER_VIEWBOX_SIZE,
   projectCornerPoint,
-} from "@/features/cube/corner-projection";
-import type { CornerFace } from "@/features/cube/corner-projection";
+} from "../src/index.js";
+import type { CornerFace } from "../src/index.js";
 
 const FACES: CornerFace[] = ["front", "right", "top"];
 

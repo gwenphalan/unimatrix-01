@@ -6,9 +6,9 @@ import {
   faceNormal,
   faceRowColToXyz,
   xyzToFaceRowCol,
-} from "./model";
-import type { FaceLetter, FaceletCube } from "./model";
-import type { Move } from "./notation";
+} from "./model.js";
+import type { FaceLetter, FaceletCube } from "./model.js";
+import type { Move } from "./notation.js";
 
 /**
  * Moves are implemented by tracking each of the 54 facelets as a rigid-body vector pair

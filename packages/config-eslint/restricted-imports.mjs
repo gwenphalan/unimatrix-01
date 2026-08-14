@@ -195,6 +195,28 @@ const SECRETS_ENTRY_POINT_CONFIGS = [
   },
 ];
 
+/**
+ * `packages/cube`'s `.` entry point promises to carry no dependency at all —
+ * every consumer of `.`, including the `gen:algs` SSR bundle, takes that on
+ * faith. `ignores` excludes the two files that legitimately need React: the
+ * `./react` entry point and the view components it re-exports.
+ *
+ * Scoped by file rather than by workspace, so it lives outside the table above.
+ */
+const CUBE_ENTRY_POINT_CONFIGS = [
+  {
+    files: ["src/**/*.ts"],
+    ignores: ["src/react.ts", "src/components/**"],
+    restrictions: [
+      {
+        group: ["react", "react-dom", "@unimatrix/ui", "@unimatrix/ui/*", "./react", "./react.js"],
+        message:
+          "The `.` entry point of `@unimatrix/cube` carries no dependency at all — a React or `@unimatrix/ui` import here reaches every consumer of `.`, including the gen:algs SSR bundle. Put React-touching code behind `./react` instead.",
+      },
+    ],
+  },
+];
+
 function workspaceIdOf(tsconfigRootDir) {
   const group = path.basename(path.dirname(tsconfigRootDir));
   return `${group}/${path.basename(tsconfigRootDir)}`;
@@ -235,6 +257,18 @@ export function createRestrictedImportConfigs({ tsconfigRootDir }) {
     for (const entry of SECRETS_ENTRY_POINT_CONFIGS) {
       configs.push({
         files: entry.files,
+        rules: {
+          "@typescript-eslint/no-restricted-imports": ["error", { patterns: entry.restrictions }],
+        },
+      });
+    }
+  }
+
+  if (workspaceId === "packages/cube") {
+    for (const entry of CUBE_ENTRY_POINT_CONFIGS) {
+      configs.push({
+        files: entry.files,
+        ...(entry.ignores ? { ignores: entry.ignores } : {}),
         rules: {
           "@typescript-eslint/no-restricted-imports": ["error", { patterns: entry.restrictions }],
         },

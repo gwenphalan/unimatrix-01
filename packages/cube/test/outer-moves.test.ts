@@ -1,9 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { applyMoves } from "@/features/cube/engine";
-import { createSolvedCube } from "@/features/cube/model";
-import { movesToString, parseAlgorithm } from "@/features/cube/notation";
-import { isOuterFace, rewriteAsOuterMoves, simplifyMoves } from "@/features/cube/outer-moves";
+import {
+  applyMoves,
+  createSolvedCube,
+  isOuterFace,
+  movesToString,
+  parseAlgorithm,
+  rewriteAsOuterMoves,
+  simplifyMoves,
+} from "../src/index.js";
 
 function stateOf(alg: string) {
   return applyMoves(createSolvedCube(), parseAlgorithm(alg));

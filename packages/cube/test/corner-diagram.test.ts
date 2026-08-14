@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { applyMoves } from "@/features/cube/engine";
-import { derivePllCornerDiagram } from "@/features/cube/last-layer-diagram";
-import { createSolvedCube } from "@/features/cube/model";
-import { parseAlgorithm } from "@/features/cube/notation";
+import {
+  applyMoves,
+  createSolvedCube,
+  derivePllCornerDiagram,
+  parseAlgorithm,
+} from "../src/index.js";
 
 describe("derivePllCornerDiagram", () => {
   it("shows a fully oriented top and real side colors for a solved cube", () => {

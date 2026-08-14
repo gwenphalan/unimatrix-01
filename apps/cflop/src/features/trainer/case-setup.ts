@@ -1,7 +1,7 @@
+import { createSolvedCube, movesToString } from "@unimatrix/cube";
+import type { FaceletCube } from "@unimatrix/cube";
+
 import type { AlgorithmCase, AlgorithmSetId } from "@/features/algorithms/types";
-import { createSolvedCube } from "@/features/cube/model";
-import type { FaceletCube } from "@/features/cube/model";
-import { movesToString } from "@/features/cube/notation";
 import { chooseSetupAlgorithm } from "@/features/trainer/setup-algorithm";
 
 export interface CaseSetup {

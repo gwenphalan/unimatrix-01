@@ -5,9 +5,9 @@ import {
   CORNER_SILHOUETTE,
   CORNER_VIEWBOX_SIZE,
   type CornerCellPolygon,
-} from "@/features/cube/corner-projection";
-import { DIAGRAM_LOWER_LAYER_COLOR, diagramStickerColor } from "@/features/cube/last-layer-diagram";
-import type { CornerDiagram, DiagramSticker } from "@/features/cube/last-layer-diagram";
+} from "../corner-projection.js";
+import { DIAGRAM_LOWER_LAYER_COLOR, diagramStickerColor } from "../last-layer-diagram.js";
+import type { CornerDiagram, DiagramSticker } from "../last-layer-diagram.js";
 
 const STROKE_COLOR = "#0f172a";
 

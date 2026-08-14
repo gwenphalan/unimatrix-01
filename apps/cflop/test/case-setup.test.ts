@@ -1,13 +1,20 @@
 import { describe, expect, it } from "vitest";
+import {
+  applyMoves,
+  createSolvedCube,
+  extractLastLayer,
+  invertMoves,
+  isBottomTwoLayersSolved,
+  isOuterFace,
+  netRotationFor,
+  normalizeOrientation,
+  parseAlgorithm,
+} from "@unimatrix/cube";
+import type { FaceletCube } from "@unimatrix/cube";
 
 import { getAlgorithmSet } from "@/features/algorithms/algorithm-sets";
 import { ALGORITHM_SET_IDS } from "@/features/algorithms/types";
 import type { AlgorithmCase, AlgorithmSetId } from "@/features/algorithms/types";
-import { applyMoves, netRotationFor, normalizeOrientation } from "@/features/cube/engine";
-import { createSolvedCube, extractLastLayer, isBottomTwoLayersSolved } from "@/features/cube/model";
-import type { FaceletCube } from "@/features/cube/model";
-import { invertMoves, parseAlgorithm } from "@/features/cube/notation";
-import { isOuterFace } from "@/features/cube/outer-moves";
 import { getCaseSetup } from "@/features/trainer/case-setup";
 import { chooseSetupAlgorithm } from "@/features/trainer/setup-algorithm";
 

@@ -11,12 +11,19 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { createContext, runInContext } from "node:vm";
 
+import {
+  applyMoves,
+  createSolvedCube,
+  invertMoves,
+  isBottomTwoLayersSolved,
+  netRotationFor,
+  parseAlgorithm,
+  rewriteAsOuterMoves,
+  simplifyMoves,
+} from "@unimatrix/cube";
+
 import { deriveDiagramForSet } from "@/features/algorithms/derive-diagram";
 import type { AlgorithmSetId } from "@/features/algorithms/types";
-import { applyMoves, netRotationFor } from "@/features/cube/engine";
-import { createSolvedCube, isBottomTwoLayersSolved } from "@/features/cube/model";
-import { invertMoves, parseAlgorithm } from "@/features/cube/notation";
-import { rewriteAsOuterMoves, simplifyMoves } from "@/features/cube/outer-moves";
 
 interface JoinRow {
   id: string;

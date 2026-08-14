@@ -1,6 +1,5 @@
-import type { FaceletCube } from "@/features/cube/model";
-import { deriveOllDiagram, derivePllDiagram } from "@/features/cube/last-layer-diagram";
-import type { LastLayerDiagram } from "@/features/cube/last-layer-diagram";
+import { deriveOllDiagram, derivePllDiagram } from "@unimatrix/cube";
+import type { FaceletCube, LastLayerDiagram } from "@unimatrix/cube";
 
 import type { AlgorithmSetId } from "./types";
 
