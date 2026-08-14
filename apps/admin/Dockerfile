@@ -11,7 +11,7 @@ RUN corepack enable
 
 FROM base AS prune
 ARG TURBO_VERSION=2.10.7
-RUN npm install -g turbo@${TURBO_VERSION}
+RUN npm install -g turbo@$TURBO_VERSION
 COPY . .
 RUN turbo prune @unimatrix/admin --docker
 

@@ -333,7 +333,10 @@ function baseAndPruneStageLines(
     // to read a pinned pnpm version from, and `PNPM_HOME` is not a directory
     // `pnpm add -g` can install into. `npm` ships in the node base image.
     `ARG TURBO_VERSION=${TURBO_VERSION}`,
-    "RUN npm install -g turbo@${TURBO_VERSION}",
+    // The `$TURBO_VERSION` below is Docker expanding the ARG above at build
+    // time, unbraced so it cannot be misread as the identically named constant
+    // this module interpolates on the line before.
+    "RUN npm install -g turbo@$TURBO_VERSION",
     "COPY . .",
     `RUN turbo prune ${packageName} --docker`,
   ];
