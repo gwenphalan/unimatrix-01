@@ -7,10 +7,13 @@
 # them passes `pnpm verify` end to end and is broken, or unverified, in a way
 # only a human looking at a browser or a deploy would notice:
 #
-#   1. A `@source` line pointing at `packages/chrome/src` in the app's
-#      stylesheet. Tailwind v4's source detection scans the app's own tree and
-#      stops at the workspace boundary, so without it none of the shell's
-#      utility classes are emitted and the layout collapses — in a browser only.
+#   1. A `@source` line resolving to `packages/<name>/src` for every
+#      `packages/*` workspace an app depends on that carries at least one
+#      `.tsx` under its own `src/` — the packages that render UI, whose
+#      Tailwind classes only reach the app's bundle through this line.
+#      Tailwind v4's source detection scans the app's own tree and stops at
+#      the workspace boundary, so without it none of that package's utility
+#      classes are emitted and the layout collapses — in a browser only.
 #   2. `@tanstack/react-router` in the app's vite `resolve.dedupe`.
 #      `@unimatrix/chrome` declares the router as a peer and resolves it from
 #      its own directory; two resolved copies means the shell's
@@ -41,6 +44,7 @@ script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd -- "${script_dir}/../.." && pwd)"
 
 apps_dir="${repo_root}/apps"
+packages_dir="${repo_root}/packages"
 ci_workflow="${repo_root}/.github/workflows/ci.yml"
 
 failures=0
@@ -77,50 +81,109 @@ if [[ -z "${images_matrix}" ]]; then
   exit 1
 fi
 
+# `packages/<dir>/src`, keyed by its package.json `name`, for every package
+# that carries at least one `.tsx` under `src/` — the packages that render UI
+# and whose Tailwind classes only reach a consuming app's bundle through an
+# `@source` line. Keyed by the package's own declared `name` rather than
+# assumed from its directory: two apps already break that assumption
+# (`@unimatrix/auth-app`, `@unimatrix/secrets-app`), and this table should not
+# encode the weaker rule.
+#
+# Checks `-d "$pkg_dir/src"` before calling `find` on it: under `set -euo
+# pipefail`, a bare `find` on a nonexistent directory aborts the whole script,
+# and `packages/config-eslint`, `packages/config-typescript` and
+# `packages/config-vitest` have no `src/` at all. `2>/dev/null` on the `find`
+# stays anyway, matching the defensive style used throughout this file.
+ui_package_table() {
+  local pkg_dir name tsx_count
+  for pkg_dir in "${packages_dir}"/*/; do
+    pkg_dir="${pkg_dir%/}"
+    [[ -f "${pkg_dir}/package.json" ]] || continue
+    [[ -d "${pkg_dir}/src" ]] || continue
+    name="$(grep -m1 -oE '"name"[[:space:]]*:[[:space:]]*"[^"]*"' "${pkg_dir}/package.json" \
+      | sed -E 's/.*"([^"]*)"$/\1/')"
+    [[ -n "${name}" ]] || continue
+    tsx_count="$(find "${pkg_dir}/src" -type f -name '*.tsx' 2>/dev/null | wc -l)"
+    ((tsx_count > 0)) || continue
+    printf '%s\t%s\n' "${name}" "$(cd "${pkg_dir}/src" && pwd)"
+  done
+}
+
+ui_packages="$(ui_package_table)"
+
 check_vite_app() {
   local app_name="$1"
   local app_dir="$2"
   local vite_config="${app_dir}/vite.config.ts"
+  local app_pkg_json="${app_dir}/package.json"
 
-  # --- 1. Tailwind @source line for packages/chrome ------------------------
+  # --- 1. Tailwind @source line for every UI package this app depends on ---
   #
-  # Fails closed: an app with a vite config and no stylesheet at all is a
-  # failure, not a vacuous pass. That is the standard bug in this class of
-  # script — a glob that matches nothing silently satisfies "no file is
-  # missing the line".
-  # A substring match on "packages/chrome/src" is NOT enough: `@source
-  # "../../packages/chrome/src/**"` from a file that needs three `../` is a
-  # perfectly valid line that resolves to nothing, Tailwind emits no utilities,
-  # and every automated check stays green. So resolve the glob against the CSS
-  # file's own directory and require that the base directory actually exists.
+  # Fails closed two ways. An app with a vite config and no stylesheet at all
+  # is a failure, not a vacuous pass — the standard bug in this class of
+  # script is a glob that matches nothing silently satisfying "no file is
+  # missing the line". The hardcoded chrome-only version of this check could
+  # never derive an empty requirement (it always resolved
+  # `packages/chrome/src`, a `cd` that cannot come back empty); the derived
+  # version loses that immunity on its own, so the requirement set itself is
+  # asserted non-empty below — every app derives at least {ui, chrome} today.
+  local required_names=() required_dirs=()
+  local pkg_name pkg_src
+  while IFS=$'\t' read -r pkg_name pkg_src; do
+    [[ -n "${pkg_name}" ]] || continue
+    # Matched against the JSON-quoted name so `@unimatrix/auth` cannot be
+    # satisfied by `@unimatrix/auth-app` appearing as the app's own package
+    # name — a bare substring match would.
+    if grep -qF "\"${pkg_name}\"" "${app_pkg_json}"; then
+      required_names+=("${pkg_name}")
+      required_dirs+=("${pkg_src}")
+    fi
+  done <<<"${ui_packages}"
+
+  if ((${#required_names[@]} == 0)); then
+    fail "${app_name}: derived @source requirement set is empty — the derivation is broken, not this app (every app should need at least ui)"
+  fi
+
   local stylesheet_count
   stylesheet_count="$(find "${app_dir}/src" -type f -name '*.css' 2>/dev/null | wc -l)"
 
   if ((stylesheet_count == 0)); then
-    fail "${app_name}: no stylesheet under src/ — nowhere for the chrome @source line to live"
+    if ((${#required_names[@]} > 0)); then
+      fail "${app_name}: no stylesheet under src/ — nowhere for ${#required_names[@]} required @source line(s) to live"
+    fi
   else
-    local chrome_src resolved_ok css_file raw_glob base_dir
-    chrome_src="$(cd "${repo_root}/packages/chrome/src" && pwd)"
-    resolved_ok=0
-
+    # A substring match on the raw glob string is NOT enough: `@source
+    # "../../packages/chrome/src/**"` from a file that needs three `../` is a
+    # perfectly valid line that resolves to nothing, Tailwind emits no
+    # utilities, and every automated check stays green. So every @source
+    # glob's base directory is resolved against the CSS file's own directory
+    # and compared as an absolute path.
+    local resolved_bases=()
+    local css_file raw_glob base_dir
     while IFS= read -r css_file; do
       while IFS= read -r raw_glob; do
-        # Strip the glob tail, leaving the directory the pattern is rooted at.
         base_dir="${raw_glob%%\**}"
         base_dir="$(cd "$(dirname "${css_file}")" 2>/dev/null && cd "${base_dir}" 2>/dev/null && pwd)" || continue
-        if [[ "${base_dir}" == "${chrome_src}" ]]; then
-          resolved_ok=1
-          break 2
-        fi
-      done < <(grep -oE '^[[:space:]]*@source[[:space:]]+"[^"]*packages/chrome/src[^"]*"' "${css_file}" \
+        resolved_bases+=("${base_dir}")
+      done < <(grep -oE '^[[:space:]]*@source[[:space:]]+"[^"]*"' "${css_file}" \
         | sed -E 's/.*"([^"]*)".*/\1/')
-    done < <(find "${app_dir}/src" -type f -name '*.css')
+    done < <(find "${app_dir}/src" -type f -name '*.css' 2>/dev/null)
 
-    if ((resolved_ok == 1)); then
-      pass "${app_name}: stylesheet @source resolves to packages/chrome/src"
-    else
-      fail "${app_name}: no @source line under src/**.css resolves to ${chrome_src} — the tool shell's utilities will not be emitted (a wrong number of '../' still parses, and still emits nothing)"
-    fi
+    local i found base
+    for i in "${!required_names[@]}"; do
+      found=0
+      for base in "${resolved_bases[@]}"; do
+        if [[ "${base}" == "${required_dirs[$i]}" ]]; then
+          found=1
+          break
+        fi
+      done
+      if ((found == 1)); then
+        pass "${app_name}: stylesheet @source resolves to ${required_dirs[$i]#"${repo_root}/"}"
+      else
+        fail "${app_name}: no @source line under src/**.css resolves to ${required_dirs[$i]} (${required_names[$i]}) — that package's utilities will not be emitted (a wrong number of '../' still parses, and still emits nothing)"
+      fi
+    done
   fi
 
   # --- 2. @tanstack/react-router in resolve.dedupe -------------------------

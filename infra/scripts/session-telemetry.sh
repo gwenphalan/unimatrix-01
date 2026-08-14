@@ -174,8 +174,8 @@ skills_loaded=$(grep -o '\(["]\|\\n\)Base directory for this skill: [^ "\\]*' "$
 
 # Browser surfaces are derived from `cwd` at hook time rather than hardcoded,
 # so adding an app does not silently stop being measured. The rule they encode
-# is `AGENTS.md`'s: anything with a `vite.config.ts`, plus `packages/ui` and
-# `packages/chrome`, which have no browser of their own.
+# is `AGENTS.md`'s: anything with a `vite.config.ts`, plus `packages/ui`,
+# `packages/chrome` and `packages/cube`, which have no browser of their own.
 surfaces=()
 if [ -n "$cwd" ] && [ -d "$cwd" ]; then
 	for config in "$cwd"/apps/*/vite.config.ts "$cwd"/packages/*/vite.config.ts "$cwd"/lab/vite.config.ts; do
@@ -183,7 +183,7 @@ if [ -n "$cwd" ] && [ -d "$cwd" ]; then
 		dir=${config%/vite.config.ts}
 		surfaces+=("${dir#"$cwd"/}")
 	done
-	for extra in packages/ui packages/chrome; do
+	for extra in packages/ui packages/chrome packages/cube; do
 		[ -d "$cwd/$extra" ] || continue
 		case " ${surfaces[*]} " in
 		*" $extra "*) ;;
