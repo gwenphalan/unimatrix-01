@@ -1,13 +1,18 @@
 import { z } from "zod";
 
 /**
- * `z.object`, not `z.strictObject`: Dokploy is upstream software this repo does not control, and a
- * new field appearing in a later Dokploy release must not turn every call into a validation error.
+ * `settings.getDokployVersion` answers with a bare JSON string, not an object — measured
+ * `"v0.29.13"` against the running instance on 2026-08-14. A wrapper object is the shape to expect
+ * and the wrong one.
  */
-export const dokployVersionSchema = z.object({
-  version: z.string(),
-});
+export const dokployVersionSchema = z.string();
 
+/**
+ * Field-for-field as measured on 2026-08-14; every value arrives as a string, `ports` and `status`
+ * included. `z.object`, not `z.strictObject`: Dokploy is upstream software this repo does not
+ * control, and a new field appearing in a later release must not turn every call into a validation
+ * error.
+ */
 export const dokployContainerSchema = z.object({
   containerId: z.string(),
   name: z.string(),

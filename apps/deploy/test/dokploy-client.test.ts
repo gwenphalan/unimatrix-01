@@ -36,13 +36,13 @@ void test("getDokployVersion sends the x-api-key header and parses a valid body"
     apiKey: API_KEY,
     fetch: (_url, init) => {
       capturedHeaders = new Headers(init?.headers);
-      return Promise.resolve(jsonResponse({ version: "0.29.13" }));
+      return Promise.resolve(jsonResponse("v0.29.13"));
     },
   });
 
   const version = await client.getDokployVersion();
 
-  assert.deepEqual(version, { version: "0.29.13" });
+  assert.equal(version, "v0.29.13");
   assert.equal(capturedHeaders?.get("x-api-key"), API_KEY);
 });
 
