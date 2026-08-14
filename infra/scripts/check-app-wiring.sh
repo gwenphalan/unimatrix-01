@@ -19,9 +19,12 @@
 #      its own directory; two resolved copies means the shell's
 #      `useRouterState` reads a router context the app's `RouterProvider` never
 #      wrote to.
-#   3. Every `apps/*/Dockerfile` present in CI's `Images` matrix. `Verify` is
+#   3. Every `apps/*/Dockerfile` present in every `app: [...]` matrix array in
+#      CI's workflow file — today that is `Images` and `Publish`. `Verify` is
 #      Vite and tsc only and never touches a Dockerfile, so an image left out
-#      of the matrix is simply never built.
+#      of the `Images` matrix is simply never built, and one left out of
+#      `Publish` while present in `Images` is built and never published, with
+#      nothing else to say so.
 #
 # This is also the app template, captured mechanically rather than as prose: a
 # new app satisfies it or the check goes red.
@@ -58,25 +61,28 @@ pass() {
   printf '  ok    %s\n' "$1"
 }
 
-# Reads the `app: [...]` matrix list out of CI's Images job.
+# Reads every `app: [...]` matrix array out of the CI workflow file — one per
+# job that builds the `apps/*` matrix (`Images`, `Publish`, and any future
+# one), not just the first.
 #
-# Extracted once rather than per app so a missing or renamed matrix is one
-# failure with a clear cause, not one per app with a misleading one.
-read_images_matrix() {
+# Extracted once rather than per app so a missing matrix set is one failure
+# with a clear cause, not one per app with a misleading one.
+read_images_matrices() {
   if [[ ! -f "${ci_workflow}" ]]; then
     return 1
   fi
 
   # `tr` first so a matrix broken across lines still matches. The `[^]]*`
-  # class stops at the closing bracket, so only the one array is captured.
-  tr '\n' ' ' <"${ci_workflow}" | grep -oE 'app:[[:space:]]*\[[^]]*\]' | head -n 1
+  # class stops at the closing bracket, so each array is captured whole and
+  # matches after the first one are not lost, unlike a `head -n 1` cutoff.
+  tr '\n' ' ' <"${ci_workflow}" | grep -oE 'app:[[:space:]]*\[[^]]*\]'
 }
 
-images_matrix="$(read_images_matrix || true)"
+mapfile -t images_matrices < <(read_images_matrices || true)
 
-if [[ -z "${images_matrix}" ]]; then
-  printf 'apps/*: could not read the Images matrix from %s\n' "${ci_workflow#"${repo_root}/"}"
-  fail "CI Images matrix (app: [...]) not found — every Dockerized app is unverified"
+if ((${#images_matrices[@]} == 0)); then
+  printf 'apps/*: could not read any app: [...] matrix from %s\n' "${ci_workflow#"${repo_root}/"}"
+  fail "CI app: [...] matrix not found — every Dockerized app is unverified"
   printf '\n%s\n' "check-app-wiring: 1 failure"
   exit 1
 fi
@@ -223,14 +229,23 @@ check_vite_app() {
 check_dockerized_app() {
   local app_name="$1"
 
-  # Word-boundary match inside the captured array, so `web` cannot be satisfied
-  # by a future `webhooks` entry. The list is comma/space separated inside the
-  # brackets, so the boundary characters are `[`, `,`, whitespace and `]`.
-  if printf '%s' "${images_matrix}" | grep -qE "[[,[:space:]]${app_name}[],[:space:]]"; then
-    pass "${app_name}: present in CI's Images matrix"
-  else
-    fail "${app_name}: apps/${app_name}/Dockerfile is not in CI's Images matrix (.github/workflows/ci.yml) — the image is never built"
-  fi
+  # Every matrix array found in the workflow file must list this app — not
+  # just the first. A future array added above `Images` would silently shift
+  # which one a `head -n 1` cutoff checked; checking all of them removes that
+  # footgun rather than relying on file order.
+  local i matrix
+  for i in "${!images_matrices[@]}"; do
+    matrix="${images_matrices[$i]}"
+    # Word-boundary match inside the captured array, so `web` cannot be
+    # satisfied by a future `webhooks` entry. The list is comma/space
+    # separated inside the brackets, so the boundary characters are `[`, `,`,
+    # whitespace and `]`.
+    if printf '%s' "${matrix}" | grep -qE "[[,[:space:]]${app_name}[],[:space:]]"; then
+      pass "${app_name}: present in app: [...] matrix #$((i + 1))"
+    else
+      fail "${app_name}: apps/${app_name}/Dockerfile is not in app: [...] matrix #$((i + 1)) of .github/workflows/ci.yml — that job never builds this image"
+    fi
+  done
 }
 
 printf 'check-app-wiring: auditing apps/* against the wiring no other check sees\n\n'
