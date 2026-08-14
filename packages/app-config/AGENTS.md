@@ -1,14 +1,14 @@
 # @unimatrix/app-config
 
-Zod-backed validation for the two external config boundaries every Vite app
-has: the browser runtime env (`import.meta.env.VITE_*`) and the dev-proxy env
-read by `vite.config.ts`.
+Zod-backed validation for the two external config boundaries the consuming
+Vite apps have: the browser runtime env (`import.meta.env.VITE_*`) and the
+dev-proxy env read by `vite.config.ts`.
 
 ## Shape
 
 - **Field builders, not app loaders.** The validation rules are identical
-  across apps while the shapes legitimately differ (web's Clerk key is
-  optional, admin has an auth-hub URL, auth has neither). Each app composes
+  across apps while the shapes legitimately differ (compare the
+  `src/lib/config.ts` of the apps that consume this package). Each app composes
   its own schema in its `src/lib/config.ts` from `apiBaseUrl()`,
   `requiredEnvString()`, `optionalHttpUrl()` etc., and keeps its own explicit
   exported config interfaces. The one whole loader here is
