@@ -60,9 +60,19 @@ packages are public, so Dokploy pulls them unauthenticated.
 
 Every `infra/docker/<app>-compose.yaml` declares `image:` and no `build:`, so
 nothing is built on the deploy host: each stack pulls
-`ghcr.io/unimatrixcore/unimatrix-<app>:${IMAGE_TAG}`. `IMAGE_TAG` is a
-**project-level** Dokploy variable — one value shared by every service in the
-project, and the only thing that decides which commit production runs.
+`ghcr.io/unimatrixcore/unimatrix-<app>:${IMAGE_TAG}`, and `IMAGE_TAG` is the
+only thing deciding which commit production runs.
+
+**Each Compose service needs `IMAGE_TAG=${{project.IMAGE_TAG}}` in its own
+environment variables, once.** Dokploy does not inherit project-level variables
+into a Compose stack. It writes the stack's `.env` from the *service's* own env
+alone, expanding `${{project.X}}` references out of the project blob as it goes,
+and then runs `docker compose … up` under `env -i`, so nothing ambient reaches
+the substitution either. Without that one line `${IMAGE_TAG}` resolves to an
+empty string and the deploy fails on `invalid reference format` — loudly, with
+the previous container still running. (Read from `getCreateEnvFileCommand`,
+`prepareEnvironmentVariables` and `getBuildComposeCommand` in Dokploy v0.29.13;
+not measured against the instance.)
 
 ### A new app's package is private until someone makes it public by hand
 
@@ -103,10 +113,11 @@ the same name. A service that is missing, renamed, or duplicated fails the job
 by name rather than being skipped, and a project whose tag write failed has its
 services skipped rather than deployed at the previous commit's tag.
 
-**Project-level environment holds `IMAGE_TAG` and nothing else.**
-`project.update` is a partial that Dokploy spreads over the row, so the write
-above *replaces* the whole blob — a second variable stored at project level
-would be deleted on the next merge. CI deliberately never reads the blob back
+**Project-level environment holds `IMAGE_TAG` and nothing else**, and each
+service reads it through the one-line reference described under "Published GHCR
+images" above. `project.update` is a partial that Dokploy spreads over the row,
+so the write above *replaces* the whole blob — a second variable stored at
+project level would be deleted on the next merge. CI deliberately never reads the blob back
 to merge into it, because that would pull whatever it holds into a public
 repository's runner, so this invariant is the only thing protecting anything
 kept there. Per-service variables (`CORS_ALLOWED_ORIGINS`, `CLERK_*`, the
