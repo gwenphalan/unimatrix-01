@@ -17,8 +17,8 @@ nginx digest bump land as a normal PR (see "Base image updates" below) without e
 
 ## Monorepo build rules
 
-Build all six images from the repo root, not from an individual app
-directory.
+Build every image (one per `apps/*/Dockerfile`) from the repo root, not from
+an individual app directory.
 
 Each app resolves workspace source aliases from its own `vite.config.ts` and
 `tsconfig.json` and reads files outside its own directory, so an app-directory
@@ -34,6 +34,7 @@ docker build -f apps/api/Dockerfile .
 docker build -f apps/cflop/Dockerfile .
 docker build -f apps/auth/Dockerfile .
 docker build -f apps/admin/Dockerfile .
+docker build -f apps/deploy/Dockerfile .
 docker build -f apps/secrets/Dockerfile .
 ```
 
@@ -221,12 +222,46 @@ Example run:
 docker run --rm -p 3002:3001 -e SECRETS_KEKS="1:$(openssl rand -base64 32)" unimatrix-secrets:local
 ```
 
+## Deploy service image
+
+The deploy image builds `@unimatrix/shared`, compiles `apps/deploy`, then uses
+`pnpm deploy` to package the runtime with production dependencies — the same
+shape as the API and secrets images, but with no database and no volume. It
+holds a typed Dokploy API client and performs no reconciliation and no
+probing; see `apps/deploy/README.md` for what still has to happen by hand
+before this stack deploys.
+
+### Deploy service runtime contract
+
+- entrypoint: `node dist/server.js`
+- container port: `3001`
+- healthcheck path: `/health` — the only route this service answers
+- runtime env that has to be supplied: `DOKPLOY_BASE_URL` and
+  `DOKPLOY_API_KEY` — the service refuses to start without either.
+  `NODE_ENV`, `HOST`, `PORT` and `LOG_LEVEL` have image defaults in
+  `apps/deploy/Dockerfile`.
+- **no domain**: this service is deliberately unrouted, same as the secrets
+  service — see `docs/deployment.md`.
+
+Example build:
+
+```bash
+docker build -f apps/deploy/Dockerfile -t unimatrix-deploy:local .
+```
+
+Example run:
+
+```bash
+docker run --rm -p 3004:3001 \
+  -e DOKPLOY_BASE_URL=http://localhost:3000 \
+  -e DOKPLOY_API_KEY=<your-key> \
+  unimatrix-deploy:local
+```
+
 ## Compose workflow
 
-`infra/docker/web-compose.yaml`, `infra/docker/api-compose.yaml`,
-`infra/docker/cflop-compose.yaml`, `infra/docker/auth-compose.yaml`,
-`infra/docker/admin-compose.yaml`, and `infra/docker/secrets-compose.yaml` are each
-single-service files. Each declares `image:` and no `build:`, so they pull
+Every `infra/docker/*-compose.yaml` file is a single-service file, one per
+`apps/*/Dockerfile`. Each declares `image:` and no `build:`, so they pull
 `ghcr.io/unimatrixcore/unimatrix-<app>:$IMAGE_TAG` from GHCR — they validate a
 published image, never the working tree. Run them together from the repo root:
 
@@ -234,12 +269,15 @@ published image, never the working tree. Run them together from the repo root:
 IMAGE_TAG=main \
 CORS_ALLOWED_ORIGINS=http://localhost:8080,http://127.0.0.1:8080 \
 SECRETS_KEKS="1:<base64-32-bytes>" \
+DOKPLOY_BASE_URL=http://localhost:3000 \
+DOKPLOY_API_KEY=<your-key> \
 docker compose \
   -f infra/docker/api-compose.yaml \
   -f infra/docker/web-compose.yaml \
   -f infra/docker/cflop-compose.yaml \
   -f infra/docker/auth-compose.yaml \
   -f infra/docker/admin-compose.yaml \
+  -f infra/docker/deploy-compose.yaml \
   -f infra/docker/secrets-compose.yaml \
   up -d
 ```
@@ -311,11 +349,8 @@ a shared storage strategy.
 
 ## Dokploy Compose deployment
 
-`infra/docker/web-compose.yaml`, `infra/docker/api-compose.yaml`,
-`infra/docker/cflop-compose.yaml`, `infra/docker/auth-compose.yaml`,
-`infra/docker/admin-compose.yaml`, and `infra/docker/secrets-compose.yaml` are single-service compose
-files meant to be used as Dokploy's "Compose" application type, one Dokploy app per file. They
-intentionally have:
+Every `infra/docker/*-compose.yaml` file is a single-service compose file meant to be used as
+Dokploy's "Compose" application type, one Dokploy app per file. They intentionally have:
 
 - no `ports:` host publishing
 - no Traefik labels
@@ -331,15 +366,18 @@ see `docs/deployment.md`), the auth Dokploy app's domain at
 deliberately unrouted, which also keeps it off the shared `dokploy-network`, since Dokploy
 attaches a stack to that overlay when Traefik has to reach it. Neither fact is what makes the
 service private: a service token is. See `docs/deployment.md`'s "Secrets service" section.
+The deploy Dokploy app also gets no Domains entry, but it does join `dokploy-network` — it exists
+to call Dokploy's own API over that network, not to be reached across it. See
+`apps/deploy/AGENTS.md`.
 
-Only `api-compose.yaml` and `secrets-compose.yaml` carry an `environment:`
-block. The `${...}` entries in it come from compose variable substitution — set
-those in the Dokploy app's environment variables UI rather than editing the
-file. The literals beside them (`HOST`, `PORT`, `NODE_ENV`, `LOG_LEVEL` and the
-rest) are fixed by the file, and a Dokploy variable of the same name does not
-override one. The four SPA stacks have no block at all: their `VITE_*` values are inlined into the
-bundle when the image is built, so a Dokploy variable would reach nothing. All
-six read `IMAGE_TAG` for the tag they pull; see `docs/deployment.md`.
+Every `node-api` compose file (`api-compose.yaml`, `secrets-compose.yaml`, `deploy-compose.yaml`)
+carries an `environment:` block; the SPA compose files do not. The `${...}` entries in it come from
+compose variable substitution — set those in the Dokploy app's environment variables UI rather than
+editing the file. The literals beside them (`HOST`, `PORT`, `NODE_ENV`, `LOG_LEVEL` and the rest)
+are fixed by the file, and a Dokploy variable of the same name does not override one. The SPA
+stacks have no block at all: their `VITE_*` values are inlined into the bundle when the image is
+built, so a Dokploy variable would reach nothing. Every stack reads `IMAGE_TAG` for the tag it
+pulls; see `docs/deployment.md`.
 
 Previews cannot be enabled on these apps — Dokploy supports them only on
 Application-type services. See `docs/deployment.md` for the full
@@ -347,8 +385,9 @@ Dokploy service setup, including how previews are configured instead.
 
 ## Base image updates
 
-Dependabot watches base images through the `docker` ecosystem, pointed at the
-six `apps/*` directories — **not** at this one. The `image:` line in every
+Dependabot watches base images through the `docker` ecosystem, pointed at each
+`apps/*` directory carrying a Dockerfile (`.github/dependabot.yml`'s `directories:` list) — **not**
+at this one. The `image:` line in every
 compose file here names this repository's own published app image, built by its
 own CI from the `apps/*` Dockerfile Dependabot already watches. There is no
 upstream version for a `docker-compose` block to bump, and pointing one here
