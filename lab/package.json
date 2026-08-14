@@ -29,9 +29,11 @@
     "@tanstack/react-router": "^1.166.6",
     "@unimatrix/auth": "workspace:^",
     "@unimatrix/chrome": "workspace:^",
+    "@unimatrix/cube": "workspace:^",
     "@unimatrix/shared": "workspace:^",
     "@unimatrix/ui": "workspace:^",
     "react": "^19.2.4",
-    "react-dom": "^19.2.4"
+    "react-dom": "^19.2.4",
+    "zod": "^4.3.6"
   }
 }

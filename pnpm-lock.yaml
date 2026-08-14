@@ -580,6 +580,9 @@ importers:
       '@unimatrix/chrome':
         specifier: workspace:^
         version: link:../packages/chrome
+      '@unimatrix/cube':
+        specifier: workspace:^
+        version: link:../packages/cube
       '@unimatrix/shared':
         specifier: workspace:^
         version: link:../packages/shared
@@ -592,6 +595,9 @@ importers:
       react-dom:
         specifier: ^19.2.4
         version: 19.2.8(react@19.2.8)
+      zod:
+        specifier: ^4.3.6
+        version: 4.4.3
     devDependencies:
       '@tailwindcss/vite':
         specifier: ^4.2.1

@@ -13,7 +13,7 @@ export default defineConfig({
   },
   test: {
     coverage: createCoverageConfig({
-      thresholds: { statements: 76, functions: 77 },
+      thresholds: { statements: 78, functions: 77 },
     }),
     include: ["test/**/*.test.ts"],
   },

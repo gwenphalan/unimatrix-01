@@ -4,3 +4,4 @@ export * from "./engine.js";
 export * from "./outer-moves.js";
 export * from "./last-layer-diagram.js";
 export * from "./corner-projection.js";
+export * from "./unfolded-diagram.js";
