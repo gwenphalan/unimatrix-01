@@ -60,6 +60,27 @@ packages are public. **Nothing deploys from them yet** — every Dokploy service
 below still builds from the `build:` block in its own
 `infra/docker/<app>-compose.yaml`, not by pulling a GHCR image.
 
+### A new app's package is private until someone makes it public by hand
+
+Every package is created **private**, whatever the repository's visibility. A
+package linked to a repository inherits that repository's access permissions but
+never its visibility, so a public repo does not produce a public package. Adding
+a seventh app therefore carries one manual step, once, that nothing enforces:
+let the first `Publish` run create the package, then set it public at
+`https://github.com/orgs/unimatrixcore/packages/container/unimatrix-<app>/settings`.
+The organization must permit public packages at all — Settings → Packages →
+Package Creation → Public — or that per-package control is greyed out.
+
+**There is no API for this.** The Packages REST API lists, gets, deletes and
+restores packages and versions, and mutates visibility nowhere; `gh` cannot do
+it either, and the web UI is the only route. So no check can assert it, which is
+why it is written here rather than enforced somewhere.
+
+Miss it and Dokploy's unauthenticated pull fails as *image-not-found* —
+indistinguishable from a bad tag, so the obvious next move is to go and debug
+the tag scheme. Visibility is a property of the package rather than of each
+version, so this is once per app, not once per deploy.
+
 ## Dokploy service layout
 
 Create one Dokploy service per `infra/docker/*-compose.yaml`, all from the same
