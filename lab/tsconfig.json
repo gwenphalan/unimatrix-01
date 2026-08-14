@@ -21,6 +21,8 @@
       // name in `eslint.config.mjs`, and no mapping exists for them here.
       "@unimatrix/auth": ["../packages/auth/src/index.ts"],
       "@unimatrix/chrome/tool": ["../packages/chrome/src/tool.ts"],
+      "@unimatrix/cube/react": ["../packages/cube/src/react.ts"],
+      "@unimatrix/cube": ["../packages/cube/src/index.ts"],
       "@unimatrix/shared": ["../packages/shared/src/index.ts"],
       "@unimatrix/ui/public": ["../packages/ui/src/public.ts"],
       "@unimatrix/ui/editor": ["../packages/ui/src/editor.ts"],

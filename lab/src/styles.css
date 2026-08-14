@@ -23,6 +23,7 @@
 @source "../src/**/*.{ts,tsx}";
 @source "../../packages/ui/src/**/*.{ts,tsx}";
 @source "../../packages/chrome/src/**/*.{ts,tsx}";
+@source "../../packages/cube/src/**/*.{ts,tsx}";
 
 /* The prototype lines are split by depth on purpose. Even with automatic
    detection off, a pattern containing a doubled star is walked as a directory
