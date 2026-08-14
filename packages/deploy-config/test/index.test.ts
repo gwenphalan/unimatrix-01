@@ -116,6 +116,49 @@ describe("staticSpaApp / dockerfileFor / composeFor", () => {
     expect(dockerfile).toContain(FROM_LINES.base);
     expect(dockerfile).toContain(FROM_LINES.runtime);
   });
+
+  it("prunes the named package and installs from the pruned lockfile, not the whole workspace", () => {
+    const config = staticSpaApp({ appDir: "web", packageName: "@unimatrix/web", buildArgs: [] });
+    const dockerfile = dockerfileFor(config, FROM_LINES);
+
+    expect(dockerfile).toContain("RUN turbo prune @unimatrix/web --docker");
+    expect(dockerfile).toContain("COPY --from=prune /workspace/out/json/ .");
+    expect(dockerfile).toContain("RUN pnpm install --frozen-lockfile");
+    expect(dockerfile).not.toContain("COPY . .\nRUN pnpm install");
+    expect(dockerfile).not.toContain("find . -name");
+  });
+
+  it("emits the ARG/ENV build-arg block after the install line, not before it", () => {
+    const config = staticSpaApp({
+      appDir: "web",
+      packageName: "@unimatrix/web",
+      buildArgs: [{ name: "VITE_API_BASE_URL", default: "/api" }],
+    });
+    const lines = dockerfileFor(config, FROM_LINES).split("\n");
+
+    const installIndex = lines.indexOf("RUN pnpm install --frozen-lockfile");
+    const argIndex = lines.indexOf("ARG VITE_API_BASE_URL=/api");
+
+    expect(installIndex).toBeGreaterThan(-1);
+    expect(argIndex).toBeGreaterThan(installIndex);
+  });
+
+  it("copies each extraBuildPaths entry into the build stage, and nothing when omitted", () => {
+    const withPaths = staticSpaApp({
+      appDir: "web",
+      packageName: "@unimatrix/web",
+      buildArgs: [],
+      extraBuildPaths: ["content/home"],
+    });
+    expect(dockerfileFor(withPaths, FROM_LINES)).toContain("COPY content/home ./content/home");
+
+    const withoutPaths = staticSpaApp({
+      appDir: "cflop",
+      packageName: "@unimatrix/cflop",
+      buildArgs: [],
+    });
+    expect(dockerfileFor(withoutPaths, FROM_LINES)).not.toContain("COPY content/home");
+  });
 });
 
 describe("nodeApiApp / dockerfileFor / composeFor", () => {
@@ -269,6 +312,16 @@ describe("nodeApiApp / dockerfileFor / composeFor", () => {
   it("emits no networks block at all when none are declared", () => {
     expect(composeFor(config)).not.toContain("networks:");
   });
+
+  it("prunes the named package and installs from the pruned lockfile, not the whole workspace", () => {
+    const dockerfile = dockerfileFor(config, API_FROM_LINES);
+
+    expect(dockerfile).toContain("RUN turbo prune @unimatrix/api --docker");
+    expect(dockerfile).toContain("COPY --from=prune /workspace/out/json/ .");
+    expect(dockerfile).toContain("RUN pnpm install --frozen-lockfile");
+    expect(dockerfile).not.toContain("COPY . .\nRUN pnpm install");
+    expect(dockerfile).not.toContain("find . -name");
+  });
 });
 
 describe("validateAppConfig", () => {
@@ -375,5 +428,47 @@ describe("validateAppConfig", () => {
     expect(
       validateAppConfig(config).some((message) => message.includes("appDir must not be empty")),
     ).toBe(true);
+  });
+
+  it("accepts a well-formed extraBuildPaths entry", () => {
+    const config = staticSpaApp({
+      appDir: "web",
+      packageName: "@unimatrix/web",
+      buildArgs: [],
+      extraBuildPaths: ["content/home"],
+    });
+    expect(validateAppConfig(config)).toEqual([]);
+  });
+
+  it("rejects an empty extraBuildPaths entry", () => {
+    const config = staticSpaApp({
+      appDir: "web",
+      packageName: "@unimatrix/web",
+      buildArgs: [],
+      extraBuildPaths: [""],
+    });
+    expect(validateAppConfig(config).some((message) => message.includes("is empty"))).toBe(true);
+  });
+
+  it("rejects an absolute extraBuildPaths entry", () => {
+    const config = staticSpaApp({
+      appDir: "web",
+      packageName: "@unimatrix/web",
+      buildArgs: [],
+      extraBuildPaths: ["/etc/passwd"],
+    });
+    expect(validateAppConfig(config).some((message) => message.includes("absolute"))).toBe(true);
+  });
+
+  it("rejects an extraBuildPaths entry with a .. segment", () => {
+    const config = staticSpaApp({
+      appDir: "web",
+      packageName: "@unimatrix/web",
+      buildArgs: [],
+      extraBuildPaths: ["content/../../etc"],
+    });
+    expect(validateAppConfig(config).some((message) => message.includes('".." segment'))).toBe(
+      true,
+    );
   });
 });

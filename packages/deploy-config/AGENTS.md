@@ -40,6 +40,8 @@ consequences:
 - If two apps' Dockerfiles cannot both be expressed by `staticSpaApp()`/`nodeApiApp()` without a
   generator branch keyed on app name, that is a signal the archetype split is wrong, not licence to
   add the branch.
+- The generated `prune` stage installs turbo from the `TURBO_VERSION` constant in `src/index.ts`,
+  not the root `turbo` devDependency — a Dependabot bump of one does not move the other.
 
 ## 5. The pre-commit hook's partial-stage refusal, and its known gaps
 `infra/scripts/install-git-hooks.mjs`, run by the root `prepare` script, writes the pre-commit hook
