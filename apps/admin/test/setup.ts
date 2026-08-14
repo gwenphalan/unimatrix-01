@@ -3,9 +3,11 @@ import { cleanup, configure } from "@testing-library/react";
 import { afterEach } from "vitest";
 
 // Testing Library's default 1000ms `asyncUtilTimeout` is independent of Vitest's
-// 5000ms `testTimeout`, and it is what `findBy*` races. Suites that await a lazy
-// chunk blow past 1000ms whenever `pnpm verify` runs builds, lint, and typecheck
-// alongside the tests, so align the async-util budget with the test timeout.
+// `testTimeout`, and it is what `findBy*` races. Suites that await a lazy chunk
+// blow past 1000ms whenever `pnpm verify` runs builds, lint, and typecheck
+// alongside the tests, so the budget is raised — but deliberately kept well
+// under the `testTimeout` in `vitest.config.ts`, which explains why the two
+// must not be equal.
 configure({ asyncUtilTimeout: 5000 });
 
 (
