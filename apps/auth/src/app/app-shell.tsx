@@ -11,8 +11,8 @@ type AppShellProps = {
  * services). Every route is a single Clerk widget or a small card.
  *
  * It takes the shared tool shell rather than growing its own, which is what
- * `@unimatrix/chrome` exists for. `ToolShell` already centres its `main`
- * vertically, so the hand-rolled centring here is gone.
+ * `@unimatrix/chrome` exists for. `ToolShell` centres its `main`
+ * vertically, so this app adds only horizontal centring.
  *
  * `homeHref` without `homeLabel` is deliberate: the shell renders no title bar
  * unless one of `homeLabel` or `accountControl` is given, so this app gets its

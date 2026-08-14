@@ -1,6 +1,6 @@
 /**
  * Every failure mode this package can raise. HTTP status mapping is not this
- * package's concern — that belongs to the service that later wraps it.
+ * package's concern — that belongs to `apps/secrets`, which wraps it.
  */
 export type SecretsErrorCode =
   | "KEK_MISSING"

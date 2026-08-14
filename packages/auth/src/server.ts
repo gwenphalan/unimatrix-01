@@ -37,8 +37,8 @@ interface AuthErrorOptions {
 
 /**
  * Thrown by `requireAuth()` and `requirePermission()` guards. Designed to
- * slot into a later phase's `apps/api` error normalization (see
- * `apps/api/src/lib/http/errors.ts`'s `ApiError`/`normalizeError` pattern):
+ * slot into `apps/api`'s error normalization
+ * (`apps/api/src/lib/http/errors.ts`'s `ApiError`/`normalizeError` pattern):
  * a downstream handler can catch `AuthError` and map `statusCode`/`code`
  * onto an `ApiError`-shaped envelope. This package intentionally does not
  * import from `apps/api` to avoid a circular dependency.

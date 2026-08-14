@@ -5,7 +5,7 @@
 
 ## 2. Folder Structure
 - `src/tool-shell.tsx`: the tool shell — title bar, dense content region, no site nav tabs and no site footer.
-- `src/`: the public-site shell pieces (`PublicPageContainer`, `PublicSiteFooter`, header, nav tabs, breadcrumbs), moved here out of `apps/web`'s `features/public-site`.
+- `src/`: the public-site shell pieces — `PublicShell`, `PublicPageContainer`, `PublicFooterLink`, and the header, nav tabs, breadcrumbs and footer they compose.
 
 ## 3. Core Behaviors & Patterns
 - Composes `@unimatrix/ui` for its own UI, and **never `@unimatrix/auth`.** That prohibition is

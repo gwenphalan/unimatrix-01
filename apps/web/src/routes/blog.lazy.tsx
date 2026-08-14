@@ -52,9 +52,8 @@ function BlogRoute() {
 }
 
 /**
- * Posts are fetched from the API now, so an unreachable API is a real state
- * this page has to render — it used to be impossible, because the list was
- * compiled into the bundle.
+ * Posts are fetched from the API, so an unreachable API is a real state this
+ * page has to render.
  */
 function BlogUnavailable() {
   return (

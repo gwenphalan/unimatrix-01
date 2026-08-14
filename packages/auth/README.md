@@ -44,7 +44,7 @@ canAccessAdminSection(perms, "content"); // today: equivalent to isAdmin(perms)
 
 `ADMIN_SECTIONS`/`AdminSection` name the sections that exist. A private `ADMIN_SECTION_PERMISSIONS` table in `src/permissions.ts` maps each one to the `{ appSlug, role }` it requires, and today every entry is `auth:admin` — so the predicate is `isAdmin` for every section. **That table is the point.** Introducing per-section capabilities later is an edit to one record, not a change at N call sites, which only holds as long as nothing open-codes the check.
 
-`@unimatrix/auth/server`'s `requireAdminSection(section)` is a Fastify `preHandler` wrapping the same predicate — one implementation, two surfaces. New admin API modules use it rather than `requirePermission("auth", "admin")` directly. (`apps/api/src/modules/content` still uses the latter; nothing existing was re-gated in the change that introduced this.)
+`@unimatrix/auth/server`'s `requireAdminSection(section)` is a Fastify `preHandler` wrapping the same predicate — one implementation, two surfaces. New admin API modules use it rather than `requirePermission("auth", "admin")` directly. (`apps/api/src/modules/content` still uses the latter.)
 
 `publicMetadata` can only be written server-side — in the Clerk Dashboard or via the Clerk Backend API — never from the client. There is intentionally no public "become admin" flow.
 
@@ -91,7 +91,7 @@ These keys are provisioned by the repo owner in the Clerk Dashboard and are not 
 There is no public "become admin" endpoint or flow. To grant the first platform administrator:
 
 - **Preferred**: in the Clerk Dashboard, open the user's profile and set `publicMetadata` to `{ "permissions": { "auth": ["admin"] } }`.
-- **Alternative**: use a one-off script against `@clerk/backend`'s `clerkClient.users.updateUserMetadata(userId, { publicMetadata: { permissions: { auth: ["admin"] } } })` (this requires `CLERK_SECRET_KEY`; such a script belongs to a later phase's tooling, not to this package).
+- **Alternative**: use a one-off script against `@clerk/backend`'s `clerkClient.users.updateUserMetadata(userId, { publicMetadata: { permissions: { auth: ["admin"] } } })` (this requires `CLERK_SECRET_KEY`; such a script does not belong to this package).
 
 Once a user holds `auth: ["admin"]`, manage other users and their permission metadata directly in the Clerk Dashboard. This permission scheme still gates access across apps via `requirePermission` (server) and `usePermissions`/`isAdmin` (react).
 

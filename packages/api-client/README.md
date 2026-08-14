@@ -38,8 +38,7 @@ token between calls.
 
 ## Requests with a body or query
 
-`request(contract, options?)` now honors `contract.method`, and generalizes
-beyond `GET`:
+`request(contract, options?)` honors `contract.method`:
 
 - If `contract.bodySchema` is set, `options.body` is **required**, typed as
   `ApiContractBody<TContract>` (the schema's `z.input` shape). The body is
