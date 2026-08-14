@@ -10,5 +10,3 @@ Minimal persistence boundary for the Unimatrix monorepo.
   - repo-relative filesystem path
   - `file:` URL
   - `:memory:`
-
-This package stays SQLite-first; new tables belong in `src/schema` behind the shared barrel rather than as ad hoc, package-local connections.
