@@ -5,8 +5,8 @@ negates `.gitkeep` and `README.md` back in, so a sketch cannot be staged without
 `git add -f`. That ignore is what keeps this directory empty on `main`.
 
 The `No prototypes on main` check is the backstop for a forced add: it fails when
-a pull request's diff adds a file under `lab/prototypes/`. It is advisory — not
-armed as a required status check — so it reports rather than blocks.
+a pull request's diff adds a file under `lab/prototypes/`. It is a required status
+check on `main`, so a forced add blocks the merge.
 
 That check is **repo hygiene, not a security control** — worth saying plainly,
 because a rule that sounds like a security boundary gets trusted like one. The

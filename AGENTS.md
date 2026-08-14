@@ -108,7 +108,7 @@ The packages below sit deliberately below `latest`. Each has a reason that is no
 - State plainly what you could not verify rather than omitting it; an unmentioned gap reads as a confirmed result
 
 ## CI And Automation
-- `main` accepts changes by pull request only. `Verify`, the six `Images (*)` matrix checks, `Review dependency changes`, `Analyze`, and `CodeQL` are required status checks; merges are squash-only with required linear history; work on a branch and open a PR
+- `main` accepts changes by pull request only; the required status checks are whatever `rules/branches/main` reports — `.claude/skills/ship-pr/scripts/required-checks.sh` prints them. Merges are squash-only with required linear history; work on a branch and open a PR
 - **Never add self-hosted Actions runners on the owner's hardware** — this repo is public, so fork PRs would execute untrusted code on the home lab. A third-party managed runner is not that, and every workflow uses one: `blacksmith-4vcpu-ubuntu-2404`. `check-runner-labels.mjs` allowlists it by name and fails any other label
 - Pin third-party actions to a commit SHA with the version in a trailing comment
 - Adding a Dockerfile means adding it to CI's `Images` matrix **and** to the required checks, or it is unverified
