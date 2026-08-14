@@ -54,6 +54,12 @@ const ALLOWED_PACKAGE_IMPORTS = {
   // packages/db's (single-writer, already owned by the API container) — see
   // apps/secrets/AGENTS.md.
   "apps/secrets": ["deploy-config", "secrets", "shared"],
+  // Deliberately no `secrets`: this service holds the Dokploy manage token, not
+  // a secrets-store credential, and has nothing to fetch from that store yet —
+  // see apps/deploy/AGENTS.md and the plan's Reasoning §2 for why granting the
+  // edge ahead of the code that would use it violates this file's own rule
+  // that an entry states current use, not an aspiration.
+  "apps/deploy": ["deploy-config", "shared"],
   // Deliberately narrow. AGENTS.md: cflop must not gain
   // `@unimatrix/api-client`, `@unimatrix/shared`, or `@unimatrix/content`
   // unless a real server-backed feature is added. Neither `chrome` nor `cube`
