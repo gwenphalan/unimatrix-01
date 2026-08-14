@@ -2,7 +2,7 @@
 #
 # Asserts the per-app wiring that every other check in this repo is blind to.
 #
-# Three facts about `apps/*` are load-bearing at runtime and invisible to lint,
+# Four facts about `apps/*` are load-bearing at runtime and invisible to lint,
 # tsc, Vitest, Playwright and the production build alike. An app missing any of
 # them passes `pnpm verify` end to end and is broken, or unverified, in a way
 # only a human looking at a browser or a deploy would notice:
@@ -25,6 +25,12 @@
 #      of the `Images` matrix is simply never built, and one left out of
 #      `Publish` while present in `Images` is built and never published, with
 #      nothing else to say so.
+#   4. Every `infra/docker/<app>-compose.yaml` pulling the image `Publish`
+#      pushes for that same app. The registry prefix is spelled out three
+#      times — CI's build step, CI's push step, and the generator that writes
+#      the compose line — and a mismatch between them is silent everywhere a
+#      check can look: the image builds, pushes, and is never pulled, while
+#      the stack goes on running whatever it last deployed.
 #
 # This is also the app template, captured mechanically rather than as prose: a
 # new app satisfies it or the check goes red.
@@ -32,7 +38,7 @@
 # Two independent categories, because `apps/*` is not homogeneous:
 #
 #   * Vite React app  — detected by `vite.config.ts`. Checks 1 and 2.
-#   * Dockerized app  — detected by `Dockerfile`. Check 3. `apps/api` is
+#   * Dockerized app  — detected by `Dockerfile`. Checks 3 and 4. `apps/api` is
 #                       Fastify: a Dockerfile, no stylesheet, no chrome, no
 #                       router.
 #
@@ -48,7 +54,14 @@ repo_root="$(cd -- "${script_dir}/../.." && pwd)"
 
 apps_dir="${repo_root}/apps"
 packages_dir="${repo_root}/packages"
+compose_dir="${repo_root}/infra/docker"
 ci_workflow="${repo_root}/.github/workflows/ci.yml"
+
+# Two literal checks rather than one derived one, because `ci.yml` never spells
+# an app's image out: it builds `…/unimatrix-${{ matrix.app }}`, so searching it
+# for an expanded name fails for every app on day one. Asserting the prefix once
+# there, and the whole reference per compose file here, pins the same join.
+image_registry_prefix="ghcr.io/unimatrixcore/unimatrix-"
 
 failures=0
 
@@ -246,9 +259,38 @@ check_dockerized_app() {
       fail "${app_name}: apps/${app_name}/Dockerfile is not in app: [...] matrix #$((i + 1)) of .github/workflows/ci.yml — that job never builds this image"
     fi
   done
+
+  # --- 4. The compose file pulls the image Publish pushes ------------------
+  #
+  # Whole-line fixed-string match: the indentation and the `${IMAGE_TAG}`
+  # spelling are part of what is being pinned, and a compose file that pulls
+  # the right repository under a tag nothing sets deploys nothing.
+  #
+  # A Dockerized app with no compose file fails here rather than being skipped.
+  # Skipping would make this check vacuous for exactly the app that has no
+  # deploy target at all.
+  local compose_file="${compose_dir}/${app_name}-compose.yaml"
+  local expected_reference="${image_registry_prefix}${app_name}:\${IMAGE_TAG}"
+  local expected_line="    image: ${expected_reference}"
+
+  if [[ ! -f "${compose_file}" ]]; then
+    fail "${app_name}: no infra/docker/${app_name}-compose.yaml — Publish pushes an image nothing deploys"
+  elif grep -qxF -- "${expected_line}" "${compose_file}"; then
+    pass "${app_name}: compose pulls ${expected_reference}"
+  else
+    fail "${app_name}: infra/docker/${app_name}-compose.yaml has no 'image: ${expected_reference}' line — this stack deploys something other than what Publish pushes"
+  fi
 }
 
 printf 'check-app-wiring: auditing apps/* against the wiring no other check sees\n\n'
+
+printf '.github/workflows/ci.yml\n'
+if grep -qF -- "${image_registry_prefix}" "${ci_workflow}"; then
+  pass "Publish pushes to ${image_registry_prefix}<app>"
+else
+  fail "no '${image_registry_prefix}' anywhere in .github/workflows/ci.yml — every compose file pulls a registry path nothing publishes to"
+fi
+printf '\n'
 
 shopt -s nullglob
 

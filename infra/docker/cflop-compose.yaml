@@ -1,6 +1,4 @@
 services:
   cflop:
-    build:
-      context: ../..
-      dockerfile: apps/cflop/Dockerfile
+    image: ghcr.io/unimatrixcore/unimatrix-cflop:${IMAGE_TAG}
     restart: unless-stopped

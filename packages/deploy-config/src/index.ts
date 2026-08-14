@@ -4,18 +4,35 @@
  * A `deploy.config.ts` at each app root builds one {@link DeployAppConfig}
  * through {@link staticSpaApp} or {@link nodeApiApp}. `infra/scripts/generate-deploy-config.mjs`
  * reads it and writes `apps/<app>/Dockerfile` and `infra/docker/<app>-compose.yaml`;
- * `infra/scripts/validate-deploy-config.mjs` checks it. Base images are not part
- * of this config — the generator reads the committed `FROM` lines and re-emits
- * them verbatim, so a Dependabot digest bump never has to touch generated
- * output. `nginx.conf` is `COPY`d, never generated, and carries no entry here
- * either. The build stage installs from a `turbo prune --docker` output rather
- * than the whole repo, so a change to an unrelated app's source cannot bust
- * the install layer.
+ * `infra/scripts/validate-deploy-config.mjs` checks it.
+ *
+ * The two outputs sit on opposite sides of the registry: the Dockerfile is what
+ * CI builds and pushes, and the compose file only ever names the published
+ * result — `image:`, never `build:` — so `appDir` is the image name as well as
+ * the directory. Base images are not part of this config either; the generator
+ * reads the committed `FROM` lines and re-emits them verbatim, so a Dependabot
+ * digest bump never has to touch generated output. `nginx.conf` is `COPY`d,
+ * never generated, and carries no entry here. The build stage installs from a
+ * `turbo prune --docker` output rather than the whole repo, so a change to an
+ * unrelated app's source cannot bust the install layer.
  */
 
 /** The turbo version installed in the prune stage, pinned independently of
  *  the root `turbo` devDependency — see the package `AGENTS.md` §2. */
 const TURBO_VERSION = "2.10.7";
+
+/** Registry prefix of the published images the compose files pull. This plus an
+ *  app's `appDir` must spell the same reference CI's `Publish` job pushes
+ *  (`.github/workflows/ci.yml`), which hardcodes it twice;
+ *  `infra/scripts/check-app-wiring.sh` is what stops the two drifting apart. */
+const IMAGE_REGISTRY_PREFIX = "ghcr.io/unimatrixcore/unimatrix-";
+
+/** The compose variable naming which published tag to deploy, set per
+ *  environment in the deployment platform. Left unset it resolves to an empty
+ *  string, which `docker compose config` accepts with a warning and
+ *  `docker compose pull` then rejects as `invalid reference format` (measured)
+ *  — so a missing tag stops the deploy rather than choosing a version. */
+const IMAGE_TAG_VARIABLE = "IMAGE_TAG";
 
 /**
  * A `docker build --build-arg` a static SPA image accepts, inlined into the
@@ -25,19 +42,17 @@ export interface DeployBuildArg {
   /** The `ARG`/`ENV` name, e.g. `"VITE_API_BASE_URL"`. */
   readonly name: string;
   /**
-   * The Dockerfile `ARG NAME=<default>`. Omit entirely when the build must
-   * supply a value — an empty string here is rejected by
-   * {@link validateAppConfig}, since it inlines an empty value into the
-   * bundle exactly as silently as no default does, but reads as intentional.
+   * The Dockerfile `ARG NAME=<default>`, and the value that actually reaches
+   * the browser bundle: the image is built once in CI with no `--build-arg`
+   * and the compose file only pulls the published result, so nothing supplies
+   * one later. {@link validateAppConfig} rejects a missing default as well as
+   * an empty string — either inlines an empty value with every check staying
+   * green. Optional only so the generator can still render the bare
+   * `ARG NAME` form for a config that has not been fixed yet.
    */
   readonly default?: string;
   /** Multi-line comment placed above the `ARG` line in the Dockerfile. */
   readonly comment?: readonly string[];
-  /**
-   * A *different* comment placed above this arg's line in the compose
-   * file's `build.args:` block. Only admin's Clerk key carries one today.
-   */
-  readonly composeComment?: readonly string[];
 }
 
 export interface StaticSpaAppConfig {
@@ -168,10 +183,21 @@ const EMPTY_DEFAULT_MESSAGE =
   "an empty-string default, which inlines an empty value exactly as silently as no default at " +
   "all. Omit default entirely if the value has no safe fallback.";
 
+/** What a `static-spa` build arg with nothing usable in `default` costs. */
+const BUILD_ARG_CONSEQUENCE =
+  "which inlines an empty value into the browser bundle. Nothing supplies one downstream: CI " +
+  "builds the image with no --build-arg, and the compose file only pulls the published result.";
+
+/**
+ * A legal Docker image name component. `appDir` is the image name, so an
+ * `appDir` outside this produces a reference no registry can resolve.
+ */
+const IMAGE_NAME_COMPONENT = /^[a-z0-9]+(?:[._-][a-z0-9]+)*$/u;
+
 /**
  * Structural checks a `deploy.config.ts` can fail on its own, with no
  * Dockerfile or compose file to compare against. Everything else — pairing,
- * `build.dockerfile`/`build.context`, and the API env probe — is either true
+ * the `appDir`-to-directory match, and the API env probe — is either true
  * by construction (the generator writes both files from this same config) or
  * lives in `infra/scripts/validate-deploy-config.mjs`, which can reach
  * `apps/api/src/config.ts` and the filesystem in ways this package must not.
@@ -182,6 +208,13 @@ export function validateAppConfig(config: DeployAppConfig): readonly string[] {
 
   if (config.appDir.length === 0) {
     failures.push("appDir must not be empty.");
+  } else if (!IMAGE_NAME_COMPONENT.test(config.appDir)) {
+    failures.push(
+      `${label}: appDir is not a legal Docker image name component, so the compose file would ` +
+        `name ${IMAGE_REGISTRY_PREFIX}${config.appDir}:` +
+        `${formatComposeVarReference(IMAGE_TAG_VARIABLE, undefined)} — a reference no registry ` +
+        `can resolve.`,
+    );
   }
   if (!config.packageName.startsWith("@unimatrix/")) {
     failures.push(`${label}: packageName must start with "@unimatrix/".`);
@@ -196,8 +229,12 @@ export function validateAppConfig(config: DeployAppConfig): readonly string[] {
         failures.push(`${label}: buildArg ${arg.name} is declared more than once.`);
       }
       seen.add(arg.name);
-      if (hasEmptyStringDefault(arg.default)) {
-        failures.push(`${label}: buildArg ${arg.name} has ${EMPTY_DEFAULT_MESSAGE}`);
+      if (arg.default === undefined) {
+        failures.push(`${label}: buildArg ${arg.name} has no default, ${BUILD_ARG_CONSEQUENCE}`);
+      } else if (hasEmptyStringDefault(arg.default)) {
+        failures.push(
+          `${label}: buildArg ${arg.name} has an empty-string default, ${BUILD_ARG_CONSEQUENCE}`,
+        );
       }
     }
 
@@ -274,14 +311,16 @@ export function validateAppConfig(config: DeployAppConfig): readonly string[] {
 }
 
 /**
- * Formats a compose `${NAME}` / `${NAME:-default}` substitution. The one
- * place this spelling decision is made, used by both a static SPA's
- * `build.args:` and the API's `environment:` block — an arg or env var with
- * no Dockerfile/image default gets the bare form, everything else the
- * `:-default` form. Reversing this is a browser-console-only failure: an
- * explicit empty `--build-arg` overrides the Dockerfile's own `ARG` default,
- * so a bare reference plus an unset deploy-environment variable inlines an
- * empty string instead of falling back to it.
+ * Formats a compose `${NAME}` / `${NAME:-default}` substitution — the one
+ * place that spelling is decided, shared by the service's `image:` tag and the
+ * API's `environment:` block.
+ *
+ * The bare form is the one to reach for. An unset variable reaches the
+ * container as an empty string rather than as absent, and both `node-api`
+ * config loaders refuse an empty value, so a deployment variable nobody set
+ * stops the service instead of booting it on a fallback nobody chose. The
+ * `:-default` form is for a literal that is genuinely safe everywhere this
+ * compose file runs.
  */
 function formatComposeVarReference(name: string, defaultValue: string | undefined): string {
   return defaultValue === undefined ? `\${${name}}` : `\${${name}:-${defaultValue}}`;
@@ -493,18 +532,9 @@ export function composeFor(config: DeployAppConfig): string {
   const lines: string[] = [
     "services:",
     `  ${config.appDir}:`,
-    "    build:",
-    "      context: ../..",
-    `      dockerfile: apps/${config.appDir}/Dockerfile`,
+    `    image: ${IMAGE_REGISTRY_PREFIX}${config.appDir}:` +
+      formatComposeVarReference(IMAGE_TAG_VARIABLE, undefined),
   ];
-
-  if (config.kind === "static-spa" && config.buildArgs.length > 0) {
-    lines.push("      args:");
-    for (const arg of config.buildArgs) {
-      lines.push(...formatCommentLines(arg.composeComment).map((line) => `        ${line}`));
-      lines.push(`        ${arg.name}: ${formatComposeVarReference(arg.name, arg.default)}`);
-    }
-  }
 
   if (config.kind === "node-api") {
     lines.push("    environment:");

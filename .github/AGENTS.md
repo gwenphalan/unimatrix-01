@@ -41,11 +41,14 @@ this file holds the mechanics, each of which was learned the hard way.
   unverified.**
 - `infra/scripts/check-app-wiring.sh` (run by `pnpm check`/`pnpm verify` and by the `App wiring`
   step in `Verify`, placed before `pnpm install` because it needs no `node_modules`) is the
-  mechanical guard on three things nothing else sees: an `@source` line resolving to
+  mechanical guard on four things nothing else sees: an `@source` line resolving to
   `packages/<name>/src` for every `packages/*` dependency that ships a `.tsx`, `@tanstack/react-router`
-  in its vite `dedupe`, and every `apps/*/Dockerfile` appearing in **every** `app: [...]` matrix array
+  in its vite `dedupe`, every `apps/*/Dockerfile` appearing in **every** `app: [...]` matrix array
   in `ci.yml` — today that is `Images` and `Publish`, and an app present in one and missing from the
-  other fails naming which matrix (`matrix #1`, `matrix #2`, ...) it is missing from. It walks
+  other fails naming which matrix (`matrix #1`, `matrix #2`, ...) it is missing from — and every
+  `infra/docker/<app>-compose.yaml` pulling the `ghcr.io/unimatrixcore/unimatrix-<app>` image
+  `Publish` pushes for that app, which is the only thing anywhere comparing the two spellings of
+  that registry path. It walks
   `apps/*` only, so `lab` carries the first two requirements unchecked. It is also the app template,
   but only for an app it can classify: a new Vite or Dockerized app satisfies it or the check goes
   red, while an `apps/*` directory with neither `vite.config.ts` nor `Dockerfile` is skipped and
@@ -56,6 +59,16 @@ this file holds the mechanics, each of which was learned the hard way.
   `Images`' — `check-app-wiring.sh` above enforces that across both. It is deliberately not a
   required check: it never runs on `pull_request`, so arming it would create a required check that
   is permanently green on every PR without verifying anything there.
+- `Deploy` follows `Publish`, on a push to `main` alone, and is what actually moves production: it
+  writes `IMAGE_TAG=<sha>` to each Dokploy project over the REST API, then calls `compose.deploy`
+  per service. Not a required check, for the same reason as `Publish`. A 200 from Dokploy means the
+  deploy was **queued** — a green `Deploy` is not evidence the new image is serving, and the job
+  says `queued` rather than claiming otherwise. It is the only job reading a configured Actions
+  secret (`DOKPLOY_API_KEY`, `CF_ACCESS_CLIENT_ID`, `CF_ACCESS_CLIENT_SECRET` — everything else in
+  this repo runs on the built-in `GITHUB_TOKEN`), and it prints no response body
+  from any call, because `project.all` returns every project's whole env blob and these run logs are
+  public. `docs/deployment.md` carries the rollback runbook and the project-env invariant that tag
+  write depends on.
 - `infra/scripts/check-agents-md-symlinks.sh` (same placement and rationale, as the `AGENTS.md
   symlinks` step) asserts every `AGENTS.md` has a sibling `CLAUDE.md` symlink pointing at it.
   Claude Code reads `CLAUDE.md`, not `AGENTS.md`, and discovers nested ones on demand when a file in
@@ -63,11 +76,7 @@ this file holds the mechanics, each of which was learned the hard way.
   notices. It fails closed on a missing symlink, a regular file in its place, a wrong target, and a
   `CLAUDE.md` whose `AGENTS.md` was renamed away.
 - The remaining guards, each aimed at one kind of drift.
-  `check-watch-paths.mjs` (`Watch paths`) has a production consequence: it derives
-  each app's real inputs from the `@unimatrix/*` specifiers under its `src/` and fails if one is
-  missing from the fenced watch-path list in its README, because Dokploy rebuilds only on those
-  paths — `packages/chrome/**` was absent from three apps, so the shared site chrome could change
-  without them redeploying. `check-stale-comments.mjs` (`Stale comments`) fails when a backticked
+  `check-stale-comments.mjs` (`Stale comments`) fails when a backticked
   `PascalCase` name in a comment exists in no code; an "occluder" mechanism was deleted and five
   comments across four workspaces outlived it. `check-coverage-drift.mjs` (`Coverage drift`) runs
   **after** `pnpm test` because it reads the `coverage/coverage-summary.json` that run writes, and

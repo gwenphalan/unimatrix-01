@@ -57,13 +57,6 @@ jobs:
       - name: AGENTS.md symlinks
         run: bash ./infra/scripts/check-agents-md-symlinks.sh
 
-      # Same placement rationale again — plain Node, no `node_modules`. Watch
-      # paths are the one of these with a production consequence: a package
-      # missing from an app's list means that app silently stops redeploying
-      # when the package changes.
-      - name: Watch paths
-        run: node ./infra/scripts/check-watch-paths.mjs
-
       - name: Stale comments
         run: node ./infra/scripts/check-stale-comments.mjs
 
@@ -353,3 +346,188 @@ jobs:
           if [ "$IS_MAIN_PUSH" = "true" ]; then
             docker push "$IMAGE:main"
           fi
+
+  # Every `infra/docker/*-compose.yaml` names `image:` and no `build:`, so a
+  # deploy builds nothing: it writes the tag to run and then asks Dokploy to
+  # pull it. Two API calls, in that order, or the deploy re-runs the tag that
+  # was already there.
+  #
+  # Deliberately **not** armed as a required check, for the same reason as
+  # `Publish`: it never runs on `pull_request`, so arming it would create a
+  # required check that is permanently green on every PR while verifying
+  # nothing.
+  #
+  # The `if:` is narrower than `Publish`'s on purpose. A `workflow_dispatch`
+  # from a feature branch may publish a SHA-tagged image, but must never be
+  # able to point production at it.
+  #
+  # One job rather than a matrix: the six calls share one credential and one
+  # project-level write, so a matrix would race on that write and report six
+  # red checks for one outage.
+  #
+  # The workflow-level `concurrency` block above has `cancel-in-progress: true`
+  # and covers this job, so a second push to `main` can cancel this one
+  # mid-flight — leaving `IMAGE_TAG` written with no deploy issued. The next
+  # merge heals it, but until then Dokploy's project env reads as deployed when
+  # nothing was.
+  deploy:
+    name: Deploy
+    needs: [publish]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+
+    steps:
+      # For `infra/docker/*-compose.yaml` alone: the stacks to deploy are
+      # derived from those filenames rather than listed here, so an app added
+      # to the matrices above cannot be silently left undeployed.
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # The Dokploy hostname is in `docs/deployment.md` already, so it lives
+      # here where a reviewer can see it rather than in a secret. The API key is
+      # instance-wide and the Cloudflare pair is what gets past Access on the
+      # origin — without it every call answers 302 from
+      # `unimatrix-01.cloudflareaccess.com`.
+      - name: Point Dokploy at this commit and deploy
+        env:
+          DOKPLOY_URL: https://dokploy.unimatrix-01.dev
+          DOKPLOY_API_KEY: ${{ secrets.DOKPLOY_API_KEY }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          work="$(mktemp -d)"
+          failures=()
+
+          # Without nullglob an unmatched glob expands to the pattern itself,
+          # so the zero-file guard below would be unreachable.
+          shopt -s nullglob
+
+          apps=()
+          for compose_file in infra/docker/*-compose.yaml; do
+            base="$(basename "$compose_file")"
+            apps+=("${base%-compose.yaml}")
+          done
+
+          if [ "${#apps[@]}" -eq 0 ]; then
+            echo "::error::no infra/docker/*-compose.yaml found — refusing to deploy vacuously"
+            exit 1
+          fi
+
+          # Never prints a response body. `project.all` returns every project's
+          # whole environment-variable blob and this repository's run logs are
+          # public; the status code is what diagnoses these calls anyway.
+          # `-f` is not used: it treats a 302 as success, and a 302 is the most
+          # likely first failure here.
+          call() {
+            local method="$1" path="$2" body="$3" out="$4" status
+            local args=(--silent --show-error -X "$method" "${DOKPLOY_URL}${path}"
+              -H "x-api-key: ${DOKPLOY_API_KEY}"
+              -H "CF-Access-Client-Id: ${CF_ACCESS_CLIENT_ID}"
+              -H "CF-Access-Client-Secret: ${CF_ACCESS_CLIENT_SECRET}"
+              -o "$out" -w '%{http_code}')
+            if [ -n "$body" ]; then
+              args+=(-H 'content-type: application/json' --data "$body")
+            fi
+            status="$(curl "${args[@]}" || true)"
+            printf '%s' "${status:-000}"
+          }
+
+          hint() {
+            case "$1" in
+              302) printf ' (Cloudflare Access is in front of this endpoint — check CF_ACCESS_CLIENT_ID/CF_ACCESS_CLIENT_SECRET)' ;;
+              401) printf ' (Dokploy rejected DOKPLOY_API_KEY)' ;;
+              000) printf ' (curl could not complete the request)' ;;
+              *) printf '' ;;
+            esac
+          }
+
+          status="$(call GET /api/project.all "" "${work}/projects.json")"
+          if [ "$status" != "200" ]; then
+            echo "::error::GET /api/project.all returned ${status}$(hint "$status")"
+            exit 1
+          fi
+
+          # Resolved per run rather than hardcoded: a compose service that is
+          # renamed or recreated gets a new id, and a stale map would deploy
+          # the wrong stack or nothing at all.
+          declare -A compose_id_of=()
+          declare -A project_of=()
+
+          for app in "${apps[@]}"; do
+            mapfile -t matches < <(jq -r --arg app "$app" \
+              '.[] | .projectId as $project | .environments[]?.compose[]?
+               | select(.name == $app) | "\($project) \(.composeId)"' \
+              "${work}/projects.json")
+
+            if [ "${#matches[@]}" -ne 1 ]; then
+              failures+=("${app}: Dokploy has ${#matches[@]} compose service(s) named '${app}', need exactly 1")
+              continue
+            fi
+
+            project_of["$app"]="${matches[0]%% *}"
+            compose_id_of["$app"]="${matches[0]##* }"
+          done
+
+          # One blind write per distinct project. `project.update` is a partial
+          # the router spreads over the row, so this REPLACES the project's
+          # whole env blob — safe only because project-level env holds
+          # IMAGE_TAG and nothing else. Keep it that way: reading it back to
+          # merge would pull whatever it holds into a public repository's
+          # runner, which is why this never does.
+          declare -A project_written=()
+
+          if [ "${#project_of[@]}" -gt 0 ]; then
+            for project in $(printf '%s\n' "${project_of[@]}" | sort -u); do
+              status="$(call POST /api/project.update \
+                "{\"projectId\":\"${project}\",\"env\":\"IMAGE_TAG=${IMAGE_TAG}\"}" \
+                "${work}/update.json")"
+              if [ "$status" = "200" ]; then
+                project_written["$project"]=1
+              else
+                failures+=("project ${project}: POST /api/project.update returned ${status}$(hint "$status")")
+              fi
+            done
+          fi
+
+          # Sequential, and only for a project whose tag actually landed:
+          # deploying against the old tag would queue a deploy of the previous
+          # commit and report it as this one.
+          for app in "${apps[@]}"; do
+            compose_id="${compose_id_of[$app]:-}"
+            [ -n "$compose_id" ] || continue
+
+            if [ -z "${project_written[${project_of[$app]}]:-}" ]; then
+              failures+=("${app}: skipped — its project's IMAGE_TAG write failed, so a deploy would run the previous commit")
+              continue
+            fi
+
+            status="$(call POST /api/compose.deploy \
+              "{\"composeId\":\"${compose_id}\",\"title\":\"CI ${IMAGE_TAG}\"}" \
+              "${work}/deploy.json")"
+            if [ "$status" = "200" ]; then
+              echo "${app}: deployment queued"
+            else
+              failures+=("${app}: POST /api/compose.deploy returned ${status}$(hint "$status")")
+            fi
+          done
+
+          if [ "${#failures[@]}" -gt 0 ]; then
+            for failure in "${failures[@]}"; do
+              echo "::error::${failure}"
+            done
+            exit 1
+          fi
+
+          # Queued, not applied. A 200 from Dokploy is an acknowledgement that
+          # the deploy was accepted; the container being recreated is the only
+          # signal it landed, and that can be minutes later — see
+          # docs/deployment.md, "A deploy is queued, not applied".
+          echo "${#apps[@]} stack(s) queued at ${IMAGE_TAG}. Queued is not applied."

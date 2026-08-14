@@ -35,8 +35,8 @@ describe("staticSpaApp / dockerfileFor / composeFor", () => {
     expect(dockerfile.split("\n")[1]?.startsWith("# GENERATED")).toBe(true);
 
     const compose = composeFor(config);
-    expect(compose).not.toContain("args:");
-    expect(compose).toContain("dockerfile: apps/cflop/Dockerfile");
+    expect(compose).toContain("image: ghcr.io/unimatrixcore/unimatrix-cflop:${IMAGE_TAG}");
+    expect(compose).not.toContain("build:");
   });
 
   it("pairs each ARG with its ENV, with a default that has no trailing empty ENV default", () => {
@@ -67,46 +67,6 @@ describe("staticSpaApp / dockerfileFor / composeFor", () => {
       "# The Clerk publishable key is public.\nARG VITE_CLERK_PUBLISHABLE_KEY\n",
     );
     expect(dockerfile).toContain("RUN pnpm --filter @unimatrix/auth-app build");
-  });
-
-  it("emits ${NAME:-default} when a build arg declares a default, and bare ${NAME} otherwise (A2)", () => {
-    const config = staticSpaApp({
-      appDir: "auth",
-      packageName: "@unimatrix/auth-app",
-      buildArgs: [
-        { name: "VITE_API_BASE_URL", default: "/api" },
-        { name: "VITE_CLERK_PUBLISHABLE_KEY" },
-      ],
-    });
-
-    const compose = composeFor(config);
-    expect(compose).toContain("VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api}");
-    expect(compose).toContain("VITE_CLERK_PUBLISHABLE_KEY: ${VITE_CLERK_PUBLISHABLE_KEY}");
-    // The bug this guards: an unset deploy-time var plus a bare reference
-    // inlines an empty string even though the Dockerfile has a default.
-    expect(compose).not.toContain("VITE_API_BASE_URL: ${VITE_API_BASE_URL}\n");
-  });
-
-  it("places a composeComment above its arg in the compose file only, not the Dockerfile", () => {
-    const config = staticSpaApp({
-      appDir: "admin",
-      packageName: "@unimatrix/admin",
-      buildArgs: [
-        {
-          name: "VITE_CLERK_PUBLISHABLE_KEY",
-          comment: ["Dockerfile-only comment."],
-          composeComment: ["Compose-only comment."],
-        },
-      ],
-    });
-
-    const dockerfile = dockerfileFor(config, FROM_LINES);
-    const compose = composeFor(config);
-
-    expect(dockerfile).toContain("Dockerfile-only comment.");
-    expect(dockerfile).not.toContain("Compose-only comment.");
-    expect(compose).toContain("Compose-only comment.");
-    expect(compose).not.toContain("Dockerfile-only comment.");
   });
 
   it("re-emits the given FROM lines verbatim rather than deriving them", () => {
@@ -204,6 +164,15 @@ describe("nodeApiApp / dockerfileFor / composeFor", () => {
         expect(indent).toBeGreaterThanOrEqual(6);
       }
     }
+  });
+
+  it("references a composeEnv variable with no default in the bare form", () => {
+    // A `:-default` here would be the silent failure: an unset variable reaches
+    // the container as an empty string rather than as absent, and this app's
+    // loader refuses an empty value — so the bare form is what turns a variable
+    // nobody set into a service that stops instead of one running on a fallback
+    // nobody chose.
+    expect(composeFor(config)).toContain("CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS}");
   });
 
   it("declares the named volume both on the service and at the top level", () => {
@@ -345,6 +314,17 @@ describe("validateAppConfig", () => {
     expect(failures[0]).toContain("empty-string default");
   });
 
+  it("rejects a build arg with no default at all, not just an empty one", () => {
+    const config = staticSpaApp({
+      appDir: "web",
+      packageName: "@unimatrix/web",
+      buildArgs: [{ name: "VITE_API_BASE_URL" }],
+    });
+    const failures = validateAppConfig(config);
+    expect(failures).toHaveLength(1);
+    expect(failures[0]).toContain("has no default");
+  });
+
   it("rejects a duplicate build arg name", () => {
     const config = staticSpaApp({
       appDir: "web",
@@ -428,6 +408,22 @@ describe("validateAppConfig", () => {
     expect(
       validateAppConfig(config).some((message) => message.includes("appDir must not be empty")),
     ).toBe(true);
+  });
+
+  it("rejects an appDir that is not a legal image name component", () => {
+    const rejected = staticSpaApp({ appDir: "Web", packageName: "@unimatrix/web", buildArgs: [] });
+    expect(
+      validateAppConfig(rejected).some((message) =>
+        message.includes("ghcr.io/unimatrixcore/unimatrix-Web:${IMAGE_TAG}"),
+      ),
+    ).toBe(true);
+
+    const accepted = staticSpaApp({
+      appDir: "cflop",
+      packageName: "@unimatrix/cflop",
+      buildArgs: [],
+    });
+    expect(validateAppConfig(accepted)).toEqual([]);
   });
 
   it("accepts a well-formed extraBuildPaths entry", () => {

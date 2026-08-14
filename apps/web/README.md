@@ -3,48 +3,5 @@
 The public web site is a Vite SPA deployed from `apps/web/Dockerfile` through
 `infra/docker/web-compose.yaml`.
 
-## Dokploy redeploy watch paths
-
-Configure the web Dokploy service to watch these repository paths. A change to
-any of them can change the built browser bundle or its container:
-
-```text
-apps/web/**
-content/blog/**
-content/home/**
-content/projects/**
-packages/api-client/**
-packages/app-config/**
-packages/chrome/**
-packages/config-typescript/**
-packages/content/**
-packages/shared/**
-packages/ui/**
-infra/docker/web-compose.yaml
-package.json
-pnpm-lock.yaml
-pnpm-workspace.yaml
-.dockerignore
-```
-
-`apps/web/**` includes its Dockerfile and Nginx configuration. The app bundles
-the listed content directories and imports source directly from the listed
-workspace packages, so each must trigger a rebuild. The root workspace files
-control the frozen pnpm install used by the Docker build.
-
-`packages/chrome/**` is on the list because the app's shell imports from
-`@unimatrix/chrome`. Omitting it lets the shared chrome change without this app
-rebuilding, so two apps serve different chrome with nothing to indicate it.
-
-When adding a workspace dependency or another build input, add its path here
-and to the Dokploy service's watch-path configuration. Removing one is the same
-two edits: `check-watch-paths.mjs` is one-directional on purpose and fails only
-on a *missing* entry, so a path left behind after its import goes away costs
-nothing but rebuilds and is invisible to every check. See
-[`docs/deployment.md`](../../docs/deployment.md) for the
-repository-wide convention.
-
-Watch paths apply to `push` events only. Dokploy's pull request handler does
-not filter by them, so if preview deployments are enabled, every PR against
-`main` rebuilds this app regardless of what it touched — including a
-docs-only PR.
+The image is built by CI, not on the deploy host — see
+[`docs/deployment.md`](../../docs/deployment.md).

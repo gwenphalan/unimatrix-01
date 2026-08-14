@@ -1,9 +1,4 @@
 services:
   auth:
-    build:
-      context: ../..
-      dockerfile: apps/auth/Dockerfile
-      args:
-        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-https://api.unimatrix-01.dev}
-        VITE_CLERK_PUBLISHABLE_KEY: ${VITE_CLERK_PUBLISHABLE_KEY:-pk_live_Y2xlcmsudW5pbWF0cml4LTAxLmRldiQ}
+    image: ghcr.io/unimatrixcore/unimatrix-auth:${IMAGE_TAG}
     restart: unless-stopped

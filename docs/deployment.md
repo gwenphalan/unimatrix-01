@@ -40,25 +40,39 @@ In this shape:
   deliberately unrouted. That makes it unreachable from the internet; it does
   not make it private. See "Secrets service" below
 
-### SPA build args now default in `deploy.config.ts`
+### SPA build args are baked into the published image
 
-`apps/web`, `apps/auth`, and `apps/admin` each build with production values
-as their `ARG` defaults (see `apps/<app>/deploy.config.ts`), so a
-`docker build` with no `--build-arg` produces a correct production image.
-The Dokploy environment variables listed per service below
-(`VITE_API_BASE_URL`, `VITE_CLERK_PUBLISHABLE_KEY`, `VITE_AUTH_APP_URL`) are
-consequently redundant with those defaults; they still take effect when
-Dokploy builds, since an explicit `--build-arg` overrides a Dockerfile
-default.
+`apps/web`, `apps/auth`, and `apps/admin` each declare production values as
+their `ARG` defaults (see `apps/<app>/deploy.config.ts`). CI builds each image
+with no `--build-arg` and the compose files pull that image rather than
+building one, so those defaults are the only values that ever reach a browser
+bundle: setting `VITE_API_BASE_URL`, `VITE_CLERK_PUBLISHABLE_KEY` or
+`VITE_AUTH_APP_URL` on a Dokploy service changes nothing at all. Pointing an
+app at a different API origin or Clerk instance means editing its
+`deploy.config.ts` default and publishing a new image.
 
 ## Published GHCR images
 
 CI's `Publish` job (`.github/workflows/ci.yml`) builds every `apps/*/Dockerfile`
 with no build args and pushes it to `ghcr.io/unimatrixcore/unimatrix-<app>` on
 every push to `main`, tagged with the commit SHA and a moving `main` tag. The
-packages are public. **Nothing deploys from them yet** — every Dokploy service
-below still builds from the `build:` block in its own
-`infra/docker/<app>-compose.yaml`, not by pulling a GHCR image.
+packages are public, so Dokploy pulls them unauthenticated.
+
+Every `infra/docker/<app>-compose.yaml` declares `image:` and no `build:`, so
+nothing is built on the deploy host: each stack pulls
+`ghcr.io/unimatrixcore/unimatrix-<app>:${IMAGE_TAG}`, and `IMAGE_TAG` is the
+only thing deciding which commit production runs.
+
+**Each Compose service needs `IMAGE_TAG=${{project.IMAGE_TAG}}` in its own
+environment variables, once.** Dokploy does not inherit project-level variables
+into a Compose stack. It writes the stack's `.env` from the *service's* own env
+alone, expanding `${{project.X}}` references out of the project blob as it goes,
+and then runs `docker compose … up` under `env -i`, so nothing ambient reaches
+the substitution either. Without that one line `${IMAGE_TAG}` resolves to an
+empty string and the deploy fails on `invalid reference format` — loudly, with
+the previous container still running. (Read from `getCreateEnvFileCommand`,
+`prepareEnvironmentVariables` and `getBuildComposeCommand` in Dokploy v0.29.13;
+not measured against the instance.)
 
 ### A new app's package is private until someone makes it public by hand
 
@@ -81,6 +95,70 @@ indistinguishable from a bad tag, so the obvious next move is to go and debug
 the tag scheme. Visibility is a property of the package rather than of each
 version, so this is once per app, not once per deploy.
 
+## How a deploy is triggered
+
+CI's `Deploy` job (`.github/workflows/ci.yml`) runs after `Publish`, on a push
+to `main` and nowhere else — a `workflow_dispatch` from a feature branch
+publishes a SHA-tagged image but can never point production at it. It makes two
+writes over Dokploy's REST API, in this order:
+
+1. `POST /api/project.update` sets the project's environment to
+   `IMAGE_TAG=<commit sha>`, once per project the compose services span.
+2. `POST /api/compose.deploy`, one call per service and sequentially, which is
+   what makes Dokploy pull the newly tagged images.
+
+Which service is which is resolved per run from `GET /api/project.all`, by
+matching each `infra/docker/<app>-compose.yaml` to a Dokploy compose service of
+the same name. A service that is missing, renamed, or duplicated fails the job
+by name rather than being skipped, and a project whose tag write failed has its
+services skipped rather than deployed at the previous commit's tag.
+
+**Project-level environment holds `IMAGE_TAG` and nothing else**, and each
+service reads it through the one-line reference described under "Published GHCR
+images" above. `project.update` is a partial that Dokploy spreads over the row,
+so the write above *replaces* the whole blob — a second variable stored at
+project level would be deleted on the next merge. CI deliberately never reads the blob back
+to merge into it, because that would pull whatever it holds into a public
+repository's runner, so this invariant is the only thing protecting anything
+kept there. Per-service variables (`CORS_ALLOWED_ORIGINS`, `CLERK_*`, the
+`SECRETS_*` set) live on the service and are untouched by any of this.
+
+**`autoDeploy` must stay off on all six services.** With it on, Dokploy deploys
+on a push of its own accord, at whatever `IMAGE_TAG` the project holds at that
+moment — which during a CI run is the previous commit. Watch paths are no
+defence: `shouldDeploy` returns true when a service's watch-path list is empty,
+so a service with none set redeploys on every push to `main`. It is a
+Dokploy-side setting and nothing in this repository can assert it.
+
+That choice has a price. `POST /api/compose.refreshToken` mints a per-service
+webhook URL — a far narrower credential than the instance-wide API key — and it
+answers `400 Automatic deployments are disabled for this compose` while
+`autoDeploy` is off. The instance-wide key is what the safety control costs.
+
+**A 200 is an acknowledgement, not a deploy.** The job logs `queued` and claims
+nothing more; see "A deploy is queued, not applied" below for the only signal
+that says otherwise.
+
+### Rolling back
+
+Dokploy has **no rollback for Compose services** — its rollback path resolves
+`deployment.applicationId` only, and a compose deployment has none. Reverting
+the commit does not roll production back either, because the running version is
+whatever `IMAGE_TAG` says, not whatever `main` says.
+
+So a rollback is one edit and one deploy:
+
+1. Pick the commit to go back to. Any commit whose `Publish` run succeeded has
+   a `ghcr.io/unimatrixcore/unimatrix-<app>` tag under its SHA.
+2. Set `IMAGE_TAG` to that SHA in the Dokploy project's environment UI, keeping
+   it the only variable there.
+3. Redeploy the affected services and confirm each container was **recreated**
+   — see "A deploy is queued, not applied" below.
+
+Reverting on `main` and merging works too and is slower: it goes through CI,
+publishes a new image, and writes the new SHA. Reach for that when the revert
+belongs in the repository as well.
+
 ## Dokploy service layout
 
 Create one Dokploy service per `infra/docker/*-compose.yaml`, all from the same
@@ -91,16 +169,14 @@ application type (not the plain Dockerfile application type).
 
 - application type: Compose
 - compose path: `infra/docker/web-compose.yaml`
-- environment variables (set in Dokploy's UI, not in the file):
-  - `VITE_API_BASE_URL=https://api.example.com`
+- no service-level environment variables — `VITE_API_BASE_URL` is baked into
+  the published image (see "SPA build args are baked into the published image")
 - Domains page: route `site.example.com` to the `web` service, container port
   `8080`
 
-This `VITE_*` value is inlined into the bundle at **build** time, so it must be
-present before the image builds (the compose file passes it as a build arg).
 The public site is fully anonymous — no Clerk, no sign-in affordance, no
-account-scoped UI. That surface now lives on `apps/admin`; see the admin
-service below.
+account-scoped UI. That surface lives on `apps/admin`; see the admin service
+below.
 
 The web container is a static SPA container. Preserve SPA fallback behavior
 inside the web container regardless of routing.
@@ -214,9 +290,9 @@ visitor arrives with an empty profile.
 
 - application type: Compose
 - compose path: `infra/docker/auth-compose.yaml`
-- environment variables (set in Dokploy's UI, not in the file):
-  `VITE_API_BASE_URL=https://api.example.com`,
-  `VITE_CLERK_PUBLISHABLE_KEY=pk_live_...`
+- no service-level environment variables — `VITE_API_BASE_URL` and
+  `VITE_CLERK_PUBLISHABLE_KEY` are baked into the published image (see "SPA
+  build args are baked into the published image")
 - Domains page: route `auth.unimatrix-01.dev` to the `auth` service,
   container port `8080`
 
@@ -231,10 +307,9 @@ the API service to include
 
 - application type: Compose
 - compose path: `infra/docker/admin-compose.yaml`
-- environment variables (set in Dokploy's UI, not in the file):
-  `VITE_CLERK_PUBLISHABLE_KEY=pk_live_...`, `VITE_API_BASE_URL=https://api.example.com`,
-  and optionally `VITE_AUTH_APP_URL` (defaults to `https://auth.unimatrix-01.dev`) — see
-  "SPA build args now default in `deploy.config.ts`" above
+- no service-level environment variables — `VITE_CLERK_PUBLISHABLE_KEY`,
+  `VITE_API_BASE_URL` and `VITE_AUTH_APP_URL` are baked into the published
+  image (see "SPA build args are baked into the published image")
 - Domains page: route `admin.unimatrix-01.dev` to the `admin` service,
   container port `8080`
 
@@ -372,16 +447,15 @@ deliberate: a certificate pinned by value gains nothing from expiring, and an
 expired one is an outage with a confusing error.
 
 Order matters, and none of these steps is optional. Steps 1 to 3 happen
-**before the compose changes reach `main`**, not after. Both services carry
-`autoDeploy: true` on `main` with their own compose file in `watchPaths` (read
-from Dokploy's `compose.one`), so the merge is the deploy — and an unset
-variable reaches the container as an empty string, present rather than absent,
-which both loaders refuse. Merging first restart-loops the store and the API,
-and with the store down step 3's tokens cannot be minted at all: the CLI that
-mints them runs inside the running container.
+**before either stack is deployed with the new compose file**, not after: an
+unset variable reaches the container as an empty string, present rather than
+absent, and both loaders refuse an empty value. Deploy first and the store and
+the API both restart-loop — and with the store down, step 3's tokens cannot be
+minted at all, because the CLI that mints them runs inside the running
+container.
 
-Setting the variables early is safe. The deployed compose files do not
-reference them until the change lands.
+Setting the variables early is safe. The containers already running do not read
+them until a deploy replaces them.
 
 1. `docker network create unimatrix-secrets` on the host. Compose does not
    create an external network; it fails when one is missing.
@@ -391,8 +465,9 @@ reference them until the change lands.
    five `SECRETS_*` variables on the **api** stack: the base URL
    `https://secrets:3001`, the three distinct tokens, and the certificate.
    Never the private key.
-4. Merge. Both stacks deploy on their own compose file changing, and a deploy
-   is queued rather than applied — see "A deploy is queued, not applied" below.
+4. Merge, wait for `Publish` to push the new images, then deploy both stacks. A
+   deploy is queued rather than applied — see "A deploy is queued, not applied"
+   below.
 5. Confirm `"scheme":"https"` in the store's boot log and the container
    reporting `healthy`, then check the public API through Traefik immediately.
    A 502 means the explicit `networks:` block cost the service its Traefik
@@ -485,34 +560,17 @@ scheme.
   `DEFAULT_API_CORS_ALLOWED_ORIGINS` in `apps/api/src/config.ts`, which includes
   local development origins — set it explicitly in production
 
-## Auto-updates from `main`
+## The host reuses its layer cache between builds
 
-Enable automatic Dokploy redeploys from the repository `main` branch for every
-service, using service-specific watch paths. This avoids rebuilding every
-service for an unrelated monorepo change while still rebuilding when its image
-inputs change.
+Scope: the two preview **Application** services (see "Pull request preview
+deployments" below) are the only Dokploy services that still build on the host.
+Every Compose stack pulls a published image, so nothing below affects how long a
+production deploy takes.
 
-Each live app owns the canonical list for its Dokploy service:
-
-- `apps/web/README.md`
-- `apps/api/README.md`
-- `apps/cflop/README.md`
-- `apps/auth/README.md`
-- `apps/admin/README.md`
-- `apps/secrets/README.md`
-
-Copy each list exactly into that service's Dokploy watch-path configuration.
-The lists include the app directory, directly imported workspace packages,
-shared root pnpm manifests, and the service-specific Compose file. When an app
-adds a workspace dependency, new bundled content, or another Docker build
-input, update its README and Dokploy configuration in the same change.
-
-## The host reuses its layer cache between deploys
-
-The prune stage's `COPY . .` misses on every deploy — each deploy builds a
-different commit and the whole repository is that stage's context. The install
-layer survives it anyway, because `turbo prune <package> --docker` emits an
-`out/json` that a change outside the package's pruned scope does not move.
+The prune stage's `COPY . .` misses on every build — each build is a different
+commit and the whole repository is that stage's context. The install layer
+survives it anyway, because `turbo prune <package> --docker` emits an `out/json`
+that a change outside the package's pruned scope does not move.
 
 Measured on the `api` service across two consecutive deploys, 2026-08-14: b169a72
 at 07:17:43 UTC, then 96c4397 at 07:33:17 UTC — a change spanning `apps/cflop`, a
@@ -529,9 +587,9 @@ byte-identical `out/json`, and the second build reported:
 #17 DONE 10.5s
 ```
 
-The cache is shared across services rather than held per service: the `web`
-compose deploy at 07:17:17 reused an install layer that a `main` deploy of the
-`web-preview` Application service had built 78 seconds earlier. That is an
+The cache is shared across services rather than held per service: in that same
+window, the `web` build at 07:17:17 reused an install layer a `main` deploy of
+the `web-preview` Application service had built 78 seconds earlier. That was an
 ordinary branch deploy — PR previews still produce nothing, see "Pull request
 preview deployments" below.
 
@@ -540,7 +598,7 @@ BuildKit's default garbage collection applies: read on 2026-08-14 at 07:37 UTC,
 the oldest surviving cache record was under three hours old. Treat a layer from a
 previous day as gone.
 
-Read the install step off the host per deploy:
+Read the install step off the host per build:
 
 ```bash
 f=$(ls -t /etc/dokploy/logs/<service>/* | head -1)
@@ -688,7 +746,9 @@ default (no API dependency), but there is no reason to split them.
 ### Three behaviours that are invisible from the UI
 
 - **Watch paths do not apply to pull requests.** The `push` handler filters by
-  watch path; the `pull_request` handler does not. Every PR against `main`
+  watch path; the `pull_request` handler does not, so a watch path set on one of
+  these Application services throttles its branch deploys and never its
+  previews. Every PR against `main`
   rebuilds every previewable app — a docs-only PR triggers two full repo-root
   `pnpm install --frozen-lockfile` plus workspace builds and posts two bot
   comments. If that is too much load, the throttle is the preview **label**
@@ -799,8 +859,33 @@ expiry, granting instance-wide administrative control: it can create, mutate,
 and delete every application on the Dokploy instance — not only this project's
 — and trigger builds. Since a build runs a Dockerfile of the holder's choosing
 on the host, treat that reach as host-level in practice even though the key
-itself is not an OS credential. Issue one for the task, keep it out of the repo
-and out of CI, and revoke it when the setup is done.
+itself is not an OS credential. A key issued for a one-off task still gets
+revoked when that task is done.
+
+One such key is a standing exception: `DOKPLOY_API_KEY` in this repository's
+Actions secrets, with `CF_ACCESS_CLIENT_ID` and `CF_ACCESS_CLIENT_SECRET`
+beside it to get past Cloudflare Access. That reverses the rule this section
+carried until 2026-08-14 — issue a key per task, never in CI — and it was
+reversed on purpose: Dokploy has no scoped or per-project key to issue instead,
+and the narrower per-service webhook credential requires `autoDeploy: true`,
+which is exactly the control that stops every push deploying every service (see
+"How a deploy is triggered" above). What makes it tolerable is that Actions
+secrets are not exposed to workflows triggered by fork pull requests, so an
+outside contributor cannot reach them. What it costs is that anyone who can
+push to `main` can reach the whole instance.
+
+The Cloudflare half is an Access **service token** named `github-actions-deploy`,
+allowed by a Service Auth policy on the `Dokploy control panel` application. It
+sits behind the existing owner-email policy rather than replacing it, so it
+grants no browser access to anyone.
+
+**It expires 2027-08-14, and its lapse is silent.** An expired service token
+does not fail closed with an error a reader would recognise — Cloudflare answers
+the runner with a 302 to the login page, exactly as it did before the token
+existed, and `Deploy` reports it as `POST /api/compose.deploy returned 302`.
+Nothing warns beforehand. Minting a replacement and updating the two Actions
+secrets is the whole fix; the policy references the token by id, so a new token
+needs the policy updated too.
 
 ## Verification after deploy
 
@@ -831,9 +916,5 @@ static-host 404.
   auto-detects a builder (Nixpacks) and cannot build this pnpm monorepo. Every
   service here must be a **Compose** application pointing at its
   `infra/docker/*-compose.yaml` file (see the per-service sections above), which
-  builds the app's `Dockerfile` with the repo root as the build context. Recreate
-  the service as a Compose application rather than editing the Nixpacks one.
-- **Build args resolve to empty** (e.g. a blank `VITE_CLERK_PUBLISHABLE_KEY` or
-  `VITE_API_BASE_URL` baked into the bundle): the compose files pass these through
-  as `${VAR}` build args, so they must be set in the Dokploy service's environment
-  before the build runs — Vite inlines them at build time, not runtime.
+  pulls a published image and builds nothing. Recreate the service as a Compose
+  application rather than editing the Nixpacks one.

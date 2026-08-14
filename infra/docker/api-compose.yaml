@@ -1,8 +1,6 @@
 services:
   api:
-    build:
-      context: ../..
-      dockerfile: apps/api/Dockerfile
+    image: ghcr.io/unimatrixcore/unimatrix-api:${IMAGE_TAG}
     environment:
       HOST: 0.0.0.0
       PORT: 3001

@@ -26,34 +26,6 @@ calling, service-token-authenticated caller — not a fact this service verifies
 authorization decision; omitting it lands `null`. `POST /secrets` reports a name that already
 exists as `409 CONFLICT`, distinct from the `400 VALIDATION_ERROR` a malformed body gets.
 
-## Dokploy redeploy watch paths
-
-Configure the secrets Dokploy service to watch these repository paths. A
-change to any of them can change the service image or its runtime behavior:
-
-```text
-apps/secrets/**
-packages/secrets/**
-packages/shared/**
-packages/config-typescript/**
-infra/docker/secrets-compose.yaml
-package.json
-pnpm-lock.yaml
-pnpm-workspace.yaml
-.dockerignore
-```
-
-`apps/secrets/**` includes its Dockerfile and Drizzle migrations. The shared
-package paths are this service's workspace dependencies; note the absence of
-`packages/db/**` — this service owns its own Drizzle schema and migration set
-and never depends on that package. The root workspace files control the
-frozen pnpm install used by the Docker build.
-
-When adding a workspace dependency or another build input, add its path here
-and to the Dokploy service's watch-path configuration. See
-[`docs/deployment.md`](../../docs/deployment.md) for the
-repository-wide convention.
-
 ## Local development
 
 Requires a KEK — the service refuses to start without one. There is no `.env`
