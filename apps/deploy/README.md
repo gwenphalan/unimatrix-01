@@ -22,13 +22,15 @@ the first time:
 
 ## Before this stack can deploy
 
-None of the following is enforced by a check — say so plainly rather than
-implying otherwise:
+Nothing here is gated before a merge. Step 1 is the only one any check reports
+on at all, and it reports **after** the merge, in a job that cannot block one:
 
 1. Create a Dokploy Compose service named `deploy` **before merging** the PR
-   that adds `infra/docker/deploy-compose.yaml`. CI's `Deploy` job resolves
-   every generated compose file against Dokploy's project list and fails by
-   name — not just skips — when one is missing.
+   that adds `infra/docker/deploy-compose.yaml`. CI's `Deploy` job runs on push
+   to `main` only, resolves every generated compose file against Dokploy's
+   project list, and fails by name — not just skips — when one is missing. It
+   is not an armed required check, so a missing service is a red job on `main`
+   rather than a blocked PR.
 2. Set `IMAGE_TAG=${{project.IMAGE_TAG}}` in that service's own environment
    variables. Dokploy does not inherit project-level variables into a Compose
    stack, so without this line `${IMAGE_TAG}` resolves empty and the deploy
