@@ -406,6 +406,10 @@ jobs:
           work="$(mktemp -d)"
           failures=()
 
+          # Without nullglob an unmatched glob expands to the pattern itself,
+          # so the zero-file guard below would be unreachable.
+          shopt -s nullglob
+
           apps=()
           for compose_file in infra/docker/*-compose.yaml; do
             base="$(basename "$compose_file")"

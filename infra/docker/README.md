@@ -249,7 +249,7 @@ fails with `invalid reference format` rather than starting something arbitrary.
 The four SPA variables (`VITE_*`) are absent from these files on purpose —
 they are inlined into a bundle at build time, so only a rebuild changes them.
 To exercise a working-tree change, build it with the `docker build` lines
-above.
+below.
 
 None of the files publish host ports. That is intentional: the same files run
 unmodified as Dokploy Compose apps, where Dokploy's Domains page owns port
@@ -333,9 +333,11 @@ attaches a stack to that overlay when Traefik has to reach it. Neither fact is w
 service private: a service token is. See `docs/deployment.md`'s "Secrets service" section.
 
 Only `api-compose.yaml` and `secrets-compose.yaml` carry an `environment:`
-block, and every value in it comes from compose variable substitution — set
+block. The `${...}` entries in it come from compose variable substitution — set
 those in the Dokploy app's environment variables UI rather than editing the
-file. The four SPA stacks have none: their `VITE_*` values are inlined into the
+file. The literals beside them (`HOST`, `PORT`, `NODE_ENV`, `LOG_LEVEL` and the
+rest) are fixed by the file, and a Dokploy variable of the same name does not
+override one. The four SPA stacks have no block at all: their `VITE_*` values are inlined into the
 bundle when the image is built, so a Dokploy variable would reach nothing. All
 six read `IMAGE_TAG` for the tag they pull; see `docs/deployment.md`.
 
