@@ -3,6 +3,7 @@ import test from "node:test";
 
 import { buildApp } from "../src/app.js";
 import { loadDeployRuntimeConfig, type DeployRuntimeEnv } from "../src/config.js";
+import type { DokployClient } from "../src/dokploy/client.js";
 
 const BASE_ENV: DeployRuntimeEnv = {
   LOG_LEVEL: "error",
@@ -11,8 +12,13 @@ const BASE_ENV: DeployRuntimeEnv = {
   DOKPLOY_API_KEY: "dokploy_test_key",
 };
 
+const stubDokployClient: DokployClient = {
+  getDokployVersion: () => Promise.reject(new Error("not used in these tests")),
+  getContainers: () => Promise.reject(new Error("not used in these tests")),
+};
+
 function createTestApp(env: DeployRuntimeEnv = {}) {
-  return buildApp(loadDeployRuntimeConfig({ ...BASE_ENV, ...env }));
+  return buildApp(loadDeployRuntimeConfig({ ...BASE_ENV, ...env }), { dokploy: stubDokployClient });
 }
 
 void test("GET /health returns the expected health payload and cache headers", async () => {

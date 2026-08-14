@@ -1,6 +1,7 @@
 import Fastify, { LogController, type FastifyInstance, type FastifyServerOptions } from "fastify";
 
 import type { DeployRuntimeConfig } from "./config.js";
+import type { DokployClient } from "./dokploy/client.js";
 import { createNotFoundErrorEnvelope, normalizeDeployError } from "./lib/http/errors.js";
 import { buildLoggerOptions, type DeployLoggerStream } from "./lib/http/logging.js";
 import { registerModules } from "./modules/index.js";
@@ -9,10 +10,13 @@ import { setupCorePlugins } from "./plugins/index.js";
 declare module "fastify" {
   interface FastifyInstance {
     runtimeConfig: DeployRuntimeConfig;
+    dokploy: DokployClient;
   }
 }
 
 export interface BuildDeployAppOptions {
+  /** The typed Dokploy API client, decorated onto the instance as `app.dokploy`. */
+  dokploy: DokployClient;
   /** Where log records go instead of stdout, so tests can assert on redaction. */
   loggerStream?: DeployLoggerStream;
 }
@@ -25,7 +29,7 @@ const REQUEST_BODY_LIMIT_BYTES = 65_536;
 
 export function buildApp(
   config: DeployRuntimeConfig,
-  options: BuildDeployAppOptions = {},
+  options: BuildDeployAppOptions,
 ): FastifyInstance {
   const loggerOptions =
     options.loggerStream === undefined
@@ -43,6 +47,7 @@ export function buildApp(
   const app: FastifyInstance = Fastify(appOptions);
 
   app.decorate("runtimeConfig", config);
+  app.decorate("dokploy", options.dokploy);
   setupCorePlugins(app);
 
   app.setErrorHandler((error, request, reply) => {

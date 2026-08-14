@@ -1,11 +1,16 @@
 import { buildApp } from "./app.js";
 import { loadDeployRuntimeConfig } from "./config.js";
+import { createDokployClient, loadDokployApiKey } from "./dokploy/client.js";
 
 // No .env file loading here, same reasoning as apps/secrets/src/server.ts: porting it would put a
 // plaintext Dokploy API key on a developer's disk. Local dev supplies DOKPLOY_BASE_URL and
 // DOKPLOY_API_KEY on the command line — see README.md.
 const config = loadDeployRuntimeConfig();
-const app = buildApp(config);
+const dokploy = createDokployClient({
+  baseUrl: config.dokployBaseUrl,
+  apiKey: loadDokployApiKey(),
+});
+const app = buildApp(config, { dokploy });
 
 let closeAppPromise: Promise<void> | null = null;
 let isShuttingDown = false;
