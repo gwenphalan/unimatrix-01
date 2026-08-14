@@ -157,7 +157,9 @@ central Clerk-backed accounts app (sign-in/sign-up and account management).
 - build-time env: `VITE_API_BASE_URL`, `VITE_CLERK_PUBLISHABLE_KEY`
 
 `VITE_CLERK_PUBLISHABLE_KEY` is a public key and safe to ship in a browser
-bundle, but it must be the real key for the target Clerk instance.
+bundle. It defaults to the production Clerk instance's key (see
+`apps/auth/deploy.config.ts`); pass `--build-arg` to target a different
+Clerk instance.
 
 Example build:
 
@@ -185,10 +187,11 @@ console behind Cloudflare Access; the container itself carries no secrets.
   `VITE_AUTH_APP_URL` (sign-in redirect target, defaults to
   `https://auth.unimatrix-01.dev`)
 
-`VITE_CLERK_PUBLISHABLE_KEY` has no Dockerfile default on purpose:
-`loadAdminAppRuntimeConfig` throws without it, so an image built without the
-key fails loudly in the browser rather than rendering an admin console that
-can never sign anyone in.
+`VITE_CLERK_PUBLISHABLE_KEY` defaults to the production Clerk instance's key
+(see `apps/admin/deploy.config.ts`); pass `--build-arg` to target a different
+Clerk instance. `loadAdminAppRuntimeConfig` still throws on an *empty* value,
+so an explicit `--build-arg VITE_CLERK_PUBLISHABLE_KEY=` fails loudly rather
+than rendering an admin console that can never sign anyone in.
 
 Example build:
 

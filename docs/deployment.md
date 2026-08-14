@@ -40,6 +40,17 @@ In this shape:
   deliberately unrouted. That makes it unreachable from the internet; it does
   not make it private. See "Secrets service" below
 
+### SPA build args now default in `deploy.config.ts`
+
+`apps/web`, `apps/auth`, and `apps/admin` each build with production values
+as their `ARG` defaults (see `apps/<app>/deploy.config.ts`), so a
+`docker build` with no `--build-arg` produces a correct production image.
+The Dokploy environment variables listed per service below
+(`VITE_API_BASE_URL`, `VITE_CLERK_PUBLISHABLE_KEY`, `VITE_AUTH_APP_URL`) are
+consequently redundant with those defaults; they still take effect when
+Dokploy builds, since an explicit `--build-arg` overrides a Dockerfile
+default.
+
 ## Dokploy service layout
 
 Create one Dokploy service per `infra/docker/*-compose.yaml`, all from the same
@@ -191,10 +202,9 @@ the API service to include
 - application type: Compose
 - compose path: `infra/docker/admin-compose.yaml`
 - environment variables (set in Dokploy's UI, not in the file):
-  `VITE_CLERK_PUBLISHABLE_KEY=pk_live_...` (required — `loadAdminAppRuntimeConfig`
-  throws without it, so a keyless image fails loudly in the browser),
-  `VITE_API_BASE_URL=https://api.example.com`, and optionally
-  `VITE_AUTH_APP_URL` (defaults to `https://auth.unimatrix-01.dev`)
+  `VITE_CLERK_PUBLISHABLE_KEY=pk_live_...`, `VITE_API_BASE_URL=https://api.example.com`,
+  and optionally `VITE_AUTH_APP_URL` (defaults to `https://auth.unimatrix-01.dev`) — see
+  "SPA build args now default in `deploy.config.ts`" above
 - Domains page: route `admin.unimatrix-01.dev` to the `admin` service,
   container port `8080`
 

@@ -18,7 +18,7 @@ RUN turbo prune @unimatrix/web --docker
 FROM base AS build
 COPY --from=prune /workspace/out/json/ .
 RUN pnpm install --frozen-lockfile
-ARG VITE_API_BASE_URL=/api
+ARG VITE_API_BASE_URL=https://api.unimatrix-01.dev
 ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
 COPY --from=prune /workspace/out/full/ .
 COPY content/home ./content/home
