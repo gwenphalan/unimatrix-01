@@ -3,9 +3,9 @@
 The administration console is a Vite SPA built from `apps/admin/Dockerfile`
 and served by nginx on port 8080, matching the other three static apps.
 
-Content is the first built section — the blog/project CMS, moved here from
-`apps/web` — on `@unimatrix/chrome`'s tool shell; the other six section routes
-are still placeholders. It is deployed and reachable:
+Content (the blog/project CMS) and Secrets (the credential console) are the
+built sections, on `@unimatrix/chrome`'s tool shell; the remaining section
+routes are still placeholders. It is deployed and reachable:
 `infra/docker/admin-compose.yaml` is the Dokploy Compose file, and
 `admin.unimatrix-01.dev` sits behind Cloudflare Access, which is what makes the
 ungated placeholder routes safe.

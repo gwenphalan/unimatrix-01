@@ -17,8 +17,8 @@ export const Route = createLazyFileRoute("/content")({
  *
  * `<Toaster />` is mounted here rather than in `AppShell`: publish, delete and
  * upload are the only actions in this section that report errors through a
- * toast, and this is one of the two sections that reach `@unimatrix/ui`'s
- * root barrel — the other five stay on `NotBuiltPlaceholder` from `./public`.
+ * toast, and this is the only route that reaches `@unimatrix/ui`'s root
+ * barrel.
  */
 function ContentRoute() {
   const { isLoaded, permissions } = usePermissions();

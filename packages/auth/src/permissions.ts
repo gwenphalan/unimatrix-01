@@ -106,12 +106,10 @@ export function isAdmin(
 /**
  * Sections of the admin app (`apps/admin`) that are gated independently.
  *
- * A section belongs here once something exists for the gate to protect —
- * either the admin UI itself or, for `secrets`, an API route
- * (`POST /integrations/admin/credentials/refresh`) reachable before the UI
- * route is gated. The four remaining placeholders (deploys, analytics,
- * social, feedback triage) stay out: naming them here would pre-commit
- * decisions that have not been taken yet.
+ * A section belongs here once something exists for the gate to protect. The
+ * remaining `NotBuiltPlaceholder` routes under `apps/admin/src/routes` stay
+ * out: naming them here would pre-commit decisions that have not been taken
+ * yet.
  */
 export const ADMIN_SECTIONS = ["content", "secrets"] as const;
 

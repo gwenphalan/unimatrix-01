@@ -8,13 +8,10 @@ export const Route = createLazyFileRoute("/")({
 });
 
 /**
- * The scaffold's one placeholder route, and it is **deliberately ungated**.
- *
- * `canAccessAdminSection` exists in `@unimatrix/auth` already, but wiring a
- * gate around a page that shows nothing would be a security control that looks
- * present and protects nothing — and the origin's real protection (Cloudflare
- * Access in front of it) is not this app's job either. The gate lands with the
- * first section that actually has something to guard.
+ * Deliberately ungated. A gate around a page that shows nothing would be a
+ * security control that looks present and protects nothing, and the origin's
+ * real protection — Cloudflare Access in front of it — is not this app's job.
+ * `/content` and `/secrets` are the gated sections.
  */
 function IndexRoute() {
   return (
