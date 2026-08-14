@@ -45,6 +45,11 @@
       "ignoreDependencies": ["pino-pretty"],
     },
 
+    "apps/deploy": {
+      "entry": ["test/**/*.test.ts"],
+      "project": ["src/**/*.ts", "test/**/*.ts"],
+    },
+
     "apps/secrets": {
       "entry": ["test/**/*.test.ts"],
       "project": ["src/**/*.ts", "test/**/*.ts"],
