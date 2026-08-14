@@ -8,21 +8,21 @@
 - `src/features`: feature-local code grouped by concern.
   - `content`: registry wiring, markdown helpers, lookup utilities, and lazy markdown loading.
   - `public-site`: app-owned public compositions such as frames, cards, and section headings.
-  - `status`: status-route query logic.
+  - `status`: the unrouted reference example for fetching `GET /health` through `@unimatrix/api-client`.
 - `src/lib`: web-local config (`VITE_API_BASE_URL` validation and the dev-proxy target), query client setup, and API client wiring.
 - `src/routes`: file-based route loaders and lazy route components; keep paired `*.ts(x)` and `*.lazy.tsx` files aligned.
 - `src/styles.css`: site-specific presentation layered on top of `@unimatrix/ui/styles.css`.
 - `test`: Vitest coverage for routing, content wiring, and markdown behavior.
-- `e2e`: Playwright smoke coverage for the public site.
+- `e2e`: Playwright coverage that needs a real browser — the public-site smoke path and the layout/observer regressions.
 
 ## 3. Core Behaviors & Patterns
 - **Route composition**: Each route keeps data loading in the non-lazy file (`index.tsx`, `blog.tsx`, `projects_.$slug.tsx`) and renders UI from the matching lazy file. `routeTree.gen.ts` is generated and should not become a hand-edited source of truth.
 - **Shared UI boundary**: App code consumes shared primitives from `@unimatrix/ui/public`, while `src/features/public-site/components.tsx` owns public-site-specific compositions such as `PublicSectionHeading`, `PublicDecisionCard`, and `PublicProjectLedgerItem`.
-- **Package aliasing**: `vite.config.ts` resolves `@unimatrix/content`, `@unimatrix/shared`, and `@unimatrix/ui/public` straight to those packages' source, so they are real build inputs.
+- **Package aliasing**: `vite.config.ts` aliases workspace imports to package source, so they are real build inputs — `resolve.alias` there is the list.
 - **Admin redirect**: `src/routes/admin.tsx` and `src/routes/admin.$.tsx` each throw a full-document `redirect` to `https://admin.unimatrix-01.dev/` in `beforeLoad`, so an old `/admin` link still lands somewhere. They hold no UI and deliberately drop the query string, since the admin route paths differ from the ones a stale link carries. `admin.tsx` is the parent layout of `admin.$.tsx`, so its `beforeLoad` already covers every `/admin/*` match; the second file is belt-and-braces.
 - **Content loading**: Blog and project entries are fetched at runtime from the API (`src/features/content/queries`). `src/features/content/site-content.ts` holds only the home/about singleton, the one file still compiled into the bundle.
 - **Safe markdown rendering**: Route components use `LazyPublicMarkdown` plus `renderPublicMarkdownInternalLink` to render authored markdown. Raw HTML and runtime MDX stay disabled; safe GFM rendering lives in `@unimatrix/ui`.
-- **Testing split**: Behavior-heavy UI and content rules live under `test/`, while a minimal smoke path for the running site lives under `e2e/public-site.smoke.spec.ts`.
+- **Testing split**: Behavior-heavy UI and content rules live under `test/`, while the browser-only checks — the smoke path plus the layout and `ResizeObserver` regressions no jsdom test can catch — live under `e2e/`.
 
 ## 4. Conventions
 - **Route files**: Use TanStack Router file naming, including underscore and param patterns such as `blog_.$slug.tsx` and `blog_.$slug.lazy.tsx`.

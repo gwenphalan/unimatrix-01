@@ -48,12 +48,8 @@ Use `pnpm dev` to start the normal local runtime surface.
   files
 - Leaves existing local env files untouched
 - Starts only `@unimatrix/api` and `@unimatrix/web` through Turbo
-- Does not start `@unimatrix/cflop`; run
-  `pnpm --filter @unimatrix/cflop dev` separately. It has no `.env`
-  files and no backend dependency.
-- Does not start `@unimatrix/auth-app`; run
-  `pnpm --filter @unimatrix/auth-app dev` separately. It throws at startup
-  without `VITE_CLERK_PUBLISHABLE_KEY`.
+- Starts no other app; root `AGENTS.md`'s "Runtime And Bootstrap" section
+  lists how each of the others is started and what env it needs.
 
 Every app pins its own dev and preview port in its `vite.config.ts`, with
 `strictPort: true` — a port already in use refuses to start rather than moving
@@ -127,28 +123,9 @@ pnpm db:generate
 
 ### Workspace commands
 
-```bash
-pnpm --filter @unimatrix/web dev
-pnpm --filter @unimatrix/web test:unit
-pnpm --filter @unimatrix/web test:smoke
-pnpm --filter @unimatrix/web test
-pnpm --filter @unimatrix/api dev
-pnpm --filter @unimatrix/api test
-pnpm --filter @unimatrix/cflop dev
-pnpm --filter @unimatrix/cflop test:unit
-pnpm --filter @unimatrix/cflop test:smoke
-pnpm --filter @unimatrix/cflop test
-pnpm --filter @unimatrix/auth-app dev
-pnpm --filter @unimatrix/auth-app test
-pnpm --filter @unimatrix/auth typecheck
-pnpm --filter @unimatrix/auth test
-pnpm --filter @unimatrix/user-data typecheck
-pnpm --filter @unimatrix/user-data test
-pnpm --filter @unimatrix/content build
-pnpm --filter @unimatrix/content test
-pnpm --filter @unimatrix/db db:migrate
-pnpm --filter @unimatrix/db db:generate
-```
+`pnpm --filter <package> <script>` runs one workspace's script; each
+workspace's `package.json` is the list. Root `AGENTS.md` carries the
+file-scoped and per-workspace commands worth memorising.
 
 ## Quality gates
 
@@ -163,8 +140,10 @@ Run the narrowest relevant command set for the change you made.
 
 ## CI behavior
 
-CI runs the same root gates as `pnpm verify`, individually rather than through
-the wrapper, plus the `App wiring` and `AGENTS.md symlinks` scripts. A separate `Images` job builds every
+CI runs most of the root gates individually rather than through
+`pnpm check`/`pnpm verify`, and runs gates neither wrapper has — shellcheck
+and the Lighthouse budgets among them; it also omits some the wrappers run.
+A separate `Images` job builds every
 `apps/*/Dockerfile`; those checks are required on `main`, and `Verify` never
 touches a Dockerfile. `.github/workflows/ci.yml` is the authority on the exact
 step list.

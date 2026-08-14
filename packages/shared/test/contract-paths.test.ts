@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 /**
- * AGENTS.md: "`ApiContract` paths stay static (no path params) — use
+ * Root `AGENTS.md`: "`ApiContract` paths stay static (no path params) — use
  * query/body schemas instead."
  *
  * The `path` field is typed `` `/${string}` ``, which the compiler happily

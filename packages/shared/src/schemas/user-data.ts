@@ -9,9 +9,10 @@ import { z } from "zod";
  * environment-agnostic.
  *
  * Module-scoped rather than `declare global`, so nothing leaks into consumers.
- * Note that `packages/shared`'s own typecheck sees `@types/node` through
- * workspace hoisting and would pass without this; `tsconfig.build.json` does
- * not, which is the configuration that matters.
+ * `tsconfig.json` would typecheck without this: its `include` carries
+ * `vitest.config.ts`, and vite's types pull `@types/node` into that program.
+ * `tsconfig.build.json` compiles `src` only and does not include
+ * `vitest.config.ts`, which is the configuration that matters.
  */
 declare const TextEncoder: {
   new (): { encode(input: string): { length: number } };
@@ -63,9 +64,8 @@ export const DOCUMENT_VALUE_MAX_BYTES = 262_144;
  * `TextEncoder` rather than `Buffer.byteLength`: this package is bundled
  * into browser code (`apps/web` imports it), where `Buffer` does not exist.
  * `TextEncoder` is a standard global in both Node and the browser. A
- * typecheck passing on `Buffer` here proves nothing — `@types/node` is
- * visible through workspace hoisting even though this package neither
- * declares it nor puts it in `lib`.
+ * typecheck passing on `Buffer` here proves nothing — see the `TextEncoder`
+ * declaration at the top of this file for why `@types/node` is visible.
  */
 function serializedJsonByteLength(value: unknown): number | null {
   let serialized: string | undefined;

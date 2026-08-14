@@ -12,7 +12,7 @@ All Unimatrix services are subdomains of `unimatrix-01.dev`. Clerk's primary dom
 | `@unimatrix/auth/server` | Node (Fastify 5) | `registerClerkAuth`, `requireAuth`, `requirePermission`, `requireAdminSection`, `getAuthUserId`, `getSessionPermissionsClaim`, `AuthError` |
 | `@unimatrix/auth/react` | browser (React 19) | `AuthProvider`, `usePermissions`, plus re-exports of `SignIn`, `SignUp`, `UserButton`, `UserProfile`, `SignedIn`, `SignedOut`, `RedirectToSignIn`, `useAuth`, `useUser` |
 
-Use `.` from anywhere you only need types or the pure permission-check helpers (e.g. shared validation logic). Use `./server` only in `apps/api` (or another Fastify backend). Use `./react` only in a Vite/React frontend (`apps/web`, `apps/auth`, `apps/admin`).
+Use `.` from anywhere you only need types or the pure permission-check helpers (e.g. shared validation logic). Use `./server` only in `apps/api` (or another Fastify backend). Use `./react` only in a Vite/React frontend.
 
 ## Permission scheme
 
@@ -44,7 +44,7 @@ canAccessAdminSection(perms, "content"); // today: equivalent to isAdmin(perms)
 
 `ADMIN_SECTIONS`/`AdminSection` name the sections that exist. A private `ADMIN_SECTION_PERMISSIONS` table in `src/permissions.ts` maps each one to the `{ appSlug, role }` it requires, and today every entry is `auth:admin` — so the predicate is `isAdmin` for every section. **That table is the point.** Introducing per-section capabilities later is an edit to one record, not a change at N call sites, which only holds as long as nothing open-codes the check.
 
-`@unimatrix/auth/server`'s `requireAdminSection(section)` is a Fastify `preHandler` wrapping the same predicate — one implementation, two surfaces. New admin API modules use it rather than `requirePermission("auth", "admin")` directly. (`apps/api/src/modules/content` still uses the latter; nothing existing was re-gated in the change that introduced this.)
+`@unimatrix/auth/server`'s `requireAdminSection(section)` is a Fastify `preHandler` wrapping the same predicate — one implementation, two surfaces. New admin API modules use it rather than `requirePermission("auth", "admin")` directly. (`apps/api/src/modules/content` still uses the latter.)
 
 `publicMetadata` can only be written server-side — in the Clerk Dashboard or via the Clerk Backend API — never from the client. There is intentionally no public "become admin" flow.
 
@@ -82,7 +82,7 @@ This package never reads `process.env` itself — every value below is read by t
 | `CLERK_SECRET_KEY` | backend (`apps/api`) | Backend API authentication (`registerClerkAuth`'s `secretKey`) |
 | `CLERK_PUBLISHABLE_KEY` | backend (`apps/api`) | Deriving the Clerk Frontend API URL (`registerClerkAuth`'s `publishableKey`) |
 | `CLERK_JWT_KEY` | backend (`apps/api`) | Networkless session JWT verification (`registerClerkAuth`'s `jwtKey`) |
-| `VITE_CLERK_PUBLISHABLE_KEY` | frontend (`apps/web`, `apps/auth`, `apps/admin`) | `AuthProvider`'s `publishableKey` prop |
+| `VITE_CLERK_PUBLISHABLE_KEY` | frontend (`apps/auth`, `apps/admin`) | `AuthProvider`'s `publishableKey` prop |
 
 These keys are provisioned by the repo owner in the Clerk Dashboard and are not committed. Local dev and tests can run without them — nothing in this package requires them to be set at import time; they are only required once `registerClerkAuth`/`AuthProvider` is actually invoked with them at app runtime.
 
@@ -91,7 +91,7 @@ These keys are provisioned by the repo owner in the Clerk Dashboard and are not 
 There is no public "become admin" endpoint or flow. To grant the first platform administrator:
 
 - **Preferred**: in the Clerk Dashboard, open the user's profile and set `publicMetadata` to `{ "permissions": { "auth": ["admin"] } }`.
-- **Alternative**: use a one-off script against `@clerk/backend`'s `clerkClient.users.updateUserMetadata(userId, { publicMetadata: { permissions: { auth: ["admin"] } } })` (this requires `CLERK_SECRET_KEY`; such a script belongs to a later phase's tooling, not to this package).
+- **Alternative**: use a one-off script against `@clerk/backend`'s `clerkClient.users.updateUserMetadata(userId, { publicMetadata: { permissions: { auth: ["admin"] } } })` (this requires `CLERK_SECRET_KEY`; such a script does not belong to this package).
 
 Once a user holds `auth: ["admin"]`, manage other users and their permission metadata directly in the Clerk Dashboard. This permission scheme still gates access across apps via `requirePermission` (server) and `usePermissions`/`isAdmin` (react).
 
@@ -111,12 +111,14 @@ app.get("/admin/only", { preHandler: requirePermission("api", "admin") }, handle
 ```
 
 ```tsx
-// apps/web
+// Excerpt from a Vite app's main.tsx. `runtimeConfig` is the app's own validated
+// config, not shown: `apps/auth` loads it with `loadAuthAppRuntimeConfig`, and
+// `apps/admin` builds it in main.tsx and passes it through the router context.
 import { AuthProvider, usePermissions } from "@unimatrix/auth/react";
 
 function Root() {
   return (
-    <AuthProvider publishableKey={import.meta.env.VITE_CLERK_PUBLISHABLE_KEY}>
+    <AuthProvider publishableKey={runtimeConfig.clerkPublishableKey}>
       <App />
     </AuthProvider>
   );
@@ -128,3 +130,5 @@ function AdminOnlyPanel() {
   return <Panel />;
 }
 ```
+
+The key comes from the app's own validated config loader (`src/lib/config.ts`), never straight from `import.meta.env`.

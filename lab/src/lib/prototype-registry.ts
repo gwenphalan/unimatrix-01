@@ -3,11 +3,12 @@ import type { ComponentType } from "react";
 /**
  * Prototype discovery.
  *
- * `import.meta.glob` rather than the file-based router the three apps use. A
+ * `import.meta.glob` rather than the file-based router the Vite apps use. A
  * generated route tree would churn on every prototype added or deleted, in the
- * one directory this repo requires to stay empty on `main` — and a required
- * check fails any PR to `main` whose diff touches it. Globbing means a
- * prototype is a file you drop in and delete again, with no generated residue.
+ * one directory this repo requires to stay empty on `main` — the required
+ * `No prototypes on main` check fails any PR to `main` whose diff touches it.
+ * Globbing means a prototype is a file you drop in and delete again, with no
+ * generated residue.
  *
  * The type parameter is an assertion, not a guarantee: `lab/prototypes/` is
  * excluded from typecheck by design, so nothing proves a prototype module has a

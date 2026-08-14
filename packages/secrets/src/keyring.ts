@@ -89,8 +89,7 @@ export class SecretsKeyring {
   /**
    * The package never reads `process.env` itself — the encoded string is
    * always an argument, same rule as `packages/auth`. There is no "boot"
-   * here: this throws, and a future `apps/secrets` turns that into a failed
-   * start.
+   * here: this throws, and `apps/secrets` turns that into a failed start.
    */
   static load(encodedKeys: string | undefined): SecretsKeyring {
     if (encodedKeys === undefined || encodedKeys.trim().length === 0) {

@@ -63,7 +63,7 @@ export type ToolShellProps = {
   ownerName?: string;
   /**
    * The tool's section rail. When given a non-empty list, the shell renders a
-   * collapsible vertical rail in place of the title bar and footer strip —
+   * collapsible vertical rail in place of the title bar —
    * the wordmark and `accountControl` both move into it. An empty
    * array is treated the same as omitting `sections` entirely, so a caller
    * computing sections from permissions falls back to today's layout instead

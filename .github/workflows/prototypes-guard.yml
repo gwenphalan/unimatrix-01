@@ -18,8 +18,8 @@ name: Prototypes guard
 # request forever instead of passing it. The job therefore runs on every pull
 # request to `main` and decides pass/fail by inspecting the diff itself.
 #
-# Not armed as a required status check by this workflow's existence — arming it
-# on the ruleset is a separate, human step.
+# Armed as a required status check on the repository's Main Branch ruleset, so
+# a red run blocks the merge. The ruleset is edited outside this file.
 
 on:
   pull_request:

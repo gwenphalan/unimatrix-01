@@ -32,12 +32,13 @@ this file holds the mechanics, each of which was learned the hard way.
 
 ## CI
 
-- CI's `Images` job builds every `apps/*/Dockerfile`, and all six matrix checks — `Images (admin)`,
-  `Images (api)`, `Images (auth)`, `Images (cflop)`, `Images (secrets)`, `Images (web)` — are required
-  on `main` alongside `Verify`, `Review dependency changes`, `Analyze`, and `CodeQL`. This exists because `Verify` is Vite and tsc only and never touches a Dockerfile, so a
-  dependency could pass every check while making the deployable image unbuildable. `better-sqlite3@13`
-  is the live example: no published prebuilds, so it falls back to `node-gyp` and dies on alpine.
-  **If you add a Dockerfile, add it to the matrix and to the required checks, or it is unverified.**
+- CI's `Images` job builds every `apps/*/Dockerfile`. The required status checks on `main` are
+  whatever `rules/branches/main` reports — `.claude/skills/ship-pr/scripts/required-checks.sh` prints
+  them — rather than a list here. This exists because `Verify` is Vite and tsc only and never touches
+  a Dockerfile, so a dependency could pass every check while making the deployable image unbuildable.
+  `better-sqlite3@13` is the live example: no published prebuilds, so it falls back to `node-gyp` and
+  dies on alpine. **If you add a Dockerfile, add it to the matrix and to the required checks, or it is
+  unverified.**
 - `infra/scripts/check-app-wiring.sh` (run by `pnpm check`/`pnpm verify` and by the `App wiring`
   step in `Verify`, placed before `pnpm install` because it needs no `node_modules`) is the
   mechanical guard on three things nothing else sees: the `packages/chrome` `@source` line in each
@@ -103,7 +104,7 @@ this file holds the mechanics, each of which was learned the hard way.
   omitted deliberately: a path-filtered workflow that does not run reports nothing, and a required
   check that never reports blocks a PR forever instead of passing it. This is repo hygiene, not a
   security control. `Lab` runs lint + typecheck of `lab/src` on `lab/**` branches; full `Verify`
-  there would fail on coverage thresholds and burn minutes for nothing. Neither is armed as a
-  required check.
+  there would fail on coverage thresholds and burn minutes for nothing. `No prototypes on main` is a
+  required check on `main`; `Lab` is not armed.
 - Several workflow settings that look redundant are load-bearing and carry a comment saying why.
   Read the comment before removing one.

@@ -17,6 +17,7 @@ remain only as seed input for
 The current content collections map to the following public routes.
 
 - `/` for the homepage and public orientation content
+- `/about` for the remainder of `content/home/index.md`
 - `/projects` and `/projects/:slug` for the project listing and detail routes
 - `/blog` and `/blog/:slug` for the writing listing and detail routes
 

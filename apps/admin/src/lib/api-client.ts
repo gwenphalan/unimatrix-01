@@ -6,8 +6,8 @@ import { useAuth } from "@unimatrix/auth/react";
 /**
  * The one supported way to obtain an `ApiClient` for component/route code.
  *
- * Unlike `apps/web`'s `useApiClient`, this has no tokenless branch: every
- * surface in this app needs a signed-in `auth:admin` session, so Clerk is
+ * Unlike `apps/web`'s module-level, tokenless `apiClient`, this is a hook:
+ * every surface in this app needs a signed-in `auth:admin` session, so Clerk is
  * always present. `baseUrl` comes from the router context rather than
  * `import.meta.env` — `main.tsx` is the one file allowed to read that, and a
  * module-scope read here would move `loadAdminAppRuntimeConfig`'s
