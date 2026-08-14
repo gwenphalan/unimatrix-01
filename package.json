@@ -41,17 +41,17 @@
     "verify": "pnpm format:check && pnpm deps:check && pnpm check:app-wiring && pnpm check:agents-md && pnpm check:stale-comments && pnpm check:doc-script-refs && pnpm check:deploy-config && pnpm check:runner-labels && pnpm check:ship-pr-fixtures && pnpm check:reminder-hooks && pnpm check:todo-citations && pnpm check:scratch-untracked && turbo run build lint typecheck test && pnpm check:coverage-drift"
   },
   "devDependencies": {
-    "@playwright/test": "^1.54.2",
+    "@playwright/test": "^1.62.1",
     "@testing-library/jest-dom": "^7.0.0",
     "@testing-library/react": "^16.3.2",
     "chrome-launcher": "^1.2.1",
     "eslint": "^10.0.0",
     "jsdom": "^29.1.1",
-    "knip": "^6.29.0",
+    "knip": "^6.31.0",
     "lighthouse": "^13.4.1",
     "prettier": "^3.9.6",
     "syncpack": "^15.3.2",
-    "turbo": "^2.10.7",
+    "turbo": "^2.10.8",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10"
   }

@@ -30,7 +30,7 @@
   },
   "dependencies": {
     "@clerk/clerk-react": "^5.61.6",
-    "@clerk/fastify": "^3.1.58",
+    "@clerk/fastify": "^3.1.59",
     "@clerk/themes": "^2.4.57"
   },
   "peerDependencies": {
@@ -51,8 +51,8 @@
   },
   "devDependencies": {
     "@types/node": "^24.13.3",
-    "@types/react": "^19.2.14",
-    "@types/react-dom": "^19.2.3",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
     "@unimatrix/config-eslint": "workspace:*",
     "@unimatrix/config-typescript": "workspace:*",
     "@unimatrix/config-vitest": "workspace:*",
