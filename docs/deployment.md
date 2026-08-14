@@ -887,6 +887,19 @@ Nothing warns beforehand. Minting a replacement and updating the two Actions
 secrets is the whole fix; the policy references the token by id, so a new token
 needs the policy updated too.
 
+**Cloudflare Bot Fight Mode must stay off on `unimatrix-01.dev`.** With it on,
+a GitHub-hosted runner reaching Dokploy is refused with a 403 while the
+identical request from a residential address succeeds. Every credential
+therefore tests correct by hand — the API key, the service token, the Access
+policy — and `Deploy` still fails on `GET /api/project.all returned 403`, which
+points at nothing.
+
+The free-plan setting is zone-wide, and no attempt was made to scope it to
+`dokploy.unimatrix-01.dev` alone; Super Bot Fight Mode on a paid plan runs on
+the Ruleset Engine and takes a skip rule, which is the upgrade to make if the
+zone needs bot filtering back. What guards the sensitive hostnames is
+Cloudflare Access, unaffected either way.
+
 ## Verification after deploy
 
 Verify these URLs after each production rollout:
