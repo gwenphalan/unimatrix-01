@@ -1,0 +1,36 @@
+services:
+  deploy:
+    image: ghcr.io/unimatrixcore/unimatrix-deploy:${IMAGE_TAG}
+    environment:
+      HOST: 0.0.0.0
+      PORT: 3001
+      NODE_ENV: production
+      LOG_LEVEL: info
+      # This service's own Compose stack, reachable over dokploy-network — see
+      # that network's comment below. No default: an unset variable reaches the
+      # container as an empty string rather than as absent, and this service's
+      # config loader refuses an empty value, so a stack deployed before this is
+      # set stops the service instead of booting it against nothing.
+      DOKPLOY_BASE_URL: ${DOKPLOY_BASE_URL}
+      # Unscoped and unexpiring — it can delete every application on the
+      # instance. It comes only from this variable, never lands on
+      # runtimeConfig, and never appears in a log line or an error message.
+      # See apps/deploy/AGENTS.md.
+      DOKPLOY_API_KEY: ${DOKPLOY_API_KEY}
+    networks:
+      # This service exists to talk to Dokploy's own API, and the alternative —
+      # reaching https://dokploy.unimatrix-01.dev — costs two more Cloudflare
+      # Access service-token secrets and a round trip out through Cloudflare and
+      # back. The cost of joining: a container holding an instance-wide
+      # delete-everything token sits on the same network every app Traefik
+      # serves. Nothing routes *to* this service — no domain, no Traefik entry —
+      # so membership is reachability from it, not to it, and /health is the
+      # only route anything on that network could call. It is an attachable
+      # swarm overlay, which is what lets a plain Compose stack join it
+      # (measured on the host, 2026-08-12, recorded in apps/api/deploy.config.ts).
+      dokploy-network:
+    restart: unless-stopped
+
+networks:
+  dokploy-network:
+    external: true

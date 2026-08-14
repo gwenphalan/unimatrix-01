@@ -170,7 +170,7 @@ export function staticSpaApp(config: Omit<StaticSpaAppConfig, "kind">): StaticSp
   return { kind: "static-spa", ...config };
 }
 
-/** Two call sites (`apps/api`, `apps/secrets`) — see the package `AGENTS.md` §4. */
+/** One call site per `node-api` app (every `deploy.config.ts` calling this) — see the package `AGENTS.md` §4. */
 export function nodeApiApp(config: Omit<NodeApiAppConfig, "kind">): NodeApiAppConfig {
   return { kind: "node-api", ...config };
 }

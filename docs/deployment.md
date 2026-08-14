@@ -79,7 +79,7 @@ not measured against the instance.)
 Every package is created **private**, whatever the repository's visibility. A
 package linked to a repository inherits that repository's access permissions but
 never its visibility, so a public repo does not produce a public package. Adding
-a seventh app therefore carries one manual step, once, that nothing enforces:
+a new app therefore carries one manual step, once, that nothing enforces:
 let the first `Publish` run create the package, then set it public at
 `https://github.com/orgs/unimatrixcore/packages/container/unimatrix-<app>/settings`.
 The organization must permit public packages at all — Settings → Packages →
@@ -123,7 +123,7 @@ repository's runner, so this invariant is the only thing protecting anything
 kept there. Per-service variables (`CORS_ALLOWED_ORIGINS`, `CLERK_*`, the
 `SECRETS_*` set) live on the service and are untouched by any of this.
 
-**`autoDeploy` must stay off on all six services.** With it on, Dokploy deploys
+**`autoDeploy` must stay off on every service** (one per `infra/docker/*-compose.yaml`). With it on, Dokploy deploys
 on a push of its own accord, at whatever `IMAGE_TAG` the project holds at that
 moment — which during a CI run is the previous commit. Watch paths are no
 defence: `shouldDeploy` returns true when a service's watch-path list is empty,
@@ -493,6 +493,26 @@ can a log line. What does distinguish them:
    attempt.
 5. As a positive control, create a throwaway credential in each tier from the
    console.
+
+### Deploy service
+
+- application type: Compose
+- compose path: `infra/docker/deploy-compose.yaml`
+- no Domains page entry — this service is deliberately unrouted, same as the
+  secrets service
+- required environment variables (set in Dokploy's UI, not in the file):
+  `DOKPLOY_BASE_URL` and `DOKPLOY_API_KEY` — the service refuses to start
+  without either
+- no volume — it holds no persistent state
+
+Unlike the secrets service, it does join `dokploy-network`: it exists to call
+Dokploy's own API, and joining is what lets it reach that API by service name
+rather than round-tripping out through Cloudflare. The cost, stated plainly:
+a container holding an unscoped, instance-wide Dokploy API key sits on the
+same network every app Traefik serves. Nothing routes to this service across
+that network — no domain, no Traefik entry — so membership is reachability
+*from* it, and `/health` is the only route anything on that network could
+call. See `apps/deploy/AGENTS.md`.
 
 ## Traefik expectations
 

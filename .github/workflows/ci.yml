@@ -221,7 +221,7 @@ jobs:
       # check also has to be armed as required on `main`, or the image is built
       # and its result ignored.
       matrix:
-        app: [admin, api, auth, cflop, secrets, web]
+        app: [admin, api, auth, cflop, deploy, secrets, web]
 
     steps:
       - name: Check out repository
@@ -295,7 +295,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        app: [admin, api, auth, cflop, secrets, web]
+        app: [admin, api, auth, cflop, deploy, secrets, web]
 
     steps:
       - name: Check out repository
@@ -361,9 +361,9 @@ jobs:
   # from a feature branch may publish a SHA-tagged image, but must never be
   # able to point production at it.
   #
-  # One job rather than a matrix: the six calls share one credential and one
-  # project-level write, so a matrix would race on that write and report six
-  # red checks for one outage.
+  # One job rather than a matrix: the calls (one per infra/docker/*-compose.yaml)
+  # share one credential and one project-level write, so a matrix would race on
+  # that write and report a red check per stack for one outage.
   #
   # The workflow-level `concurrency` block above has `cancel-in-progress: true`
   # and covers this job, so a second push to `main` can cancel this one

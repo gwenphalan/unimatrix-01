@@ -12,6 +12,12 @@ export const secretsHealthResponseSchema = z.strictObject({
   status: z.literal("ok"),
 });
 
+export const deployHealthResponseSchema = z.strictObject({
+  service: z.literal("deploy"),
+  status: z.literal("ok"),
+});
+
 export type HealthQuery = z.output<typeof healthQuerySchema>;
 export type HealthResponse = z.output<typeof healthResponseSchema>;
 export type SecretsHealthResponse = z.output<typeof secretsHealthResponseSchema>;
+export type DeployHealthResponse = z.output<typeof deployHealthResponseSchema>;

@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  deployHealthContract,
+  deployHealthResponseSchema,
   healthContract,
   healthQuerySchema,
   healthResponseSchema,
@@ -83,5 +85,42 @@ describe("secrets health shared contract surface", () => {
       path: "/health",
     });
     expect(secretsHealthContract.responseSchema).toBe(secretsHealthResponseSchema);
+  });
+});
+
+describe("deploy health shared contract surface", () => {
+  it("accepts the expected health response payload", () => {
+    expect(
+      deployHealthResponseSchema.parse({
+        service: "deploy",
+        status: "ok",
+      }),
+    ).toEqual({
+      service: "deploy",
+      status: "ok",
+    });
+  });
+
+  it("rejects the api service literal and other invalid values", () => {
+    expect(
+      deployHealthResponseSchema.safeParse({
+        service: "api",
+        status: "ok",
+      }).success,
+    ).toBe(false);
+    expect(
+      deployHealthResponseSchema.safeParse({
+        service: "deploy",
+        status: "degraded",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("keeps the expected method and path pairing", () => {
+    expect(deployHealthContract).toMatchObject({
+      method: "GET",
+      path: "/health",
+    });
+    expect(deployHealthContract.responseSchema).toBe(deployHealthResponseSchema);
   });
 });
