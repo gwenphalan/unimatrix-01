@@ -73,5 +73,13 @@ export default defineConfig({
     environment: "jsdom",
     include: ["test/**/*.test.ts", "test/**/*.test.tsx"],
     setupFiles: ["./test/setup.ts"],
+    // Must stay strictly above the `asyncUtilTimeout` in `test/setup.ts`, and
+    // by more than a rounding margin. A `findBy*` is allowed to spend that
+    // whole budget, so a test that also renders, clicks and asserts cannot fit
+    // inside a `testTimeout` of the same size — it fails by construction on any
+    // machine slow enough for one `findBy*` to run long. Vitest's 5000ms
+    // default was exactly equal, and three suites here render the tool shell
+    // and a full table in 4-5s.
+    testTimeout: 15_000,
   },
 });

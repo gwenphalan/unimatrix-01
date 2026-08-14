@@ -19,7 +19,7 @@ permissions:
 jobs:
   verify:
     name: Verify
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
       contents: read
@@ -211,7 +211,7 @@ jobs:
   # still assembles, which is exactly the signal `Verify` cannot give.
   images:
     name: Images
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
       contents: read
@@ -235,23 +235,19 @@ jobs:
         with:
           persist-credentials: false
 
-      # A layer cache persisted between runs on Blacksmith's sticky disks, keyed
-      # per app so one app's build never evicts another's. `push: false` and
-      # `load: true` land the built image in the local daemon rather than a
-      # registry — the cflop step below needs it there.
-      - name: Set up Blacksmith Docker builder
-        uses: useblacksmith/setup-docker-builder@a5256a73e30f09e37e3eceb8ca36043d17621d24 # v2.1.0
-        with:
-          cache-key: apps/${{ matrix.app }}/Dockerfile
-
+      # Plain `docker build` against the runner's preinstalled Docker, rather
+      # than the buildx actions. It needs no third-party action to pin and no
+      # cache to invalidate, the build context is the repo itself, and the image
+      # lands in the local daemon where the cflop step below needs it.
+      #
+      # A layer cache cannot buy wall clock here however well it works: compare
+      # any run's `Images (*)` durations against `Verify` in the same run — the
+      # whole matrix finishes minutes before `Verify` does, so this job is never
+      # the critical path. A per-app Blacksmith sticky-disk cache was measured
+      # over three runs on main and produced zero `CACHED` layers in all 18
+      # jobs, while adding ~5s of action setup to each.
       - name: Build ${{ matrix.app }} image
-        uses: useblacksmith/build-push-action@9b0579bbec7a6cad2f171596c57e7ac1e7658850 # v2.3.0
-        with:
-          context: .
-          file: apps/${{ matrix.app }}/Dockerfile
-          tags: unimatrix-${{ matrix.app }}:ci
-          push: false
-          load: true
+        run: docker build --file "apps/${{ matrix.app }}/Dockerfile" --tag "unimatrix-${{ matrix.app }}:ci" .
 
       # cflop serves one HTML file per route and returns real 404s, which lives
       # entirely in its `nginx.conf`. Nothing else reaches it: the unit suite
