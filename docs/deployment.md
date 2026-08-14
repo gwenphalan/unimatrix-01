@@ -467,6 +467,44 @@ shared root pnpm manifests, and the service-specific Compose file. When an app
 adds a workspace dependency, new bundled content, or another Docker build
 input, update its README and Dokploy configuration in the same change.
 
+## The host reuses its layer cache between deploys
+
+Dokploy re-clones the repository into `/etc/dokploy/compose/<service>/code` for
+every deploy, so the prune stage's `COPY . .` never hits cache. The install layer
+does, because `turbo prune <package> --docker` emits a byte-identical `out/json`
+for a change that touches no manifest in that package's pruned scope.
+
+Measured on the `api` service across two consecutive deploys, 2026-08-14: b169a72
+at 07:17:43 UTC, then 96c4397 at 07:33:17 UTC — a change spanning `apps/cflop`, a
+new `packages/cube`, and the root `pnpm-lock.yaml`. The second build reported:
+
+```text
+#14 [build 1/5] COPY --from=prune /workspace/out/json/ .
+#14 CACHED
+#15 [build 2/5] RUN pnpm install --frozen-lockfile
+#15 CACHED
+#17 [build 4/5] RUN pnpm --filter "@unimatrix/api..." build
+#17 DONE 10.5s
+```
+
+Nothing prunes the cache between deploys — `docker system df` reported 124
+build-cache records holding 12.85 GB the same day — and it is shared across
+services rather than held per service: the `web` compose deploy at 07:17:17 reused
+an install layer the `web-preview` application had built 78 seconds earlier.
+
+Read it per deploy from the host, which is the only place the build output exists:
+
+```bash
+f=$(ls -t /etc/dokploy/logs/<service>/* | head -1)
+grep -B1 -E '^#[0-9]+ (CACHED|DONE)' "$f" | grep -A1 'pnpm install'
+```
+
+**The saving is seconds.** Install is roughly 10s on `api` and 13s on `web` here,
+against a whole-image build of 35-47s — `pnpm build` and `pnpm --prod deploy`
+dominate what is left. Those two totals come from a hand-run `docker build` pair on
+the host at b169a72, outside Dokploy, differing by one appended line in
+`apps/api/src/server.ts`.
+
 ## A deploy is queued, not applied
 
 A Dokploy deploy is queued rather than applied, however it was triggered. Over
