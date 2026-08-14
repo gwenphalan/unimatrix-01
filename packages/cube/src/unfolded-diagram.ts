@@ -156,13 +156,16 @@ function buildNetCells(): UnfoldedNetCell[] {
 /** The net grid's 54 cells (9 per face), computed once at module load. */
 export const UNFOLDED_NET_CELLS: readonly UnfoldedNetCell[] = buildNetCells();
 
-function buildFaceOutlines(): {
+/** One face's border in the net - drawn at a heavier stroke than the sticker grid inside it. */
+export interface UnfoldedNetFaceOutline {
   face: FaceLetter;
   height: number;
   width: number;
   x: number;
   y: number;
-}[] {
+}
+
+function buildFaceOutlines(): UnfoldedNetFaceOutline[] {
   return FACE_ORDER.map((face) => {
     const origin = FACE_ORIGIN_CELLS[face];
 
@@ -177,10 +180,4 @@ function buildFaceOutlines(): {
 }
 
 /** The six 120x120 face outlines, computed once at module load. */
-export const UNFOLDED_NET_FACE_OUTLINES: readonly {
-  face: FaceLetter;
-  height: number;
-  width: number;
-  x: number;
-  y: number;
-}[] = buildFaceOutlines();
+export const UNFOLDED_NET_FACE_OUTLINES: readonly UnfoldedNetFaceOutline[] = buildFaceOutlines();

@@ -3,7 +3,7 @@
 ## 1. Overview
 `packages/cube` is the Rubik's Cube move engine, notation parser, and diagram geometry — last-layer views and a whole-cube unfolded net — behind `apps/cflop` and the `lab` harness. Two entry points: `.` (engine, notation, diagram geometry — no dependency of its own) and `./react` (the diagram views, the one place this package touches React or `@unimatrix/ui`).
 
-The last-layer diagrams are read **yellow up, green front** (`DIAGRAM_PALETTE`); the unfolded net is read **white up, green front** (`WHITE_UP_DIAGRAM_PALETTE`, derived from the first by a half turn about the F–B axis). Both are correct for their own view, and reusing either palette in the other's view renders a mirrored cube that looks entirely plausible.
+The last-layer diagrams are read **yellow up, green front** (`DIAGRAM_PALETTE`); the unfolded net is read **white up, green front** (`WHITE_UP_DIAGRAM_PALETTE`, derived from the first by a half turn about the F–B axis). Both are correct for their own view. Reusing either palette in the other's view still renders a physically valid cube — the two differ by an orientation-preserving half turn, so the result is the same cube recoloured into the wrong orientation rather than anything visibly broken. Nothing fails; the diagram just answers about a cube nobody is holding.
 
 ## 2. Core Behaviors & Patterns
 - `rewriteAsOuterMoves` emits quarter turns only (`R'` comes back as `R R R`); pass its result through `simplifyMoves` before it reaches `movesToString`, never hand it there directly.
