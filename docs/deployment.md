@@ -85,6 +85,69 @@ indistinguishable from a bad tag, so the obvious next move is to go and debug
 the tag scheme. Visibility is a property of the package rather than of each
 version, so this is once per app, not once per deploy.
 
+## How a deploy is triggered
+
+CI's `Deploy` job (`.github/workflows/ci.yml`) runs after `Publish`, on a push
+to `main` and nowhere else — a `workflow_dispatch` from a feature branch
+publishes a SHA-tagged image but can never point production at it. It makes two
+writes over Dokploy's REST API, in this order:
+
+1. `POST /api/project.update` sets the project's environment to
+   `IMAGE_TAG=<commit sha>`, once per project the compose services span.
+2. `POST /api/compose.deploy`, one call per service and sequentially, which is
+   what makes Dokploy pull the newly tagged images.
+
+Which service is which is resolved per run from `GET /api/project.all`, by
+matching each `infra/docker/<app>-compose.yaml` to a Dokploy compose service of
+the same name. A service that is missing, renamed, or duplicated fails the job
+by name rather than being skipped, and a project whose tag write failed has its
+services skipped rather than deployed at the previous commit's tag.
+
+**Project-level environment holds `IMAGE_TAG` and nothing else.**
+`project.update` is a partial that Dokploy spreads over the row, so the write
+above *replaces* the whole blob — a second variable stored at project level
+would be deleted on the next merge. CI deliberately never reads the blob back
+to merge into it, because that would pull whatever it holds into a public
+repository's runner, so this invariant is the only thing protecting anything
+kept there. Per-service variables (`CORS_ALLOWED_ORIGINS`, `CLERK_*`, the
+`SECRETS_*` set) live on the service and are untouched by any of this.
+
+**`autoDeploy` must stay off on all six services.** With it on, Dokploy deploys
+on a push of its own accord, at whatever `IMAGE_TAG` the project holds at that
+moment — which during a CI run is the previous commit. Watch paths are no
+defence: `shouldDeploy` returns true when a service's watch-path list is empty,
+so a service with none set redeploys on every push to `main`. It is a
+Dokploy-side setting and nothing in this repository can assert it.
+
+That choice has a price. `POST /api/compose.refreshToken` mints a per-service
+webhook URL — a far narrower credential than the instance-wide API key — and it
+answers `400 Automatic deployments are disabled for this compose` while
+`autoDeploy` is off. The instance-wide key is what the safety control costs.
+
+**A 200 is an acknowledgement, not a deploy.** The job logs `queued` and claims
+nothing more; see "A deploy is queued, not applied" below for the only signal
+that says otherwise.
+
+### Rolling back
+
+Dokploy has **no rollback for Compose services** — its rollback path resolves
+`deployment.applicationId` only, and a compose deployment has none. Reverting
+the commit does not roll production back either, because the running version is
+whatever `IMAGE_TAG` says, not whatever `main` says.
+
+So a rollback is one edit and one deploy:
+
+1. Pick the commit to go back to. Any commit whose `Publish` run succeeded has
+   a `ghcr.io/unimatrixcore/unimatrix-<app>` tag under its SHA.
+2. Set `IMAGE_TAG` to that SHA in the Dokploy project's environment UI, keeping
+   it the only variable there.
+3. Redeploy the affected services and confirm each container was **recreated**
+   — see "A deploy is queued, not applied" below.
+
+Reverting on `main` and merging works too and is slower: it goes through CI,
+publishes a new image, and writes the new SHA. Reach for that when the revert
+belongs in the repository as well.
+
 ## Dokploy service layout
 
 Create one Dokploy service per `infra/docker/*-compose.yaml`, all from the same
@@ -805,8 +868,20 @@ expiry, granting instance-wide administrative control: it can create, mutate,
 and delete every application on the Dokploy instance — not only this project's
 — and trigger builds. Since a build runs a Dockerfile of the holder's choosing
 on the host, treat that reach as host-level in practice even though the key
-itself is not an OS credential. Issue one for the task, keep it out of the repo
-and out of CI, and revoke it when the setup is done.
+itself is not an OS credential. A key issued for a one-off task still gets
+revoked when that task is done.
+
+One such key is a standing exception: `DOKPLOY_API_KEY` in this repository's
+Actions secrets, with `CF_ACCESS_CLIENT_ID` and `CF_ACCESS_CLIENT_SECRET`
+beside it to get past Cloudflare Access. That reverses the rule this section
+carried until 2026-08-14 — issue a key per task, never in CI — and it was
+reversed on purpose: Dokploy has no scoped or per-project key to issue instead,
+and the narrower per-service webhook credential requires `autoDeploy: true`,
+which is exactly the control that stops every push deploying every service (see
+"How a deploy is triggered" above). What makes it tolerable is that Actions
+secrets are not exposed to workflows triggered by fork pull requests, so an
+outside contributor cannot reach them. What it costs is that anyone who can
+push to `main` can reach the whole instance.
 
 ## Verification after deploy
 

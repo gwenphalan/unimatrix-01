@@ -59,6 +59,16 @@ this file holds the mechanics, each of which was learned the hard way.
   `Images`' — `check-app-wiring.sh` above enforces that across both. It is deliberately not a
   required check: it never runs on `pull_request`, so arming it would create a required check that
   is permanently green on every PR without verifying anything there.
+- `Deploy` follows `Publish`, on a push to `main` alone, and is what actually moves production: it
+  writes `IMAGE_TAG=<sha>` to each Dokploy project over the REST API, then calls `compose.deploy`
+  per service. Not a required check, for the same reason as `Publish`. A 200 from Dokploy means the
+  deploy was **queued** — a green `Deploy` is not evidence the new image is serving, and the job
+  says `queued` rather than claiming otherwise. It is the only job reading a configured Actions
+  secret (`DOKPLOY_API_KEY`, `CF_ACCESS_CLIENT_ID`, `CF_ACCESS_CLIENT_SECRET` — everything else in
+  this repo runs on the built-in `GITHUB_TOKEN`), and it prints no response body
+  from any call, because `project.all` returns every project's whole env blob and these run logs are
+  public. `docs/deployment.md` carries the rollback runbook and the project-env invariant that tag
+  write depends on.
 - `infra/scripts/check-agents-md-symlinks.sh` (same placement and rationale, as the `AGENTS.md
   symlinks` step) asserts every `AGENTS.md` has a sibling `CLAUDE.md` symlink pointing at it.
   Claude Code reads `CLAUDE.md`, not `AGENTS.md`, and discovers nested ones on demand when a file in
