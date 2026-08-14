@@ -3,6 +3,9 @@ import { describe, expect, it } from "vitest";
 import {
   DIAGRAM_PALETTE,
   UNFOLDED_NET_CELLS,
+  UNFOLDED_NET_CELL_SIZE,
+  UNFOLDED_NET_HEIGHT,
+  UNFOLDED_NET_WIDTH,
   WHITE_UP_DIAGRAM_PALETTE,
   applyMoves,
   createSolvedCube,
@@ -31,6 +34,21 @@ describe("deriveUnfoldedDiagram", () => {
     expect(diagram.D.join("")).toBe("DDDDDDDDD");
     expect(diagram.L.join("")).toBe("FFFLLLLLL");
     expect(diagram.B.join("")).toBe("LLLBBBBBB");
+  });
+
+  // Every row is uniform after a lone U turn, so that fixture is invariant under a column
+  // reversal and cannot tell one apart from the correct reading. R is the cheapest move that
+  // varies a face along its columns: reversing them would read F as "DFF DFF DFF".
+  it("reads every face left-to-right, with no reversal on B or R, after an R turn", () => {
+    const cube = applyMoves(createSolvedCube(), parseAlgorithm("R"));
+    const diagram = deriveUnfoldedDiagram(cube);
+
+    expect(diagram.U.join("")).toBe("UUFUUFUUF");
+    expect(diagram.R.join("")).toBe("RRRRRRRRR");
+    expect(diagram.F.join("")).toBe("FFDFFDFFD");
+    expect(diagram.D.join("")).toBe("DDBDDBDDB");
+    expect(diagram.L.join("")).toBe("LLLLLLLLL");
+    expect(diagram.B.join("")).toBe("UBBUBBUBB");
   });
 
   it("throws rather than silently rendering an incomplete cube", () => {
@@ -74,6 +92,18 @@ describe("UNFOLDED_NET_CELLS", () => {
 
     for (const face of ["U", "R", "F", "D", "L", "B"] as const) {
       expect(UNFOLDED_NET_CELLS.filter((cell) => cell.face === face).length).toBe(9);
+    }
+  });
+
+  // The declared canvas is what the view hands to `viewBox`, and an SVG root clips at it. Without
+  // this, changing CELL leaves the net overflowing or floating in dead space with every other
+  // check green. The strict inequalities are the outline stroke's room to render at full weight.
+  it("fits inside the declared canvas with room for the outline stroke", () => {
+    for (const cell of UNFOLDED_NET_CELLS) {
+      expect(cell.x).toBeGreaterThan(0);
+      expect(cell.y).toBeGreaterThan(0);
+      expect(cell.x + UNFOLDED_NET_CELL_SIZE).toBeLessThan(UNFOLDED_NET_WIDTH);
+      expect(cell.y + UNFOLDED_NET_CELL_SIZE).toBeLessThan(UNFOLDED_NET_HEIGHT);
     }
   });
 

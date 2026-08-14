@@ -36,9 +36,7 @@ function readFacelet(cube: FaceletCube, face: FaceLetter, row: number, col: numb
  * touching R, which sits immediately left of B in this net's middle band.
  */
 export function deriveUnfoldedDiagram(cube: FaceletCube): UnfoldedCubeDiagram {
-  const diagram = {} as UnfoldedCubeDiagram;
-
-  for (const face of FACE_ORDER) {
+  const readFace = (face: FaceLetter): FaceLetter[] => {
     const facelets: FaceLetter[] = [];
 
     for (let row = 0; row < 3; row += 1) {
@@ -47,10 +45,19 @@ export function deriveUnfoldedDiagram(cube: FaceletCube): UnfoldedCubeDiagram {
       }
     }
 
-    diagram[face] = facelets;
-  }
+    return facelets;
+  };
 
-  return diagram;
+  // Written out rather than accumulated into a `{} as UnfoldedCubeDiagram`: the cast would let a
+  // missing face through the typechecker, and a missing face is a whole undrawn square.
+  return {
+    B: readFace("B"),
+    D: readFace("D"),
+    F: readFace("F"),
+    L: readFace("L"),
+    R: readFace("R"),
+    U: readFace("U"),
+  };
 }
 
 /**
@@ -59,8 +66,8 @@ export function deriveUnfoldedDiagram(cube: FaceletCube): UnfoldedCubeDiagram {
  * the F-B axis (`z2`: U and D swap, L and R swap, F and B stay fixed), which is
  * orientation-preserving and so cannot introduce a mirror. Derived from `DIAGRAM_PALETTE` rather
  * than six fresh hex literals, so the two constants can never drift out of the relationship that
- * makes both of them correct. `DIAGRAM_PALETTE` keeps its own values: three existing views depend
- * on them.
+ * makes both of them correct. `DIAGRAM_PALETTE` keeps its own values: the last-layer derivations
+ * are read yellow-up and are correct as they stand.
  */
 export const WHITE_UP_DIAGRAM_PALETTE: Record<FaceLetter, string> = {
   B: DIAGRAM_PALETTE.B,
@@ -89,12 +96,22 @@ export function unfoldedNetCellColor(diagram: UnfoldedCubeDiagram, cell: Unfolde
 }
 
 const CELL = 40;
+const NET_COLS = 12;
+const NET_ROWS = 9;
+
+/**
+ * Blank space between the net's outer edge and the canvas edge. An SVG root clips at its viewBox
+ * and a stroke straddles the path it outlines, so without this the face outlines lying on the
+ * boundary - L's left, U's top, B's right, D's bottom - would lose their outer half and render at
+ * half the weight of every interior seam. `corner-projection.ts` leaves the same kind of room.
+ */
+const MARGIN = 2;
 
 /** Edge length, in SVG user units, of one net cell - what a consuming view sizes its `<rect>`s with. */
 export const UNFOLDED_NET_CELL_SIZE = CELL;
 
-export const UNFOLDED_NET_WIDTH = 480;
-export const UNFOLDED_NET_HEIGHT = 360;
+export const UNFOLDED_NET_WIDTH = NET_COLS * CELL + 2 * MARGIN;
+export const UNFOLDED_NET_HEIGHT = NET_ROWS * CELL + 2 * MARGIN;
 
 /** Each face's top-left corner, in cells, within the 12x9-cell net grid. */
 const FACE_ORIGIN_CELLS: Record<FaceLetter, { col: number; row: number }> = {
@@ -126,8 +143,8 @@ function buildNetCells(): UnfoldedNetCell[] {
           col,
           face,
           row,
-          x: (origin.col + col) * CELL,
-          y: (origin.row + row) * CELL,
+          x: MARGIN + (origin.col + col) * CELL,
+          y: MARGIN + (origin.row + row) * CELL,
         });
       }
     }
@@ -153,8 +170,8 @@ function buildFaceOutlines(): {
       face,
       height: 3 * CELL,
       width: 3 * CELL,
-      x: origin.col * CELL,
-      y: origin.row * CELL,
+      x: MARGIN + origin.col * CELL,
+      y: MARGIN + origin.row * CELL,
     };
   });
 }
