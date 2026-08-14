@@ -201,15 +201,33 @@ const SECRETS_ENTRY_POINT_CONFIGS = [
  * faith. `ignores` excludes the two files that legitimately need React: the
  * `./react` entry point and the view components it re-exports.
  *
+ * Banning `react` and `@unimatrix/ui` alone would not keep that promise, for
+ * the same reason `packages/secrets` bans `./client` and everything under it:
+ * the `.` entry stays dependency-free only while nothing under it reaches the
+ * files that legitimately hold the dependency. So `./components` is banned
+ * beside `./react` — a convenience re-export of a view from `src/index.ts`
+ * would otherwise pull React into every consumer with lint, typecheck and
+ * tests all green.
+ *
  * Scoped by file rather than by workspace, so it lives outside the table above.
  */
 const CUBE_ENTRY_POINT_CONFIGS = [
   {
-    files: ["src/**/*.ts"],
+    files: ["src/**/*.{ts,tsx}"],
     ignores: ["src/react.ts", "src/components/**"],
     restrictions: [
       {
-        group: ["react", "react-dom", "@unimatrix/ui", "@unimatrix/ui/*", "./react", "./react.js"],
+        group: [
+          "react",
+          "react-dom",
+          "@unimatrix/ui",
+          "@unimatrix/ui/*",
+          "./react",
+          "./react.js",
+          "./components",
+          "./components/*",
+          "./components/**",
+        ],
         message:
           "The `.` entry point of `@unimatrix/cube` carries no dependency at all — a React or `@unimatrix/ui` import here reaches every consumer of `.`, including the gen:algs SSR bundle. Put React-touching code behind `./react` instead.",
       },

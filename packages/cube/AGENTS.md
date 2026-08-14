@@ -8,7 +8,7 @@
 - `rewriteAsOuterMoves` throws on a sequence carrying a net whole-cube rotation — outer turns leave the centres fixed, so such a sequence has no outer-turn-only form at all.
 
 ## 3. Conventions
-Source-only, on the `@unimatrix/chrome` model: consumers resolve `src/*.ts` through a Vite alias plus a tsconfig `paths` entry, so this package's tsconfig extends `base.json` rather than `library.json`. `.`'s promise of carrying no dependency is enforced, not just stated: `packages/config-eslint/restricted-imports.mjs` bans `react`, `react-dom` and `@unimatrix/ui` from every file under `src/` except `react.ts` and `components/**`.
+Source-only, on the `@unimatrix/chrome` model: consumers resolve `src/*.ts` through a Vite alias plus a tsconfig `paths` entry, so this package's tsconfig extends `base.json` rather than `library.json`. `.`'s promise of carrying no dependency is enforced, not just stated: `packages/config-eslint/restricted-imports.mjs` bans `react`, `react-dom` and `@unimatrix/ui` from every file under `src/` except `react.ts` and `components/**` — and bans reaching those two exempt paths as well, since a re-export from `index.ts` would carry the dependency just as far as a direct import.
 
 ## 4. Working Agreements
 Same wiring requirement as `packages/chrome`: `@source "../../../packages/cube/src/**/*.{ts,tsx}"` in a consuming app's stylesheet, guarded by `infra/scripts/check-app-wiring.sh`.

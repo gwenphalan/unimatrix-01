@@ -94,15 +94,34 @@ fi
 # and `packages/config-eslint`, `packages/config-typescript` and
 # `packages/config-vitest` have no `src/` at all. `2>/dev/null` on the `find`
 # stays anyway, matching the defensive style used throughout this file.
+#
+# A package whose name cannot be read ends the run rather than being skipped.
+# Skipping it would drop exactly one entry from the table, which the empty-set
+# assertion below cannot see — that assertion only fires when *every* package
+# is dropped, and `packages/ui` guarantees it never is. The name grep is
+# anchored to a top-level key for the same reason: unanchored, `-m1` takes the
+# first `"name"` anywhere in the file, so a nested one (a `contributors` entry,
+# say) would key the package under the wrong name and silently retire its
+# `@source` requirement.
+#
+# The `.tsx` census is a proxy for "this package renders UI", and a deliberately
+# imperfect one: a package holding Tailwind classes only in a `.ts` file (a
+# `cva` variants module with no JSX) is not covered. Counting `.ts` instead is
+# not the fix — it would enrol every logic-only package, and `apps/web` would be
+# required to carry a dead `@source` line for `@unimatrix/shared`.
 ui_package_table() {
   local pkg_dir name tsx_count
   for pkg_dir in "${packages_dir}"/*/; do
     pkg_dir="${pkg_dir%/}"
     [[ -f "${pkg_dir}/package.json" ]] || continue
     [[ -d "${pkg_dir}/src" ]] || continue
-    name="$(grep -m1 -oE '"name"[[:space:]]*:[[:space:]]*"[^"]*"' "${pkg_dir}/package.json" \
-      | sed -E 's/.*"([^"]*)"$/\1/')"
-    [[ -n "${name}" ]] || continue
+    name="$(grep -m1 -oE '^[[:space:]]{2}"name"[[:space:]]*:[[:space:]]*"[^"]*"' \
+      "${pkg_dir}/package.json" | sed -E 's/.*"([^"]*)"$/\1/' || true)"
+    if [[ -z "${name}" ]]; then
+      printf '  FAIL  %s: no top-level "name" in package.json — the @source derivation cannot key this package\n' \
+        "${pkg_dir#"${repo_root}/"}" >&2
+      return 1
+    fi
     tsx_count="$(find "${pkg_dir}/src" -type f -name '*.tsx' 2>/dev/null | wc -l)"
     ((tsx_count > 0)) || continue
     printf '%s\t%s\n' "${name}" "$(cd "${pkg_dir}/src" && pwd)"
