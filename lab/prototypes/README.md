@@ -52,12 +52,12 @@ Then `pnpm --filter @unimatrix/lab dev` and open the printed URL.
   right, and the two are different layouts — a public-site sketch wrapped in tool
   chrome is designed against the wrong furniture just as surely as one wrapped in
   none.
-- **Data comes from `lab/src/mocks/` and nowhere else.** The real transports,
-  stores and Clerk sessions are lint errors in this workspace — the banned
-  specifiers are listed under "What is enforced mechanically, and what is not"
-  below, and `lab/eslint.config.mjs` owns the list. The mocks need no Clerk
-  keys, no running API and no database, and they cannot reach a deployed
-  origin.
+- **Data comes from `lab/src/mocks/` and nowhere else.** Under `lab/src/`, the real transports,
+  stores and Clerk sessions are lint errors — the banned specifiers are listed under "What is
+  enforced mechanically, and what is not" below, and `lab/eslint.config.mjs` owns the list. **This
+  directory is not linted** (`ignores: ["prototypes/**"]`), so here the rule holds by convention
+  and by what the harness makes reachable, not by a check. The mocks need no Clerk keys, no
+  running API and no database, and they cannot reach a deployed origin.
 - **This directory is excluded from lint, typecheck and prettier.** A
   half-finished sketch is not a failing check. It is *not* excluded from the
   stylesheet's `@source` globs — Tailwind still emits the classes you write

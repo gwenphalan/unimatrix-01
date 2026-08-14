@@ -11,8 +11,8 @@ import { z } from "zod";
  * Module-scoped rather than `declare global`, so nothing leaks into consumers.
  * `tsconfig.json` would typecheck without this: its `include` carries
  * `vitest.config.ts`, and vite's types pull `@types/node` into that program.
- * `tsconfig.build.json` compiles `src` only and does not, which is the
- * configuration that matters.
+ * `tsconfig.build.json` compiles `src` only and does not include
+ * `vitest.config.ts`, which is the configuration that matters.
  */
 declare const TextEncoder: {
   new (): { encode(input: string): { length: number } };

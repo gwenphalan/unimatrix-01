@@ -111,7 +111,9 @@ app.get("/admin/only", { preHandler: requirePermission("api", "admin") }, handle
 ```
 
 ```tsx
-// a Vite app's main.tsx (apps/auth, apps/admin)
+// Excerpt from a Vite app's main.tsx. `runtimeConfig` is the app's own validated
+// config, not shown: `apps/auth` loads it with `loadAuthAppRuntimeConfig`, and
+// `apps/admin` builds it in main.tsx and passes it through the router context.
 import { AuthProvider, usePermissions } from "@unimatrix/auth/react";
 
 function Root() {

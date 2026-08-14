@@ -242,11 +242,25 @@ two subcommands, and both they and `issue` append a row to the audit log.
 runbook:
 
 1. Capture the current key before touching anything, encrypted offline:
-   `docker exec <container> printenv SECRETS_KEKS | gpg -c --armor --output kek-<date>.asc`, or
-   read it from Dokploy's environment-variable UI where it was pasted. The pipe keeps the key out
-   of the argument list and shell history; restore with `gpg -d kek-<date>.asc`. Do this
-   regardless of whether anything looks wrong — a backup taken after a key is already lost is not
-   a backup.
+
+   ```bash
+   set -o pipefail
+   docker exec <container> sh -c 'test -n "${SECRETS_KEKS:-}" && printf %s "$SECRETS_KEKS"' \
+     | gpg -c --armor --output kek-<date>.asc
+   ```
+
+   Or read it from Dokploy's environment-variable UI where it was pasted. The pipe keeps the key
+   out of the argument list and shell history; restore with `gpg -d kek-<date>.asc`.
+
+   **`set -o pipefail` and the `test -n` are what make this fail loudly.** Without them a failed
+   `docker exec` — wrong container name, container not running — still runs `gpg`, which encrypts
+   empty input and writes a well-formed `.asc` file containing nothing. It decrypts cleanly to an
+   empty string, so nothing about the artifact says it is not a backup. Confirm the file is
+   non-trivial in size and prove the restore opens every row (`kek verify` under the restored key)
+   before treating it as one.
+
+   Do this regardless of whether anything looks wrong — a backup taken after a key is already lost
+   is not a backup, and one that has never been restored is a hypothesis rather than a backup.
 2. `docker exec <container> node dist/cli/kek.js generate` and encrypt the
    printed `<version>:<key>` entry offline the same way — call this new version `<n>`. It
    prints only the new entry, never the rest of the ring. `SECRETS_KEKS` set
