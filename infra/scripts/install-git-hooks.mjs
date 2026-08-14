@@ -12,10 +12,11 @@
 // a plain checkout but an absolute one from a worktree — `path.resolve`
 // against the repo root handles both without a branch on which form it is.
 //
-// Must exit 0 with no `.git` present at all: `.dockerignore` excludes `.git`,
-// so this runs during every app's Docker build (`COPY . .` then
-// `pnpm install --frozen-lockfile`), and a non-zero exit there fails the
-// image.
+// The Docker build stage installs from a `turbo prune --docker` tree, which
+// never carries `infra/`, so this script no longer runs inside a build at
+// all — the root `prepare` script guards the call on this file's own
+// existence (see the root `package.json`) rather than relying on this
+// script's own no-`.git` handling below.
 import { execFileSync } from "node:child_process";
 import { chmodSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";

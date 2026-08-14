@@ -9,9 +9,16 @@ ENV PATH=${PNPM_HOME}:${PATH}
 WORKDIR /workspace
 RUN corepack enable
 
-FROM base AS build
+FROM base AS prune
+ARG TURBO_VERSION=2.10.7
+RUN npm install -g turbo@$TURBO_VERSION
 COPY . .
-RUN find . -name '*.tsbuildinfo' -delete && pnpm install --frozen-lockfile
+RUN turbo prune @unimatrix/api --docker
+
+FROM base AS build
+COPY --from=prune /workspace/out/json/ .
+RUN pnpm install --frozen-lockfile
+COPY --from=prune /workspace/out/full/ .
 # Build this service together with its workspace dependencies, in
 # topological order. It compiles with tsc and resolves them from their
 # built dist (not source, unlike the Vite apps), so they must be built

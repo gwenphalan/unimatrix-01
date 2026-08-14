@@ -8,8 +8,14 @@
  * of this config — the generator reads the committed `FROM` lines and re-emits
  * them verbatim, so a Dependabot digest bump never has to touch generated
  * output. `nginx.conf` is `COPY`d, never generated, and carries no entry here
- * either.
+ * either. The build stage installs from a `turbo prune --docker` output rather
+ * than the whole repo, so a change to an unrelated app's source cannot bust
+ * the install layer.
  */
+
+/** The turbo version installed in the prune stage, pinned independently of
+ *  the root `turbo` devDependency — see the package `AGENTS.md` §2. */
+const TURBO_VERSION = "2.10.7";
 
 /**
  * A `docker build --build-arg` a static SPA image accepts, inlined into the
@@ -42,6 +48,14 @@ export interface StaticSpaAppConfig {
    *  builds `@unimatrix/auth-app`, so this is never derived from `appDir`. */
   readonly packageName: string;
   readonly buildArgs: readonly DeployBuildArg[];
+  /**
+   * Repo-root-relative paths `COPY`d into the build stage on top of the
+   * pruned workspace, e.g. `"content/home"`. `turbo prune` emits workspace
+   * packages only, so an app that imports something outside every workspace
+   * — `apps/web` reads `content/home/index.md` straight off disk — cannot
+   * build without it named here.
+   */
+  readonly extraBuildPaths?: readonly string[];
 }
 
 /** A compose value: either a literal or a `${NAME}` / `${NAME:-default}` substitution. */
@@ -186,6 +200,21 @@ export function validateAppConfig(config: DeployAppConfig): readonly string[] {
         failures.push(`${label}: buildArg ${arg.name} has ${EMPTY_DEFAULT_MESSAGE}`);
       }
     }
+
+    for (const path of config.extraBuildPaths ?? []) {
+      if (path.length === 0) {
+        failures.push(`${label}: an extraBuildPaths entry is empty.`);
+      } else if (path.startsWith("/")) {
+        failures.push(
+          `${label}: extraBuildPaths entry "${path}" is absolute; it must be repo-root-relative.`,
+        );
+      } else if (path.split("/").includes("..")) {
+        failures.push(
+          `${label}: extraBuildPaths entry "${path}" has a ".." segment, which would escape the build context.`,
+        );
+      }
+    }
+
     return failures;
   }
 
@@ -279,18 +308,50 @@ function regenerateNotice(config: DeployAppConfig): string[] {
   ];
 }
 
-function staticSpaDockerfileBody(
-  config: StaticSpaAppConfig,
+/**
+ * The `base` and `prune` stages, identical in shape for a static SPA and a
+ * node service: `turbo prune <package> --docker` is what narrows the install
+ * that follows to the packages `<package>` actually depends on, instead of
+ * `pnpm install --frozen-lockfile` reinstalling the whole workspace on every
+ * app's build regardless of which app changed.
+ */
+function baseAndPruneStageLines(
+  packageName: string,
   fromLines: DeployDockerfileFromLines,
 ): string[] {
-  const lines: string[] = ["ARG NODE_VERSION=24.18.0", "", fromLines.base];
-  lines.push(
+  return [
+    "ARG NODE_VERSION=24.18.0",
+    "",
+    fromLines.base,
     "ENV PNPM_HOME=/pnpm",
     "ENV PATH=${PNPM_HOME}:${PATH}",
     "WORKDIR /workspace",
     "RUN corepack enable",
     "",
+    "FROM base AS prune",
+    // `npm`, not `pnpm add -g`: no package.json exists this early for corepack
+    // to read a pinned pnpm version from, and `PNPM_HOME` is not a directory
+    // `pnpm add -g` can install into. `npm` ships in the node base image.
+    `ARG TURBO_VERSION=${TURBO_VERSION}`,
+    // The `$TURBO_VERSION` below is Docker expanding the ARG above at build
+    // time, unbraced so it cannot be misread as the identically named constant
+    // this module interpolates on the line before.
+    "RUN npm install -g turbo@$TURBO_VERSION",
+    "COPY . .",
+    `RUN turbo prune ${packageName} --docker`,
+  ];
+}
+
+function staticSpaDockerfileBody(
+  config: StaticSpaAppConfig,
+  fromLines: DeployDockerfileFromLines,
+): string[] {
+  const lines: string[] = baseAndPruneStageLines(config.packageName, fromLines);
+  lines.push(
+    "",
     "FROM base AS build",
+    "COPY --from=prune /workspace/out/json/ .",
+    "RUN pnpm install --frozen-lockfile",
   );
 
   for (const arg of config.buildArgs) {
@@ -299,9 +360,12 @@ function staticSpaDockerfileBody(
     lines.push(`ENV ${arg.name}=\${${arg.name}}`);
   }
 
+  lines.push("COPY --from=prune /workspace/out/full/ .");
+  for (const path of config.extraBuildPaths ?? []) {
+    lines.push(`COPY ${path} ./${path}`);
+  }
+
   lines.push(
-    "COPY . .",
-    "RUN find . -name '*.tsbuildinfo' -delete && pnpm install --frozen-lockfile",
     `RUN pnpm --filter ${config.packageName} build`,
     "",
     fromLines.runtime,
@@ -360,16 +424,13 @@ function nodeApiDockerfileBody(
   config: NodeApiAppConfig,
   fromLines: DeployDockerfileFromLines,
 ): string[] {
-  const lines: string[] = ["ARG NODE_VERSION=24.18.0", "", fromLines.base];
+  const lines: string[] = baseAndPruneStageLines(config.packageName, fromLines);
   lines.push(
-    "ENV PNPM_HOME=/pnpm",
-    "ENV PATH=${PNPM_HOME}:${PATH}",
-    "WORKDIR /workspace",
-    "RUN corepack enable",
     "",
     "FROM base AS build",
-    "COPY . .",
-    "RUN find . -name '*.tsbuildinfo' -delete && pnpm install --frozen-lockfile",
+    "COPY --from=prune /workspace/out/json/ .",
+    "RUN pnpm install --frozen-lockfile",
+    "COPY --from=prune /workspace/out/full/ .",
     "# Build this service together with its workspace dependencies, in",
     "# topological order. It compiles with tsc and resolves them from their",
     "# built dist (not source, unlike the Vite apps), so they must be built",
