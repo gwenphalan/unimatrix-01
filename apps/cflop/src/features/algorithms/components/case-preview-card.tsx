@@ -1,9 +1,9 @@
 import { useMemo } from "react";
 import { RiCheckLine } from "@remixicon/react";
+import { LastLayerDiagramView } from "@unimatrix/cube/react";
 
 import { deriveDiagramForSet } from "@/features/algorithms/derive-diagram";
 import type { AlgorithmCase, AlgorithmSetId } from "@/features/algorithms/types";
-import { LastLayerDiagramView } from "@/features/cube/components/last-layer-diagram-view";
 import { getCaseSetup } from "@/features/trainer/case-setup";
 import { cn } from "@unimatrix/ui/public";
 

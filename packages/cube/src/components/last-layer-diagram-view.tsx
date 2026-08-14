@@ -1,7 +1,7 @@
 import { cn } from "@unimatrix/ui/public";
 
-import { diagramStickerColor } from "@/features/cube/last-layer-diagram";
-import type { DiagramSticker, LastLayerDiagram } from "@/features/cube/last-layer-diagram";
+import { diagramStickerColor } from "../last-layer-diagram.js";
+import type { DiagramSticker, LastLayerDiagram } from "../last-layer-diagram.js";
 
 const CELL = 40;
 const GRID_START = 40;

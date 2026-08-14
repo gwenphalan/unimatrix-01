@@ -1,6 +1,6 @@
 ---
 name: browser-verifier
-description: Load a changed surface in a real browser and report what actually rendered. Use before opening a PR that touches anything rendering in a browser — any workspace with a vite.config.ts, plus packages/ui and packages/chrome — because the failure modes this catches leave lint, typecheck, unit and smoke suites all green.
+description: Load a changed surface in a real browser and report what actually rendered. Use before opening a PR that touches anything rendering in a browser — any workspace with a vite.config.ts, plus packages/ui, packages/chrome and packages/cube — because the failure modes this catches leave lint, typecheck, unit and smoke suites all green.
 tools: Bash, Read, Grep, Glob, mcp__claude-in-chrome__tabs_context_mcp, mcp__claude-in-chrome__tabs_create_mcp, mcp__claude-in-chrome__navigate, mcp__claude-in-chrome__computer, mcp__claude-in-chrome__read_page, mcp__claude-in-chrome__get_page_text, mcp__claude-in-chrome__find, mcp__claude-in-chrome__read_console_messages, mcp__claude-in-chrome__resize_window, Skill
 model: sonnet
 effort: medium
@@ -41,9 +41,9 @@ Read the dev command out of the workspace's own `package.json` rather than guess
 it — which apps a bare `pnpm dev` starts is stated in the root `AGENTS.md` and changes as apps are
 added. If no browser is running, start one; that is part of this job, not a blocker to report.
 
-**`packages/ui` and `packages/chrome` have no dev command to read** — verified: neither
-`package.json` defines a `dev` script, so the rule above dead-ends on the two workspaces this agent
-is named for. They are only ever seen through a consuming app, so pick one: grep `apps/` for an
+**`packages/ui`, `packages/chrome` and `packages/cube` have no dev command to read** — verified: none
+of the three `package.json` files define a `dev` script, so the rule above dead-ends on the
+workspaces this agent is named for. They are only ever seen through a consuming app, so pick one: grep `apps/` for an
 import of the changed export, take the app that has it, and name the route that renders it. Start
 *that* app's dev server. A shared-package change you could not reach from any route is
 `FAILED TO RENDER` with the reason — an export nothing renders is where this check is worth most.

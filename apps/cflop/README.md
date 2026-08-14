@@ -12,6 +12,7 @@ change to any of them can change the built browser bundle or its container:
 apps/cflop/**
 packages/chrome/**
 packages/config-typescript/**
+packages/cube/**
 packages/ui/**
 infra/docker/cflop-compose.yaml
 package.json
@@ -21,14 +22,16 @@ pnpm-workspace.yaml
 ```
 
 `apps/cflop/**` includes its Dockerfile and Nginx configuration, and its own
-`package.json` and `tsconfig.json`. The trainer resolves `@unimatrix/ui` and
-`@unimatrix/chrome` from workspace source, and the root workspace files control
-the frozen pnpm install used by the Docker build.
+`package.json` and `tsconfig.json`. The trainer resolves `@unimatrix/ui`,
+`@unimatrix/chrome` and `@unimatrix/cube` from workspace source, and the root
+workspace files control the frozen pnpm install used by the Docker build.
 
 `packages/chrome/**` is on the list because `app-shell.tsx` imports
 `@unimatrix/chrome/tool`. Omitting it leaves a tool-shell change rebuilding
 `apps/admin` and not this app, so the two serve different chrome with nothing to
-indicate it. `@unimatrix/e2e-helpers` stays off the list deliberately: it is
+indicate it. `packages/cube/**` is on the list for the same reason: the move
+engine and diagram views it carries render on screen here, and nothing else
+imports it. `@unimatrix/e2e-helpers` stays off the list deliberately: it is
 imported only from `e2e/`, so it cannot change the built bundle.
 
 When adding a workspace dependency or another build input, add its path here

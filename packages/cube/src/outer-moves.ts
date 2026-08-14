@@ -1,4 +1,4 @@
-import type { Move } from "./notation";
+import type { Move } from "./notation.js";
 
 const OUTER_FACES = ["U", "D", "L", "R", "F", "B"] as const;
 

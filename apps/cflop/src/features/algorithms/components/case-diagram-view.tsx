@@ -1,13 +1,12 @@
 import { useMemo } from "react";
 import { RiEyeOffLine } from "@remixicon/react";
+import { derivePllCornerDiagram } from "@unimatrix/cube";
+import type { FaceletCube } from "@unimatrix/cube";
+import { CornerDiagramView, LastLayerDiagramView } from "@unimatrix/cube/react";
 
 import { deriveDiagramForSet } from "@/features/algorithms/derive-diagram";
 import type { DiagramPreviewMode } from "@/features/algorithms/preview-mode";
 import type { AlgorithmSetId } from "@/features/algorithms/types";
-import { CornerDiagramView } from "@/features/cube/components/corner-diagram-view";
-import { LastLayerDiagramView } from "@/features/cube/components/last-layer-diagram-view";
-import { derivePllCornerDiagram } from "@/features/cube/last-layer-diagram";
-import type { FaceletCube } from "@/features/cube/model";
 
 export interface CaseDiagramViewProps {
   cube: FaceletCube;

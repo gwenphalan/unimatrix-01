@@ -56,10 +56,12 @@ const ALLOWED_PACKAGE_IMPORTS = {
   "apps/secrets": ["deploy-config", "secrets", "shared"],
   // Deliberately narrow. AGENTS.md: cflop must not gain
   // `@unimatrix/api-client`, `@unimatrix/shared`, or `@unimatrix/content`
-  // unless a real server-backed feature is added. `chrome` does not widen that:
-  // it carries no auth, transport, or content dependency of its own, which is
-  // the whole reason its shells take the account control as a slot.
-  "apps/cflop": ["chrome", "deploy-config", "e2e-helpers", "ui"],
+  // unless a real server-backed feature is added. Neither `chrome` nor `cube`
+  // widens that: chrome carries no auth, transport, or content dependency of
+  // its own, which is the whole reason its shells take the account control as
+  // a slot, and cube is the move engine and diagram geometry — no transport,
+  // no content, and its own `.` entry carries no dependency at all.
+  "apps/cflop": ["chrome", "cube", "deploy-config", "e2e-helpers", "ui"],
   "apps/auth": ["app-config", "auth", "chrome", "deploy-config", "ui"],
   // `api-client` and `shared` were added when the CMS moved onto this origin:
   // the content section calls the API through `@unimatrix/api-client` and
@@ -81,6 +83,10 @@ const ALLOWED_PACKAGE_IMPORTS = {
   // slot precisely so a sign-in-free tool can import one without pulling Clerk
   // into its dependency tree.
   "packages/chrome": ["ui"],
+  // Mirrors chrome: composes ui and nothing else. The finer-grained rule —
+  // only `./react` may actually import it — is `restricted-imports.mjs`'s
+  // job, not this one's.
+  "packages/cube": ["ui"],
   "packages/user-data": ["api-client", "auth", "shared"],
   // Its `.` entry is a leaf, but `./client` (the secrets-service HTTP client)
   // consumes `getSecretValueContract`/`getSecretQuerySchema` from `shared` —

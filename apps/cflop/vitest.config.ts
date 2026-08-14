@@ -17,6 +17,14 @@ export default defineConfig({
         replacement: fileURLToPath(new URL("../../packages/ui/src/index.ts", import.meta.url)),
       },
       {
+        find: /^@unimatrix\/cube\/react$/,
+        replacement: fileURLToPath(new URL("../../packages/cube/src/react.ts", import.meta.url)),
+      },
+      {
+        find: /^@unimatrix\/cube$/,
+        replacement: fileURLToPath(new URL("../../packages/cube/src/index.ts", import.meta.url)),
+      },
+      {
         find: /^react$/,
         replacement: fileURLToPath(new URL("./node_modules/react", import.meta.url)),
       },
@@ -29,7 +37,7 @@ export default defineConfig({
       // `head: () => ({ meta: [...] })` bodies only run when the router renders
       // a route, which the Playwright smoke suite does and this suite does not.
       // Those statements are real and shipped, just unreachable from here.
-      thresholds: { statements: 65, functions: 57 },
+      thresholds: { statements: 54, functions: 47 },
     }),
     environment: "jsdom",
     include: ["test/**/*.test.ts", "test/**/*.test.tsx"],

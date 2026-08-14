@@ -1,9 +1,9 @@
 import { useCallback, useMemo, useState } from "react";
+import type { FaceletCube } from "@unimatrix/cube";
 
 import { getAlgorithmSet, groupCasesByGroup } from "@/features/algorithms/algorithm-sets";
 import type { AlgorithmCase, AlgorithmSetId } from "@/features/algorithms/types";
 import { useCaseProgress } from "@/features/algorithms/use-case-progress";
-import type { FaceletCube } from "@/features/cube/model";
 import { orderedLearnCases } from "@/features/learn/learn-case-order";
 import { getCaseSetup } from "@/features/trainer/case-setup";
 import { mirrorLearnedCaseToPool } from "@/lib/pool-storage";

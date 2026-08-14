@@ -1,14 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { applyMoves } from "@/features/cube/engine";
 import {
   DIAGRAM_PALETTE,
+  applyMoves,
+  createSolvedCube,
   deriveOllDiagram,
   derivePllDiagram,
   diagramStickerColor,
-} from "@/features/cube/last-layer-diagram";
-import { createSolvedCube } from "@/features/cube/model";
-import { parseAlgorithm } from "@/features/cube/notation";
+  parseAlgorithm,
+} from "../src/index.js";
 
 describe("deriveOllDiagram", () => {
   it("shows a fully oriented top and no side stickers peeking U for a solved cube", () => {

@@ -1,0 +1,42 @@
+{
+  "name": "@unimatrix/cube",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Rubik's Cube notation, move engine and last-layer diagram geometry, with React views for the diagrams.",
+  "license": "MIT",
+  "type": "module",
+  "files": [
+    "src"
+  ],
+  "exports": {
+    ".": "./src/index.ts",
+    "./react": "./src/react.ts"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@unimatrix/ui": "workspace:*"
+  },
+  "peerDependencies": {
+    "react": "^19.2.4"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.14",
+    "@unimatrix/config-eslint": "workspace:*",
+    "@unimatrix/config-typescript": "workspace:*",
+    "@unimatrix/config-vitest": "workspace:*",
+    "@vitest/coverage-v8": "^4.1.10",
+    "eslint": "^10.0.0",
+    "react": "^19.2.4",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.10"
+  }
+}

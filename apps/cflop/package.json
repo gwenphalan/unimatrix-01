@@ -45,6 +45,7 @@
     "@remixicon/react": "^4.9.0",
     "@tanstack/react-router": "^1.166.6",
     "@unimatrix/chrome": "workspace:^",
+    "@unimatrix/cube": "workspace:^",
     "@unimatrix/ui": "workspace:^",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",

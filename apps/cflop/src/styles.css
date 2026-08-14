@@ -2,6 +2,7 @@
 
 @source "../../../packages/ui/src/**/*.{ts,tsx}";
 @source "../../../packages/chrome/src/**/*.{ts,tsx}";
+@source "../../../packages/cube/src/**/*.{ts,tsx}";
 
 @layer components {
   .alg-move-string {

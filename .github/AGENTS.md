@@ -41,9 +41,9 @@ this file holds the mechanics, each of which was learned the hard way.
   unverified.**
 - `infra/scripts/check-app-wiring.sh` (run by `pnpm check`/`pnpm verify` and by the `App wiring`
   step in `Verify`, placed before `pnpm install` because it needs no `node_modules`) is the
-  mechanical guard on three things nothing else sees: the `packages/chrome` `@source` line in each
-  `apps/*` stylesheet, `@tanstack/react-router` in its vite `dedupe`, and every
-  `apps/*/Dockerfile` appearing in the `Images` matrix. It walks `apps/*` only, so `lab` carries the
+  mechanical guard on three things nothing else sees: an `@source` line resolving to
+  `packages/<name>/src` for every `packages/*` dependency that ships a `.tsx`, `@tanstack/react-router`
+  in its vite `dedupe`, and every `apps/*/Dockerfile` appearing in the `Images` matrix. It walks `apps/*` only, so `lab` carries the
   first two requirements unchecked. It is also the app template, but only for an app it can
   classify: a new Vite or Dockerized app satisfies it or the check goes red, while an `apps/*`
   directory with neither `vite.config.ts` nor `Dockerfile` is skipped and passes.

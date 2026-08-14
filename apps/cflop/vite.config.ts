@@ -61,6 +61,14 @@ export function createCflopViteConfig({
           find: /^@unimatrix\/ui$/,
           replacement: fileURLToPath(new URL("../../packages/ui/src/index.ts", import.meta.url)),
         },
+        {
+          find: /^@unimatrix\/cube\/react$/,
+          replacement: fileURLToPath(new URL("../../packages/cube/src/react.ts", import.meta.url)),
+        },
+        {
+          find: /^@unimatrix\/cube$/,
+          replacement: fileURLToPath(new URL("../../packages/cube/src/index.ts", import.meta.url)),
+        },
         ...(ssr
           ? []
           : [

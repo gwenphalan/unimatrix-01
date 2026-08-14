@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import type { FaceletCube } from "@unimatrix/cube";
 
 import type { AlgorithmCase, AlgorithmSetId } from "@/features/algorithms/types";
 import { useCasePool } from "@/features/algorithms/use-case-pool";
-import type { FaceletCube } from "@/features/cube/model";
 import { getCaseSetup } from "@/features/trainer/case-setup";
 import type { DrillQueueStep } from "@/features/trainer/drill-queue";
 import { advanceDrillQueue, enabledCaseIds } from "@/features/trainer/drill-queue";

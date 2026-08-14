@@ -1,5 +1,5 @@
-import { extractLastLayer } from "./model";
-import type { FaceLetter, FaceletCube } from "./model";
+import { extractLastLayer } from "./model.js";
+import type { FaceLetter, FaceletCube } from "./model.js";
 
 export type DiagramSticker =
   { kind: "oriented" } | { kind: "unknown" } | { kind: "color"; face: FaceLetter };
