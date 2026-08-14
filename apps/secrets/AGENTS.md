@@ -73,11 +73,6 @@ HTTP, which is what local dev and every test do.
   package root, so the same relative path reaches `apps/secrets/drizzle` in dev and `/app/drizzle` in
   the container. Moving `migrate.ts` up or down a directory breaks migration-on-start in production
   only — `tsx` running the TypeScript source directly would still happen to resolve.
-- **Never write `@unimatrix/db` as a specifier in a comment under `src/`.**
-  `infra/scripts/check-watch-paths.mjs` greps the raw text of every file under `src/` for
-  `@unimatrix/*` with no import parsing, so a comment naming the package this service deliberately
-  does not depend on would demand `packages/db/**` in the README watch-path block. Reference it as a
-  path (`packages/db/src/client.ts`) instead.
 - **The scoped read route is the one exception to "no route here may serve a secret value"** — see
   §1. Every denial the five routes throw (wrong capability, out-of-scope name, absent name) goes
   through one `denySecretAccess` construction site in `src/modules/secrets/index.ts` and comes back

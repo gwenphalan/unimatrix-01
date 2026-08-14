@@ -26,36 +26,6 @@ All three default to the production values, so `docker build` with no
 is the source of these defaults; override any of them to target a different
 environment.
 
-## Dokploy redeploy watch paths
-
-Configure the admin Dokploy service to watch these repository paths. A change
-to any of them can change the built browser bundle or its container:
-
-```text
-apps/admin/**
-packages/api-client/**
-packages/app-config/**
-packages/auth/**
-packages/chrome/**
-packages/config-typescript/**
-packages/shared/**
-packages/ui/**
-infra/docker/admin-compose.yaml
-package.json
-pnpm-lock.yaml
-pnpm-workspace.yaml
-.dockerignore
-```
-
-`apps/admin/**` includes its Dockerfile and nginx configuration. The app
-imports source directly from the listed workspace packages, and the root
-workspace files control the frozen pnpm install used by the Docker build.
-
-When adding a workspace dependency or another build input, add its path here
-and to the Dokploy service's watch-path configuration. See
-[`docs/deployment.md`](../../docs/deployment.md) for the
-repository-wide convention.
-
 ## Security headers
 
 `nginx.conf` ships a deliberately tighter policy than `apps/web` — this app

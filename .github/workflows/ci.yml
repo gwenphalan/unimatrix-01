@@ -57,13 +57,6 @@ jobs:
       - name: AGENTS.md symlinks
         run: bash ./infra/scripts/check-agents-md-symlinks.sh
 
-      # Same placement rationale again — plain Node, no `node_modules`. Watch
-      # paths are the one of these with a production consequence: a package
-      # missing from an app's list means that app silently stops redeploying
-      # when the package changes.
-      - name: Watch paths
-        run: node ./infra/scripts/check-watch-paths.mjs
-
       - name: Stale comments
         run: node ./infra/scripts/check-stale-comments.mjs
 

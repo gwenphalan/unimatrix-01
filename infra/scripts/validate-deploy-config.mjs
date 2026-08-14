@@ -27,8 +27,8 @@
 //      for Clerk instead of throwing, so probing a non-production effective
 //      env would measure nothing.
 //
-// Fails closed on zero configs discovered, matching `check-watch-paths.mjs`
-// and `check-coverage-drift.mjs`, and on a `node-api` config with no probe
+// Fails closed on zero configs discovered, matching `check-coverage-drift.mjs`,
+// and on a `node-api` config with no probe
 // entry — the smaller fix of skipping the probe when there is no entry would
 // fail *open* for every future node-api app, which this script must never do.
 import { readdirSync, existsSync } from "node:fs";

@@ -549,28 +549,6 @@ scheme.
   `DEFAULT_API_CORS_ALLOWED_ORIGINS` in `apps/api/src/config.ts`, which includes
   local development origins — set it explicitly in production
 
-## Auto-updates from `main`
-
-Enable automatic Dokploy redeploys from the repository `main` branch for every
-service, using service-specific watch paths. This avoids rebuilding every
-service for an unrelated monorepo change while still rebuilding when its image
-inputs change.
-
-Each live app owns the canonical list for its Dokploy service:
-
-- `apps/web/README.md`
-- `apps/api/README.md`
-- `apps/cflop/README.md`
-- `apps/auth/README.md`
-- `apps/admin/README.md`
-- `apps/secrets/README.md`
-
-Copy each list exactly into that service's Dokploy watch-path configuration.
-The lists include the app directory, directly imported workspace packages,
-shared root pnpm manifests, and the service-specific Compose file. When an app
-adds a workspace dependency, new bundled content, or another Docker build
-input, update its README and Dokploy configuration in the same change.
-
 ## The host reuses its layer cache between builds
 
 Scope: the two preview **Application** services (see "Pull request preview
@@ -757,7 +735,9 @@ default (no API dependency), but there is no reason to split them.
 ### Three behaviours that are invisible from the UI
 
 - **Watch paths do not apply to pull requests.** The `push` handler filters by
-  watch path; the `pull_request` handler does not. Every PR against `main`
+  watch path; the `pull_request` handler does not, so a watch path set on one of
+  these Application services throttles its branch deploys and never its
+  previews. Every PR against `main`
   rebuilds every previewable app — a docs-only PR triggers two full repo-root
   `pnpm install --frozen-lockfile` plus workspace builds and posts two bot
   comments. If that is too much load, the throttle is the preview **label**

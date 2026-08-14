@@ -76,11 +76,7 @@ this file holds the mechanics, each of which was learned the hard way.
   notices. It fails closed on a missing symlink, a regular file in its place, a wrong target, and a
   `CLAUDE.md` whose `AGENTS.md` was renamed away.
 - The remaining guards, each aimed at one kind of drift.
-  `check-watch-paths.mjs` (`Watch paths`) has a production consequence: it derives
-  each app's real inputs from the `@unimatrix/*` specifiers under its `src/` and fails if one is
-  missing from the fenced watch-path list in its README, because Dokploy rebuilds only on those
-  paths — `packages/chrome/**` was absent from three apps, so the shared site chrome could change
-  without them redeploying. `check-stale-comments.mjs` (`Stale comments`) fails when a backticked
+  `check-stale-comments.mjs` (`Stale comments`) fails when a backticked
   `PascalCase` name in a comment exists in no code; an "occluder" mechanism was deleted and five
   comments across four workspaces outlived it. `check-coverage-drift.mjs` (`Coverage drift`) runs
   **after** `pnpm test` because it reads the `coverage/coverage-summary.json` that run writes, and
