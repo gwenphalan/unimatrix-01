@@ -53,7 +53,14 @@ describe("WHITE_UP_DIAGRAM_PALETTE", () => {
   });
 
   it("is DIAGRAM_PALETTE half-turned about the F-B axis (U<->D, L<->R, F and B fixed)", () => {
-    const swapped: Record<FaceLetter, FaceLetter> = { B: "B", D: "U", F: "F", L: "R", R: "L", U: "D" };
+    const swapped: Record<FaceLetter, FaceLetter> = {
+      B: "B",
+      D: "U",
+      F: "F",
+      L: "R",
+      R: "L",
+      U: "D",
+    };
 
     for (const face of Object.keys(WHITE_UP_DIAGRAM_PALETTE) as FaceLetter[]) {
       expect(WHITE_UP_DIAGRAM_PALETTE[face]).toBe(DIAGRAM_PALETTE[swapped[face]]);
@@ -80,7 +87,8 @@ describe("UNFOLDED_NET_CELLS", () => {
     expect(xRangeOf("U")).toEqual(fRange);
     expect(xRangeOf("D")).toEqual(fRange);
 
-    const yOf = (face: FaceLetter) => UNFOLDED_NET_CELLS.filter((cell) => cell.face === face)[0]?.y ?? -1;
+    const yOf = (face: FaceLetter) =>
+      UNFOLDED_NET_CELLS.filter((cell) => cell.face === face)[0]?.y ?? -1;
     expect(yOf("U")).toBeLessThan(yOf("F"));
     expect(yOf("D")).toBeGreaterThan(yOf("F"));
   });
@@ -89,7 +97,11 @@ describe("UNFOLDED_NET_CELLS", () => {
     const bandOf = (face: FaceLetter) => {
       const cells = UNFOLDED_NET_CELLS.filter((cell) => cell.face === face);
       const xs = cells.map((cell) => cell.x);
-      return { maxX: Math.max(...xs), minX: Math.min(...xs), minY: Math.min(...cells.map((cell) => cell.y)) };
+      return {
+        maxX: Math.max(...xs),
+        minX: Math.min(...xs),
+        minY: Math.min(...cells.map((cell) => cell.y)),
+      };
     };
 
     const [l, f, r, b] = (["L", "F", "R", "B"] as const).map(bandOf);

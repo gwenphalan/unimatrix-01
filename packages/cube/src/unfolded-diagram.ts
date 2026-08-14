@@ -139,7 +139,13 @@ function buildNetCells(): UnfoldedNetCell[] {
 /** The net grid's 54 cells (9 per face), computed once at module load. */
 export const UNFOLDED_NET_CELLS: readonly UnfoldedNetCell[] = buildNetCells();
 
-function buildFaceOutlines(): { face: FaceLetter; height: number; width: number; x: number; y: number }[] {
+function buildFaceOutlines(): {
+  face: FaceLetter;
+  height: number;
+  width: number;
+  x: number;
+  y: number;
+}[] {
   return FACE_ORDER.map((face) => {
     const origin = FACE_ORIGIN_CELLS[face];
 
