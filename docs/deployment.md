@@ -874,6 +874,19 @@ secrets are not exposed to workflows triggered by fork pull requests, so an
 outside contributor cannot reach them. What it costs is that anyone who can
 push to `main` can reach the whole instance.
 
+The Cloudflare half is an Access **service token** named `github-actions-deploy`,
+allowed by a Service Auth policy on the `Dokploy control panel` application. It
+sits behind the existing owner-email policy rather than replacing it, so it
+grants no browser access to anyone.
+
+**It expires 2027-08-14, and its lapse is silent.** An expired service token
+does not fail closed with an error a reader would recognise — Cloudflare answers
+the runner with a 302 to the login page, exactly as it did before the token
+existed, and `Deploy` reports it as `POST /api/compose.deploy returned 302`.
+Nothing warns beforehand. Minting a replacement and updating the two Actions
+secrets is the whole fix; the policy references the token by id, so a new token
+needs the policy updated too.
+
 ## Verification after deploy
 
 Verify these URLs after each production rollout:
