@@ -41,9 +41,9 @@ consequences:
   issues exactly that command for a Compose service whose own `command` field is empty, so the
   published image would go unused while the build log, the tag and the deploy status all read as a
   normal deploy. Build an app locally with `docker build -f apps/<app>/Dockerfile .` instead.
-- `nodeApiApp()` is a parameterised template with two call sites (`apps/api`, `apps/secrets`) — each
-  supplies its own env and volume data as arguments, and the generator's Dockerfile/compose body stays
-  identical between them.
+- `nodeApiApp()` is a parameterised template — one call site per `node-api` app's `deploy.config.ts`
+  (`grep -l nodeApiApp apps/*/deploy.config.ts`) — each supplies its own env and volume data as
+  arguments, and the generator's Dockerfile/compose body stays identical between them.
 - If two apps' Dockerfiles cannot both be expressed by `staticSpaApp()`/`nodeApiApp()` without a
   generator branch keyed on app name, that is a signal the archetype split is wrong, not licence to
   add the branch.
