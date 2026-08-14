@@ -43,6 +43,16 @@ export function createLabViteConfig(): UserConfig {
           find: /^@unimatrix\/chrome\/tool$/,
           replacement: fileURLToPath(new URL("../packages/chrome/src/tool.ts", import.meta.url)),
         },
+        // `/react` before the bare entry, for the first-match-wins reason
+        // spelled out at the `@unimatrix/ui` pair below.
+        {
+          find: /^@unimatrix\/cube\/react$/,
+          replacement: fileURLToPath(new URL("../packages/cube/src/react.ts", import.meta.url)),
+        },
+        {
+          find: /^@unimatrix\/cube$/,
+          replacement: fileURLToPath(new URL("../packages/cube/src/index.ts", import.meta.url)),
+        },
         {
           find: /^@unimatrix\/shared$/,
           replacement: fileURLToPath(new URL("../packages/shared/src/index.ts", import.meta.url)),
