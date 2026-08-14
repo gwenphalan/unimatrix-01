@@ -10,10 +10,10 @@ is not the production web server for `apps/web/dist/`,
 `apps/cflop/dist/`, or `apps/auth/dist/`.
 
 Every `apps/*/Dockerfile` and `infra/docker/*-compose.yaml` referenced below is generated from
-`apps/<app>/deploy.config.ts` — see `infra/docker/README.md`. The subdomain and container-port
-listed per service in this document is **not** sourced from that config and stays hand-maintained
-duplication for now; it is not read by anything until the Dokploy auto-deployment work that would
-read it directly.
+`apps/<app>/deploy.config.ts` — see `infra/docker/README.md`. The subdomain and container port
+listed per service in this document are **not** sourced from that config and stay hand-maintained
+duplication: `packages/deploy-config` deliberately holds no subdomain or Dokploy metadata (see its
+`AGENTS.md`), so nothing generates or reads them.
 
 ## Default production topology
 
@@ -25,6 +25,7 @@ The default production shape is separate-origin:
 - `https://cube.unimatrix-01.dev` -> 301 to `cflop.unimatrix-01.dev`
   (pre-rebrand hostname; see "CFLOP service" below)
 - `https://auth.unimatrix-01.dev` -> auth
+- `https://admin.unimatrix-01.dev` -> admin
 
 In this shape:
 
@@ -254,7 +255,7 @@ runbook:
    `SECRETS_KEKS` (new entry first, comma-separated), keeping the old entry,
    and redeploy. **Wait for the container to be recreated before step 4** — the
    deploy is queued rather than applied, and the old ring stays live for minutes
-   afterwards; see "A deploy is queued, not applied" above.
+   afterwards; see "A deploy is queued, not applied" below.
 4. `docker exec <container> node dist/cli/kek.js rotate --to-version <n>` —
    re-seals every `secret_versions` row, live and superseded, under version
    `<n>`. Refuses to start if `<n>` is not the ring's actual active version
@@ -336,7 +337,7 @@ reference them until the change lands.
    `https://secrets:3001`, the three distinct tokens, and the certificate.
    Never the private key.
 4. Merge. Both stacks deploy on their own compose file changing, and a deploy
-   is queued rather than applied — see "A deploy is queued, not applied" above.
+   is queued rather than applied — see "A deploy is queued, not applied" below.
 5. Confirm `"scheme":"https"` in the store's boot log and the container
    reporting `healthy`, then check the public API through Traefik immediately.
    A 502 means the explicit `networks:` block cost the service its Traefik
@@ -379,6 +380,7 @@ Production routing still needs to satisfy:
 - the `cube.unimatrix-01.dev` hostname 301s to `cflop.unimatrix-01.dev` via a
   Traefik middleware, and still terminates TLS so the redirect is reachable
 - the `auth.unimatrix-01.dev` hostname routes to the auth service
+- the `admin.unimatrix-01.dev` hostname routes to the admin service
 - TLS terminates at Traefik
 - standard proxy headers are forwarded so the API can run with
   `TRUST_PROXY=1`
@@ -479,7 +481,7 @@ A 200 is not the signal, and neither is a healthy status: the old container goes
 on reporting healthy while it runs the configuration you believe you replaced.
 
 This binds on any runbook that edits an environment variable in Dokploy and then
-acts on the new value. The KEK rotation runbook under "Secrets service" below is
+acts on the new value. The KEK rotation runbook under "Secrets service" above is
 the worst case, because acting inside the window re-seals rows under the very key
 that is about to be retired, and then deletes the key still holding them. Its
 steps 4 and 5 refuse outright when the ring is not the one they were told to
@@ -552,12 +554,12 @@ Defaults quoted verbatim from the schema (see the verification note above).
 | Setting | Dokploy default | Needs to be | Why |
 | --- | --- | --- | --- |
 | `previewPort` | `.default(3000)` | `8080` | Both previewable images serve on 8080 (`listen 8080` in every `apps/*/nginx.conf`). Leaving the default produces a domain that resolves and then dead-ends. |
-| `previewHttps` | `.notNull().default(false)` | `true` | An `http://` preview origin is rejected by the API's CORS rule — every entry in `DEFAULT_API_CORS_ALLOWED_ORIGINS` (`apps/api/src/config.ts:5`) is scheme-qualified `https://` for the public domains. With HTTPS on, the existing `https://*.unimatrix-01.dev` entry already matches preview hosts, so no repo change is needed. |
+| `previewHttps` | `.notNull().default(false)` | `true` | An `http://` preview origin is rejected by the API's CORS rule — every entry in `DEFAULT_API_CORS_ALLOWED_ORIGINS` (`apps/api/src/config.ts`) is scheme-qualified `https://` for the public domains. With HTTPS on, the existing `https://*.unimatrix-01.dev` entry already matches preview hosts, so no repo change is needed. |
 | `previewCertificateType` | `.notNull().default("none")` | issue certs | TLS is not automatic. Needs either per-host Let's Encrypt or a wildcard cert covering the preview domain. |
 | `isPreviewDeploymentsActive` | `.default(false)` | `true` | Off until switched on per application. |
 | `previewRequireCollaboratorPermissions` | `.default(true)` | leave `true` | The public-repo guard. See "Fork PRs" below. |
 
-`apps/auth/src/features/auth/safe-redirect.ts:28` also requires
+`apps/auth/src/features/auth/safe-redirect.ts` also requires
 `protocol === "https:"` for any `unimatrix-01.dev` host, but that is the auth
 app, which is deliberately not previewed — it is not what forces `previewHttps`
 here. The CORS rule is.
