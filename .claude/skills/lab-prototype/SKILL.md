@@ -26,7 +26,7 @@ Before designing against `@/mocks`, compare:
 | `LabUserStore` (`lab/src/mocks/user-data.ts`) | `UserStore` (`packages/user-data/src/types.ts`) |
 | `LabAssetUploader` (`lab/src/mocks/asset-upload.ts`) | `asset-upload.ts` (`apps/admin/src/features/content/asset-upload.ts`) |
 
-Both are structurally copied rather than imported, so typecheck cannot see either one diverge, and
+Each is structurally copied rather than imported, so typecheck cannot see one diverge, and
 importing the real thing to end the problem is off the table — `lab/AGENTS.md` says why.
 
 **Report what is missing; do not decide it is a bug.** Each mock's doc comment states what it omits

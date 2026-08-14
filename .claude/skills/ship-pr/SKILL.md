@@ -468,7 +468,7 @@ the backlog of branches nothing else ever swept.
 **`ExitWorktree` first, then the sweep — never the other way round.** `git branch -D` refuses a
 branch checked out in *any* worktree, including the one the sweep is running from, and the refusal
 is stderr-only — stdout still reads as a clean run. Sweeping before closing the worktree leaves
-behind exactly the branch this run meant to clean, reporting that it cleaned it. `watch-pr.sh:1145`
+behind exactly the branch this run meant to clean, reporting that it cleaned it. `watch-pr.sh`
 documents the same trap for `--delete-branch`. `git switch main` from inside a worktree fails the
 same way: `fatal: 'main' is already used by worktree at ...`, exit 128.
 

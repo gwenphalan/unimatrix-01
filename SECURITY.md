@@ -22,8 +22,8 @@ not to be.
 ## Scope
 
 In scope: this repository's own code — the applications under `apps/`, the
-shared packages under `packages/`, the Dockerfiles and Compose files under
-`infra/`, and the GitHub Actions workflows.
+shared packages under `packages/`, the Compose files under `infra/docker/`,
+and the GitHub Actions workflows.
 
 Out of scope: findings in third-party dependencies (report those upstream;
 Dependabot already watches this repository's lockfile), and anything that
