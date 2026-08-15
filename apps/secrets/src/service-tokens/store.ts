@@ -86,11 +86,11 @@ export function issueServiceToken(
   const existing = db
     .select({ id: serviceTokensTable.id })
     .from(serviceTokensTable)
-    .where(eq(serviceTokensTable.name, name))
+    .where(and(eq(serviceTokensTable.name, name), isNull(serviceTokensTable.revokedAt)))
     .get();
 
   if (existing !== undefined) {
-    throw createServiceTokenError(`a token named ${JSON.stringify(name)} already exists.`);
+    throw createServiceTokenError(`an active token named ${JSON.stringify(name)} already exists.`);
   }
 
   const token = generateServiceToken();

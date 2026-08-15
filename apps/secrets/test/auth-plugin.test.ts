@@ -196,6 +196,55 @@ void test("every rejection is the same response, and none of it echoes the token
   }
 });
 
+void test("reissuing a revoked name 401s the old plaintext and 200s the new one", async () => {
+  const app = createTestApp();
+  addProtectedRoute(app);
+
+  try {
+    await app.ready();
+
+    const first = issueServiceToken(app.db, {
+      name: "deploy-worker",
+      scopePrefix: "dokploy",
+      capability: "manage",
+    });
+
+    revokeServiceToken(app.db, "deploy-worker");
+
+    const second = issueServiceToken(app.db, {
+      name: "deploy-worker",
+      scopePrefix: "dokploy",
+      capability: "manage",
+    });
+
+    const oldResponse = await app.inject({
+      method: "GET",
+      url: "/protected",
+      headers: { authorization: `Bearer ${first.token}` },
+    });
+
+    assert.equal(oldResponse.statusCode, 401);
+
+    const newResponse = await app.inject({
+      method: "GET",
+      url: "/protected",
+      headers: { authorization: `Bearer ${second.token}` },
+    });
+
+    assert.equal(newResponse.statusCode, 200);
+    assert.deepEqual(newResponse.json(), {
+      serviceToken: {
+        id: second.record.id,
+        name: "deploy-worker",
+        scopePrefix: "dokploy",
+        capability: "manage",
+      },
+    });
+  } finally {
+    await app.close();
+  }
+});
+
 // A broken schema must not read as a bad credential: a 401 would send the
 // caller hunting for a token that is fine.
 void test("a database fault inside the guard is a 500, not a 401", async () => {
