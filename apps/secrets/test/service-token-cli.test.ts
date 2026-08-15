@@ -128,6 +128,33 @@ void test("an unrecognised or repeated flag stops the command rather than being 
   });
 });
 
+void test("issue, revoke, then issue again under the same name succeeds", () => {
+  withCli(({ db, run }) => {
+    run("issue", "--name", "deploy-worker", "--scope", "dokploy", "--capability", "manage");
+    assert.deepEqual(run("revoke", "--name", "deploy-worker"), [
+      'Revoked service token "deploy-worker".',
+    ]);
+
+    const reissued = run(
+      "issue",
+      "--name",
+      "deploy-worker",
+      "--scope",
+      "dokploy",
+      "--capability",
+      "manage",
+    );
+    const token = reissued.flatMap((line) => line.split(/\s+/u).filter(isServiceTokenShape))[0];
+
+    assert.ok(token !== undefined, "issue printed no token");
+    assert.equal(findServiceTokenByPlaintext(db, token).outcome, "active");
+
+    const revokedCount = listServiceTokens(db).filter((entry) => entry.revokedAt !== null).length;
+
+    assert.equal(revokedCount, 1);
+  });
+});
+
 void test("an unknown or missing subcommand fails with the usage text", () => {
   withCli(({ run }) => {
     assert.throws(() => run("rotate"), /Unknown subcommand "rotate"[\s\S]*Usage:/u);

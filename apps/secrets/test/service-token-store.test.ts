@@ -157,6 +157,90 @@ void test("listing exposes the capability and never the digest", () => {
   });
 });
 
+void test("a revoked name can be reissued, and the revoked row survives", () => {
+  withDatabase(({ db }) => {
+    const first = issueServiceToken(db, {
+      name: "deploy-worker",
+      scopePrefix: "dokploy",
+      capability: "manage",
+    });
+
+    assert.equal(revokeServiceToken(db, "deploy-worker")?.id, first.record.id);
+
+    const second = issueServiceToken(db, {
+      name: "deploy-worker",
+      scopePrefix: "dokploy",
+      capability: "manage",
+    });
+
+    assert.notEqual(second.record.id, first.record.id);
+
+    const names = listServiceTokens(db).map(
+      (token) => `${token.id}:${String(token.revokedAt !== null)}`,
+    );
+
+    assert.deepEqual(
+      new Set(names),
+      new Set([`${first.record.id}:true`, `${second.record.id}:false`]),
+    );
+  });
+});
+
+void test("issuance refuses a second live token while revoked rows under the same name accumulate", () => {
+  withDatabase(({ db }) => {
+    issueServiceToken(db, { name: "deploy-worker", scopePrefix: "dokploy", capability: "manage" });
+    revokeServiceToken(db, "deploy-worker");
+
+    issueServiceToken(db, { name: "deploy-worker", scopePrefix: "dokploy", capability: "manage" });
+    revokeServiceToken(db, "deploy-worker");
+
+    issueServiceToken(db, { name: "deploy-worker", scopePrefix: "dokploy", capability: "manage" });
+
+    assert.throws(
+      () =>
+        issueServiceToken(db, {
+          name: "deploy-worker",
+          scopePrefix: "dokploy",
+          capability: "manage",
+        }),
+      /an active token named "deploy-worker" already exists/u,
+    );
+
+    const revokedCount = listServiceTokens(db).filter((token) => token.revokedAt !== null).length;
+
+    assert.equal(revokedCount, 2);
+  });
+});
+
+// The store's check-then-insert refuses a second live name before SQLite is
+// ever consulted, so the two tests above pass identically whether
+// `service_tokens_live_unique` exists, is misspelt, or was never created —
+// they cannot detect a missing or broken index. This test bypasses the store
+// entirely and inserts straight through the driver, so only the database's
+// own constraint can save it.
+void test("the database itself refuses two live rows sharing a name but accepts a revoked one", () => {
+  withDatabase(({ client }) => {
+    const insert = (row: { id: string; tokenHash: string; revokedAt: string | null }) => {
+      client
+        .prepare(
+          `INSERT INTO service_tokens (id, name, token_hash, scope_prefix, capability, revoked_at)
+           VALUES (?, 'deploy-worker', ?, 'dokploy', 'manage', ?)`,
+        )
+        .run(row.id, row.tokenHash, row.revokedAt);
+    };
+
+    insert({ id: "live-1", tokenHash: "hash-1", revokedAt: null });
+
+    assert.throws(() => {
+      insert({ id: "live-2", tokenHash: "hash-2", revokedAt: null });
+    }, /UNIQUE constraint failed/u);
+
+    assert.doesNotThrow(() => {
+      insert({ id: "revoked-1", tokenHash: "hash-3", revokedAt: "2026-01-01" });
+    });
+  });
+});
+
 void test("touching a token records when it was last used", () => {
   withDatabase(({ db }) => {
     const issued = issueServiceToken(db, {
