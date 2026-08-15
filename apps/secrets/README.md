@@ -67,7 +67,9 @@ single-valued, so a consumer needing more than one takes more than one token.
 
 The plaintext is printed once and only its SHA-256 digest is stored, so a lost
 token is reissued rather than recovered. `list` shows every token with its
-scope, capability and revocation state; `revoke --name <name>` retires one.
+scope, capability and revocation state; `revoke --name <name>` retires one. A
+revoked name is free to `issue` again — uniqueness applies only among active
+tokens — and the revoked row stays visible in `list` alongside the new one.
 
 ## Managing the KEK ring
 

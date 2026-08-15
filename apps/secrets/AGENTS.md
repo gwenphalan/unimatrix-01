@@ -81,6 +81,12 @@ HTTP, which is what local dev and every test do.
   first would put two live rows on the same name at once, and the partial unique index
   (`secret_versions_live_unique`) would roll the whole transaction back instead of the rotation
   landing.
+- **`service_tokens.name` is unique only among live rows** (`service_tokens_live_unique`, the same
+  partial-index idiom as above), so a revoked name is free to reissue — the normal response to a
+  leaked token — while every revoked row stays for the audit trail. The existence check in
+  `issueServiceToken` (`src/service-tokens/store.ts`) must stay scoped to `isNull(revokedAt)`;
+  widening it back to a bare name match reintroduces the permanent-lockout bug without the index
+  itself changing.
 - **`PUBLIC_ROUTE_URLS` is the entire allowlist, and a URL matching no route is not on it.** Denying
   unmatched URLs is the point, not an oversight to patch: being able to open a socket to this
   service proves nothing about who is calling. Never exempt them.
