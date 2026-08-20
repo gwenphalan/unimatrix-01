@@ -9,6 +9,7 @@
     "dev": "tsx watch --clear-screen=false src/server.ts",
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/server.js",
+    "reconcile": "tsx src/cli/reconcile.ts",
     "lint": "eslint .",
     "test": "node --import tsx --test --experimental-test-coverage --test-coverage-include='src/**' --test-coverage-lines=96 --test-coverage-functions=97 test/**/*.test.ts",
     "typecheck": "tsc -p tsconfig.json"

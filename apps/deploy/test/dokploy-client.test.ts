@@ -114,6 +114,121 @@ void test("a body failing the schema throws DokployClientError", async () => {
   );
 });
 
+void test("getProjects sends the x-api-key header and strips the project-level env blob", async () => {
+  let capturedHeaders: Headers | undefined;
+  const client = createDokployClient({
+    baseUrl: BASE_URL,
+    apiKey: API_KEY,
+    fetch: (_url, init) => {
+      capturedHeaders = new Headers(init?.headers);
+      return Promise.resolve(
+        jsonResponse([
+          {
+            projectId: "project-1",
+            name: "Unimatrix-01",
+            env: "SECRETS_KEKS=super-secret-blob\n",
+            environments: [
+              {
+                environmentId: "env-1",
+                name: "production",
+                compose: [{ composeId: "compose-1", composeStatus: "done", name: "api" }],
+              },
+            ],
+          },
+        ]),
+      );
+    },
+  });
+
+  const projects = await client.getProjects();
+
+  assert.equal(capturedHeaders?.get("x-api-key"), API_KEY);
+  assert.equal(projects.length, 1);
+  assert.equal(Object.hasOwn(projects[0] ?? {}, "env"), false);
+  assert.equal(JSON.stringify(projects).includes("super-secret-blob"), false);
+});
+
+void test("getCompose builds the composeId query param through URL/URLSearchParams", async () => {
+  let capturedUrl: string | undefined;
+  const client = createDokployClient({
+    baseUrl: BASE_URL,
+    apiKey: API_KEY,
+    fetch: (url) => {
+      // callProcedure always passes a URL instance.
+      capturedUrl = (url as URL).toString();
+      return Promise.resolve(
+        jsonResponse({
+          composeId: "abc&123#",
+          name: "api",
+          environmentId: "env-1",
+          composePath: "infra/docker/api-compose.yaml",
+          sourceType: "github",
+          branch: "main",
+          autoDeploy: false,
+          env: null,
+        }),
+      );
+    },
+  });
+
+  await client.getCompose("abc&123#");
+
+  // A composeId containing & or # cannot reshape the request into extra query params or drop the
+  // rest of the URL — URLSearchParams percent-encodes both.
+  assert.equal(capturedUrl, `${BASE_URL}/api/compose.one?composeId=abc%26123%23`);
+});
+
+void test("getCompose sends the x-api-key header and reduces env to key/blank pairs", async () => {
+  let capturedHeaders: Headers | undefined;
+  const client = createDokployClient({
+    baseUrl: BASE_URL,
+    apiKey: API_KEY,
+    fetch: (_url, init) => {
+      capturedHeaders = new Headers(init?.headers);
+      return Promise.resolve(
+        jsonResponse({
+          composeId: "compose-1",
+          name: "api",
+          environmentId: "env-1",
+          composePath: "infra/docker/api-compose.yaml",
+          sourceType: "github",
+          branch: "main",
+          autoDeploy: false,
+          env: "CLERK_SECRET_KEY=sk_live_whatever\nEMPTY_VAR=\n",
+        }),
+      );
+    },
+  });
+
+  const compose = await client.getCompose("compose-1");
+
+  assert.equal(capturedHeaders?.get("x-api-key"), API_KEY);
+  assert.deepEqual(compose.env, [
+    { key: "CLERK_SECRET_KEY", blank: false },
+    { key: "EMPTY_VAR", blank: true },
+  ]);
+});
+
+void test("a compose.one 500 whose body is an env blob throws DokployClientError carrying no fragment of it", async () => {
+  const client = createDokployClient({
+    baseUrl: BASE_URL,
+    apiKey: API_KEY,
+    fetch: () =>
+      Promise.resolve(jsonResponse({ env: "SECRETS_KEKS=leaked-value-if-this-ever-appears" }, 500)),
+  });
+
+  await assert.rejects(
+    () => client.getCompose("compose-1"),
+    (error: unknown) => {
+      assert.ok(error instanceof DokployClientError);
+      assert.equal(error.status, 500);
+      const serialized = JSON.stringify(error, Object.getOwnPropertyNames(error));
+      assert.ok(!serialized.includes("leaked-value-if-this-ever-appears"));
+      return true;
+    },
+  );
+});
+
 void test("no thrown error ever carries the API key or a response-body fragment", async () => {
   const sensitiveBody = { project: "prod", secretEnvBlob: "SECRETS_KEKS=super-sensitive-value" };
   const client = createDokployClient({

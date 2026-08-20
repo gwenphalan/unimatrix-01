@@ -1,9 +1,11 @@
 # AGENTS.md
 
 ## 1. Overview
-`apps/deploy` is a Fastify service scaffold holding a typed Dokploy API client. It performs no
-reconciliation and no probing — see `README.md` for what still has to happen by hand before this
-stack deploys.
+`apps/deploy` is a Fastify service holding a typed Dokploy API client and a read-only reconcile
+report (`src/reconcile/`, `pnpm --filter @unimatrix/deploy-app reconcile`): it diffs
+`src/reconcile/desired-state.gen.ts` against what Dokploy actually holds and prints drift. It
+performs no probing and applies nothing — see `README.md` for what still has to happen by hand
+before this stack deploys, and for why an apply path is a separate PR.
 
 ## 2. Rules
 
@@ -22,7 +24,23 @@ stack deploys.
 - **Dokploy is tRPC-derived: every call is `GET|POST /api/<router>.<procedure>`**, never a REST
   resource path, and `/api/openapi.json` 404s on v0.29.13, so schemas are hand-written rather than
   generated. Only add a procedure whose response has actually been observed —
-  `docker.getContainers` and `settings.getDokployVersion` are the two this scaffold carries.
-  `DokployClientError` (`src/dokploy/client.ts`) never carries a response-body fragment, on any
-  property; a later procedure such as `project.all` returns a whole project's environment-variable
-  blob, and the class has to refuse that before that call exists, not after.
+  `docker.getContainers`, `settings.getDokployVersion`, `project.all`, and `compose.one` are the
+  four this service carries. `DokployClientError` (`src/dokploy/client.ts`) never carries a
+  response-body fragment, on any property: `project.all` returns every project's whole
+  environment-variable blob and `compose.one` returns one service's, both in plaintext.
+- **`callProcedure` hardcodes `method: "GET"`, and every procedure above is read-only.** Nothing in
+  this service calls `compose.create`, `compose.update`, or `compose.deploy` — that is the apply
+  path `README.md`'s "Reconcile report" section names as a deliberately separate PR, and it must
+  refuse to apply against this service's own compose entry: `compose.update` + `compose.deploy`
+  there would destroy the process performing the reconciliation mid-run, and Dokploy has no
+  rollback for a Compose service (`docs/deployment.md`).
+- **`src/reconcile/desired-state.gen.ts` is generated** — edit the relevant
+  `apps/<app>/deploy.config.ts` and run `node ./infra/scripts/generate-deploy-config.mjs`, not this
+  file. It carries no value from any source, only structure (env var names and whether they are
+  required).
+- **No env value crosses `src/reconcile/`'s boundary, ever — only a key and a closed state.**
+  `readEnvKeyStates` (`src/dokploy/schemas.ts`) reduces Dokploy's plaintext `env` blob to
+  `{key, blank}` inside its own schema transform, so the plaintext exists only as that function's
+  parameter; nothing downstream — the diff, the report, the CLI — ever holds a field that could
+  carry a value. This is `docs/deployment.md`'s "never print a response body" rule applied one layer
+  deeper than the client.

@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 //
-// Writes apps/<app>/Dockerfile and infra/docker/<app>-compose.yaml from every
-// apps/<app>/deploy.config.ts. Two modes, one script, so they can never
+// Writes apps/<app>/Dockerfile and infra/docker/<app>-compose.yaml from each
+// apps/<app>/deploy.config.ts, plus one apps/deploy/src/reconcile/desired-state.gen.ts
+// from every app's config together. Two modes, one script, so they can never
 // diverge:
 //
 //   (default) / --stage — writes the files that changed, then
@@ -16,14 +17,17 @@
 // why (a Dependabot nginx digest bump must never touch this config).
 // nginx.conf is never touched either.
 //
-// Compose output is formatted through prettier's API before writing or
-// comparing (prettier@3.9.6 resolves from here — measured). Dockerfiles are
-// unaffected: prettier has no Dockerfile parser.
+// Compose and desired-state output are both formatted through prettier's API
+// before writing or comparing (prettier@3.9.6 resolves from here —
+// measured), with the repo's own .prettierrc.json resolved once and spread
+// into every format() call — its defaults alone (printWidth 80) disagree
+// with `pnpm format:check` (printWidth 100) and would reject the output.
+// Dockerfiles are unaffected: prettier has no Dockerfile parser.
 //
 // Fails closed on zero apps/*/deploy.config.ts discovered, same convention
 // as validate-deploy-config.mjs.
 import { execFileSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -32,12 +36,15 @@ import * as prettier from "prettier";
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const appsDir = join(repoRoot, "apps");
 const composeDir = join(repoRoot, "infra", "docker");
+const desiredStatePath = join(appsDir, "deploy", "src", "reconcile", "desired-state.gen.ts");
 
 const mode = process.argv.includes("--check") ? "check" : "stage";
 
-const { dockerfileFor, composeFor } = await import(
+const { dockerfileFor, composeFor, deployDesiredStateModule } = await import(
   pathToFileURL(join(repoRoot, "packages", "deploy-config", "src", "index.ts")).href
 );
+
+const prettierConfig = (await prettier.resolveConfig(repoRoot)) ?? {};
 
 /**
  * Reads a file, returning `null` when it does not exist. Reading straight
@@ -136,13 +143,17 @@ function discoverApps() {
     .sort();
 }
 
-async function renderApp(app) {
+async function loadConfig(app) {
   const mod = await import(pathToFileURL(join(appsDir, app, "deploy.config.ts")).href);
-  const config = mod.default;
+  return mod.default;
+}
+
+async function renderApp(app, config) {
   const fromLines = readFromLines(app);
 
   const dockerfileContent = dockerfileFor(config, fromLines);
   const composeContent = await prettier.format(composeFor(config), {
+    ...prettierConfig,
     filepath: join(composeDir, `${app}-compose.yaml`),
   });
 
@@ -183,11 +194,15 @@ async function main() {
     process.exit(1);
   }
 
+  const configs = [];
   const written = [];
   let mismatches = 0;
 
   for (const app of apps) {
-    for (const { path, content } of await renderApp(app)) {
+    const config = await loadConfig(app);
+    configs.push(config);
+
+    for (const { path, content } of await renderApp(app, config)) {
       // Read straight through rather than testing existsSync first: a missing
       // file and a file deleted between the two calls are the same case here,
       // and the check-then-read pair is a race CodeQL flags (js/file-system-race).
@@ -202,6 +217,24 @@ async function main() {
         writeFileSync(path, content);
         written.push(path);
       }
+    }
+  }
+
+  const desiredStateContent = await prettier.format(deployDesiredStateModule(configs), {
+    ...prettierConfig,
+    filepath: desiredStatePath,
+  });
+  const existingDesiredState = readFileIfPresent(desiredStatePath);
+
+  if (existingDesiredState !== desiredStateContent) {
+    if (mode === "check") {
+      mismatches += 1;
+      console.log(`  DIFF  ${relative(repoRoot, desiredStatePath)}`);
+      console.log(diffLines(existingDesiredState ?? "", desiredStateContent));
+    } else {
+      mkdirSync(dirname(desiredStatePath), { recursive: true });
+      writeFileSync(desiredStatePath, desiredStateContent);
+      written.push(desiredStatePath);
     }
   }
 

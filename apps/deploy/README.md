@@ -51,6 +51,33 @@ on at all, and it reports **after** the merge, in a job that cannot block one:
    network yet. Never the public hostname: that path measures Cloudflare and
    Traefik as much as Dokploy, and costs two Access service-token secrets.
 
+## Reconcile report
+
+`pnpm --filter @unimatrix/deploy-app reconcile report` diffs
+`src/reconcile/desired-state.gen.ts` — generated from every `apps/<app>/deploy.config.ts` — against
+what Dokploy actually holds, and prints the result. Read-only: it calls only `project.all` and
+`compose.one`, never `compose.create`, `compose.update`, or `compose.deploy`. Applying a
+reconciliation is a separate, later PR — see `AGENTS.md`.
+
+For each declared app it reports one of `MISSING` (no Dokploy compose service of that name),
+`AMBIGUOUS` (more than one, matched globally across every Dokploy project the same way CI's
+`Deploy` job does), `IN SYNC`, or `DRIFT` naming which env keys and which of `composePath`,
+`sourceType`, `branch`, `autoDeploy` disagree. An env finding is always a key and a state — `set`,
+`blank`, `missing`, `optional-absent`, or `undeclared` — never a value; Dokploy's `env` blob is
+reduced to that before it exists anywhere in this service (`readEnvKeyStates`,
+`src/dokploy/schemas.ts`). `image` and `containerPort` ride along in the manifest for the apply PR
+and are not part of this diff.
+
+It deliberately does not check a service's Domains entry (out of scope — `packages/deploy-config`
+holds no domain data at all) or its `watchPaths`/`composeFile` (inert while `autoDeploy` is off, and
+the inline-source field of a source type this repo does not use).
+
+Same env requirement as `pnpm --filter @unimatrix/deploy-app dev` — `DOKPLOY_BASE_URL` and
+`DOKPLOY_API_KEY` on the command line, locally or in production:
+
+    DOKPLOY_BASE_URL=http://localhost:3000 DOKPLOY_API_KEY=<your-key> \
+      pnpm --filter @unimatrix/deploy-app reconcile report
+
 ## Local development
 
 No `.env` file support and no `dotenv` dependency, same reasoning as

@@ -34,6 +34,12 @@ const IMAGE_REGISTRY_PREFIX = "ghcr.io/unimatrixcore/unimatrix-";
  *  — so a missing tag stops the deploy rather than choosing a version. */
 const IMAGE_TAG_VARIABLE = "IMAGE_TAG";
 
+/** The container port nginx listens on inside every `static-spa` runtime image. */
+const STATIC_SPA_CONTAINER_PORT = 8080;
+
+/** The container port a `node-api` runtime image listens on unless `PORT` overrides it. */
+const NODE_API_CONTAINER_PORT = 3001;
+
 /**
  * A `docker build --build-arg` a static SPA image accepts, inlined into the
  * browser bundle at build time via a paired `ARG`/`ENV` pair.
@@ -410,8 +416,8 @@ function staticSpaDockerfileBody(
     fromLines.runtime,
     `COPY apps/${config.appDir}/nginx.conf /etc/nginx/conf.d/default.conf`,
     `COPY --from=build /workspace/apps/${config.appDir}/dist /usr/share/nginx/html`,
-    "EXPOSE 8080",
-    "HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 CMD wget -q -O /dev/null http://127.0.0.1:8080/ || exit 1",
+    `EXPOSE ${STATIC_SPA_CONTAINER_PORT}`,
+    `HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 CMD wget -q -O /dev/null http://127.0.0.1:${STATIC_SPA_CONTAINER_PORT}/ || exit 1`,
   );
 
   return lines;
@@ -441,7 +447,7 @@ function nodeApiHealthcheckLine(scheme: DeployHealthcheckScheme): string {
   if (scheme === "http") {
     return (
       prefix +
-      "\"fetch('http://127.0.0.1:' + (process.env.PORT ?? '3001') + '/health').then((response) => " +
+      `"fetch('http://127.0.0.1:' + (process.env.PORT ?? '${NODE_API_CONTAINER_PORT}') + '/health').then((response) => ` +
       '{ if (!response.ok) process.exit(1); }).catch(() => process.exit(1))"'
     );
   }
@@ -453,7 +459,7 @@ function nodeApiHealthcheckLine(scheme: DeployHealthcheckScheme): string {
 
   return (
     prefix +
-    `"require(${module}).get({ host: '127.0.0.1', port: process.env.PORT ?? '3001', ` +
+    `"require(${module}).get({ host: '127.0.0.1', port: process.env.PORT ?? '${NODE_API_CONTAINER_PORT}', ` +
     "path: '/health', rejectUnauthorized: false }, (response) => { process.exit(" +
     "response.statusCode === 200 ? 0 : 1); }).on('error', () => process.exit(1))\""
   );
@@ -502,7 +508,7 @@ function nodeApiDockerfileBody(
 
   lines.push(
     "USER node",
-    "EXPOSE 3001",
+    `EXPOSE ${NODE_API_CONTAINER_PORT}`,
     nodeApiHealthcheckLine(config.healthcheckScheme ?? "http"),
     'CMD ["node", "dist/server.js"]',
   );
@@ -588,4 +594,106 @@ export function composeFor(config: DeployAppConfig): string {
   }
 
   return lines.join("\n") + "\n";
+}
+
+/** One compose-env variable a service's desired state declares. No value — see
+ *  {@link DeployDesiredService}. */
+export interface DeployDesiredEnvVar {
+  readonly name: string;
+  /** `false` only when the variable carries a default; a bare `${NAME}` reference is required. */
+  readonly required: boolean;
+}
+
+/**
+ * The desired-state shape `apps/deploy`'s reconcile report diffs against what Dokploy holds for
+ * one service. `image` and `containerPort` are carried here for a later PR (the apply path) and
+ * read by nothing in this one — see `apps/deploy/README.md`'s "Reconcile report" section.
+ */
+export interface DeployDesiredService {
+  readonly appDir: string;
+  readonly packageName: string;
+  readonly kind: DeployAppConfig["kind"];
+  /** Repo-root-relative, e.g. `"infra/docker/api-compose.yaml"` — no leading `./`. */
+  readonly composePath: string;
+  readonly image: string;
+  readonly containerPort: number;
+  /** `IMAGE_TAG` plus every `composeEnv` entry whose value is a variable reference, sorted by name. */
+  readonly env: readonly DeployDesiredEnvVar[];
+}
+
+export type DeployDesiredState = readonly DeployDesiredService[];
+
+function desiredEnvVars(config: DeployAppConfig): DeployDesiredEnvVar[] {
+  const vars: DeployDesiredEnvVar[] = [{ name: IMAGE_TAG_VARIABLE, required: true }];
+
+  if (config.kind === "node-api") {
+    for (const env of config.composeEnv) {
+      if (env.value.kind === "variable") {
+        vars.push({ name: env.value.name, required: env.value.default === undefined });
+      }
+    }
+  }
+
+  return vars.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function desiredServiceForConfig(config: DeployAppConfig): DeployDesiredService {
+  return {
+    appDir: config.appDir,
+    packageName: config.packageName,
+    kind: config.kind,
+    composePath: `infra/docker/${config.appDir}-compose.yaml`,
+    image: `${IMAGE_REGISTRY_PREFIX}${config.appDir}`,
+    containerPort:
+      config.kind === "static-spa" ? STATIC_SPA_CONTAINER_PORT : NODE_API_CONTAINER_PORT,
+    env: desiredEnvVars(config),
+  };
+}
+
+/**
+ * Renders `apps/deploy/src/reconcile/desired-state.gen.ts` — one {@link DeployDesiredService} per
+ * `config`, sorted by `appDir`. String building only, same as {@link dockerfileFor} and
+ * {@link composeFor}: this package keeps zero runtime dependencies.
+ */
+export function deployDesiredStateModule(configs: readonly DeployAppConfig[]): string {
+  const services = [...configs].sort((a, b) => a.appDir.localeCompare(b.appDir));
+
+  const lines: string[] = [
+    "// GENERATED — edit the relevant apps/<app>/deploy.config.ts and run",
+    "// `node ./infra/scripts/generate-deploy-config.mjs`, not this file.",
+    "//",
+    "// The desired-state manifest apps/deploy's reconcile report diffs against Dokploy. `image`",
+    "// and `containerPort` are carried for a later PR (the apply path) and read by nothing in",
+    "// this one — see apps/deploy/README.md.",
+    'import type { DeployDesiredState } from "@unimatrix/deploy-config";',
+    "",
+    "export const DEPLOY_DESIRED_STATE: DeployDesiredState = [",
+  ];
+
+  for (const config of services) {
+    const service = desiredServiceForConfig(config);
+
+    lines.push(
+      "  {",
+      `    appDir: ${JSON.stringify(service.appDir)},`,
+      `    packageName: ${JSON.stringify(service.packageName)},`,
+      `    kind: ${JSON.stringify(service.kind)},`,
+      `    composePath: ${JSON.stringify(service.composePath)},`,
+      `    image: ${JSON.stringify(service.image)},`,
+      `    containerPort: ${String(service.containerPort)},`,
+      "    env: [",
+    );
+
+    for (const envVar of service.env) {
+      lines.push(
+        `      { name: ${JSON.stringify(envVar.name)}, required: ${String(envVar.required)} },`,
+      );
+    }
+
+    lines.push("    ],", "  },");
+  }
+
+  lines.push("];", "");
+
+  return lines.join("\n");
 }

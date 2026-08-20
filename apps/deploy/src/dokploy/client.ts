@@ -1,7 +1,11 @@
 import {
+  dokployComposeSchema,
   dokployContainersSchema,
+  dokployProjectsSchema,
   dokployVersionSchema,
+  type DokployCompose,
   type DokployContainer,
+  type DokployProject,
   type DokployVersion,
 } from "./schemas.js";
 
@@ -26,13 +30,11 @@ export function loadDokployApiKey(env: DeployDokployEnv = process.env): string {
 }
 
 /**
- * Never carries a response-body fragment on `message`, `cause`, or any other property — even
- * though neither procedure this scaffold calls returns anything sensitive. `project.all`, which a
- * later Dokploy client method will need, "returns every project's whole environment-variable blob"
- * (`.github/workflows/ci.yml`'s own comment on why its `Deploy` job never prints one). Writing the
- * rule into the class now, with a test, is what stops the first procedure that does return env
- * blobs from leaking them into a log line — the same `SecretsClientError` precedent in
- * `packages/secrets/AGENTS.md` §5, for a different reason.
+ * Never carries a response-body fragment on `message`, `cause`, or any other property.
+ * `project.all` "returns every project's whole environment-variable blob"
+ * (`.github/workflows/ci.yml`'s own comment on why its `Deploy` job never prints one), and
+ * `compose.one` returns a single service's env blob in plaintext — the same
+ * `SecretsClientError` precedent in `packages/secrets/AGENTS.md` §5, for a different reason.
  */
 export class DokployClientError extends Error {
   readonly status: number | null;
@@ -54,6 +56,8 @@ export interface CreateDokployClientOptions {
 export interface DokployClient {
   getDokployVersion: () => Promise<DokployVersion>;
   getContainers: () => Promise<DokployContainer[]>;
+  getProjects: () => Promise<DokployProject[]>;
+  getCompose: (composeId: string) => Promise<DokployCompose>;
 }
 
 const DEFAULT_TIMEOUT_MS = 10_000;
@@ -61,8 +65,9 @@ const DEFAULT_TIMEOUT_MS = 10_000;
 /**
  * Dokploy is tRPC-derived: every call is `GET|POST /api/<router>.<procedure>`, never a REST
  * resource path. `/api/openapi.json` 404s on the running v0.29.13, so there is no spec to generate
- * a client from — this hand-writes the two procedures whose 200 response has actually been
- * observed. See `apps/deploy/AGENTS.md` before adding a third.
+ * a client from — this hand-writes the four procedures whose 200 response has actually been
+ * observed. See `apps/deploy/AGENTS.md` before adding a fifth. All four are `GET` — `callProcedure`
+ * hardcodes the method, and it must stay that way until a mutation path is deliberately added.
  */
 export function createDokployClient(options: CreateDokployClientOptions): DokployClient {
   const fetchImpl = options.fetch ?? globalThis.fetch;
@@ -72,16 +77,25 @@ export function createDokployClient(options: CreateDokployClientOptions): Dokplo
   async function callProcedure<T>(
     procedurePath: string,
     schema: { parse: (value: unknown) => T },
+    query?: Readonly<Record<string, string>>,
   ): Promise<T> {
-    const response = await fetchImpl(`${baseUrl}/api/${procedurePath}`, {
+    // Built through URL/URLSearchParams rather than string concatenation, so a query value
+    // containing `&` or `#` (a composeId is Dokploy-generated, not user input, but nothing here
+    // depends on that staying true) cannot reshape the request past what was intended.
+    const url = new URL(`${baseUrl}/api/${procedurePath}`);
+    for (const [key, value] of Object.entries(query ?? {})) {
+      url.searchParams.set(key, value);
+    }
+
+    const response = await fetchImpl(url, {
       method: "GET",
       headers: { "x-api-key": options.apiKey },
       signal: AbortSignal.timeout(timeoutMs),
     });
 
     if (!response.ok) {
-      // Never `await response.text()` here: the caller of `project.all` (a later change) would
-      // otherwise put a project's whole env blob into this error's message.
+      // Never `await response.text()` here: `project.all` and `compose.one` both return an env
+      // blob, and reading the body into this error's message would put it there.
       throw new DokployClientError(
         `Dokploy procedure ${procedurePath} responded with status ${response.status}.`,
         response.status,
@@ -114,5 +128,7 @@ export function createDokployClient(options: CreateDokployClientOptions): Dokplo
   return {
     getDokployVersion: () => callProcedure("settings.getDokployVersion", dokployVersionSchema),
     getContainers: () => callProcedure("docker.getContainers", dokployContainersSchema),
+    getProjects: () => callProcedure("project.all", dokployProjectsSchema),
+    getCompose: (composeId) => callProcedure("compose.one", dokployComposeSchema, { composeId }),
   };
 }
