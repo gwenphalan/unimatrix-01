@@ -166,3 +166,17 @@ void test("prints usage and exits 2 with an unknown subcommand", async () => {
   assert.equal(exitCode, 2);
   assert.ok(lines.some((line) => line.startsWith("Usage:")));
 });
+
+void test("prints usage and exits 2 when report carries a trailing argument", async () => {
+  const { write, lines } = collectLines();
+  const client = stubClient();
+
+  const exitCode = await runReconcileCli(["report", "--apply"], {
+    client,
+    desired: IN_SYNC_DESIRED,
+    write,
+  });
+
+  assert.equal(exitCode, 2);
+  assert.ok(lines.some((line) => line.startsWith("Usage:")));
+});

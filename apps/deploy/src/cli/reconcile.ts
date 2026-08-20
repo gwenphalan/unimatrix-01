@@ -46,7 +46,10 @@ export async function runReconcileCli(
 ): Promise<number> {
   const [subcommand] = argv;
 
-  if (subcommand !== "report") {
+  // Exact-length, so `reconcile report --apply` is a usage error rather than a silently ignored
+  // flag. There is no apply path in this service, and a flag that looks accepted is the wrong way
+  // to say so.
+  if (argv.length !== 1 || subcommand !== "report") {
     deps.write(USAGE);
 
     return 2;

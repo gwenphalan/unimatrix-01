@@ -3,15 +3,21 @@ import type { DeployDesiredState } from "@unimatrix/deploy-config";
 import type { DokployClient } from "../dokploy/client.js";
 import { diffApp, findComposeMatches, type AppDiff } from "./diff.js";
 
-export type AppRunResult =
-  | { readonly appDir: string; readonly outcome: "diffed"; readonly diff: AppDiff }
-  | {
-      readonly appDir: string;
-      readonly outcome: "error";
-      /** A message from `DokployClientError`, never a response-body fragment (see that class in
-       *  `../dokploy/client.js`). */
-      readonly errorMessage: string;
-    };
+export interface DiffedAppRunResult {
+  readonly appDir: string;
+  readonly outcome: "diffed";
+  readonly diff: AppDiff;
+}
+
+export interface ErrorAppRunResult {
+  readonly appDir: string;
+  readonly outcome: "error";
+  /** A message from `DokployClientError`, never a response-body fragment (see that class in
+   *  `../dokploy/client.js`). */
+  readonly errorMessage: string;
+}
+
+export type AppRunResult = DiffedAppRunResult | ErrorAppRunResult;
 
 export interface ReconcileRun {
   readonly results: readonly AppRunResult[];
