@@ -9,11 +9,12 @@ production deployment.
 is not the production web server for `apps/web/dist/`,
 `apps/cflop/dist/`, or `apps/auth/dist/`.
 
-Every `apps/*/Dockerfile` and `infra/docker/*-compose.yaml` referenced below is generated from
-`apps/<app>/deploy.config.ts` — see `infra/docker/README.md`. The subdomain and container port
-listed per service in this document are **not** sourced from that config and stay hand-maintained
-duplication: `packages/deploy-config` deliberately holds no subdomain or Dokploy metadata (see its
-`AGENTS.md`), so nothing generates or reads them.
+Every `apps/*/Dockerfile` and `infra/docker/*-compose.yaml` referenced below, plus
+`apps/deploy/src/reconcile/desired-state.gen.ts`, is generated from `apps/<app>/deploy.config.ts` —
+see `infra/docker/README.md`. The subdomain and container port listed per service in this document
+are **not** sourced from that config and stay hand-maintained duplication: `packages/deploy-config`
+deliberately holds no subdomain or Dokploy metadata (see its `AGENTS.md`), so nothing generates or
+reads them.
 
 ## Default production topology
 
@@ -128,7 +129,9 @@ on a push of its own accord, at whatever `IMAGE_TAG` the project holds at that
 moment — which during a CI run is the previous commit. Watch paths are no
 defence: `shouldDeploy` returns true when a service's watch-path list is empty,
 so a service with none set redeploys on every push to `main`. It is a
-Dokploy-side setting and nothing in this repository can assert it.
+Dokploy-side setting; `pnpm --filter @unimatrix/deploy-app reconcile report` (`apps/deploy/README.md`)
+reads it back and reports drift when it finds `autoDeploy: true`, but nothing in this repository
+can set it back.
 
 That choice has a price. `POST /api/compose.refreshToken` mints a per-service
 webhook URL — a far narrower credential than the instance-wide API key — and it
@@ -513,6 +516,14 @@ same network every app Traefik serves. Nothing routes to this service across
 that network — no domain, no Traefik entry — so membership is reachability
 *from* it, and `/health` is the only route anything on that network could
 call. See `apps/deploy/AGENTS.md`.
+
+`pnpm --filter @unimatrix/deploy-app reconcile report` diffs every app's `deploy.config.ts` against
+what Dokploy actually holds and prints the drift — missing or ambiguously-named compose services,
+env keys that are unset/blank/undeclared (never a value, only a key and a state), and disagreement
+on `composePath`, `sourceType`, `branch`, or `autoDeploy`. Read-only: it calls only `project.all`
+and `compose.one`. It does not check a service's Domains entry or its `watchPaths`/`composeFile` —
+see `apps/deploy/README.md`. Applying a reconciliation (creating or updating a Dokploy service to
+match) is not built yet.
 
 ## Traefik expectations
 
