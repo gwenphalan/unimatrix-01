@@ -4,7 +4,8 @@
 `packages/deploy-config` holds the typed per-app config that drives the Dockerfile/compose
 generator: each `apps/<app>/deploy.config.ts` builds a `DeployAppConfig` from `staticSpaApp()` or
 `nodeApiApp()`. `infra/scripts/generate-deploy-config.mjs` reads it and writes
-`apps/<app>/Dockerfile` and `infra/docker/<app>-compose.yaml`; `infra/scripts/validate-deploy-config.mjs`
+`apps/<app>/Dockerfile`, `infra/docker/<app>-compose.yaml`, and — once, from every app's config —
+`apps/deploy/src/reconcile/desired-state.gen.ts`; `infra/scripts/validate-deploy-config.mjs`
 checks it. Edit the config, not the generated files — see the root `AGENTS.md` for the
 generated-files rule.
 

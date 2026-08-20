@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   composeFor,
+  deployDesiredStateModule,
   dockerfileFor,
   nodeApiApp,
   staticSpaApp,
@@ -466,5 +467,109 @@ describe("validateAppConfig", () => {
     expect(validateAppConfig(config).some((message) => message.includes('".." segment'))).toBe(
       true,
     );
+  });
+});
+
+describe("container ports", () => {
+  it("exposes 8080 on a static-spa image, matching the healthcheck URL", () => {
+    const config = staticSpaApp({ appDir: "web", packageName: "@unimatrix/web", buildArgs: [] });
+    const dockerfile = dockerfileFor(config, FROM_LINES);
+
+    expect(dockerfile).toContain("EXPOSE 8080");
+    expect(dockerfile).toContain("http://127.0.0.1:8080/");
+  });
+
+  it("exposes 3001 on a node-api image, matching the healthcheck fallback port", () => {
+    const config = nodeApiApp({
+      appDir: "api",
+      packageName: "@unimatrix/api",
+      dockerfileEnv: [],
+      composeEnv: [],
+      volumes: [],
+    });
+    const dockerfile = dockerfileFor(config, API_FROM_LINES);
+
+    expect(dockerfile).toContain("EXPOSE 3001");
+    expect(dockerfile).toContain("process.env.PORT ?? '3001'");
+  });
+});
+
+describe("deployDesiredStateModule", () => {
+  it("emits a GENERATED banner and an import type, never a value import", () => {
+    const config = staticSpaApp({
+      appDir: "cflop",
+      packageName: "@unimatrix/cflop",
+      buildArgs: [],
+    });
+    const source = deployDesiredStateModule([config]);
+
+    expect(source.startsWith("// GENERATED")).toBe(true);
+    expect(source).toContain('import type { DeployDesiredState } from "@unimatrix/deploy-config";');
+    expect(source).not.toMatch(/^import \{/mu);
+  });
+
+  it("sorts services by appDir regardless of input order", () => {
+    const web = staticSpaApp({ appDir: "web", packageName: "@unimatrix/web", buildArgs: [] });
+    const admin = staticSpaApp({ appDir: "admin", packageName: "@unimatrix/admin", buildArgs: [] });
+    const source = deployDesiredStateModule([web, admin]);
+
+    expect(source.indexOf('appDir: "admin"')).toBeLessThan(source.indexOf('appDir: "web"'));
+  });
+
+  it("carries IMAGE_TAG (required) plus every variable-kind composeEnv entry, sorted by name", () => {
+    const config = nodeApiApp({
+      appDir: "api",
+      packageName: "@unimatrix/api",
+      dockerfileEnv: [],
+      composeEnv: [
+        { name: "HOST", value: { kind: "literal", value: "0.0.0.0" } },
+        { name: "CLERK_SECRET_KEY", value: { kind: "variable", name: "CLERK_SECRET_KEY" } },
+        {
+          name: "TRUST_PROXY",
+          value: { kind: "variable", name: "TRUST_PROXY", default: "1" },
+        },
+      ],
+      volumes: [],
+    });
+    const source = deployDesiredStateModule([config]);
+
+    // A literal-kind entry (HOST) never appears — only variable-kind entries do.
+    expect(source).not.toContain('name: "HOST"');
+    expect(source).toContain('{ name: "CLERK_SECRET_KEY", required: true }');
+    expect(source).toContain('{ name: "IMAGE_TAG", required: true }');
+    expect(source).toContain('{ name: "TRUST_PROXY", required: false }');
+    // Sorted: CLERK_SECRET_KEY < IMAGE_TAG < TRUST_PROXY.
+    expect(source.indexOf('name: "CLERK_SECRET_KEY"')).toBeLessThan(
+      source.indexOf('name: "IMAGE_TAG"'),
+    );
+    expect(source.indexOf('name: "IMAGE_TAG"')).toBeLessThan(source.indexOf('name: "TRUST_PROXY"'));
+  });
+
+  it("declares only IMAGE_TAG for a static-spa app, which has no composeEnv", () => {
+    const config = staticSpaApp({ appDir: "web", packageName: "@unimatrix/web", buildArgs: [] });
+    const source = deployDesiredStateModule([config]);
+
+    expect(source).toContain('env: [\n      { name: "IMAGE_TAG", required: true },\n    ]');
+  });
+
+  it("carries a repo-root-relative composePath with no leading ./", () => {
+    const config = staticSpaApp({ appDir: "web", packageName: "@unimatrix/web", buildArgs: [] });
+    const source = deployDesiredStateModule([config]);
+
+    expect(source).toContain('composePath: "infra/docker/web-compose.yaml"');
+  });
+
+  it("carries the right containerPort per kind", () => {
+    const spa = staticSpaApp({ appDir: "web", packageName: "@unimatrix/web", buildArgs: [] });
+    const api = nodeApiApp({
+      appDir: "api",
+      packageName: "@unimatrix/api",
+      dockerfileEnv: [],
+      composeEnv: [],
+      volumes: [],
+    });
+
+    expect(deployDesiredStateModule([spa])).toContain("containerPort: 8080");
+    expect(deployDesiredStateModule([api])).toContain("containerPort: 3001");
   });
 });
