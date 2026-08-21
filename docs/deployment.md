@@ -130,8 +130,9 @@ moment — which during a CI run is the previous commit. Watch paths are no
 defence: `shouldDeploy` returns true when a service's watch-path list is empty,
 so a service with none set redeploys on every push to `main`. It is a
 Dokploy-side setting; `pnpm --filter @unimatrix/deploy-app reconcile report` (`apps/deploy/README.md`)
-reads it back and reports drift when it finds `autoDeploy: true`, but nothing in this repository
-can set it back.
+reads it back and reports drift when it finds `autoDeploy: true`, and `reconcile apply <app>` can
+set it back to `false` — a single `compose.update` call, one app at a time, refusing its own compose
+entry and a handful of other cases (`apps/deploy/AGENTS.md`).
 
 That choice has a price. `POST /api/compose.refreshToken` mints a per-service
 webhook URL — a far narrower credential than the instance-wide API key — and it
@@ -522,8 +523,17 @@ what Dokploy actually holds and prints the drift — missing or ambiguously-name
 env keys that are unset/blank/undeclared (never a value, only a key and a state), and disagreement
 on `composePath`, `sourceType`, `branch`, or `autoDeploy`. Read-only: it calls only `project.all`
 and `compose.one`. It does not check a service's Domains entry or its `watchPaths`/`composeFile` —
-see `apps/deploy/README.md`. Applying a reconciliation (creating or updating a Dokploy service to
-match) is not built yet.
+see `apps/deploy/README.md`.
+
+`pnpm --filter @unimatrix/deploy-app reconcile apply <app>` writes `composePath`, `branch`, and
+`autoDeploy` for one app when they drift — a single `compose.update` call, settings only, refusing
+its own compose entry, an app not in the manifest, a name matching zero or more than one Dokploy
+compose service, a match anchored to a different GitHub owner/repository, or a `sourceType`
+disagreement. It still writes no `env`, creates nothing (`compose.create` needs an `environmentId`
+this repo declares nowhere), deploys nothing, and touches no domain. On that last point: v0.29.13's
+`domain.create` procedure does work — the reason this repo does not call it is that
+`packages/deploy-config` declares no domain data, not that the API can't. See `apps/deploy/AGENTS.md`
+and `apps/deploy/README.md`.
 
 ## Traefik expectations
 

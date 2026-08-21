@@ -56,8 +56,7 @@ on at all, and it reports **after** the merge, in a job that cannot block one:
 `pnpm --filter @unimatrix/deploy-app reconcile report` diffs
 `src/reconcile/desired-state.gen.ts` — generated from every `apps/<app>/deploy.config.ts` — against
 what Dokploy actually holds, and prints the result. Read-only: it calls only `project.all` and
-`compose.one`, never `compose.create`, `compose.update`, or `compose.deploy`. Applying a
-reconciliation is a separate, later PR — see `AGENTS.md`.
+`compose.one`, never `compose.create`, `compose.update`, or `compose.deploy`.
 
 For each declared app it reports one of `MISSING` (no Dokploy compose service of that name),
 `AMBIGUOUS` (more than one, matched globally across every Dokploy project the same way CI's
@@ -65,8 +64,7 @@ For each declared app it reports one of `MISSING` (no Dokploy compose service of
 `sourceType`, `branch`, `autoDeploy` disagree. An env finding is always a key and a state — `set`,
 `blank`, `missing`, `optional-absent`, or `undeclared` — never a value; Dokploy's `env` blob is
 reduced to that before it exists anywhere in this service (`readEnvKeyStates`,
-`src/dokploy/schemas.ts`). `image` and `containerPort` ride along in the manifest for the apply PR
-and are not part of this diff.
+`src/dokploy/schemas.ts`).
 
 It deliberately does not check a service's Domains entry (out of scope — `packages/deploy-config`
 holds no domain data at all) or its `watchPaths`/`composeFile` (inert while `autoDeploy` is off, and
@@ -77,6 +75,32 @@ Same env requirement as `pnpm --filter @unimatrix/deploy-app dev` — `DOKPLOY_B
 
     DOKPLOY_BASE_URL=http://localhost:3000 DOKPLOY_API_KEY=<your-key> \
       pnpm --filter @unimatrix/deploy-app reconcile report
+
+## Reconcile apply
+
+`pnpm --filter @unimatrix/deploy-app reconcile apply <app>` writes `composePath`, `branch`, and
+`autoDeploy` for one declared app when report would show them drifted — a single `compose.update`
+call, settings only. It never writes `env` (no field on the wire payload can hold one — see
+`src/dokploy/client.ts`'s `DokployComposeSettingsUpdate`), never calls `compose.create`,
+`compose.deploy`, or a domain route, and never touches more than one app per invocation.
+
+It refuses to write, with zero Dokploy calls beyond whatever was needed to reach the decision, when:
+the app is this service's own compose entry (`deploy` — a self-write followed by any deploy would
+destroy the process performing the reconciliation, and Dokploy has no rollback for a Compose
+service); the app is not declared in the manifest; the name matches zero or more than one Dokploy
+compose service; the single match is anchored to a different GitHub owner/repository than this one
+(`findComposeMatches` matches on service name alone, globally across every project the instance
+holds); or the match's `sourceType` disagrees with policy (`sourceType` selects which sibling column
+group drives the clone, and this repo declares none of them).
+
+Apply's exit code is not a sync assertion: `apply web` can succeed today on an app `report` still
+exits 1 on, because `report` also finds env drift apply deliberately never touches. Run
+`pnpm --filter @unimatrix/deploy-app reconcile apply` with no app name for the full exit-code table.
+
+In production: `docker exec <deploy container> node dist/cli/reconcile.js apply <app>`.
+
+    DOKPLOY_BASE_URL=http://localhost:3000 DOKPLOY_API_KEY=<your-key> \
+      pnpm --filter @unimatrix/deploy-app reconcile apply api
 
 ## Local development
 
