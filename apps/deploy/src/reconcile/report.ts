@@ -1,5 +1,15 @@
+import type { ApplyOutcome } from "./apply.js";
 import type { AppDiff, EnvFindingState } from "./diff.js";
 import type { ReconcileRun } from "./collect.js";
+
+/**
+ * Every render in this module — {@link renderReconcileRun} and {@link renderApplyOutcome} alike —
+ * carries an env key and one of {@link EnvFindingState}'s five states, never a value: nothing here
+ * holds a field a value could ride on. `renderApplyOutcome`'s `applied` and `nothing-to-apply`
+ * cases additionally always say apply never writes env, then list the non-in-sync env findings
+ * `report` would show — an operator reading only the apply output must never conclude apply fixed
+ * env drift it never touches.
+ */
 
 const ENV_STATE_LABEL: Record<EnvFindingState, string> = {
   set: "set",
@@ -36,6 +46,62 @@ function renderAppDiff(appDir: string, diff: AppDiff): string[] {
   }
 
   return lines;
+}
+
+function renderNonInSyncEnvFindings(diff: AppDiff): string[] {
+  if (diff.verdict !== "matched") return [];
+
+  const lines: string[] = [];
+
+  for (const finding of diff.envFindings) {
+    if (finding.state === "set" || finding.state === "optional-absent") continue;
+    lines.push(`  env ${finding.key}: ${ENV_STATE_LABEL[finding.state]}`);
+  }
+
+  return lines;
+}
+
+export function renderApplyOutcome(outcome: ApplyOutcome): readonly string[] {
+  const appDir = outcome.appDir;
+
+  switch (outcome.outcome) {
+    case "refused-self":
+      return [`${appDir}: REFUSED — apply refuses this service's own compose entry`];
+    case "unknown-app":
+      return [`${appDir}: UNKNOWN — not declared in the desired-state manifest`];
+    case "not-matched":
+      return [
+        `${appDir}: NOT MATCHED — ${String(outcome.matchCount)} Dokploy compose services named "${appDir}"`,
+      ];
+    case "refused-foreign-repo":
+      return [
+        `${appDir}: REFUSED — matched service is anchored to ${outcome.owner ?? "(unset)"}/` +
+          `${outcome.repository ?? "(unset)"}, not this repository`,
+      ];
+    case "refused-source-type":
+      return [`${appDir}: REFUSED — sourceType drift is out of scope for apply`];
+    case "nothing-to-apply":
+      return [
+        `${appDir}: NOTHING TO APPLY — settings already match; apply never writes env`,
+        ...renderNonInSyncEnvFindings(outcome.diff),
+      ];
+    case "applied":
+      return [
+        `${appDir}: APPLIED — wrote ${outcome.written.join(", ")}; apply never writes env` +
+          (outcome.needsDeploy ? " (a deploy is required for this to take effect)" : ""),
+        ...renderNonInSyncEnvFindings(outcome.diff),
+      ];
+    case "write-status-unknown":
+      return [
+        `${appDir}: WRITE STATUS UNKNOWN — ${outcome.writeErrorMessage}`,
+        outcome.rereadErrorMessage === null
+          ? "  post-write state was re-read successfully:"
+          : `  the post-write re-read also failed — ${outcome.rereadErrorMessage}`,
+        ...(outcome.diff === null ? [] : renderAppDiff(appDir, outcome.diff).slice(1)),
+      ];
+    case "error":
+      return [`${appDir}: ERROR — ${outcome.errorMessage}`];
+  }
 }
 
 /**

@@ -3,9 +3,10 @@ import test from "node:test";
 
 import type { DeployDesiredState } from "@unimatrix/deploy-config";
 
+import type { ApplyOutcome } from "../src/reconcile/apply.js";
 import { createDokployClient, type DokployClient } from "../src/dokploy/client.js";
 import { collectReconcileRun } from "../src/reconcile/collect.js";
-import { renderReconcileRun } from "../src/reconcile/report.js";
+import { renderApplyOutcome, renderReconcileRun } from "../src/reconcile/report.js";
 import type { ReconcileRun } from "../src/reconcile/collect.js";
 
 const BASE_URL = "http://dokploy:3000";
@@ -69,6 +70,8 @@ function clientWithComposeEnv(env: string): DokployClient {
           sourceType: "github",
           branch: "main",
           autoDeploy: false,
+          owner: "unimatrixcore",
+          repository: "unimatrix-01",
           env,
         }),
       );
@@ -204,4 +207,128 @@ void test("renders ERROR when compose.one fails, isolated to that app", async ()
 
   assert.equal(rendered.length, 1);
   assert.ok(rendered[0]?.startsWith("api: ERROR — "));
+});
+
+const MATCHED_IN_SYNC = {
+  verdict: "matched",
+  appDir: "api",
+  composeId: "compose-1",
+  envFindings: [{ key: "IMAGE_TAG", state: "set" }],
+  settingFindings: [],
+  inSync: true,
+} as const;
+
+const MATCHED_WITH_ENV_DRIFT = {
+  verdict: "matched",
+  appDir: "api",
+  composeId: "compose-1",
+  envFindings: [
+    { key: "IMAGE_TAG", state: "set" },
+    { key: "CLERK_SECRET_KEY", state: "missing" },
+  ],
+  settingFindings: [],
+  inSync: false,
+} as const;
+
+void test("renderApplyOutcome: applied says apply never writes env and lists non-in-sync env findings", () => {
+  const outcome: ApplyOutcome = {
+    outcome: "applied",
+    appDir: "api",
+    written: ["branch"],
+    needsDeploy: true,
+    diff: MATCHED_WITH_ENV_DRIFT,
+  };
+
+  const rendered = renderApplyOutcome(outcome).join("\n");
+
+  assert.ok(rendered.includes("APPLIED"));
+  assert.ok(rendered.includes("apply never writes env"));
+  assert.ok(rendered.includes("CLERK_SECRET_KEY"));
+  assert.ok(rendered.includes("missing"));
+  assert.ok(rendered.includes("deploy is required"));
+});
+
+void test("renderApplyOutcome: applied with no residual env drift prints only the summary line", () => {
+  const outcome: ApplyOutcome = {
+    outcome: "applied",
+    appDir: "api",
+    written: ["autoDeploy"],
+    needsDeploy: false,
+    diff: MATCHED_IN_SYNC,
+  };
+
+  const rendered = renderApplyOutcome(outcome);
+
+  assert.equal(rendered.length, 1);
+  assert.ok(rendered[0]?.includes("apply never writes env"));
+  assert.ok(!rendered[0]?.includes("deploy is required"));
+});
+
+void test("renderApplyOutcome: nothing-to-apply says apply never writes env and lists env drift", () => {
+  const outcome: ApplyOutcome = {
+    outcome: "nothing-to-apply",
+    appDir: "api",
+    diff: MATCHED_WITH_ENV_DRIFT,
+  };
+
+  const rendered = renderApplyOutcome(outcome).join("\n");
+
+  assert.ok(rendered.includes("NOTHING TO APPLY"));
+  assert.ok(rendered.includes("apply never writes env"));
+  assert.ok(rendered.includes("CLERK_SECRET_KEY"));
+});
+
+void test("renderApplyOutcome: refused-self, unknown-app, not-matched, refused-foreign-repo, refused-source-type each render one line", () => {
+  const outcomes: ApplyOutcome[] = [
+    { outcome: "refused-self", appDir: "deploy" },
+    { outcome: "unknown-app", appDir: "ghost" },
+    { outcome: "not-matched", appDir: "api", matchCount: 0 },
+    { outcome: "refused-foreign-repo", appDir: "api", owner: "someone-else", repository: "fork" },
+    { outcome: "refused-source-type", appDir: "api" },
+  ];
+
+  for (const outcome of outcomes) {
+    const rendered = renderApplyOutcome(outcome);
+    assert.equal(rendered.length, 1);
+    assert.ok(rendered[0]?.startsWith(outcome.appDir));
+  }
+});
+
+void test("renderApplyOutcome: write-status-unknown with an observed re-read shows the observed diff", () => {
+  const outcome: ApplyOutcome = {
+    outcome: "write-status-unknown",
+    appDir: "api",
+    diff: MATCHED_WITH_ENV_DRIFT,
+    writeErrorMessage: "request timed out",
+    rereadErrorMessage: null,
+  };
+
+  const rendered = renderApplyOutcome(outcome).join("\n");
+
+  assert.ok(rendered.includes("WRITE STATUS UNKNOWN"));
+  assert.ok(rendered.includes("request timed out"));
+  assert.ok(rendered.includes("CLERK_SECRET_KEY"));
+});
+
+void test("renderApplyOutcome: write-status-unknown with a failed re-read says the re-read also failed", () => {
+  const outcome: ApplyOutcome = {
+    outcome: "write-status-unknown",
+    appDir: "api",
+    diff: null,
+    writeErrorMessage: "request timed out",
+    rereadErrorMessage: "re-read failed too",
+  };
+
+  const rendered = renderApplyOutcome(outcome).join("\n");
+
+  assert.ok(rendered.includes("request timed out"));
+  assert.ok(rendered.includes("re-read failed too"));
+});
+
+void test("renderApplyOutcome: error prints the message only", () => {
+  const outcome: ApplyOutcome = { outcome: "error", appDir: "api", errorMessage: "network down" };
+
+  const rendered = renderApplyOutcome(outcome);
+
+  assert.deepEqual(rendered, ["api: ERROR — network down"]);
 });
