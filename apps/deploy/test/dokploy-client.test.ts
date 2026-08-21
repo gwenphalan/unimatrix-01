@@ -165,6 +165,8 @@ void test("getCompose builds the composeId query param through URL/URLSearchPara
           sourceType: "github",
           branch: "main",
           autoDeploy: false,
+          owner: "unimatrixcore",
+          repository: "unimatrix-01",
           env: null,
         }),
       );
@@ -194,6 +196,8 @@ void test("getCompose sends the x-api-key header and reduces env to key/blank pa
           sourceType: "github",
           branch: "main",
           autoDeploy: false,
+          owner: "unimatrixcore",
+          repository: "unimatrix-01",
           env: "CLERK_SECRET_KEY=sk_live_whatever\nEMPTY_VAR=\n",
         }),
       );
@@ -224,6 +228,126 @@ void test("a compose.one 500 whose body is an env blob throws DokployClientError
       assert.equal(error.status, 500);
       const serialized = JSON.stringify(error, Object.getOwnPropertyNames(error));
       assert.ok(!serialized.includes("leaked-value-if-this-ever-appears"));
+      return true;
+    },
+  );
+});
+
+void test("updateComposeSettings POSTs JSON to compose.update with the x-api-key and content-type headers", async () => {
+  let capturedInit: RequestInit | undefined;
+  let capturedUrl: string | undefined;
+  const client = createDokployClient({
+    baseUrl: BASE_URL,
+    apiKey: API_KEY,
+    fetch: (url, init) => {
+      capturedUrl = (url as URL).toString();
+      capturedInit = init;
+      return Promise.resolve(jsonResponse({ composeId: "compose-1" }));
+    },
+  });
+
+  await client.updateComposeSettings("compose-1", { branch: "main" });
+
+  assert.equal(capturedUrl, `${BASE_URL}/api/compose.update`);
+  assert.equal(capturedInit?.method, "POST");
+  const headers = new Headers(capturedInit?.headers);
+  assert.equal(headers.get("x-api-key"), API_KEY);
+  assert.equal(headers.get("content-type"), "application/json");
+});
+
+void test("updateComposeSettings serialises exactly composeId plus the settings passed, no more", async () => {
+  let capturedBody: string | undefined;
+  const client = createDokployClient({
+    baseUrl: BASE_URL,
+    apiKey: API_KEY,
+    fetch: (_url, init) => {
+      capturedBody = init?.body as string;
+      return Promise.resolve(jsonResponse({ composeId: "compose-1" }));
+    },
+  });
+
+  await client.updateComposeSettings("compose-1", { composePath: "infra/docker/api-compose.yaml" });
+
+  assert.ok(capturedBody !== undefined);
+  const parsed = JSON.parse(capturedBody) as Record<string, unknown>;
+  assert.deepEqual(Object.keys(parsed).sort(), ["composeId", "composePath"]);
+  assert.deepEqual(parsed, {
+    composeId: "compose-1",
+    composePath: "infra/docker/api-compose.yaml",
+  });
+});
+
+void test("updateComposeSettings on a 200 resolves to undefined and never reads the body", async () => {
+  const client = createDokployClient({
+    baseUrl: BASE_URL,
+    apiKey: API_KEY,
+    fetch: () =>
+      Promise.resolve(
+        jsonResponse({
+          composeId: "compose-1",
+          env: "SECRETS_KEKS=super-secret-if-this-is-ever-read",
+        }),
+      ),
+  });
+
+  const call = client.updateComposeSettings("compose-1", { autoDeploy: false }) as Promise<unknown>;
+  const result = await call;
+
+  assert.equal(result, undefined);
+});
+
+void test("updateComposeSettings on a 400 names field keys only, never a zod message or an env value", async () => {
+  const client = createDokployClient({
+    baseUrl: BASE_URL,
+    apiKey: API_KEY,
+    fetch: () =>
+      Promise.resolve(
+        jsonResponse(
+          {
+            code: "BAD_REQUEST",
+            message: 'Invalid input: expected string, received number at "branch"',
+            data: {
+              zodError: {
+                formErrors: [],
+                fieldErrors: {
+                  branch: [
+                    'Invalid input: expected string, received number, value "SECRETS_KEKS=leaked-if-printed"',
+                  ],
+                },
+              },
+            },
+            issues: [],
+          },
+          400,
+        ),
+      ),
+  });
+
+  await assert.rejects(
+    () => client.updateComposeSettings("compose-1", { branch: "main" }),
+    (error: unknown) => {
+      assert.ok(error instanceof DokployClientError);
+      assert.equal(error.status, 400);
+      assert.ok(error.message.includes("branch"));
+      assert.ok(!error.message.includes("leaked-if-printed"));
+      assert.ok(!error.message.includes("Invalid input"));
+      return true;
+    },
+  );
+});
+
+void test("updateComposeSettings on a non-JSON error body degrades to the bare status", async () => {
+  const client = createDokployClient({
+    baseUrl: BASE_URL,
+    apiKey: API_KEY,
+    fetch: () => Promise.resolve(new Response("not json", { status: 500 })),
+  });
+
+  await assert.rejects(
+    () => client.updateComposeSettings("compose-1", { branch: "main" }),
+    (error: unknown) => {
+      assert.ok(error instanceof DokployClientError);
+      assert.equal(error.status, 500);
       return true;
     },
   );

@@ -53,11 +53,26 @@ export interface CreateDokployClientOptions {
   timeoutMs?: number;
 }
 
+/**
+ * The only three `compose.update` settings this service can write. Closed on purpose: `env` has no
+ * field here to hold it, so a caller cannot express an env write even by accident — the type itself
+ * is the guarantee, the primary structural one this whole apply path rests on.
+ */
+export interface DokployComposeSettingsUpdate {
+  composePath?: string;
+  branch?: string;
+  autoDeploy?: boolean;
+}
+
 export interface DokployClient {
   getDokployVersion: () => Promise<DokployVersion>;
   getContainers: () => Promise<DokployContainer[]>;
   getProjects: () => Promise<DokployProject[]>;
   getCompose: (composeId: string) => Promise<DokployCompose>;
+  updateComposeSettings: (
+    composeId: string,
+    settings: DokployComposeSettingsUpdate,
+  ) => Promise<void>;
 }
 
 const DEFAULT_TIMEOUT_MS = 10_000;
@@ -65,9 +80,10 @@ const DEFAULT_TIMEOUT_MS = 10_000;
 /**
  * Dokploy is tRPC-derived: every call is `GET|POST /api/<router>.<procedure>`, never a REST
  * resource path. `/api/openapi.json` 404s on the running v0.29.13, so there is no spec to generate
- * a client from — this hand-writes the four procedures whose 200 response has actually been
- * observed. See `apps/deploy/AGENTS.md` before adding a fifth. All four are `GET` — `callProcedure`
- * hardcodes the method, and it must stay that way until a mutation path is deliberately added.
+ * a client from — this hand-writes the procedures whose response has actually been observed. See
+ * `apps/deploy/AGENTS.md` before adding another. Every read goes through `callProcedure`, which
+ * hardcodes `GET` and must stay that way; the one mutation this service performs,
+ * `compose.update`, goes through the separate `callMutation` below instead.
  */
 export function createDokployClient(options: CreateDokployClientOptions): DokployClient {
   const fetchImpl = options.fetch ?? globalThis.fetch;
@@ -125,10 +141,81 @@ export function createDokployClient(options: CreateDokployClientOptions): Dokplo
     }
   }
 
+  /**
+   * The one mutation path this service has. Never `await response.json()`/`.text()` on a 200: the
+   * fork's `update` procedure does `db.update(compose).set(...).where(...)` and returns the whole
+   * updated row, `env` plaintext included — reading it would put a secret blob in a value this
+   * function returns, the exact thing `callProcedure` above is built to avoid on the read side.
+   * `void` on success is the only shape that cannot carry one.
+   *
+   * On a non-2xx, the body is `{code, message, data: {zodError}, issues}` — field names and zod
+   * messages, never the row — so reducing it to key names only is safe in a way reading the 200
+   * body never is. Parsed defensively: a body that is not JSON, or does not have the expected
+   * shape, degrades to the bare status instead of throwing inside the error path.
+   */
+  async function callMutation(
+    procedurePath: string,
+    payload: Readonly<Record<string, unknown>>,
+  ): Promise<void> {
+    const url = new URL(`${baseUrl}/api/${procedurePath}`);
+
+    const response = await fetchImpl(url, {
+      method: "POST",
+      headers: { "x-api-key": options.apiKey, "content-type": "application/json" },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+
+    if (response.ok) {
+      return;
+    }
+
+    let code: string | undefined;
+    let fieldNames: string[] = [];
+
+    try {
+      const body: unknown = await response.json();
+
+      if (body !== null && typeof body === "object") {
+        const record = body as Record<string, unknown>;
+
+        if (typeof record.code === "string") {
+          code = record.code;
+        }
+
+        const data = record.data;
+        const zodError =
+          data !== null && typeof data === "object"
+            ? (data as Record<string, unknown>).zodError
+            : undefined;
+        const fieldErrors =
+          zodError !== null && typeof zodError === "object"
+            ? (zodError as Record<string, unknown>).fieldErrors
+            : undefined;
+
+        if (fieldErrors !== null && typeof fieldErrors === "object") {
+          fieldNames = Object.keys(fieldErrors);
+        }
+      }
+    } catch {
+      // Falls through to the bare-status message below — never throws inside the error path.
+    }
+
+    const codeSuffix = code !== undefined ? ` (code: ${code})` : "";
+    const fieldSuffix = fieldNames.length > 0 ? ` (fields: ${fieldNames.join(", ")})` : "";
+
+    throw new DokployClientError(
+      `Dokploy procedure ${procedurePath} responded with status ${response.status}${codeSuffix}${fieldSuffix}.`,
+      response.status,
+    );
+  }
+
   return {
     getDokployVersion: () => callProcedure("settings.getDokployVersion", dokployVersionSchema),
     getContainers: () => callProcedure("docker.getContainers", dokployContainersSchema),
     getProjects: () => callProcedure("project.all", dokployProjectsSchema),
     getCompose: (composeId) => callProcedure("compose.one", dokployComposeSchema, { composeId }),
+    updateComposeSettings: (composeId, settings) =>
+      callMutation("compose.update", { composeId, ...settings }),
   };
 }

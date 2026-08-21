@@ -17,6 +17,7 @@ const stubDokployClient: DokployClient = {
   getContainers: () => Promise.reject(new Error("not used in these tests")),
   getProjects: () => Promise.reject(new Error("not used in these tests")),
   getCompose: () => Promise.reject(new Error("not used in these tests")),
+  updateComposeSettings: () => Promise.reject(new Error("not used in these tests")),
 };
 
 function createTestApp(env: DeployRuntimeEnv = {}) {
