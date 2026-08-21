@@ -32,6 +32,8 @@ function composeDetail(overrides: Partial<DokployCompose> = {}): DokployCompose 
     sourceType: "github",
     branch: "main",
     autoDeploy: false,
+    owner: "unimatrixcore",
+    repository: "unimatrix-01",
     env: [],
     ...overrides,
   };

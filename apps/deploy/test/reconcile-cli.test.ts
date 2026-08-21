@@ -24,6 +24,7 @@ function stubClient(overrides: Partial<DokployClient> = {}): DokployClient {
     getContainers: () => Promise.reject(new Error("not used")),
     getProjects: () => Promise.resolve([]),
     getCompose: () => Promise.reject(new Error("not used")),
+    updateComposeSettings: () => Promise.reject(new Error("not used")),
     ...overrides,
   };
 }
@@ -60,6 +61,8 @@ void test("exit 0 when every declared app is in sync", async () => {
         sourceType: "github",
         branch: "main",
         autoDeploy: false,
+        owner: "unimatrixcore",
+        repository: "unimatrix-01",
         env: [{ key: "IMAGE_TAG", blank: false }],
       }),
   });
@@ -134,6 +137,8 @@ void test("exit 2 when a single app's compose.one fails, isolated to that app ra
             sourceType: "github",
             branch: "main",
             autoDeploy: false,
+            owner: "unimatrixcore",
+            repository: "unimatrix-01",
             env: [{ key: "IMAGE_TAG", blank: false }],
           }),
   });
@@ -161,10 +166,152 @@ void test("prints usage and exits 2 with an unknown subcommand", async () => {
   const { write, lines } = collectLines();
   const client = stubClient();
 
+  const exitCode = await runReconcileCli(["frobnicate"], {
+    client,
+    desired: IN_SYNC_DESIRED,
+    write,
+  });
+
+  assert.equal(exitCode, 2);
+  assert.ok(lines.some((line) => line.startsWith("Usage:")));
+});
+
+void test("prints usage and exits 2 with apply and no app name", async () => {
+  const { write, lines } = collectLines();
+  const client = stubClient();
+
   const exitCode = await runReconcileCli(["apply"], { client, desired: IN_SYNC_DESIRED, write });
 
   assert.equal(exitCode, 2);
   assert.ok(lines.some((line) => line.startsWith("Usage:")));
+});
+
+void test("prints usage and exits 2 with apply and a trailing argument", async () => {
+  const { write, lines } = collectLines();
+  const client = stubClient();
+
+  const exitCode = await runReconcileCli(["apply", "api", "--force"], {
+    client,
+    desired: IN_SYNC_DESIRED,
+    write,
+  });
+
+  assert.equal(exitCode, 2);
+  assert.ok(lines.some((line) => line.startsWith("Usage:")));
+});
+
+const APPLY_ONE_MATCH_PROJECTS = [
+  {
+    projectId: "project-1",
+    name: "Unimatrix-01",
+    environments: [
+      {
+        environmentId: "env-1",
+        name: "production",
+        compose: [{ composeId: "compose-1", composeStatus: "done", name: "api" }],
+      },
+    ],
+  },
+];
+
+function applyComposeDetail() {
+  return {
+    composeId: "compose-1",
+    name: "api",
+    environmentId: "env-1",
+    composePath: "infra/docker/api-compose.yaml",
+    sourceType: "github",
+    branch: "main",
+    autoDeploy: false,
+    owner: "unimatrixcore",
+    repository: "unimatrix-01",
+    env: [{ key: "IMAGE_TAG", blank: false }],
+  };
+}
+
+void test("apply exits 0 and writes once when a setting has drifted", async () => {
+  const { write, lines } = collectLines();
+  let composeCallCount = 0;
+  const client = stubClient({
+    getProjects: () => Promise.resolve(APPLY_ONE_MATCH_PROJECTS),
+    getCompose: () => {
+      composeCallCount += 1;
+      return Promise.resolve({
+        ...applyComposeDetail(),
+        branch: composeCallCount === 1 ? "staging" : "main",
+      });
+    },
+    updateComposeSettings: () => Promise.resolve(),
+  });
+
+  const exitCode = await runReconcileCli(["apply", "api"], {
+    client,
+    desired: IN_SYNC_DESIRED,
+    write,
+  });
+
+  assert.equal(exitCode, 0);
+  assert.ok(lines.some((line) => line.includes("APPLIED")));
+});
+
+void test("apply exits 1 and writes nothing when settings already match — a different code than applied", async () => {
+  const { write, lines } = collectLines();
+  const client = stubClient({
+    getProjects: () => Promise.resolve(APPLY_ONE_MATCH_PROJECTS),
+    getCompose: () => Promise.resolve(applyComposeDetail()),
+  });
+
+  const exitCode = await runReconcileCli(["apply", "api"], {
+    client,
+    desired: IN_SYNC_DESIRED,
+    write,
+  });
+
+  assert.equal(exitCode, 1);
+  assert.ok(lines.some((line) => line.includes("NOTHING TO APPLY")));
+});
+
+void test("apply exits 5 when compose.update resolves but the re-read still shows the write drifted", async () => {
+  const { write, lines } = collectLines();
+  const client = stubClient({
+    getProjects: () => Promise.resolve(APPLY_ONE_MATCH_PROJECTS),
+    // Both getCompose calls return the same drifted branch — the write never actually took.
+    getCompose: () => Promise.resolve({ ...applyComposeDetail(), branch: "staging" }),
+    updateComposeSettings: () => Promise.resolve(),
+  });
+
+  let getComposeCalls = 0;
+  const countingClient: DokployClient = {
+    ...client,
+    getCompose: (composeId) => {
+      getComposeCalls += 1;
+      return client.getCompose(composeId);
+    },
+  };
+
+  const exitCode = await runReconcileCli(["apply", "api"], {
+    client: countingClient,
+    desired: IN_SYNC_DESIRED,
+    write,
+  });
+
+  assert.equal(exitCode, 5);
+  assert.equal(getComposeCalls, 2);
+  assert.ok(lines.some((line) => line.includes("APPLIED BUT DRIFTED")));
+});
+
+void test("apply exits 2 for the service's own compose entry", async () => {
+  const { write, lines } = collectLines();
+  const client = stubClient();
+
+  const exitCode = await runReconcileCli(["apply", "deploy"], {
+    client,
+    desired: IN_SYNC_DESIRED,
+    write,
+  });
+
+  assert.equal(exitCode, 2);
+  assert.ok(lines.some((line) => line.includes("REFUSED")));
 });
 
 void test("prints usage and exits 2 when report carries a trailing argument", async () => {

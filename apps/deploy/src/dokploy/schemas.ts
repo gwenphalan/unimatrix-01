@@ -102,9 +102,11 @@ export function readEnvKeyStates(env: string | null): readonly DokployComposeEnv
  * total, including `appName, autoDeploy, branch, command, composeFile, composeId, composePath,
  * composeStatus, composeType, createdAt, description, domains, env, environment, environmentId,
  * github, githubId, mounts, name, owner, repository, server, serverId, sourceType, suffix,
- * triggerType, watchPaths`. Only the fields `src/reconcile/diff.ts` compares are declared here;
- * the rest — `domains` and `watchPaths` included, both deliberately out of scope — are stripped by
- * `z.object`'s default behaviour, same reasoning as `dokployProjectSchema`.
+ * triggerType, watchPaths`. Only the fields `src/reconcile/diff.ts` and `src/reconcile/apply.ts`
+ * compare are declared here; the rest — `domains` and `watchPaths` included, both deliberately out
+ * of scope — are stripped by `z.object`'s default behaviour, same reasoning as
+ * `dokployProjectSchema`. `owner`/`repository` anchor a name-matched service to this repository
+ * before `apply.ts` writes anything to it — see that file's `refused-foreign-repo` outcome.
  *
  * `env` arrives as a decrypted plaintext blob — measured, for the `api` service, holding
  * `CORS_ALLOWED_ORIGINS, CLERK_PUBLISHABLE_KEY, CLERK_SECRET_KEY, CLERK_JWT_KEY, SECRETS_BASE_URL,
@@ -120,7 +122,30 @@ export const dokployComposeSchema = z.object({
   sourceType: z.string(),
   branch: z.string().nullable(),
   autoDeploy: z.boolean().nullable(),
+  owner: z.string().nullable(),
+  repository: z.string().nullable(),
   env: z.string().nullable().transform(readEnvKeyStates),
+});
+
+/**
+ * A `compose.update` non-2xx body: `{code, message, data: {zodError}, issues}`. Only `code` and
+ * `data.zodError.fieldErrors`' **keys** are declared — never `message` or a `fieldErrors` value,
+ * both of which can echo the offending field value back (`client.ts`'s `callMutation`). `z.object`
+ * everywhere here so an unrecognised field is stripped rather than rejected: this is upstream
+ * software this repo does not control, and a body that fails to match degrades to the bare-status
+ * fallback in `callMutation` rather than throwing inside the error path.
+ */
+export const dokployMutationErrorSchema = z.object({
+  code: z.string().optional(),
+  data: z
+    .object({
+      zodError: z
+        .object({
+          fieldErrors: z.record(z.string(), z.unknown()).optional(),
+        })
+        .optional(),
+    })
+    .optional(),
 });
 
 export type DokployVersion = z.output<typeof dokployVersionSchema>;

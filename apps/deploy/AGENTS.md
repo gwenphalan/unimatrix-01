@@ -1,11 +1,12 @@
 # AGENTS.md
 
 ## 1. Overview
-`apps/deploy` is a Fastify service holding a typed Dokploy API client and a read-only reconcile
-report (`src/reconcile/`, `pnpm --filter @unimatrix/deploy-app reconcile`): it diffs
-`src/reconcile/desired-state.gen.ts` against what Dokploy actually holds and prints drift. It
-performs no probing and applies nothing — see `README.md` for what still has to happen by hand
-before this stack deploys, and for why an apply path is a separate PR.
+`apps/deploy` is a Fastify service holding a typed Dokploy API client, a read-only reconcile report,
+and a settings-only apply (`src/reconcile/`, `pnpm --filter @unimatrix/deploy-app reconcile`): it
+diffs `src/reconcile/desired-state.gen.ts` against what Dokploy actually holds, prints drift, and can
+write `composePath`/`branch`/`autoDeploy` for one app at a time. It performs no probing, writes no
+env, and creates and deploys nothing — see `README.md` for what still has to happen by hand before
+this stack deploys, and for apply's full refusal set.
 
 ## 2. Rules
 
@@ -24,16 +25,35 @@ before this stack deploys, and for why an apply path is a separate PR.
 - **Dokploy is tRPC-derived: every call is `GET|POST /api/<router>.<procedure>`**, never a REST
   resource path, and `/api/openapi.json` 404s on v0.29.13, so schemas are hand-written rather than
   generated. Only add a procedure whose response has actually been observed —
-  `docker.getContainers`, `settings.getDokployVersion`, `project.all`, and `compose.one` are the
-  four this service carries. `DokployClientError` (`src/dokploy/client.ts`) never carries a
-  response-body fragment, on any property: `project.all` returns every project's whole
-  environment-variable blob and `compose.one` returns one service's, both in plaintext.
-- **`callProcedure` hardcodes `method: "GET"`, and every procedure above is read-only.** Nothing in
-  this service calls `compose.create`, `compose.update`, or `compose.deploy` — that is the apply
-  path `README.md`'s "Reconcile report" section names as a deliberately separate PR, and it must
-  refuse to apply against this service's own compose entry: `compose.update` + `compose.deploy`
-  there would destroy the process performing the reconciliation mid-run, and Dokploy has no
-  rollback for a Compose service (`docs/deployment.md`).
+  `docker.getContainers`, `settings.getDokployVersion`, `project.all`, `compose.one`, and
+  `compose.update` are the five this service carries. `DokployClientError` (`src/dokploy/client.ts`)
+  never carries a response-body fragment, on any property: `project.all` returns every project's
+  whole environment-variable blob and `compose.one` returns one service's, both in plaintext.
+- **`callProcedure` hardcodes `method: "GET"` and stays read-only; `compose.update` is the one
+  mutation and goes through the separate `callMutation` instead.** `callMutation` never reads a 200
+  body — the fork's `update` procedure returns the whole updated compose row, `env` plaintext
+  included, and `void` on success is the only return shape that cannot carry it. A non-2xx body is
+  reduced to the error `code` and the `zodError.fieldErrors` key names only — never the zod message,
+  which can echo the offending value, and never the row.
+- **The only mutation this service performs is `compose.update` with a closed
+  `{composePath?, branch?, autoDeploy?}` payload** (`DokployComposeSettingsUpdate`) —
+  `compose.create` and `compose.deploy` remain absent, because `compose.create` needs an
+  `environmentId` nothing in this repo declares and nothing here triggers a deploy. `env` has no
+  field on that type, so a caller cannot express an env write even by accident.
+  `apps/deploy/src/reconcile/apply.ts`'s `applyAppSettings` refuses to write against this service's
+  own compose entry (`RECONCILE_SELF_APP_DIR`, checked before any network call): `compose.update`
+  there followed by any deploy would destroy the process performing the reconciliation mid-run, and
+  Dokploy has no rollback for a Compose service (`docs/deployment.md`). It also refuses an app not in
+  the manifest, a name that matches zero or more than one Dokploy compose service, a match anchored
+  to a different GitHub owner/repository than this one's (`findComposeMatches` matches on service
+  name alone, globally across the instance, and reads no `projectId`), and a `sourceType`
+  disagreement (it selects which sibling column group drives the clone, and this repo declares none
+  of them). `autoDeploy`'s written value always comes from the `RECONCILE_AUTO_DEPLOY` policy
+  constant, never from the diff's `declared` string — the fork's `coerceSchema` treats `autoDeploy`
+  as `z.coerce.boolean()`, under which the string `"false"` coerces to `true`.
+- **`compose.update` is the only HTTP route on v0.29.13 that can write a compose service's `env`.**
+  `compose.saveEnvironment` exists as a tRPC procedure but is absent from the exposed path map, so a
+  future env-apply PR must widen this same procedure rather than reaching for a narrower one.
 - **`src/reconcile/desired-state.gen.ts` is generated** — edit the relevant
   `apps/<app>/deploy.config.ts` and run `node ./infra/scripts/generate-deploy-config.mjs`, not this
   file. It carries no value from any source, only structure (env var names and whether they are

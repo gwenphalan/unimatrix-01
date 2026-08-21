@@ -1,9 +1,8 @@
 // GENERATED — edit the relevant apps/<app>/deploy.config.ts and run
 // `node ./infra/scripts/generate-deploy-config.mjs`, not this file.
 //
-// The desired-state manifest apps/deploy's reconcile report diffs against Dokploy. `image`
-// and `containerPort` are carried for a later PR (the apply path) and read by nothing in
-// this one — see apps/deploy/README.md.
+// The desired-state manifest: apps/deploy's reconcile report and apply both compare it
+// against Dokploy.
 import type { DeployDesiredState } from "@unimatrix/deploy-config";
 
 export const DEPLOY_DESIRED_STATE: DeployDesiredState = [
