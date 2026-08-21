@@ -127,6 +127,27 @@ export const dokployComposeSchema = z.object({
   env: z.string().nullable().transform(readEnvKeyStates),
 });
 
+/**
+ * A `compose.update` non-2xx body: `{code, message, data: {zodError}, issues}`. Only `code` and
+ * `data.zodError.fieldErrors`' **keys** are declared — never `message` or a `fieldErrors` value,
+ * both of which can echo the offending field value back (`client.ts`'s `callMutation`). `z.object`
+ * everywhere here so an unrecognised field is stripped rather than rejected: this is upstream
+ * software this repo does not control, and a body that fails to match degrades to the bare-status
+ * fallback in `callMutation` rather than throwing inside the error path.
+ */
+export const dokployMutationErrorSchema = z.object({
+  code: z.string().optional(),
+  data: z
+    .object({
+      zodError: z
+        .object({
+          fieldErrors: z.record(z.string(), z.unknown()).optional(),
+        })
+        .optional(),
+    })
+    .optional(),
+});
+
 export type DokployVersion = z.output<typeof dokployVersionSchema>;
 export type DokployContainer = z.output<typeof dokployContainerSchema>;
 export type DokployComposeSummary = z.output<typeof dokployComposeSummarySchema>;

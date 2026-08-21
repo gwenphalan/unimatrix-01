@@ -1,6 +1,7 @@
 import {
   dokployComposeSchema,
   dokployContainersSchema,
+  dokployMutationErrorSchema,
   dokployProjectsSchema,
   dokployVersionSchema,
   type DokployCompose,
@@ -175,27 +176,11 @@ export function createDokployClient(options: CreateDokployClientOptions): Dokplo
 
     try {
       const body: unknown = await response.json();
+      const parsed = dokployMutationErrorSchema.safeParse(body);
 
-      if (body !== null && typeof body === "object") {
-        const record = body as Record<string, unknown>;
-
-        if (typeof record.code === "string") {
-          code = record.code;
-        }
-
-        const data = record.data;
-        const zodError =
-          data !== null && typeof data === "object"
-            ? (data as Record<string, unknown>).zodError
-            : undefined;
-        const fieldErrors =
-          zodError !== null && typeof zodError === "object"
-            ? (zodError as Record<string, unknown>).fieldErrors
-            : undefined;
-
-        if (fieldErrors !== null && typeof fieldErrors === "object") {
-          fieldNames = Object.keys(fieldErrors);
-        }
+      if (parsed.success) {
+        code = parsed.data.code;
+        fieldNames = Object.keys(parsed.data.data?.zodError?.fieldErrors ?? {});
       }
     } catch {
       // Falls through to the bare-status message below — never throws inside the error path.
@@ -215,7 +200,15 @@ export function createDokployClient(options: CreateDokployClientOptions): Dokplo
     getContainers: () => callProcedure("docker.getContainers", dokployContainersSchema),
     getProjects: () => callProcedure("project.all", dokployProjectsSchema),
     getCompose: (composeId) => callProcedure("compose.one", dokployComposeSchema, { composeId }),
+    // Named fields, never a spread: TypeScript's excess-property check only fires on an object
+    // literal, so a wider `settings` object — one carrying a stray `env`, say — would otherwise
+    // ride the spread onto the wire with no compile-time or runtime check catching it.
     updateComposeSettings: (composeId, settings) =>
-      callMutation("compose.update", { composeId, ...settings }),
+      callMutation("compose.update", {
+        composeId,
+        composePath: settings.composePath,
+        branch: settings.branch,
+        autoDeploy: settings.autoDeploy,
+      }),
   };
 }

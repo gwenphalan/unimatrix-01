@@ -125,7 +125,19 @@ export interface AppliedOutcome {
    *  at deploy time. An `autoDeploy` flip is live immediately: the webhook handler queries the row
    *  directly on every push. */
   readonly needsDeploy: boolean;
-  /** The post-write diff, from a fresh `getCompose` read — never the pre-write finding. */
+  /** The post-write diff, from a fresh `getCompose` read — never the pre-write finding. Every
+   *  setting in `written` is confirmed absent from `diff.settingFindings` here; when one is not,
+   *  the outcome is {@link AppliedButDriftedOutcome} instead, never this one. */
+  readonly diff: AppDiff;
+}
+
+export interface AppliedButDriftedOutcome {
+  readonly outcome: "applied-but-drifted";
+  readonly appDir: string;
+  readonly written: readonly ReconcileWritableSetting[];
+  /** The post-write diff, from a fresh `getCompose` read. At least one setting in `written` is
+   *  still present in `diff.settingFindings` — Dokploy's `compose.update` returned a 200 that did
+   *  not take, or silently dropped an unrecognised field. */
   readonly diff: AppDiff;
 }
 
@@ -153,6 +165,7 @@ export type ApplyOutcome =
   | RefusedSourceTypeOutcome
   | NothingToApplyOutcome
   | AppliedOutcome
+  | AppliedButDriftedOutcome
   | WriteStatusUnknownOutcome
   | ErrorOutcome;
 
@@ -162,6 +175,20 @@ function messageOf(error: unknown): string {
 
 function findingsFor(diff: AppDiff): readonly SettingFinding[] {
   return diff.verdict === "matched" ? diff.settingFindings : [];
+}
+
+/**
+ * `applied` means every setting in `written` is confirmed present on the re-read — Dokploy's
+ * `compose.update` input schema silently strips a field it does not recognise, so a legal 200 that
+ * changed nothing is exactly the case this guards against. A `written` setting still listed in
+ * `postDiff`'s findings means the re-read still disagrees with what was declared written.
+ */
+function writeConfirmed(postDiff: AppDiff, written: readonly ReconcileWritableSetting[]): boolean {
+  if (postDiff.verdict !== "matched") return false;
+
+  const stillDrifted = new Set(postDiff.settingFindings.map((finding) => finding.setting));
+
+  return written.every((setting) => !stillDrifted.has(setting));
 }
 
 /**
@@ -263,12 +290,17 @@ export async function applyAppSettings(
   }
 
   const written = Object.keys(update) as readonly ReconcileWritableSetting[];
+  const postDiff = diffApp(service, matches, postDetail);
+
+  if (!writeConfirmed(postDiff, written)) {
+    return { outcome: "applied-but-drifted", appDir, written, diff: postDiff };
+  }
 
   return {
     outcome: "applied",
     appDir,
     written,
     needsDeploy: written.includes("composePath") || written.includes("branch"),
-    diff: diffApp(service, matches, postDetail),
+    diff: postDiff,
   };
 }

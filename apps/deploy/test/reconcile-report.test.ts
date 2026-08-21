@@ -310,6 +310,22 @@ void test("renderApplyOutcome: write-status-unknown with an observed re-read sho
   assert.ok(rendered.includes("CLERK_SECRET_KEY"));
 });
 
+void test("renderApplyOutcome: write-status-unknown with an in-sync re-read says so, rather than trailing off", () => {
+  const outcome: ApplyOutcome = {
+    outcome: "write-status-unknown",
+    appDir: "api",
+    diff: MATCHED_IN_SYNC,
+    writeErrorMessage: "request timed out",
+    rereadErrorMessage: null,
+  };
+
+  const rendered = renderApplyOutcome(outcome);
+
+  assert.equal(rendered.length, 2);
+  assert.ok(rendered[0]?.includes("WRITE STATUS UNKNOWN"));
+  assert.ok(rendered[1]?.includes("in sync"));
+});
+
 void test("renderApplyOutcome: write-status-unknown with a failed re-read says the re-read also failed", () => {
   const outcome: ApplyOutcome = {
     outcome: "write-status-unknown",

@@ -605,8 +605,8 @@ export interface DeployDesiredEnvVar {
 }
 
 /**
- * The desired-state shape `apps/deploy`'s reconcile report and apply diff against what Dokploy
- * holds for one service.
+ * The desired-state shape for one service: `apps/deploy`'s reconcile report and apply both compare
+ * it against what Dokploy actually holds.
  */
 export interface DeployDesiredService {
   readonly appDir: string;
@@ -661,7 +661,8 @@ export function deployDesiredStateModule(configs: readonly DeployAppConfig[]): s
     "// GENERATED — edit the relevant apps/<app>/deploy.config.ts and run",
     "// `node ./infra/scripts/generate-deploy-config.mjs`, not this file.",
     "//",
-    "// The desired-state manifest apps/deploy's reconcile report and apply diff against Dokploy.",
+    "// The desired-state manifest: apps/deploy's reconcile report and apply both compare it",
+    "// against Dokploy.",
     'import type { DeployDesiredState } from "@unimatrix/deploy-config";',
     "",
     "export const DEPLOY_DESIRED_STATE: DeployDesiredState = [",

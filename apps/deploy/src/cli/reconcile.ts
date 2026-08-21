@@ -33,12 +33,14 @@ const USAGE = [
   "",
   "Exit codes for apply — 0 and 1 are deliberately different, so a caller can always tell whether a",
   "write happened:",
-  "  0  applied — a write occurred and the post-write state was confirmed",
+  "  0  applied — a write occurred and every written setting was confirmed on the re-read",
   "  1  nothing to apply — settings already matched, so no write occurred",
   "  2  refused or not applicable — bad usage, unknown app, not matched (missing/ambiguous),",
   "     the service's own entry, a foreign-repository match, or sourceType drift",
   "  3  write status unknown — a write was attempted but its outcome could not be confirmed",
   "  4  the run could not complete for another reason (a Dokploy call failed outright)",
+  "  5  applied but the post-write state does not match — compose.update returned a 200, but the",
+  "     re-read still shows a written setting drifted (Dokploy silently drops an unrecognised field)",
 ].join("\n");
 
 export interface ReconcileCliDeps {
@@ -65,6 +67,7 @@ const APPLY_EXIT_CODE = {
   "refused-source-type": 2,
   "write-status-unknown": 3,
   error: 4,
+  "applied-but-drifted": 5,
 } as const;
 
 async function runReport(deps: ReconcileCliDeps): Promise<number> {

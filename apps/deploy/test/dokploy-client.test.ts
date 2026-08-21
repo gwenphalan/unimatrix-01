@@ -5,6 +5,7 @@ import {
   createDokployClient,
   DokployClientError,
   loadDokployApiKey,
+  type DokployComposeSettingsUpdate,
 } from "../src/dokploy/client.js";
 
 const BASE_URL = "http://dokploy:3000";
@@ -277,17 +278,58 @@ void test("updateComposeSettings serialises exactly composeId plus the settings 
   });
 });
 
+void test("updateComposeSettings never puts env on the wire, even carried by a wider object", async () => {
+  let capturedBody: string | undefined;
+  const client = createDokployClient({
+    baseUrl: BASE_URL,
+    apiKey: API_KEY,
+    fetch: (_url, init) => {
+      capturedBody = init?.body as string;
+      return Promise.resolve(jsonResponse({ composeId: "compose-1" }));
+    },
+  });
+
+  // TypeScript's excess-property check only fires on an object literal — a wider object assigned
+  // through a variable is exactly the shape that could carry `env` through a naive spread of
+  // `settings` onto the mutation payload.
+  const settingsWithStrayEnv = {
+    branch: "main",
+    env: "SECRETS_KEKS=leaked-if-this-ever-reaches-the-wire",
+  } as DokployComposeSettingsUpdate;
+
+  await client.updateComposeSettings("compose-1", settingsWithStrayEnv);
+
+  assert.ok(capturedBody !== undefined);
+  const parsed = JSON.parse(capturedBody) as Record<string, unknown>;
+  assert.deepEqual(Object.keys(parsed).sort(), ["branch", "composeId"]);
+  assert.equal(Object.hasOwn(parsed, "env"), false);
+});
+
+// A canary for the safety claim itself, not just today's implementation: a valid-JSON fixture
+// would still pass even if a future `callMutation` called `await response.json()` and discarded
+// the result. Every body-read path throws instead, so the test fails loudly the moment one is added.
+function bodyThrowingResponse(status = 200): Response {
+  const bodyWasRead = (): never => {
+    throw new Error("canary: a compose.update 200 response body was read");
+  };
+
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    json: bodyWasRead,
+    text: bodyWasRead,
+    arrayBuffer: bodyWasRead,
+    get body(): never {
+      return bodyWasRead();
+    },
+  } as unknown as Response;
+}
+
 void test("updateComposeSettings on a 200 resolves to undefined and never reads the body", async () => {
   const client = createDokployClient({
     baseUrl: BASE_URL,
     apiKey: API_KEY,
-    fetch: () =>
-      Promise.resolve(
-        jsonResponse({
-          composeId: "compose-1",
-          env: "SECRETS_KEKS=super-secret-if-this-is-ever-read",
-        }),
-      ),
+    fetch: () => Promise.resolve(bodyThrowingResponse()),
   });
 
   const call = client.updateComposeSettings("compose-1", { autoDeploy: false }) as Promise<unknown>;

@@ -91,14 +91,26 @@ export function renderApplyOutcome(outcome: ApplyOutcome): readonly string[] {
           (outcome.needsDeploy ? " (a deploy is required for this to take effect)" : ""),
         ...renderNonInSyncEnvFindings(outcome.diff),
       ];
-    case "write-status-unknown":
+    case "applied-but-drifted":
+      return [
+        `${appDir}: APPLIED BUT DRIFTED — wrote ${outcome.written.join(", ")}, but the re-read` +
+          " still shows it drifted; apply never writes env",
+        ...renderAppDiff(appDir, outcome.diff).slice(1),
+      ];
+    case "write-status-unknown": {
+      const rereadLine =
+        outcome.rereadErrorMessage !== null
+          ? `  the post-write re-read also failed — ${outcome.rereadErrorMessage}`
+          : outcome.diff !== null && outcome.diff.verdict === "matched" && outcome.diff.inSync
+            ? "  post-write state was re-read successfully: it is now in sync"
+            : "  post-write state was re-read successfully:";
+
       return [
         `${appDir}: WRITE STATUS UNKNOWN — ${outcome.writeErrorMessage}`,
-        outcome.rereadErrorMessage === null
-          ? "  post-write state was re-read successfully:"
-          : `  the post-write re-read also failed — ${outcome.rereadErrorMessage}`,
+        rereadLine,
         ...(outcome.diff === null ? [] : renderAppDiff(appDir, outcome.diff).slice(1)),
       ];
+    }
     case "error":
       return [`${appDir}: ERROR — ${outcome.errorMessage}`];
   }

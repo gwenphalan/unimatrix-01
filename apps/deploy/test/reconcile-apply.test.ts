@@ -304,6 +304,25 @@ void test("needsDeploy is false when only autoDeploy was written", async () => {
   assert.equal(outcome.needsDeploy, false);
 });
 
+void test("applied-but-drifted: compose.update resolves, but the re-read still shows the written setting drifted", async () => {
+  const { client, calls } = stubClient({
+    // Both reads return the same drifted value — the write succeeded on the wire (a 200 that
+    // silently changed nothing, or a typo'd field Dokploy's input schema stripped) but never took.
+    getCompose: () => Promise.resolve(composeDetail({ branch: "staging" })),
+  });
+
+  const outcome = await applyAppSettings(client, DESIRED, "api");
+
+  assert.equal(calls.updateComposeSettings, 1);
+  assert.equal(calls.getCompose, 2);
+  assert.equal(outcome.outcome, "applied-but-drifted");
+  if (outcome.outcome !== "applied-but-drifted") throw new Error("unreachable");
+  assert.deepEqual(outcome.written, ["branch"]);
+  assert.equal(outcome.diff.verdict, "matched");
+  if (outcome.diff.verdict !== "matched") throw new Error("unreachable");
+  assert.equal(outcome.diff.inSync, false);
+});
+
 void test("a write that throws still produces write-status-unknown carrying the observed post-write state", async () => {
   const { client } = stubClient({
     getCompose: () => Promise.resolve(composeDetail({ branch: "staging" })),
