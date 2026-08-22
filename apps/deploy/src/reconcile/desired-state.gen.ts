@@ -14,6 +14,7 @@ export const DEPLOY_DESIRED_STATE: DeployDesiredState = [
     image: "ghcr.io/unimatrixcore/unimatrix-admin",
     containerPort: 8080,
     env: [{ name: "IMAGE_TAG", required: true }],
+    publicStatus: false,
   },
   {
     appDir: "api",
@@ -23,9 +24,13 @@ export const DEPLOY_DESIRED_STATE: DeployDesiredState = [
     image: "ghcr.io/unimatrixcore/unimatrix-api",
     containerPort: 3001,
     env: [
-      { name: "CLERK_JWT_KEY", required: true },
-      { name: "CLERK_PUBLISHABLE_KEY", required: true },
-      { name: "CLERK_SECRET_KEY", required: true },
+      { name: "CLERK_JWT_KEY", required: true, secretName: "platform/clerk-jwt-key" },
+      {
+        name: "CLERK_PUBLISHABLE_KEY",
+        required: true,
+        secretName: "platform/clerk-publishable-key",
+      },
+      { name: "CLERK_SECRET_KEY", required: true, secretName: "platform/clerk-secret-key" },
       { name: "CORS_ALLOWED_ORIGINS", required: true },
       { name: "IMAGE_TAG", required: true },
       { name: "SECRETS_BASE_URL", required: true },
@@ -34,6 +39,7 @@ export const DEPLOY_DESIRED_STATE: DeployDesiredState = [
       { name: "SECRETS_SERVICE_TOKEN", required: true },
       { name: "SECRETS_TLS_CERT_BASE64", required: true },
     ],
+    publicStatus: true,
   },
   {
     appDir: "auth",
@@ -43,6 +49,7 @@ export const DEPLOY_DESIRED_STATE: DeployDesiredState = [
     image: "ghcr.io/unimatrixcore/unimatrix-auth",
     containerPort: 8080,
     env: [{ name: "IMAGE_TAG", required: true }],
+    publicStatus: false,
   },
   {
     appDir: "cflop",
@@ -52,6 +59,7 @@ export const DEPLOY_DESIRED_STATE: DeployDesiredState = [
     image: "ghcr.io/unimatrixcore/unimatrix-cflop",
     containerPort: 8080,
     env: [{ name: "IMAGE_TAG", required: true }],
+    publicStatus: true,
   },
   {
     appDir: "deploy",
@@ -65,6 +73,7 @@ export const DEPLOY_DESIRED_STATE: DeployDesiredState = [
       { name: "DOKPLOY_BASE_URL", required: true },
       { name: "IMAGE_TAG", required: true },
     ],
+    publicStatus: false,
   },
   {
     appDir: "secrets",
@@ -79,6 +88,7 @@ export const DEPLOY_DESIRED_STATE: DeployDesiredState = [
       { name: "SECRETS_TLS_CERT_BASE64", required: true },
       { name: "SECRETS_TLS_KEY_BASE64", required: true },
     ],
+    publicStatus: false,
   },
   {
     appDir: "web",
@@ -88,5 +98,6 @@ export const DEPLOY_DESIRED_STATE: DeployDesiredState = [
     image: "ghcr.io/unimatrixcore/unimatrix-web",
     containerPort: 8080,
     env: [{ name: "IMAGE_TAG", required: true }],
+    publicStatus: true,
   },
 ];

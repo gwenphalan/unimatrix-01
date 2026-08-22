@@ -1,8 +1,14 @@
 import { nodeApiApp } from "@unimatrix/deploy-config";
+import {
+  CLERK_JWT_KEY_SECRET,
+  CLERK_PUBLISHABLE_KEY_SECRET,
+  CLERK_SECRET_KEY_SECRET,
+} from "@unimatrix/shared/secrets-registry";
 
 export default nodeApiApp({
   appDir: "api",
   packageName: "@unimatrix/api",
+  publicStatus: true,
   dockerfileEnv: [
     { name: "NODE_ENV", value: "production" },
     { name: "HOST", value: "0.0.0.0" },
@@ -28,7 +34,7 @@ export default nodeApiApp({
     { name: "CORS_ALLOWED_ORIGINS", value: { kind: "variable", name: "CORS_ALLOWED_ORIGINS" } },
     {
       name: "CLERK_SECRET_KEY",
-      value: { kind: "variable", name: "CLERK_SECRET_KEY" },
+      value: { kind: "secrets-store", name: "CLERK_SECRET_KEY", secret: CLERK_SECRET_KEY_SECRET },
       comment: [
         "Required together in production — the API refuses to boot without all",
         "three (`parseClerkConfig` in apps/api/src/config.ts). Compose passes",
@@ -38,10 +44,17 @@ export default nodeApiApp({
         "as every content route 404ing.",
       ],
     },
-    { name: "CLERK_PUBLISHABLE_KEY", value: { kind: "variable", name: "CLERK_PUBLISHABLE_KEY" } },
+    {
+      name: "CLERK_PUBLISHABLE_KEY",
+      value: {
+        kind: "secrets-store",
+        name: "CLERK_PUBLISHABLE_KEY",
+        secret: CLERK_PUBLISHABLE_KEY_SECRET,
+      },
+    },
     {
       name: "CLERK_JWT_KEY",
-      value: { kind: "variable", name: "CLERK_JWT_KEY" },
+      value: { kind: "secrets-store", name: "CLERK_JWT_KEY", secret: CLERK_JWT_KEY_SECRET },
       comment: [
         "A PEM public key. Clerk strips newlines before use, so a single-line",
         "value works and avoids a multi-line env value the platform may truncate.",

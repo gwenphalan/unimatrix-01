@@ -147,7 +147,7 @@
       "project": ["src/**/*.ts", "test/**/*.ts"],
     },
     "packages/shared": {
-      "entry": ["src/index.ts", "test/**/*.test.ts"],
+      "entry": ["src/index.ts", "src/secrets-registry.ts", "test/**/*.test.ts"],
       "project": ["src/**/*.ts", "test/**/*.ts"],
     },
     "packages/ui": {

@@ -32,6 +32,7 @@ const ONE_APP_DESIRED: DeployDesiredState = [
       { name: "IMAGE_TAG", required: true },
       { name: "CLERK_SECRET_KEY", required: true },
     ],
+    publicStatus: true,
   },
 ];
 

@@ -3,8 +3,8 @@ import { isIP } from "node:net";
 /**
  * This module imports no workspace package, and must not start:
  * `infra/scripts/validate-deploy-config.mjs` imports it directly on every
- * `pnpm check`, before anything is built, and `@unimatrix/shared` resolves
- * only through a `dist` that does not exist at that point.
+ * `pnpm check`, before anything is built, and `@unimatrix/shared`'s main
+ * entry resolves only through a `dist` that does not exist at that point.
  * `apps/secrets/src/config.ts` carries the same constraint.
  */
 

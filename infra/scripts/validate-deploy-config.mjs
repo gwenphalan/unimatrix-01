@@ -140,6 +140,12 @@ const { validateAppConfig } = await import(
   pathToFileURL(join(repoRoot, "packages", "deploy-config", "src", "index.ts")).href
 );
 
+const { SECRET_REGISTRY } = await import(
+  pathToFileURL(join(repoRoot, "packages", "shared", "src", "secrets-registry.ts")).href
+);
+
+const registeredSecretNames = new Set(SECRET_REGISTRY.map((entry) => entry.name));
+
 /** Resolves one compose env value to what the probe should see. */
 function resolveComposeEnvValue(value) {
   if (value.kind === "literal") {
@@ -185,6 +191,24 @@ for (const app of appsWithConfig) {
   if (schemaFailures.length > 0) continue;
 
   if (config.kind !== "node-api") continue;
+
+  // Every `secrets-store` value must name an entry that actually exists in
+  // `SECRET_REGISTRY`. `DeploySecretRegistryEntry` is structural, so an inline
+  // object literal satisfies it and carries an arbitrary name straight into the
+  // generated desired state — where the next consumer will try to resolve it
+  // against the store and find nothing. `packages/deploy-config` cannot make
+  // this closed itself: it has no dependencies, so the only way it could hold
+  // the set of valid names is a copy, and a copied registry is the drift this
+  // reference exists to remove.
+  for (const env of config.composeEnv) {
+    if (env.value.kind !== "secrets-store") continue;
+    if (registeredSecretNames.has(env.value.secret.name)) continue;
+    fail(
+      `apps/${app}/deploy.config.ts — composeEnv ${env.name} is sourced from secrets-store entry ` +
+        `${JSON.stringify(env.value.secret.name)}, which is not in SECRET_REGISTRY. Import the ` +
+        `exported constant from @unimatrix/shared/secrets-registry rather than writing the entry inline.`,
+    );
+  }
   sawNodeApiConfig = true;
 
   const probe = NODE_API_CONFIG_PROBES[app];

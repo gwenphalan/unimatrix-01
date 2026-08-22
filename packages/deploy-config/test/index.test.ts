@@ -4,10 +4,18 @@ import {
   composeFor,
   deployDesiredStateModule,
   dockerfileFor,
+  type InternalServiceUrlOptions,
+  internalServiceUrl,
   nodeApiApp,
   staticSpaApp,
   validateAppConfig,
 } from "../src/index.js";
+
+const TEST_SECRET = {
+  name: "platform/clerk-secret-key",
+  tier: "platform",
+  consumedBy: "a test fixture only.",
+};
 
 const FROM_LINES = {
   base: "FROM node:${NODE_VERSION}-alpine AS base",
@@ -294,6 +302,60 @@ describe("nodeApiApp / dockerfileFor / composeFor", () => {
   });
 });
 
+describe("DeployComposeValue: secrets-store and generated", () => {
+  it("renders a secrets-store value as a bare ${NAME}, with the registry name never leaking into compose output", () => {
+    const config = nodeApiApp({
+      appDir: "api",
+      packageName: "@unimatrix/api",
+      dockerfileEnv: [],
+      composeEnv: [
+        {
+          name: "CLERK_SECRET_KEY",
+          value: { kind: "secrets-store", name: "CLERK_SECRET_KEY", secret: TEST_SECRET },
+        },
+      ],
+      volumes: [],
+    });
+
+    const compose = composeFor(config);
+    expect(compose).toContain("CLERK_SECRET_KEY: ${CLERK_SECRET_KEY}");
+    expect(compose).not.toContain("platform/");
+  });
+
+  it("never renders a :-default for a secrets-store value, under any input", () => {
+    const config = nodeApiApp({
+      appDir: "api",
+      packageName: "@unimatrix/api",
+      dockerfileEnv: [],
+      composeEnv: [
+        {
+          name: "CLERK_SECRET_KEY",
+          value: { kind: "secrets-store", name: "CLERK_SECRET_KEY", secret: TEST_SECRET },
+        },
+      ],
+      volumes: [],
+    });
+
+    // DeployComposeValue's secrets-store variant has no `default` field at
+    // all, so there is no input that could make this render `:-`.
+    expect(composeFor(config)).not.toContain(":-");
+  });
+
+  it("renders a generated value as its baked literal", () => {
+    const config = nodeApiApp({
+      appDir: "api",
+      packageName: "@unimatrix/api",
+      dockerfileEnv: [],
+      composeEnv: [
+        { name: "COMPUTED", value: { kind: "generated", name: "COMPUTED", value: "baked-value" } },
+      ],
+      volumes: [],
+    });
+
+    expect(composeFor(config)).toContain("COMPUTED: baked-value");
+  });
+});
+
 describe("validateAppConfig", () => {
   it("passes a well-formed static SPA config", () => {
     const config = staticSpaApp({
@@ -369,6 +431,62 @@ describe("validateAppConfig", () => {
     const failures = validateAppConfig(config);
     expect(failures).toHaveLength(1);
     expect(failures[0]).toContain("empty-string default");
+  });
+
+  it("rejects a secrets-store composeEnv entry with an empty compose variable name", () => {
+    const config = nodeApiApp({
+      appDir: "api",
+      packageName: "@unimatrix/api",
+      dockerfileEnv: [],
+      composeEnv: [
+        {
+          name: "CLERK_SECRET_KEY",
+          value: { kind: "secrets-store", name: "", secret: TEST_SECRET },
+        },
+      ],
+      volumes: [],
+    });
+    expect(validateAppConfig(config)).toEqual([
+      "api: composeEnv CLERK_SECRET_KEY is secrets-store with an empty compose variable name, " +
+        "so the compose file would render ${}.",
+    ]);
+  });
+
+  it("rejects a secrets-store composeEnv entry with an empty registry entry name", () => {
+    const config = nodeApiApp({
+      appDir: "api",
+      packageName: "@unimatrix/api",
+      dockerfileEnv: [],
+      composeEnv: [
+        {
+          name: "CLERK_SECRET_KEY",
+          value: {
+            kind: "secrets-store",
+            name: "CLERK_SECRET_KEY",
+            secret: { name: "", tier: "platform", consumedBy: "test" },
+          },
+        },
+      ],
+      volumes: [],
+    });
+    expect(validateAppConfig(config)).toEqual([
+      "api: composeEnv CLERK_SECRET_KEY is secrets-store with an empty registry entry name. " +
+        "Pass the exported constant from @unimatrix/shared/secrets-registry, not an inline object.",
+    ]);
+  });
+
+  it("rejects a generated composeEnv entry with an empty computed value", () => {
+    const config = nodeApiApp({
+      appDir: "api",
+      packageName: "@unimatrix/api",
+      dockerfileEnv: [],
+      composeEnv: [{ name: "COMPUTED", value: { kind: "generated", name: "COMPUTED", value: "" } }],
+      volumes: [],
+    });
+    expect(validateAppConfig(config)).toEqual([
+      "api: composeEnv COMPUTED is generated with an empty computed value, which bakes an empty " +
+        "string into the compose file exactly as silently as no value at all.",
+    ]);
   });
 
   it("rejects a volume mount path that is not absolute", () => {
@@ -516,29 +634,49 @@ describe("deployDesiredStateModule", () => {
     expect(source.indexOf('appDir: "admin"')).toBeLessThan(source.indexOf('appDir: "web"'));
   });
 
-  it("carries IMAGE_TAG (required) plus every variable-kind composeEnv entry, sorted by name", () => {
+  it("carries IMAGE_TAG (required) plus every variable- and secrets-store-kind composeEnv entry, sorted by name", () => {
     const config = nodeApiApp({
       appDir: "api",
       packageName: "@unimatrix/api",
       dockerfileEnv: [],
       composeEnv: [
         { name: "HOST", value: { kind: "literal", value: "0.0.0.0" } },
+        {
+          name: "COMPUTED",
+          value: { kind: "generated", name: "COMPUTED", value: "baked-value" },
+        },
         { name: "CLERK_SECRET_KEY", value: { kind: "variable", name: "CLERK_SECRET_KEY" } },
         {
           name: "TRUST_PROXY",
           value: { kind: "variable", name: "TRUST_PROXY", default: "1" },
+        },
+        {
+          name: "CLERK_JWT_KEY",
+          value: { kind: "secrets-store", name: "CLERK_JWT_KEY", secret: TEST_SECRET },
         },
       ],
       volumes: [],
     });
     const source = deployDesiredStateModule([config]);
 
-    // A literal-kind entry (HOST) never appears — only variable-kind entries do.
+    // Neither a literal-kind entry (HOST) nor a generated-kind entry
+    // (COMPUTED) appears at all — only variable- and secrets-store-kind do.
     expect(source).not.toContain('name: "HOST"');
+    expect(source).not.toContain('name: "COMPUTED"');
     expect(source).toContain('{ name: "CLERK_SECRET_KEY", required: true }');
+    expect(source).toContain(
+      '{ name: "CLERK_JWT_KEY", required: true, secretName: "platform/clerk-secret-key" }',
+    );
+    // A plain variable and IMAGE_TAG both omit the secretName key entirely,
+    // rather than carrying it as `undefined`.
     expect(source).toContain('{ name: "IMAGE_TAG", required: true }');
     expect(source).toContain('{ name: "TRUST_PROXY", required: false }');
-    // Sorted: CLERK_SECRET_KEY < IMAGE_TAG < TRUST_PROXY.
+    expect(source).not.toContain('{ name: "IMAGE_TAG", required: true, secretName');
+    expect(source).not.toContain('{ name: "TRUST_PROXY", required: false, secretName');
+    // Sorted: CLERK_JWT_KEY < CLERK_SECRET_KEY < IMAGE_TAG < TRUST_PROXY.
+    expect(source.indexOf('name: "CLERK_JWT_KEY"')).toBeLessThan(
+      source.indexOf('name: "CLERK_SECRET_KEY"'),
+    );
     expect(source.indexOf('name: "CLERK_SECRET_KEY"')).toBeLessThan(
       source.indexOf('name: "IMAGE_TAG"'),
     );
@@ -571,5 +709,65 @@ describe("deployDesiredStateModule", () => {
 
     expect(deployDesiredStateModule([spa])).toContain("containerPort: 8080");
     expect(deployDesiredStateModule([api])).toContain("containerPort: 3001");
+  });
+});
+
+describe("publicStatus", () => {
+  it("defaults to false on a static-spa config", () => {
+    const config = staticSpaApp({ appDir: "web", packageName: "@unimatrix/web", buildArgs: [] });
+    expect(deployDesiredStateModule([config])).toContain("publicStatus: false,");
+  });
+
+  it("defaults to false on a node-api config", () => {
+    const config = nodeApiApp({
+      appDir: "api",
+      packageName: "@unimatrix/api",
+      dockerfileEnv: [],
+      composeEnv: [],
+      volumes: [],
+    });
+    expect(deployDesiredStateModule([config])).toContain("publicStatus: false,");
+  });
+
+  it("carries true when opted in on a static-spa config", () => {
+    const config = staticSpaApp({
+      appDir: "web",
+      packageName: "@unimatrix/web",
+      publicStatus: true,
+      buildArgs: [],
+    });
+    expect(deployDesiredStateModule([config])).toContain("publicStatus: true,");
+  });
+
+  it("carries true when opted in on a node-api config", () => {
+    const config = nodeApiApp({
+      appDir: "api",
+      packageName: "@unimatrix/api",
+      publicStatus: true,
+      dockerfileEnv: [],
+      composeEnv: [],
+      volumes: [],
+    });
+    expect(deployDesiredStateModule([config])).toContain("publicStatus: true,");
+  });
+});
+
+describe("internalServiceUrl", () => {
+  it("defaults to the https scheme", () => {
+    expect(internalServiceUrl("secrets")).toBe("https://secrets:3001");
+  });
+
+  it("accepts an explicit scheme", () => {
+    expect(internalServiceUrl("secrets", { scheme: "http" })).toBe("http://secrets:3001");
+  });
+
+  it("tracks the node-api container port by default, and the static-spa port when named", () => {
+    expect(internalServiceUrl("api", { kind: "node-api" })).toBe("https://api:3001");
+    expect(internalServiceUrl("web", { kind: "static-spa" })).toBe("https://web:8080");
+  });
+
+  it("takes its options as the exported InternalServiceUrlOptions type", () => {
+    const options: InternalServiceUrlOptions = { kind: "static-spa", scheme: "http" };
+    expect(internalServiceUrl("web", options)).toBe("http://web:8080");
   });
 });
