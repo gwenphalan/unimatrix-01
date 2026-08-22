@@ -16,8 +16,9 @@ this stack deploys, and for apply's full refusal set.
   onto the Fastify instance and therefore reachable from every handler and every log call. No log,
   error message, or derived value of it (including a length or a prefix) may exist.
 - **`src/config.ts` imports no workspace package.** `infra/scripts/validate-deploy-config.mjs`
-  imports it directly, before anything is built, and `@unimatrix/shared`'s exports map points at
-  `dist` — the same reasoning as `apps/secrets/src/config.ts`.
+  imports it directly, before anything is built, and `@unimatrix/shared`'s main entry resolves only
+  through `dist` — the same reasoning as `apps/secrets/src/config.ts`. (Its `./secrets-registry`
+  subpath points at `src` instead, for the same reason: `deploy.config.ts` files load the same way.)
 - **`/health` is the only route, and adding a second one means adding caller authentication
   first.** This service is unrouted — no domain, no Traefik entry — but that is not what makes it
   private: it holds a manage-scoped Dokploy token and sits on `dokploy-network` alongside every app
@@ -56,8 +57,9 @@ this stack deploys, and for apply's full refusal set.
   future env-apply PR must widen this same procedure rather than reaching for a narrower one.
 - **`src/reconcile/desired-state.gen.ts` is generated** — edit the relevant
   `apps/<app>/deploy.config.ts` and run `node ./infra/scripts/generate-deploy-config.mjs`, not this
-  file. It carries no value from any source, only structure (env var names and whether they are
-  required).
+  file. It carries no value from any source, only structure: a `secrets-store`-kind env entry names
+  the secrets-store key it expects (`secretName`) but never that key's stored value, and each
+  service's `publicStatus` is a policy flag, not a credential.
 - **No env value crosses `src/reconcile/`'s boundary, ever — only a key and a closed state.**
   `readEnvKeyStates` (`src/dokploy/schemas.ts`) reduces Dokploy's plaintext `env` blob to
   `{key, blank}` inside its own schema transform, so the plaintext exists only as that function's

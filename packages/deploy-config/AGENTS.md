@@ -22,6 +22,9 @@ generated-files rule.
   touches a `deploy.config.ts` or reddens the generator's drift check.
 - **No subdomain or Dokploy metadata.** Only fields that generate output. The
   subdomain/container-port duplication with `docs/deployment.md` is not collapsed here.
+  `publicStatus` is not an exception: it is a policy declaration (may a stranger see this service's
+  health?), not a mirror of whether Dokploy has a Domains entry for it — a service can be monitored
+  without being disclosed — and it does generate output, into `desired-state.gen.ts`.
 
 ## 3. Loading mechanics
 Plain Node (24.18.0) strips this package's TypeScript with no build step and no flag, the same
@@ -33,6 +36,9 @@ consequences:
   a bare specifier to resolve through.
 - An app's `deploy.config.ts` needs the `workspace:*` dependency edge in that app's
   `devDependencies`, so it resolves only after `pnpm install`.
+- A `deploy.config.ts` may not import `@unimatrix/shared`'s `.` entry — the same "loaded before
+  anything is built" constraint applies, and that entry resolves only through `dist`. Reach the
+  secrets registry through `@unimatrix/shared/secrets-registry`, a subpath that points at raw source.
 
 ## 4. Conventions
 - **A compose file names `image:` and never `build:` — not even alongside it "for local
