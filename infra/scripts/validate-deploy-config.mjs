@@ -148,7 +148,11 @@ const registeredSecretNames = new Set(SECRET_REGISTRY.map((entry) => entry.name)
 
 /** Resolves one compose env value to what the probe should see. */
 function resolveComposeEnvValue(value) {
-  if (value.kind === "literal") {
+  // `generated` is baked into the compose file exactly as computed, so the
+  // probe must read it rather than fall through to a placeholder: a
+  // placeholder that happens to match today would go on passing after the
+  // generator's output changed, which is the drift this probe exists to catch.
+  if (value.kind === "literal" || value.kind === "generated") {
     const trimmed = value.value.trim();
     return /^".*"$/u.test(trimmed) ? trimmed.slice(1, -1) : trimmed;
   }

@@ -1,4 +1,4 @@
-import { nodeApiApp } from "@unimatrix/deploy-config";
+import { internalServiceUrl, nodeApiApp } from "@unimatrix/deploy-config";
 import {
   CLERK_JWT_KEY_SECRET,
   CLERK_PUBLISHABLE_KEY_SECRET,
@@ -31,7 +31,18 @@ export default nodeApiApp({
     { name: "NODE_ENV", value: { kind: "literal", value: "production" } },
     { name: "LOG_LEVEL", value: { kind: "literal", value: "info" } },
     { name: "TRUST_PROXY", value: { kind: "literal", value: '"1"' } },
-    { name: "CORS_ALLOWED_ORIGINS", value: { kind: "variable", name: "CORS_ALLOWED_ORIGINS" } },
+    {
+      name: "CORS_ALLOWED_ORIGINS",
+      value: { kind: "variable", name: "CORS_ALLOWED_ORIGINS" },
+      comment: [
+        "This and the three CLERK_* references below are bare, with no default,",
+        "on purpose. An unset variable reaches the container as an empty string,",
+        "not as absent, and this API's loader refuses an empty value — so a stack",
+        "deployed before its values exist restart-loops, which reads from outside",
+        "as every content route 404ing. Set all four in the deployment platform",
+        "before deploying this stack.",
+      ],
+    },
     {
       name: "CLERK_SECRET_KEY",
       value: { kind: "secrets-store", name: "CLERK_SECRET_KEY", secret: CLERK_SECRET_KEY_SECRET },
@@ -62,19 +73,18 @@ export default nodeApiApp({
     },
     {
       name: "SECRETS_BASE_URL",
-      value: { kind: "variable", name: "SECRETS_BASE_URL" },
+      value: { kind: "generated", name: "SECRETS_BASE_URL", value: internalServiceUrl("secrets") },
       comment: [
         "How this API reaches the secrets store, over the shared",
         "unimatrix-secrets network declared below. The host must be the store's",
-        "Compose service name (`https://secrets:3001`) — that name is the SAN on",
-        "its certificate, and hostname verification is on.",
+        "Compose service name — that name is the SAN on its certificate, and",
+        "hostname verification is on.",
         "",
-        "All five of these are bare references with no default on purpose. An",
-        "unset variable reaches the container as an empty string, not as absent,",
-        "and this API's loader refuses an empty value — so a stack deployed",
-        "before its values exist restart-loops, which reads from outside as",
-        "every content route 404ing. Set all five in the deployment platform",
-        "before deploying this stack.",
+        "Generated rather than set in the deployment platform: both halves are",
+        "already declared here. The host is the store's own appDir, and the port",
+        "is the shared node-api container port every service is generated",
+        "against, so a hand-typed value could only ever agree with them or be",
+        "wrong.",
       ],
     },
     { name: "SECRETS_SERVICE_TOKEN", value: { kind: "variable", name: "SECRETS_SERVICE_TOKEN" } },
