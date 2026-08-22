@@ -61,13 +61,25 @@ export interface DeployBuildArg {
   readonly comment?: readonly string[];
 }
 
-export interface StaticSpaAppConfig {
-  readonly kind: "static-spa";
+/**
+ * Fields shared by both app kinds. `publicStatus` is a declaration about
+ * whether a stranger may see this service's health, decided by policy — the
+ * three surfaces an anonymous visitor actually uses — not mirrored from
+ * Dokploy's Domains table: a service can be monitored without being
+ * disclosed, and this field says nothing about whether one has a hostname at
+ * all. Defaults to `false` — see {@link DeployDesiredService}.
+ */
+interface DeployAppConfigBase {
   /** The app's directory under `apps/`, e.g. `"web"`. */
   readonly appDir: string;
   /** The workspace package name, e.g. `"@unimatrix/web"` — `apps/auth`
    *  builds `@unimatrix/auth-app`, so this is never derived from `appDir`. */
   readonly packageName: string;
+  readonly publicStatus?: boolean;
+}
+
+export interface StaticSpaAppConfig extends DeployAppConfigBase {
+  readonly kind: "static-spa";
   readonly buildArgs: readonly DeployBuildArg[];
   /**
    * Repo-root-relative paths `COPY`d into the build stage on top of the
@@ -79,10 +91,44 @@ export interface StaticSpaAppConfig {
   readonly extraBuildPaths?: readonly string[];
 }
 
-/** A compose value: either a literal or a `${NAME}` / `${NAME:-default}` substitution. */
+/** One entry in the deployment's secrets store, structural rather than
+ *  a copy of `SecretTier` — this package never reads `tier` or `consumedBy`,
+ *  it only needs the shape narrow enough that restating it inline is
+ *  obviously wrong. Pass the exported constant from
+ *  `@unimatrix/shared/secrets-registry`, not an inline object. */
+export interface DeploySecretRegistryEntry {
+  readonly name: string;
+  readonly tier: string;
+  readonly consumedBy: string;
+}
+
+/**
+ * A compose value, one of four sources:
+ * - `literal` — the literal value, baked into the compose file as-is.
+ * - `variable` — `${NAME}` or `${NAME:-default}`, resolved by the deployment
+ *   platform at container start.
+ * - `secrets-store` — `${NAME}`, resolved the same way as `variable`, but the
+ *   value the platform is expected to hold comes from the secrets store
+ *   rather than being platform-set directly. Carries no `default`,
+ *   deliberately: a store-sourced value must never have a literal fallback
+ *   inlined into a committed compose file in a public repo, and the absence
+ *   of the field is what makes that inexpressible rather than merely
+ *   discouraged.
+ * - `generated` — a value this package computed, baked into the compose file
+ *   like `literal`. Carries `name` for symmetry and legibility in the
+ *   config; it is not rendered, and — like `literal` — never reaches the
+ *   desired-state manifest's `env` (see {@link DeployDesiredEnvVar}), because
+ *   Dokploy never holds it and there is nothing to reconcile.
+ */
 export type DeployComposeValue =
   | { readonly kind: "literal"; readonly value: string }
-  | { readonly kind: "variable"; readonly name: string; readonly default?: string };
+  | { readonly kind: "variable"; readonly name: string; readonly default?: string }
+  | {
+      readonly kind: "secrets-store";
+      readonly name: string;
+      readonly secret: DeploySecretRegistryEntry;
+    }
+  | { readonly kind: "generated"; readonly name: string; readonly value: string };
 
 /** One `ENV NAME=value` baked into the API runtime image as its own default. */
 export interface NodeApiDockerfileEnvVar {
@@ -135,10 +181,8 @@ export interface DeployNetwork {
 export type DeployHealthcheckScheme =
   "http" | "https" | { readonly kind: "variable"; readonly name: string };
 
-export interface NodeApiAppConfig {
+export interface NodeApiAppConfig extends DeployAppConfigBase {
   readonly kind: "node-api";
-  readonly appDir: string;
-  readonly packageName: string;
   /** `ENV` lines in the Dockerfile's runtime stage — image-baked defaults. */
   readonly dockerfileEnv: readonly NodeApiDockerfileEnvVar[];
   /** The compose service's `environment:` block — deploy-time overrides. */
@@ -179,6 +223,27 @@ export function staticSpaApp(config: Omit<StaticSpaAppConfig, "kind">): StaticSp
 /** One call site per `node-api` app (every `deploy.config.ts` calling this) — see the package `AGENTS.md` §4. */
 export function nodeApiApp(config: Omit<NodeApiAppConfig, "kind">): NodeApiAppConfig {
   return { kind: "node-api", ...config };
+}
+
+/**
+ * The in-network URL of another compose service, on whichever Docker network
+ * both services share — `https://<appDir>:<containerPort>`. Derives the port
+ * from the same constants {@link desiredServiceForConfig} uses, so a config
+ * naming a wrong port is impossible rather than merely discouraged.
+ *
+ * Has no call site in any `apps/*\/deploy.config.ts` yet. Its first is
+ * `apps/api/deploy.config.ts`'s `SECRETS_BASE_URL`, still a bare `variable`
+ * entry — converting it changes `infra/docker/api-compose.yaml` and the
+ * API's live connection to the secrets store, and belongs in its own PR.
+ */
+export function internalServiceUrl(
+  appDir: string,
+  options?: { readonly kind?: DeployAppConfig["kind"]; readonly scheme?: string },
+): string {
+  const kind = options?.kind ?? "node-api";
+  const port = kind === "static-spa" ? STATIC_SPA_CONTAINER_PORT : NODE_API_CONTAINER_PORT;
+  const scheme = options?.scheme ?? "https";
+  return `${scheme}://${appDir}:${String(port)}`;
 }
 
 function hasEmptyStringDefault(defaultValue: string | undefined): boolean {
@@ -278,6 +343,26 @@ export function validateAppConfig(config: DeployAppConfig): readonly string[] {
     if (env.value.kind === "variable" && hasEmptyStringDefault(env.value.default)) {
       failures.push(`${label}: composeEnv ${env.name} has ${EMPTY_DEFAULT_MESSAGE}`);
     }
+    if (env.value.kind === "secrets-store") {
+      if (env.value.name.length === 0) {
+        failures.push(
+          `${label}: composeEnv ${env.name} is secrets-store with an empty compose variable ` +
+            `name, so the compose file would render \${}.`,
+        );
+      }
+      if (env.value.secret.name.length === 0) {
+        failures.push(
+          `${label}: composeEnv ${env.name} is secrets-store with an empty registry entry name. ` +
+            `Pass the exported constant from @unimatrix/shared/secrets-registry, not an inline object.`,
+        );
+      }
+    }
+    if (env.value.kind === "generated" && env.value.value.length === 0) {
+      failures.push(
+        `${label}: composeEnv ${env.name} is generated with an empty computed value, which ` +
+          `bakes an empty string into the compose file exactly as silently as no value at all.`,
+      );
+    }
   }
 
   for (const volume of config.volumes) {
@@ -333,9 +418,18 @@ function formatComposeVarReference(name: string, defaultValue: string | undefine
 }
 
 function formatComposeValue(value: DeployComposeValue): string {
-  return value.kind === "literal"
-    ? value.value
-    : formatComposeVarReference(value.name, value.default);
+  switch (value.kind) {
+    case "literal":
+      return value.value;
+    case "variable":
+      return formatComposeVarReference(value.name, value.default);
+    case "secrets-store":
+      // Bare form only — see DeployComposeValue's doc comment for why this
+      // variant can hold no default.
+      return formatComposeVarReference(value.name, undefined);
+    case "generated":
+      return value.value;
+  }
 }
 
 function formatCommentLines(comment: readonly string[] | undefined): string[] {
@@ -596,17 +690,21 @@ export function composeFor(config: DeployAppConfig): string {
   return lines.join("\n") + "\n";
 }
 
-/** One compose-env variable a service's desired state declares. No value — see
- *  {@link DeployDesiredService}. */
+/** One compose-env variable a service's desired state declares. No value — only the key
+ *  and whether Dokploy must hold it — see {@link DeployDesiredService}. */
 export interface DeployDesiredEnvVar {
   readonly name: string;
   /** `false` only when the variable carries a default; a bare `${NAME}` reference is required. */
   readonly required: boolean;
+  /** Set only for a `secrets-store` entry, to the registry entry's name — a key naming which
+   *  secret the deployment platform is expected to hold under this variable, never a value. */
+  readonly secretName?: string;
 }
 
 /**
- * The desired-state shape for one service: `apps/deploy`'s reconcile report and apply both compare
- * it against what Dokploy actually holds.
+ * The desired-state shape for one service: `apps/deploy`'s reconcile report and apply compare
+ * everything but `publicStatus` against what Dokploy actually holds — `publicStatus` is a policy
+ * declaration with no Dokploy counterpart to reconcile against.
  */
 export interface DeployDesiredService {
   readonly appDir: string;
@@ -616,8 +714,11 @@ export interface DeployDesiredService {
   readonly composePath: string;
   readonly image: string;
   readonly containerPort: number;
-  /** `IMAGE_TAG` plus every `composeEnv` entry whose value is a variable reference, sorted by name. */
+  /** `IMAGE_TAG` plus every `composeEnv` entry sourced from `variable` or `secrets-store`, sorted
+   *  by name. A `literal` or `generated` entry never appears — neither is Dokploy's to hold. */
   readonly env: readonly DeployDesiredEnvVar[];
+  /** Whether a stranger may see this service's health — see {@link DeployAppConfigBase}. */
+  readonly publicStatus: boolean;
 }
 
 export type DeployDesiredState = readonly DeployDesiredService[];
@@ -629,6 +730,12 @@ function desiredEnvVars(config: DeployAppConfig): DeployDesiredEnvVar[] {
     for (const env of config.composeEnv) {
       if (env.value.kind === "variable") {
         vars.push({ name: env.value.name, required: env.value.default === undefined });
+      } else if (env.value.kind === "secrets-store") {
+        vars.push({
+          name: env.value.name,
+          required: true,
+          secretName: env.value.secret.name,
+        });
       }
     }
   }
@@ -646,6 +753,7 @@ function desiredServiceForConfig(config: DeployAppConfig): DeployDesiredService 
     containerPort:
       config.kind === "static-spa" ? STATIC_SPA_CONTAINER_PORT : NODE_API_CONTAINER_PORT,
     env: desiredEnvVars(config),
+    publicStatus: config.publicStatus ?? false,
   };
 }
 
@@ -683,12 +791,15 @@ export function deployDesiredStateModule(configs: readonly DeployAppConfig[]): s
     );
 
     for (const envVar of service.env) {
+      const secretNameField =
+        envVar.secretName === undefined ? "" : `, secretName: ${JSON.stringify(envVar.secretName)}`;
       lines.push(
-        `      { name: ${JSON.stringify(envVar.name)}, required: ${String(envVar.required)} },`,
+        `      { name: ${JSON.stringify(envVar.name)}, required: ${String(envVar.required)}` +
+          `${secretNameField} },`,
       );
     }
 
-    lines.push("    ],", "  },");
+    lines.push("    ],", `    publicStatus: ${String(service.publicStatus)},`, "  },");
   }
 
   lines.push("];", "");

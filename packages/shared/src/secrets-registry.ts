@@ -1,3 +1,20 @@
+/**
+ * Also reachable as `@unimatrix/shared/secrets-registry`, a subpath pointing
+ * at this file directly rather than `dist` (see `package.json`'s `exports`).
+ * Plain Node loads a `deploy.config.ts` importing that subpath with no build
+ * — `infra/scripts/generate-deploy-config.mjs` runs before anything is
+ * built — so every import in this file must stay type-only: Node's type
+ * stripping does not remap a `.js` specifier to a `.ts` file, so a future
+ * value import written with this repo's `.js` convention would break
+ * `pnpm check:deploy-config` (measured).
+ *
+ * The subpath is safe for build-time consumers only. `packages/shared`
+ * declares `files: ["dist"]` and is a runtime dependency of `apps/api`,
+ * shipped via `pnpm deploy --prod --legacy`; runtime code must keep
+ * importing this registry from `@unimatrix/shared`'s main entry, never from
+ * this subpath — a runtime `src` import would typecheck, build, and fail
+ * only inside the container, where `src` never ships.
+ */
 import type { SecretTier } from "./schemas/secrets.js";
 
 /**
