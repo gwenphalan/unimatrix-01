@@ -236,10 +236,15 @@ export function nodeApiApp(config: Omit<NodeApiAppConfig, "kind">): NodeApiAppCo
  * entry — converting it changes `infra/docker/api-compose.yaml` and the
  * API's live connection to the secrets store, and belongs in its own PR.
  */
-export function internalServiceUrl(
-  appDir: string,
-  options?: { readonly kind?: DeployAppConfig["kind"]; readonly scheme?: string },
-): string {
+/** Options for {@link internalServiceUrl}. */
+export interface InternalServiceUrlOptions {
+  /** The target app's kind, which decides its container port. Defaults to `"node-api"`. */
+  readonly kind?: DeployAppConfig["kind"];
+  /** URL scheme. Defaults to `"https"`. */
+  readonly scheme?: string;
+}
+
+export function internalServiceUrl(appDir: string, options?: InternalServiceUrlOptions): string {
   const kind = options?.kind ?? "node-api";
   const port = kind === "static-spa" ? STATIC_SPA_CONTAINER_PORT : NODE_API_CONTAINER_PORT;
   const scheme = options?.scheme ?? "https";

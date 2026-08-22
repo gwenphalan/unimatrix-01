@@ -4,6 +4,7 @@ import {
   composeFor,
   deployDesiredStateModule,
   dockerfileFor,
+  type InternalServiceUrlOptions,
   internalServiceUrl,
   nodeApiApp,
   staticSpaApp,
@@ -763,5 +764,10 @@ describe("internalServiceUrl", () => {
   it("tracks the node-api container port by default, and the static-spa port when named", () => {
     expect(internalServiceUrl("api", { kind: "node-api" })).toBe("https://api:3001");
     expect(internalServiceUrl("web", { kind: "static-spa" })).toBe("https://web:8080");
+  });
+
+  it("takes its options as the exported InternalServiceUrlOptions type", () => {
+    const options: InternalServiceUrlOptions = { kind: "static-spa", scheme: "http" };
+    expect(internalServiceUrl("web", options)).toBe("http://web:8080");
   });
 });
