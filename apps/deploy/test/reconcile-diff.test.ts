@@ -19,6 +19,7 @@ function desiredService(overrides: Partial<DeployDesiredService> = {}): DeployDe
       { name: "CLERK_SECRET_KEY", required: true },
       { name: "TRUST_PROXY", required: false },
     ],
+    publicStatus: true,
     ...overrides,
   };
 }
