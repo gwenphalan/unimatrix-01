@@ -7,6 +7,12 @@ services:
       NODE_ENV: production
       LOG_LEVEL: info
       TRUST_PROXY: "1"
+      # This and the three CLERK_* references below are bare, with no default,
+      # on purpose. An unset variable reaches the container as an empty string,
+      # not as absent, and this API's loader refuses an empty value — so a stack
+      # deployed before its values exist restart-loops, which reads from outside
+      # as every content route 404ing. Set all four in the deployment platform
+      # before deploying this stack.
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS}
       # Required together in production — the API refuses to boot without all
       # three (`parseClerkConfig` in apps/api/src/config.ts). Compose passes
@@ -21,16 +27,15 @@ services:
       CLERK_JWT_KEY: ${CLERK_JWT_KEY}
       # How this API reaches the secrets store, over the shared
       # unimatrix-secrets network declared below. The host must be the store's
-      # Compose service name (`https://secrets:3001`) — that name is the SAN on
-      # its certificate, and hostname verification is on.
+      # Compose service name — that name is the SAN on its certificate, and
+      # hostname verification is on.
       #
-      # All five of these are bare references with no default on purpose. An
-      # unset variable reaches the container as an empty string, not as absent,
-      # and this API's loader refuses an empty value — so a stack deployed
-      # before its values exist restart-loops, which reads from outside as
-      # every content route 404ing. Set all five in the deployment platform
-      # before deploying this stack.
-      SECRETS_BASE_URL: ${SECRETS_BASE_URL}
+      # Generated rather than set in the deployment platform: both halves are
+      # already declared here. The host is the store's own appDir, and the port
+      # is the shared node-api container port every service is generated
+      # against, so a hand-typed value could only ever agree with them or be
+      # wrong.
+      SECRETS_BASE_URL: https://secrets:3001
       SECRETS_SERVICE_TOKEN: ${SECRETS_SERVICE_TOKEN}
       # One scoped token per tier, and no two of the three may hold the same
       # value — the store answers a wrong-capability caller with the same 404
