@@ -24,6 +24,16 @@
 // with `pnpm format:check` (printWidth 100) and would reject the output.
 // Dockerfiles are unaffected: prettier has no Dockerfile parser.
 //
+// resolveConfig() takes a *file* path and searches upward from that file's
+// directory, so it must be given a file inside the repo root rather than the
+// root itself — handed a directory, it starts one level too high and finds
+// the repo's config only when some ancestor happens to hold one. A worktree
+// under .claude/worktrees/ has such an ancestor (the main checkout) and a CI
+// checkout does not, which is why a missing config surfaced as generated
+// output that differed between the two rather than as an error. Resolution
+// failing is fatal here for the same reason: falling back to prettier's
+// defaults silently reformats every generated file.
+//
 // Fails closed on zero apps/*/deploy.config.ts discovered, same convention
 // as validate-deploy-config.mjs.
 import { execFileSync } from "node:child_process";
@@ -44,7 +54,12 @@ const { dockerfileFor, composeFor, deployDesiredStateModule } = await import(
   pathToFileURL(join(repoRoot, "packages", "deploy-config", "src", "index.ts")).href
 );
 
-const prettierConfig = (await prettier.resolveConfig(repoRoot)) ?? {};
+const prettierConfigPath = join(repoRoot, ".prettierrc.json");
+const prettierConfig = await prettier.resolveConfig(prettierConfigPath);
+if (prettierConfig === null) {
+  console.error(`generate-deploy-config: no prettier config resolved from ${prettierConfigPath}.`);
+  process.exit(1);
+}
 
 /**
  * Reads a file, returning `null` when it does not exist. Reading straight
