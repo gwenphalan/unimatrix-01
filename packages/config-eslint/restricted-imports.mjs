@@ -103,6 +103,20 @@ const WORKSPACE_RESTRICTIONS = {
       },
     ],
   },
+  // `boundaries.mjs` grants apps/deploy the `secrets` package edge workspace-wide, because it has no
+  // per-directory granularity — this is the layer that narrows it back to src/secret-env/, which
+  // holds the only read capability this service has against the store. src/reconcile/ carries no
+  // write capability of its own and must never gain one by importing this module tree.
+  "apps/deploy": {
+    files: ["src/reconcile/**/*.{ts,mts,cts}"],
+    patterns: [
+      {
+        group: ["@unimatrix/secrets", "@unimatrix/secrets/*", "../secret-env/*.js", "../secret-env/*"],
+        message:
+          "src/reconcile/ never imports the secrets store — apps/deploy/AGENTS.md's no-write rule. src/secret-env/ imports from src/reconcile/, never the other way.",
+      },
+    ],
+  },
 };
 
 /**
