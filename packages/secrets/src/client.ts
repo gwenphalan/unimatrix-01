@@ -19,6 +19,12 @@ import {
 
 import { SecretValue } from "./secret-value.js";
 
+// A value export, not just the type `getSecretValue` returns: a consumer
+// outside this package (a test stub, a narrower interface built around
+// `SecretsClient`) needs the class itself to construct one, and `client.ts`
+// is the only file `./client` resolves to.
+export { SecretValue } from "./secret-value.js";
+
 /** 5 seconds. See {@link SecretsClientConfig.timeoutMs} for why this is one shared knob. */
 const DEFAULT_TIMEOUT_MS = 5000;
 

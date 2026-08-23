@@ -5,6 +5,7 @@
     "rewriteRelativeImportExtensions": true,
     "paths": {
       "@unimatrix/deploy-config": ["../../packages/deploy-config/src/index.ts"],
+      "@unimatrix/secrets/client": ["../../packages/secrets/src/client.ts"],
       "@unimatrix/shared": ["../../packages/shared/src/index.ts"]
     },
     "types": ["node"]

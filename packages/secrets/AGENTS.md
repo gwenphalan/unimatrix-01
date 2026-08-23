@@ -9,7 +9,7 @@
 - `src/keyring.ts`: `SecretsKeyring` and `loadSecretsKeyring`, the `SECRETS_KEKS` parser and validator.
 - `src/envelope.ts`: the AES-256-GCM envelope format and its AAD.
 - `src/index.ts`: barrel re-exporting every `.` module. Does **not** re-export `client.ts` — see §5.
-- `src/client.ts`: the `./client` entry point's two factories — `createSecretsClient` for the scoped read route, and `createSecretsManagementClient` for create, rotate, list and bulk-delete. `SecretsClientError` never carries a fragment of a response body in `message` or any other property, because the 200 body for the route `createSecretsClient` calls is a decrypted credential.
+- `src/client.ts`: the `./client` entry point's two factories — `createSecretsClient` for the scoped read route, and `createSecretsManagementClient` for create, rotate, list and bulk-delete. Also re-exports `SecretValue`, since `./client` is the only place a consumer of `getSecretValue`'s return type can reach it. `SecretsClientError` never carries a fragment of a response body in `message` or any other property, because the 200 body for the route `createSecretsClient` calls is a decrypted credential.
 
 ## 3. Core Behaviors & Patterns
 - **Never reads `process.env`.** `loadSecretsKeyring` takes the encoded key string as an argument, same rule `packages/auth` follows. This package never boots anything and never calls `process.exit`; a caller decides what a thrown `SecretsError` means for its own startup.
