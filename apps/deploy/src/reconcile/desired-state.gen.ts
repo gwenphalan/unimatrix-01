@@ -71,6 +71,7 @@ export const DEPLOY_DESIRED_STATE: DeployDesiredState = [
       { name: "DOKPLOY_API_KEY", required: true },
       { name: "DOKPLOY_BASE_URL", required: true },
       { name: "IMAGE_TAG", required: true },
+      { name: "SECRETS_TLS_CERT_BASE64", required: true },
     ],
     publicStatus: false,
   },

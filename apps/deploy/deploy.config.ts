@@ -1,4 +1,4 @@
-import { nodeApiApp } from "@unimatrix/deploy-config";
+import { internalServiceUrl, nodeApiApp } from "@unimatrix/deploy-config";
 
 export default nodeApiApp({
   appDir: "deploy",
@@ -35,6 +35,27 @@ export default nodeApiApp({
         "See apps/deploy/AGENTS.md.",
       ],
     },
+    {
+      name: "SECRETS_BASE_URL",
+      value: { kind: "generated", name: "SECRETS_BASE_URL", value: internalServiceUrl("secrets") },
+      comment: [
+        "How the secrets-status CLI path reaches the store, over the shared",
+        "unimatrix-secrets network declared below — same reasoning as",
+        "apps/api/deploy.config.ts's entry of the same name. Read only: this",
+        "service's read token is never declared here (see the network comment)",
+        "and no code path can write through it.",
+      ],
+    },
+    {
+      name: "SECRETS_TLS_CERT_BASE64",
+      value: { kind: "variable", name: "SECRETS_TLS_CERT_BASE64" },
+      comment: [
+        "The store's certificate only, never its key — supplying it replaces",
+        "this service's trust store for connections to the secrets store",
+        "rather than widening it. Read lazily, on the secrets-status CLI path",
+        "only, so an unset value here never fails this service's boot.",
+      ],
+    },
   ],
   volumes: [],
   networks: [
@@ -52,6 +73,20 @@ export default nodeApiApp({
         "only route anything on that network could call. It is an attachable",
         "swarm overlay, which is what lets a plain Compose stack join it",
         "(measured on the host, 2026-08-12, recorded in apps/api/deploy.config.ts).",
+      ],
+    },
+    {
+      name: "unimatrix-secrets",
+      external: true,
+      comment: [
+        "Create it on the host before the first deploy:",
+        "`docker network create unimatrix-secrets`. The cost of joining, stated",
+        "the same way apps/secrets/deploy.config.ts states the cost of the",
+        "network above: the container already holding an instance-wide,",
+        "delete-everything Dokploy token now also sits on the network carrying",
+        "every secrets-store read for this instance. The store's own certificate",
+        "pin (SECRETS_TLS_CERT_BASE64) is what stops that traffic crossing it in",
+        "cleartext, not network membership itself.",
       ],
     },
   ],
