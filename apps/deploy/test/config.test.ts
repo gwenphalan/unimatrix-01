@@ -119,6 +119,14 @@ void test("loadDeployRuntimeConfig rejects blank LOG_LEVEL values", () => {
   );
 });
 
+void test("loadDeployRuntimeConfig never throws on a missing secrets-store variable — the binding constraint on secrets-status", () => {
+  // Store configuration (SECRETS_BASE_URL, SECRETS_TLS_CERT_BASE64, SECRETS_PLATFORM_READ_TOKEN) is
+  // read lazily, only on the secrets-status CLI path (src/secret-env/store.ts) — never here. This is
+  // the regression test for that: an unset store variable reaches the container as an empty string,
+  // not as absent, and a stack deployed before those values exist must not restart-loop.
+  assert.doesNotThrow(() => loadDeployRuntimeConfig(BASE_ENV));
+});
+
 void test("loadDeployRuntimeConfig rejects blank HOST values", () => {
   assert.throws(
     () => loadDeployRuntimeConfig({ ...BASE_ENV, HOST: "   " }),
