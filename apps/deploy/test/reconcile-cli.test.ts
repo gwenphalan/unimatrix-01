@@ -69,7 +69,12 @@ void test("exit 0 when every declared app is in sync", async () => {
       }),
   });
 
-  const exitCode = await runReconcileCli(["report"], { client, desired: IN_SYNC_DESIRED, write, secretEnv: null });
+  const exitCode = await runReconcileCli(["report"], {
+    client,
+    desired: IN_SYNC_DESIRED,
+    write,
+    secretEnv: null,
+  });
 
   assert.equal(exitCode, 0);
   assert.deepEqual(lines, ["api: IN SYNC"]);
@@ -79,7 +84,12 @@ void test("exit 1 when an app needs a decision (missing)", async () => {
   const { write, lines } = collectLines();
   const client = stubClient({ getProjects: () => Promise.resolve([]) });
 
-  const exitCode = await runReconcileCli(["report"], { client, desired: IN_SYNC_DESIRED, write, secretEnv: null });
+  const exitCode = await runReconcileCli(["report"], {
+    client,
+    desired: IN_SYNC_DESIRED,
+    write,
+    secretEnv: null,
+  });
 
   assert.equal(exitCode, 1);
   assert.deepEqual(lines, ['api: MISSING — no Dokploy compose service named "api"']);
@@ -89,7 +99,12 @@ void test("exit 2 when the run cannot complete at all (project.all fails)", asyn
   const { write, lines } = collectLines();
   const client = stubClient({ getProjects: () => Promise.reject(new Error("network down")) });
 
-  const exitCode = await runReconcileCli(["report"], { client, desired: IN_SYNC_DESIRED, write, secretEnv: null });
+  const exitCode = await runReconcileCli(["report"], {
+    client,
+    desired: IN_SYNC_DESIRED,
+    write,
+    secretEnv: null,
+  });
 
   assert.equal(exitCode, 2);
   assert.equal(lines.length, 1);
@@ -146,7 +161,12 @@ void test("exit 2 when a single app's compose.one fails, isolated to that app ra
           }),
   });
 
-  const exitCode = await runReconcileCli(["report"], { client, desired: twoAppDesired, write, secretEnv: null });
+  const exitCode = await runReconcileCli(["report"], {
+    client,
+    desired: twoAppDesired,
+    write,
+    secretEnv: null,
+  });
 
   assert.equal(exitCode, 2);
   // Both apps are reported — the api failure did not abort the web app's diff.
@@ -159,7 +179,12 @@ void test("prints usage and exits 2 with no subcommand", async () => {
   const { write, lines } = collectLines();
   const client = stubClient();
 
-  const exitCode = await runReconcileCli([], { client, desired: IN_SYNC_DESIRED, write, secretEnv: null });
+  const exitCode = await runReconcileCli([], {
+    client,
+    desired: IN_SYNC_DESIRED,
+    write,
+    secretEnv: null,
+  });
 
   assert.equal(exitCode, 2);
   assert.ok(lines.some((line) => line.startsWith("Usage:")));
@@ -184,7 +209,12 @@ void test("prints usage and exits 2 with apply and no app name", async () => {
   const { write, lines } = collectLines();
   const client = stubClient();
 
-  const exitCode = await runReconcileCli(["apply"], { client, desired: IN_SYNC_DESIRED, write, secretEnv: null });
+  const exitCode = await runReconcileCli(["apply"], {
+    client,
+    desired: IN_SYNC_DESIRED,
+    write,
+    secretEnv: null,
+  });
 
   assert.equal(exitCode, 2);
   assert.ok(lines.some((line) => line.startsWith("Usage:")));

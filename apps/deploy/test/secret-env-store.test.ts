@@ -17,10 +17,7 @@ const HTTPS_ENV = {
 };
 
 void test("loadSecretsPlatformReadToken throws when the token is absent", () => {
-  assert.throws(
-    () => loadSecretsPlatformReadToken({}),
-    /SECRETS_PLATFORM_READ_TOKEN must be set/,
-  );
+  assert.throws(() => loadSecretsPlatformReadToken({}), /SECRETS_PLATFORM_READ_TOKEN must be set/);
 });
 
 void test("loadSecretsPlatformReadToken throws when the token is blank", () => {

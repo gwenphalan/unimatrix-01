@@ -9,7 +9,9 @@ import type { SecretEnvStatus } from "./status.js";
 export function renderSecretEnvStatus(status: SecretEnvStatus): readonly string[] {
   switch (status.outcome) {
     case "refused-self":
-      return [`${status.appDir}: REFUSED — secrets-status refuses this service's own compose entry`];
+      return [
+        `${status.appDir}: REFUSED — secrets-status refuses this service's own compose entry`,
+      ];
     case "unknown-app":
       return [`${status.appDir}: UNKNOWN — not declared in the desired-state manifest`];
     case "no-declarations":

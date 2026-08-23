@@ -57,7 +57,9 @@ void test("reports no-declarations for a declared app with no secrets-store valu
 
 void test("resolves the outcome matrix: resolved, unresolved, and error", async () => {
   const client = stubClient({
-    "platform/clerk-jwt-key": new SecretValue("-----BEGIN PUBLIC KEY-----\nabc\n-----END PUBLIC KEY-----"),
+    "platform/clerk-jwt-key": new SecretValue(
+      "-----BEGIN PUBLIC KEY-----\nabc\n-----END PUBLIC KEY-----",
+    ),
     "platform/clerk-publishable-key": new SecretsClientError("not found", { status: 404 }),
     "platform/clerk-secret-key": new Error("network down"),
   });

@@ -45,7 +45,8 @@ export interface SecretEnvErrorResult extends SecretEnvDeclaration {
   readonly message: string;
 }
 
-export type SecretEnvResult = SecretEnvResolvedResult | SecretEnvUnresolvedResult | SecretEnvErrorResult;
+export type SecretEnvResult =
+  SecretEnvResolvedResult | SecretEnvUnresolvedResult | SecretEnvErrorResult;
 
 export interface RefusedSelfSecretEnvStatus {
   readonly outcome: "refused-self";

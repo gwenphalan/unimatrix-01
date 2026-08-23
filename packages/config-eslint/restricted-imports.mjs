@@ -111,7 +111,12 @@ const WORKSPACE_RESTRICTIONS = {
     files: ["src/reconcile/**/*.{ts,mts,cts}"],
     patterns: [
       {
-        group: ["@unimatrix/secrets", "@unimatrix/secrets/*", "../secret-env/*.js", "../secret-env/*"],
+        group: [
+          "@unimatrix/secrets",
+          "@unimatrix/secrets/*",
+          "../secret-env/*.js",
+          "../secret-env/*",
+        ],
         message:
           "src/reconcile/ never imports the secrets store — apps/deploy/AGENTS.md's no-write rule. src/secret-env/ imports from src/reconcile/, never the other way.",
       },

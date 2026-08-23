@@ -42,14 +42,18 @@ function parseSecretsBaseUrl(value: string | undefined): string {
   try {
     parsed = new URL(trimmedValue);
   } catch {
-    throw new Error(`SECRETS_BASE_URL must be a valid URL. Received ${JSON.stringify(trimmedValue)}.`);
+    throw new Error(
+      `SECRETS_BASE_URL must be a valid URL. Received ${JSON.stringify(trimmedValue)}.`,
+    );
   }
 
   // Through the parsed URL, never `startsWith` on the raw string — `HTTPS://secrets:3001` is a valid
   // URL whose `protocol` normalises to `https:` while a `startsWith` check on the original text reads
   // it as plain HTTP. `apps/api/src/config.ts` records the same reasoning for the same check.
   if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-    throw new Error(`SECRETS_BASE_URL must use http:// or https://. Received ${JSON.stringify(trimmedValue)}.`);
+    throw new Error(
+      `SECRETS_BASE_URL must use http:// or https://. Received ${JSON.stringify(trimmedValue)}.`,
+    );
   }
 
   return trimmedValue;
@@ -77,7 +81,10 @@ function decodeSecretsCaCertificate(value: string): string {
  * same rule `apps/api/src/config.ts`'s `parseSecretsStoreConfig` applies to the API's own connection
  * to this store.
  */
-function resolveCaCertificatePem(baseUrl: string, encodedValue: string | undefined): string | undefined {
+function resolveCaCertificatePem(
+  baseUrl: string,
+  encodedValue: string | undefined,
+): string | undefined {
   const isHttps = new URL(baseUrl).protocol === "https:";
 
   if (isHttps && encodedValue === undefined) {
@@ -109,7 +116,9 @@ function resolveCaCertificatePem(baseUrl: string, encodedValue: string | undefin
  * ignore the dispatcher that carries the pin. A test stubs the `SecretsClient` interface instead of
  * the transport, for the same reason.
  */
-export function createSecretsClientFromEnv(env: SecretsPlatformStoreEnv = process.env): SecretsClient {
+export function createSecretsClientFromEnv(
+  env: SecretsPlatformStoreEnv = process.env,
+): SecretsClient {
   const baseUrl = parseSecretsBaseUrl(env.SECRETS_BASE_URL);
   const serviceToken = loadSecretsPlatformReadToken(env);
   const caCertificatePem = resolveCaCertificatePem(baseUrl, env.SECRETS_TLS_CERT_BASE64);
