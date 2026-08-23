@@ -135,3 +135,25 @@ void test("a SecretsClientError with a null status is an error, not unresolved",
   const jwt = status.results.find((result) => result.name === "CLERK_JWT_KEY");
   assert.equal(jwt?.outcome, "error");
 });
+
+// Only a 404 carries the absent/out-of-scope/wrong-capability ambiguity that `unresolved` describes.
+// A 401 is the shape this most has to get right: a wrong token fails every name at once, and
+// reporting three unresolved names sends an operator to look at the store's contents when the fault
+// is the credential. Exit 4, not exit 3.
+void test("a non-404 store status is an error, not unresolved", async () => {
+  for (const status of [401, 403, 429, 500]) {
+    const client = stubClient({
+      "platform/clerk-jwt-key": new SecretsClientError("refused", { status }),
+      "platform/clerk-publishable-key": new SecretValue("value"),
+      "platform/clerk-secret-key": new SecretValue("value"),
+    });
+
+    const result = await resolveSecretEnvStatus(client, "api");
+
+    assert.equal(result.outcome, "results");
+    if (result.outcome !== "results") continue;
+
+    const jwt = result.results.find((entry) => entry.name === "CLERK_JWT_KEY");
+    assert.equal(jwt?.outcome, "error", `status ${String(status)} should be an error`);
+  }
+});

@@ -10,10 +10,12 @@ import { DEPLOY_DESIRED_STATE } from "../reconcile/desired-state.gen.js";
 const DEFAULT_TIMEOUT_MS = 10_000;
 
 /**
- * A `SecretsClientError` with a non-null `status` is `unresolved`: the store's 404 conflates a name
- * that does not exist, one out of this token's scope, and one this token's capability cannot reach
+ * Only a 404 is `unresolved`, and the narrowness is the point: the store's 404 conflates a name that
+ * does not exist, one out of this token's scope, and one this token's capability cannot reach
  * (`apps/secrets/AGENTS.md` §3, `denySecretAccess`) — nothing on this side of the call can tell those
- * apart, so the message says that rather than guessing which one happened.
+ * apart, so the message says that rather than guessing which one happened. Every other status is a
+ * failed call, not an answer about a name: a 401 on a wrong token would otherwise report as three
+ * names that do not resolve, which reads as a store problem and is a credential problem.
  */
 const UNRESOLVED_MESSAGE =
   "not resolved — the store answers a missing name, one out of this token's scope, and one this " +
@@ -91,7 +93,7 @@ async function resolveOne(
 
     return { ...declaration, outcome: "resolved", singleLine: !value.reveal().includes("\n") };
   } catch (error) {
-    if (error instanceof SecretsClientError && error.status !== null) {
+    if (error instanceof SecretsClientError && error.status === 404) {
       return { ...declaration, outcome: "unresolved", message: UNRESOLVED_MESSAGE };
     }
 

@@ -12,7 +12,9 @@ import { fileURLToPath } from "node:url";
 const RECONCILE_DIR = fileURLToPath(new URL("../src/reconcile", import.meta.url));
 
 function reconcileSourceFiles(): readonly string[] {
-  return readdirSync(RECONCILE_DIR)
+  // Recursive: a nested src/reconcile/<dir>/file.ts is exactly the case a non-recursive read would
+  // pass over in silence, and silence here is indistinguishable from a clean result.
+  return readdirSync(RECONCILE_DIR, { recursive: true, encoding: "utf8" })
     .filter((entry) => entry.endsWith(".ts"))
     .map((entry) => join(RECONCILE_DIR, entry));
 }

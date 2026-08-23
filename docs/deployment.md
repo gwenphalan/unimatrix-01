@@ -542,7 +542,8 @@ this repo declares nowhere), deploys nothing, and touches no domain. On that las
 and `apps/deploy/README.md`.
 
 `pnpm --filter @unimatrix/deploy-app reconcile secrets-status <app>` resolves the secrets-store
-values one declared app names, against the store this service holds a read-only token for. It writes
+names one declared app's manifest entry carries, against the store this service holds a read-only
+token for. It writes
 nothing and prints no value, only whether each declared name resolved. The token
 (`SECRETS_PLATFORM_READ_TOKEN`) arrives via `docker exec --env-file`, never as compose env, and the
 store connection is read lazily — a store left unconfigured cannot affect `report` or `apply`. See

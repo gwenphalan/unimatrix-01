@@ -45,9 +45,11 @@ services:
       # the same way apps/secrets/deploy.config.ts states the cost of the
       # network above: the container already holding an instance-wide,
       # delete-everything Dokploy token now also sits on the network carrying
-      # every secrets-store read for this instance. The store's own certificate
-      # pin (SECRETS_TLS_CERT_BASE64) is what stops that traffic crossing it in
-      # cleartext, not network membership itself.
+      # every secrets-store read for this instance. https:// is what encrypts
+      # that traffic; the certificate pin (SECRETS_TLS_CERT_BASE64) is what
+      # decides which server is allowed to answer, by replacing the trust store
+      # for this client rather than widening it. Network membership provides
+      # neither.
       unimatrix-secrets:
     restart: unless-stopped
 
