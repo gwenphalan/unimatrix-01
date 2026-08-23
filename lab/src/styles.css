@@ -38,3 +38,14 @@
 @source "../prototypes/*.{ts,tsx}";
 @source "../prototypes/*/*.{ts,tsx}";
 @source "../prototypes/*/*/*.{ts,tsx}";
+
+/* Borrowed from `apps/cflop/src/styles.css` for the `cflop` prototype. An app's
+   own `@layer components` classes reach no prototype: the lab never imports an
+   app stylesheet and no `@source` above scans one, so cloned JSX carrying such a
+   class renders unstyled with every check green. Delete this block with the
+   prototype that borrowed it. */
+@layer components {
+  .alg-move-string {
+    @apply font-mono text-[1.2rem] leading-7 font-bold tracking-wide text-foreground;
+  }
+}
