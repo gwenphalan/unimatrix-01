@@ -216,14 +216,15 @@ Clerk auth is required in production: set `CLERK_SECRET_KEY`,
 `CLERK_PUBLISHABLE_KEY`, and `CLERK_JWT_KEY` in Dokploy's UI (all three, never
 just some). See "Clerk setup" below.
 
-Five more variables connect this service to the secrets store —
-`SECRETS_BASE_URL`, `SECRETS_SERVICE_TOKEN`,
-`SECRETS_INTEGRATIONS_MANAGE_TOKEN`, `SECRETS_PLATFORM_WRITE_TOKEN` and
-`SECRETS_TLS_CERT_BASE64`. All five must exist in Dokploy before this stack is
-deployed: an unset variable named in the compose file reaches the container as
-an empty string rather than as absent, and the API's loader refuses an empty
-value, so the stack restart-loops and every content route 404s. The ordered
-procedure is under "Secrets service" below.
+Four more variables connect this service to the secrets store —
+`SECRETS_SERVICE_TOKEN`, `SECRETS_INTEGRATIONS_MANAGE_TOKEN`,
+`SECRETS_PLATFORM_WRITE_TOKEN` and `SECRETS_TLS_CERT_BASE64`. All four must
+exist in Dokploy before this stack is deployed: an unset variable named in the
+compose file reaches the container as an empty string rather than as absent,
+and the API's loader refuses an empty value, so the stack restart-loops and
+every content route 404s. `SECRETS_BASE_URL` is not a fifth: it is generated
+into the compose file from `apps/api/deploy.config.ts`, not set in Dokploy's
+UI. The ordered procedure is under "Secrets service" below.
 
 ### CFLOP service
 
@@ -507,16 +508,21 @@ can a log line. What does distinguish them:
 - required environment variables (set in Dokploy's UI, not in the file):
   `DOKPLOY_BASE_URL` and `DOKPLOY_API_KEY` — the service refuses to start
   without either
+- `SECRETS_TLS_CERT_BASE64` (set in Dokploy's UI): the store's certificate.
+  Read lazily, only when `secrets-status` runs (below) — an unset value here
+  does not block this service's boot, unlike the two above
 - no volume — it holds no persistent state
 
-Unlike the secrets service, it does join `dokploy-network`: it exists to call
-Dokploy's own API, and joining is what lets it reach that API by service name
-rather than round-tripping out through Cloudflare. The cost, stated plainly:
-a container holding an unscoped, instance-wide Dokploy API key sits on the
-same network every app Traefik serves. Nothing routes to this service across
-that network — no domain, no Traefik entry — so membership is reachability
-*from* it, and `/health` is the only route anything on that network could
-call. See `apps/deploy/AGENTS.md`.
+It joins `dokploy-network`: it exists to call Dokploy's own API, and joining
+is what lets it reach that API by service name rather than round-tripping out
+through Cloudflare. The cost, stated plainly: a container holding an
+unscoped, instance-wide Dokploy API key sits on the same network every app
+Traefik serves. Nothing routes to this service across that network — no
+domain, no Traefik entry — so membership is reachability *from* it, and
+`/health` is the only route anything on that network could call. It also
+joins `unimatrix-secrets`, alongside the secrets service and the API: the
+same container now also sits on the network carrying every secrets-store
+read for this instance. See `apps/deploy/AGENTS.md`.
 
 `pnpm --filter @unimatrix/deploy-app reconcile report` diffs every app's `deploy.config.ts` against
 what Dokploy actually holds and prints the drift — missing or ambiguously-named compose services,
@@ -534,6 +540,13 @@ this repo declares nowhere), deploys nothing, and touches no domain. On that las
 `domain.create` procedure does work — the reason this repo does not call it is that
 `packages/deploy-config` declares no domain data, not that the API can't. See `apps/deploy/AGENTS.md`
 and `apps/deploy/README.md`.
+
+`pnpm --filter @unimatrix/deploy-app reconcile secrets-status <app>` resolves the secrets-store
+values one declared app names, against the store this service holds a read-only token for. It writes
+nothing and prints no value, only whether each declared name resolved. The token
+(`SECRETS_PLATFORM_READ_TOKEN`) arrives via `docker exec --env-file`, never as compose env, and the
+store connection is read lazily — a store left unconfigured cannot affect `report` or `apply`. See
+`apps/deploy/README.md`.
 
 ## Traefik expectations
 
