@@ -93,11 +93,12 @@ export const CLERK_PUBLISHABLE_KEY_SECRET = {
  * whatever the store actually holds, so a credential the running code needs
  * and the store lacks is visible rather than simply absent.
  *
- * Nothing reads a `platform` name out of the store today: the Clerk keys reach
- * their consumers as environment variables and, for the publishable key on the
- * two SPAs, as an `ARG` default in the generated Dockerfile. They are declared
- * here because the console's question is what the system needs, not what some
- * service currently fetches.
+ * The Clerk keys still reach their actual consumers as environment variables and,
+ * for the publishable key on the two SPAs, as an `ARG` default in the generated
+ * Dockerfile — `apps/deploy`'s `reconcile secrets-status` reads a `platform`
+ * name out of the store too, but only to report whether it resolves, never to
+ * deliver it anywhere. They are declared here because the console's question
+ * is what the system needs, not what some service currently fetches.
  */
 export const SECRET_REGISTRY: readonly SecretRegistryEntry[] = [
   CLERK_SECRET_KEY_SECRET,

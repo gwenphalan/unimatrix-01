@@ -225,17 +225,6 @@ export function nodeApiApp(config: Omit<NodeApiAppConfig, "kind">): NodeApiAppCo
   return { kind: "node-api", ...config };
 }
 
-/**
- * The in-network URL of another compose service, on whichever Docker network
- * both services share — `https://<appDir>:<containerPort>`. Derives the port
- * from the same constants {@link desiredServiceForConfig} uses, so a config
- * naming a wrong port is impossible rather than merely discouraged.
- *
- * Has no call site in any `apps/*\/deploy.config.ts` yet. Its first is
- * `apps/api/deploy.config.ts`'s `SECRETS_BASE_URL`, still a bare `variable`
- * entry — converting it changes `infra/docker/api-compose.yaml` and the
- * API's live connection to the secrets store, and belongs in its own PR.
- */
 /** Options for {@link internalServiceUrl}. */
 export interface InternalServiceUrlOptions {
   /** The target app's kind, which decides its container port. Defaults to `"node-api"`. */
@@ -244,6 +233,17 @@ export interface InternalServiceUrlOptions {
   readonly scheme?: string;
 }
 
+/**
+ * The in-network URL of another compose service, on whichever Docker network
+ * both services share — `https://<appDir>:<containerPort>`. Derives the port
+ * from the same constants {@link desiredServiceForConfig} uses, so a config
+ * naming a wrong port is impossible rather than merely discouraged.
+ *
+ * Called from `apps/api/deploy.config.ts` and `apps/deploy/deploy.config.ts`,
+ * both generating `SECRETS_BASE_URL` for the shared `unimatrix-secrets`
+ * network — a hand-typed value there could only ever agree with this or be
+ * wrong, since both halves are already declared in the calling config.
+ */
 export function internalServiceUrl(appDir: string, options?: InternalServiceUrlOptions): string {
   const kind = options?.kind ?? "node-api";
   const port = kind === "static-spa" ? STATIC_SPA_CONTAINER_PORT : NODE_API_CONTAINER_PORT;

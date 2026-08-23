@@ -17,6 +17,17 @@ services:
       # runtimeConfig, and never appears in a log line or an error message.
       # See apps/deploy/AGENTS.md.
       DOKPLOY_API_KEY: ${DOKPLOY_API_KEY}
+      # How the secrets-status CLI path reaches the store, over the shared
+      # unimatrix-secrets network declared below — same reasoning as
+      # apps/api/deploy.config.ts's entry of the same name. Read only: this
+      # service's read token is never declared here (see the network comment)
+      # and no code path can write through it.
+      SECRETS_BASE_URL: https://secrets:3001
+      # The store's certificate only, never its key — supplying it replaces
+      # this service's trust store for connections to the secrets store
+      # rather than widening it. Read lazily, on the secrets-status CLI path
+      # only, so an unset value here never fails this service's boot.
+      SECRETS_TLS_CERT_BASE64: ${SECRETS_TLS_CERT_BASE64}
     networks:
       # This service exists to talk to Dokploy's own API, and the alternative —
       # reaching https://dokploy.unimatrix-01.dev — costs two more Cloudflare
@@ -29,8 +40,21 @@ services:
       # swarm overlay, which is what lets a plain Compose stack join it
       # (measured on the host, 2026-08-12, recorded in apps/api/deploy.config.ts).
       dokploy-network:
+      # Create it on the host before the first deploy:
+      # `docker network create unimatrix-secrets`. The cost of joining, stated
+      # the same way apps/secrets/deploy.config.ts states the cost of the
+      # network above: the container already holding an instance-wide,
+      # delete-everything Dokploy token now also sits on the network carrying
+      # every secrets-store read for this instance. https:// is what encrypts
+      # that traffic; the certificate pin (SECRETS_TLS_CERT_BASE64) is what
+      # decides which server is allowed to answer, by replacing the trust store
+      # for this client rather than widening it. Network membership provides
+      # neither.
+      unimatrix-secrets:
     restart: unless-stopped
 
 networks:
   dokploy-network:
+    external: true
+  unimatrix-secrets:
     external: true

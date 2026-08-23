@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import type { DeployDesiredState } from "@unimatrix/deploy-config";
+import { SecretValue, SecretsClientError, type SecretsClient } from "@unimatrix/secrets/client";
 
 import type { DokployClient } from "../src/dokploy/client.js";
 import { runReconcileCli } from "../src/cli/reconcile.js";
@@ -68,7 +69,12 @@ void test("exit 0 when every declared app is in sync", async () => {
       }),
   });
 
-  const exitCode = await runReconcileCli(["report"], { client, desired: IN_SYNC_DESIRED, write });
+  const exitCode = await runReconcileCli(["report"], {
+    client,
+    desired: IN_SYNC_DESIRED,
+    write,
+    secretEnv: null,
+  });
 
   assert.equal(exitCode, 0);
   assert.deepEqual(lines, ["api: IN SYNC"]);
@@ -78,7 +84,12 @@ void test("exit 1 when an app needs a decision (missing)", async () => {
   const { write, lines } = collectLines();
   const client = stubClient({ getProjects: () => Promise.resolve([]) });
 
-  const exitCode = await runReconcileCli(["report"], { client, desired: IN_SYNC_DESIRED, write });
+  const exitCode = await runReconcileCli(["report"], {
+    client,
+    desired: IN_SYNC_DESIRED,
+    write,
+    secretEnv: null,
+  });
 
   assert.equal(exitCode, 1);
   assert.deepEqual(lines, ['api: MISSING — no Dokploy compose service named "api"']);
@@ -88,7 +99,12 @@ void test("exit 2 when the run cannot complete at all (project.all fails)", asyn
   const { write, lines } = collectLines();
   const client = stubClient({ getProjects: () => Promise.reject(new Error("network down")) });
 
-  const exitCode = await runReconcileCli(["report"], { client, desired: IN_SYNC_DESIRED, write });
+  const exitCode = await runReconcileCli(["report"], {
+    client,
+    desired: IN_SYNC_DESIRED,
+    write,
+    secretEnv: null,
+  });
 
   assert.equal(exitCode, 2);
   assert.equal(lines.length, 1);
@@ -145,7 +161,12 @@ void test("exit 2 when a single app's compose.one fails, isolated to that app ra
           }),
   });
 
-  const exitCode = await runReconcileCli(["report"], { client, desired: twoAppDesired, write });
+  const exitCode = await runReconcileCli(["report"], {
+    client,
+    desired: twoAppDesired,
+    write,
+    secretEnv: null,
+  });
 
   assert.equal(exitCode, 2);
   // Both apps are reported — the api failure did not abort the web app's diff.
@@ -158,7 +179,12 @@ void test("prints usage and exits 2 with no subcommand", async () => {
   const { write, lines } = collectLines();
   const client = stubClient();
 
-  const exitCode = await runReconcileCli([], { client, desired: IN_SYNC_DESIRED, write });
+  const exitCode = await runReconcileCli([], {
+    client,
+    desired: IN_SYNC_DESIRED,
+    write,
+    secretEnv: null,
+  });
 
   assert.equal(exitCode, 2);
   assert.ok(lines.some((line) => line.startsWith("Usage:")));
@@ -172,6 +198,7 @@ void test("prints usage and exits 2 with an unknown subcommand", async () => {
     client,
     desired: IN_SYNC_DESIRED,
     write,
+    secretEnv: null,
   });
 
   assert.equal(exitCode, 2);
@@ -182,7 +209,12 @@ void test("prints usage and exits 2 with apply and no app name", async () => {
   const { write, lines } = collectLines();
   const client = stubClient();
 
-  const exitCode = await runReconcileCli(["apply"], { client, desired: IN_SYNC_DESIRED, write });
+  const exitCode = await runReconcileCli(["apply"], {
+    client,
+    desired: IN_SYNC_DESIRED,
+    write,
+    secretEnv: null,
+  });
 
   assert.equal(exitCode, 2);
   assert.ok(lines.some((line) => line.startsWith("Usage:")));
@@ -196,6 +228,7 @@ void test("prints usage and exits 2 with apply and a trailing argument", async (
     client,
     desired: IN_SYNC_DESIRED,
     write,
+    secretEnv: null,
   });
 
   assert.equal(exitCode, 2);
@@ -250,6 +283,7 @@ void test("apply exits 0 and writes once when a setting has drifted", async () =
     client,
     desired: IN_SYNC_DESIRED,
     write,
+    secretEnv: null,
   });
 
   assert.equal(exitCode, 0);
@@ -267,6 +301,7 @@ void test("apply exits 1 and writes nothing when settings already match — a di
     client,
     desired: IN_SYNC_DESIRED,
     write,
+    secretEnv: null,
   });
 
   assert.equal(exitCode, 1);
@@ -295,6 +330,7 @@ void test("apply exits 5 when compose.update resolves but the re-read still show
     client: countingClient,
     desired: IN_SYNC_DESIRED,
     write,
+    secretEnv: null,
   });
 
   assert.equal(exitCode, 5);
@@ -310,6 +346,7 @@ void test("apply exits 2 for the service's own compose entry", async () => {
     client,
     desired: IN_SYNC_DESIRED,
     write,
+    secretEnv: null,
   });
 
   assert.equal(exitCode, 2);
@@ -324,8 +361,156 @@ void test("prints usage and exits 2 when report carries a trailing argument", as
     client,
     desired: IN_SYNC_DESIRED,
     write,
+    secretEnv: null,
   });
 
   assert.equal(exitCode, 2);
   assert.ok(lines.some((line) => line.startsWith("Usage:")));
+});
+
+// secrets-status resolves against the real generated manifest (src/reconcile/desired-state.gen.ts),
+// not `deps.desired` — src/secret-env/status.ts reads it directly. "api" carries three
+// secrets-store declarations, "deploy" is this service's own entry, and "web" declares none.
+
+void test("secrets-status exits 2 with no app name", async () => {
+  const { write, lines } = collectLines();
+  const client = stubClient();
+
+  const exitCode = await runReconcileCli(["secrets-status"], {
+    client,
+    desired: IN_SYNC_DESIRED,
+    write,
+    secretEnv: null,
+  });
+
+  assert.equal(exitCode, 2);
+  assert.ok(lines.some((line) => line.startsWith("Usage:")));
+});
+
+void test("secrets-status exits 2 and refuses without touching the store when it is unconfigured", async () => {
+  const { write, lines } = collectLines();
+  const client = stubClient();
+
+  const exitCode = await runReconcileCli(["secrets-status", "api"], {
+    client,
+    desired: IN_SYNC_DESIRED,
+    write,
+    secretEnv: null,
+  });
+
+  assert.equal(exitCode, 2);
+  assert.ok(lines.some((line) => line.includes("REFUSED") && line.includes("not configured")));
+});
+
+void test("secrets-status exits 2 for this service's own compose entry", async () => {
+  const { write, lines } = collectLines();
+  const client = stubClient();
+  const secretEnv: SecretsClient = {
+    getSecretValue: () => Promise.reject(new Error("should not be called")),
+  };
+
+  const exitCode = await runReconcileCli(["secrets-status", "deploy"], {
+    client,
+    desired: IN_SYNC_DESIRED,
+    write,
+    secretEnv,
+  });
+
+  assert.equal(exitCode, 2);
+  assert.ok(lines.some((line) => line.includes("REFUSED")));
+});
+
+void test("secrets-status exits 2 for an app absent from the manifest", async () => {
+  const { write, lines } = collectLines();
+  const client = stubClient();
+  const secretEnv: SecretsClient = {
+    getSecretValue: () => Promise.reject(new Error("should not be called")),
+  };
+
+  const exitCode = await runReconcileCli(["secrets-status", "does-not-exist"], {
+    client,
+    desired: IN_SYNC_DESIRED,
+    write,
+    secretEnv,
+  });
+
+  assert.equal(exitCode, 2);
+  assert.ok(lines.some((line) => line.includes("UNKNOWN")));
+});
+
+void test("secrets-status exits 1 for a declared app with no secrets-store values", async () => {
+  const { write, lines } = collectLines();
+  const client = stubClient();
+  const secretEnv: SecretsClient = {
+    getSecretValue: () => Promise.reject(new Error("should not be called")),
+  };
+
+  const exitCode = await runReconcileCli(["secrets-status", "web"], {
+    client,
+    desired: IN_SYNC_DESIRED,
+    write,
+    secretEnv,
+  });
+
+  assert.equal(exitCode, 1);
+  assert.ok(lines.some((line) => line.includes("declares no secrets-store values")));
+});
+
+void test("secrets-status exits 0 when every declared name resolves", async () => {
+  const { write, lines } = collectLines();
+  const client = stubClient();
+  const secretEnv: SecretsClient = {
+    getSecretValue: () => Promise.resolve(new SecretValue("one-line-value")),
+  };
+
+  const exitCode = await runReconcileCli(["secrets-status", "api"], {
+    client,
+    desired: IN_SYNC_DESIRED,
+    write,
+    secretEnv,
+  });
+
+  assert.equal(exitCode, 0);
+  assert.ok(lines.some((line) => line.includes("RESOLVED")));
+});
+
+void test("secrets-status exits 3 when at least one declared name does not resolve", async () => {
+  const { write, lines } = collectLines();
+  const client = stubClient();
+  const secretEnv: SecretsClient = {
+    getSecretValue: (name) =>
+      name === "platform/clerk-jwt-key"
+        ? Promise.reject(new SecretsClientError("not found", { status: 404 }))
+        : Promise.resolve(new SecretValue("one-line-value")),
+  };
+
+  const exitCode = await runReconcileCli(["secrets-status", "api"], {
+    client,
+    desired: IN_SYNC_DESIRED,
+    write,
+    secretEnv,
+  });
+
+  assert.equal(exitCode, 3);
+  assert.ok(lines.some((line) => line.includes("UNRESOLVED")));
+});
+
+void test("secrets-status exits 4 when a store call fails outright for a declared name", async () => {
+  const { write, lines } = collectLines();
+  const client = stubClient();
+  const secretEnv: SecretsClient = {
+    // A non-SecretsClientError throw — resolveOne's own catch buckets this as "error", not
+    // "unresolved", and "error" present anywhere in the run outranks "unresolved" for exit code 4.
+    getSecretValue: () => Promise.reject(new Error("connection reset")),
+  };
+
+  const exitCode = await runReconcileCli(["secrets-status", "api"], {
+    client,
+    desired: IN_SYNC_DESIRED,
+    write,
+    secretEnv,
+  });
+
+  assert.equal(exitCode, 4);
+  assert.ok(lines.some((line) => line.includes("ERROR")));
 });

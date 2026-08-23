@@ -15,6 +15,7 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
+    "@unimatrix/secrets": "workspace:*",
     "@unimatrix/shared": "workspace:*",
     "fastify": "^5.11.0",
     "fastify-type-provider-zod": "^7.0.0",

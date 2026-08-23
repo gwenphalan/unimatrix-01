@@ -2,6 +2,7 @@
 // credential a route would need to protect, and it lives under src/ (not scripts/) because
 // tsconfig.build.json excludes scripts/ and the production image has no tsx to run one with.
 import type { DeployDesiredState } from "@unimatrix/deploy-config";
+import type { SecretsClient } from "@unimatrix/secrets/client";
 
 import { loadDeployRuntimeConfig } from "../config.js";
 import { createDokployClient, loadDokployApiKey, type DokployClient } from "../dokploy/client.js";
@@ -9,11 +10,15 @@ import { applyAppSettings } from "../reconcile/apply.js";
 import { collectReconcileRun, type ReconcileRun } from "../reconcile/collect.js";
 import { DEPLOY_DESIRED_STATE } from "../reconcile/desired-state.gen.js";
 import { renderApplyOutcome, renderReconcileRun } from "../reconcile/report.js";
+import { renderSecretEnvStatus } from "../secret-env/report.js";
+import { resolveSecretEnvStatus } from "../secret-env/status.js";
+import { createSecretsClientFromEnv } from "../secret-env/store.js";
 
 const USAGE = [
   "Usage:",
   "  reconcile report",
   "  reconcile apply <app>",
+  "  reconcile secrets-status <app>",
   "",
   "report diffs apps/deploy/src/reconcile/desired-state.gen.ts against Dokploy and prints the",
   "result. Read-only — creates, updates, and deploys nothing.",
@@ -25,6 +30,11 @@ const USAGE = [
   "deploy would destroy the process performing the reconciliation). apply's success (exit 0) is not",
   "a sync assertion — it can succeed on an app report still exits 1 on, because report also finds",
   "env drift apply deliberately never touches.",
+  "",
+  "secrets-status resolves the secrets-store names one declared app's manifest entry names, against",
+  "the store this service holds a read-only token for. It never writes anything, to the store or to",
+  "Dokploy, and its output never carries a value, a length, or a prefix — only whether each declared",
+  "name resolved, and whether a resolved value is single-line.",
   "",
   "Exit codes for report:",
   "  0  every declared app is in sync",
@@ -41,12 +51,30 @@ const USAGE = [
   "  4  the run could not complete for another reason (a Dokploy call failed outright)",
   "  5  applied but the post-write state does not match — compose.update returned a 200, but the",
   "     re-read still shows a written setting drifted (Dokploy silently drops an unrecognised field)",
+  "",
+  "Exit codes for secrets-status:",
+  "  0  every declared name resolved",
+  "  1  the app declares no secrets-store values",
+  "  2  refused — bad usage, unknown app, this service's own entry, or the store is not configured",
+  "  3  at least one declared name is unresolved — the store cleanly answered that it holds no",
+  "     value this token can read for that name (missing, out of scope, or wrong capability — this",
+  "     side of the call cannot tell those apart)",
+  "  4  a call to the store failed outright for at least one declared name, or the run could not",
+  "     complete for another reason",
 ].join("\n");
 
 export interface ReconcileCliDeps {
   readonly client: DokployClient;
   readonly desired: DeployDesiredState;
   readonly write: (line: string) => void;
+  /**
+   * `null` when the store is not configured — `SECRETS_BASE_URL`, `SECRETS_PLATFORM_READ_TOKEN`, or
+   * `SECRETS_TLS_CERT_BASE64` absent, empty, or malformed. `T | null` rather than an optional field:
+   * `exactOptionalPropertyTypes` (`packages/config-typescript/base.json`) forbids assigning `undefined`
+   * to an optional property explicitly, which would force every test building this object to omit the
+   * key instead of stating it.
+   */
+  readonly secretEnv: SecretsClient | null;
 }
 
 function needsADecision(run: ReconcileRun): boolean {
@@ -104,6 +132,44 @@ async function runApply(deps: ReconcileCliDeps, appDir: string): Promise<number>
   return APPLY_EXIT_CODE[outcome.outcome];
 }
 
+async function runSecretsStatus(deps: ReconcileCliDeps, appDir: string): Promise<number> {
+  if (deps.secretEnv === null) {
+    deps.write(
+      `${appDir}: REFUSED — the secrets store is not configured (SECRETS_BASE_URL, ` +
+        "SECRETS_PLATFORM_READ_TOKEN, and SECRETS_TLS_CERT_BASE64 for an https:// base URL).",
+    );
+
+    return 2;
+  }
+
+  // No try/catch here: every per-name failure resolveSecretEnvStatus can produce is already caught
+  // inside it and turned into that name's own "error" result (below) — an outright store-call
+  // failure is exit 4 by way of that per-name outcome, not a rejected promise reaching this
+  // function. An exception here would be a genuinely unanticipated bug, and {@link main}'s own
+  // catch-all handles that the same way it handles one from report or apply.
+  const status = await resolveSecretEnvStatus(deps.secretEnv, appDir);
+
+  for (const line of renderSecretEnvStatus(status)) {
+    deps.write(line);
+  }
+
+  switch (status.outcome) {
+    case "refused-self":
+    case "unknown-app":
+      return 2;
+    case "no-declarations":
+      return 1;
+    case "results":
+      // "unresolved" (3) and "error" (4) are deliberately different exit codes, same distinction
+      // {@link resolveSecretEnvStatus} draws per name: unresolved is the store cleanly answering "no"
+      // (missing, out of scope, or wrong capability — indistinguishable from here), error is the call
+      // itself failing outright. "error" wins when both are present in the same run.
+      if (status.results.every((result) => result.outcome === "resolved")) return 0;
+      if (status.results.some((result) => result.outcome === "error")) return 4;
+      return 3;
+  }
+}
+
 /**
  * Throws nothing — every failure, including a `project.all` call that fails outright, is caught
  * and turned into an exit code and a written line. {@link main} stays thin: this is the function
@@ -128,9 +194,30 @@ export async function runReconcileCli(
     }
   }
 
+  if (argv.length === 2 && subcommand === "secrets-status") {
+    const appDir = argv[1];
+    if (appDir !== undefined) {
+      return runSecretsStatus(deps, appDir);
+    }
+  }
+
   deps.write(USAGE);
 
   return 2;
+}
+
+/**
+ * Never throws: an absent, empty, or malformed store variable becomes `null` here rather than
+ * reaching {@link main}'s catch-all, which exists for a Dokploy call failing outright, not for the
+ * store being unconfigured. `runSecretsStatus` turns a `null` into its own refusal line and exit
+ * code instead.
+ */
+function tryCreateSecretsClientFromEnv(): SecretsClient | null {
+  try {
+    return createSecretsClientFromEnv();
+  } catch {
+    return null;
+  }
 }
 
 async function main(): Promise<void> {
@@ -141,9 +228,15 @@ async function main(): Promise<void> {
       apiKey: loadDokployApiKey(),
     });
 
-    process.exitCode = await runReconcileCli(process.argv.slice(2), {
+    const argv = process.argv.slice(2);
+    // Only this subcommand ever reads a store variable — report and apply never do, so a store left
+    // unconfigured cannot affect either of them.
+    const secretEnv = argv[0] === "secrets-status" ? tryCreateSecretsClientFromEnv() : null;
+
+    process.exitCode = await runReconcileCli(argv, {
       client,
       desired: DEPLOY_DESIRED_STATE,
+      secretEnv,
       write: (line) => {
         process.stdout.write(`${line}\n`);
       },

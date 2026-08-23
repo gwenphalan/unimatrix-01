@@ -6,7 +6,10 @@ and a settings-only apply (`src/reconcile/`, `pnpm --filter @unimatrix/deploy-ap
 diffs `src/reconcile/desired-state.gen.ts` against what Dokploy actually holds, prints drift, and can
 write `composePath`/`branch`/`autoDeploy` for one app at a time. It performs no probing, writes no
 env, and creates and deploys nothing — see `README.md` for what still has to happen by hand before
-this stack deploys, and for apply's full refusal set.
+this stack deploys, and for apply's full refusal set. It also holds a read-only resolver against the
+secrets store (`src/secret-env/`, `reconcile secrets-status <app>`) that answers whether a declared
+app's secrets-store values resolve — it holds no write capability against the store, and
+`src/reconcile/` holds none of that resolver's read capability either; see §2's last two rules.
 
 ## 2. Rules
 
@@ -22,7 +25,9 @@ this stack deploys, and for apply's full refusal set.
 - **`/health` is the only route, and adding a second one means adding caller authentication
   first.** This service is unrouted — no domain, no Traefik entry — but that is not what makes it
   private: it holds a manage-scoped Dokploy token and sits on `dokploy-network` alongside every app
-  Traefik serves.
+  Traefik serves, and on `unimatrix-secrets` alongside `apps/secrets` and `apps/api` — the same
+  container that can delete every application on the instance now also sits on the network carrying
+  every secrets-store read for this instance.
 - **Dokploy is tRPC-derived: every call is `GET|POST /api/<router>.<procedure>`**, never a REST
   resource path, and `/api/openapi.json` 404s on v0.29.13, so schemas are hand-written rather than
   generated. Only add a procedure whose response has actually been observed —
@@ -66,3 +71,21 @@ this stack deploys, and for apply's full refusal set.
   parameter; nothing downstream — the diff, the report, the CLI — ever holds a field that could
   carry a value. This is `docs/deployment.md`'s "never print a response body" rule applied one layer
   deeper than the client.
+- **`src/secret-env/`'s store token, base URL, and certificate are read lazily, only on the
+  `secrets-status` CLI path — never from `src/config.ts`.** `loadDeployRuntimeConfig()` runs on every
+  boot of this service and on every `reconcile report`/`reconcile apply` invocation; none of the three
+  is a field on `DeployRuntimeConfig`, so a store left unconfigured cannot fail any of those.
+  `store.ts`'s `loadSecretsPlatformReadToken` mirrors `loadDokployApiKey`'s shape: the token lives
+  only in the closure `createSecretsClientFromEnv` builds, and never on `runtimeConfig` — this service
+  builds no Fastify instance for `secrets-status` at all, but the rule is the same one the Dokploy key
+  follows. The token itself arrives via `docker exec --env-file` at invoke time; it is never declared
+  in `infra/docker/deploy-compose.yaml` and never at rest in Dokploy's `env` column.
+- **`src/reconcile/` never imports `src/secret-env/` or `@unimatrix/secrets`, in either direction of
+  data.** `boundaries.mjs` grants this workspace the `secrets` package edge as a whole (it has no
+  per-directory granularity); `restricted-imports.mjs` narrows that edge to `src/secret-env/`, the
+  only place holding read capability against the store, and
+  `test/reconcile-value-isolation.test.ts` pins the same rule structurally by reading `src/reconcile/`
+  off disk. `src/secret-env/status.ts` reads `DEPLOY_DESIRED_STATE` and `RECONCILE_SELF_APP_DIR`
+  itself rather than taking either from a caller — data flows manifest → `secret-env`, never through
+  `reconcile`. This service holds no write capability against the store at all yet: every outcome
+  `secret-env` can produce is `resolved`/`unresolved`/`error`, never a value, a length, or a prefix.

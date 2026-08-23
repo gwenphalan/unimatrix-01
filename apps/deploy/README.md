@@ -13,9 +13,11 @@ the first time:
 - **The Dokploy API key** (`DOKPLOY_API_KEY`) — it is what the store-side
   materialization work (a later change) would use to reach Dokploy in the
   first place, so it cannot itself be fetched from the store.
-- **This service's own secrets-store service token** — issuing it needs the
-  secrets service already running and reachable, which this service's own
-  deploy cannot depend on.
+- **This service's own secrets-store read token** (`SECRETS_PLATFORM_READ_TOKEN`)
+  — issuing it needs the secrets service already running and reachable, which
+  this service's own deploy cannot depend on. It arrives at invoke time via
+  `docker exec --env-file`, never as compose env: it is never at rest in
+  Dokploy's `env` column and never in `infra/docker/deploy-compose.yaml`.
 - **`SECRETS_KEKS`** — never held by this service at all; named here only
   because it is the same root-set reasoning. See `packages/secrets/AGENTS.md`
   §4 for the store-side floor these three sit beside.
@@ -50,6 +52,11 @@ on at all, and it reports **after** the merge, in a job that cannot block one:
    embedded DNS, **not measured** — nothing has run in a container on that
    network yet. Never the public hostname: that path measures Cloudflare and
    Traefik as much as Dokploy, and costs two Access service-token secrets.
+6. Set `SECRETS_TLS_CERT_BASE64` in the same UI — the store's certificate, the
+   same base64 PEM its own stack carries. Unlike the two variables above, an
+   unset value here does not block this service's boot: it is read lazily, only
+   when `secrets-status` runs (see below), so `reconcile report` shows `deploy:
+   DRIFT` on this key until it is set rather than the service restart-looping.
 
 ## Reconcile report
 
@@ -101,6 +108,27 @@ In production: `docker exec <deploy container> node dist/cli/reconcile.js apply 
 
     DOKPLOY_BASE_URL=http://localhost:3000 DOKPLOY_API_KEY=<your-key> \
       pnpm --filter @unimatrix/deploy-app reconcile apply api
+
+## Secrets status
+
+`pnpm --filter @unimatrix/deploy-app reconcile secrets-status <app>` resolves the secrets-store
+values one declared app's manifest entry names — the `secretName` on each `secrets-store`-kind
+`composeEnv` entry — against the store this service holds a read-only token for. It writes nothing,
+to the store or to Dokploy, and never prints a value, a length, or a prefix: only whether each
+declared name resolved, and whether a resolved value is single-line (a stored value with real
+newlines can never be written by PR 2's line-oriented env write). Run
+`pnpm --filter @unimatrix/deploy-app reconcile secrets-status` with no app name for the full
+exit-code table.
+
+The store is read lazily, only by this subcommand — `report` and `apply` never touch a store
+variable, so a store left unconfigured cannot affect either of them.
+
+In production: `docker exec <deploy container> node dist/cli/reconcile.js secrets-status <app>`. The
+read token (`SECRETS_PLATFORM_READ_TOKEN`) arrives via `--env-file` on that `docker exec`, never as
+compose env:
+
+    docker exec --env-file /path/to/token.env <deploy container> \
+      node dist/cli/reconcile.js secrets-status api
 
 ## Local development
 

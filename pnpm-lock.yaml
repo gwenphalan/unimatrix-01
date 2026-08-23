@@ -407,6 +407,9 @@ importers:
 
   apps/deploy:
     dependencies:
+      '@unimatrix/secrets':
+        specifier: workspace:*
+        version: link:../../packages/secrets
       '@unimatrix/shared':
         specifier: workspace:*
         version: link:../../packages/shared
