@@ -481,9 +481,12 @@ Environment:
                         skips the startup check rather than reaching the
                         network.
 
-Output from phase 1, on stdout. Each row is prefixed `PR #<num>: ` and written
-as a sentence, because under Monitor it is a notification a caller relays as it
-stands:
+Every stdout row below is prefixed `PR #<num>: ` and written as a sentence,
+because under Monitor it is a notification a caller relays as it stands. The
+`offline:` rows and FIXTURES EXHAUSTED are the exceptions — neither can reach a
+live Monitor.
+
+Output from phase 1, on stdout:
   GitHub lists no required checks for this branch — stopping rather than reading an empty list as green.
   the PR's base branch could not be read — stopping rather than gating blind.
   the required-check list could not be read — stopping rather than gating blind.
@@ -506,41 +509,50 @@ On the startup baseline read, before any ping:
   already reviewed (count=<n>) — the ping is not needed   stderr; the post-review wait starts next
 
 Under --no-review, before any wait:
-  no review requested, and auto-merge is off — nothing armed   terminal
+  no review and no auto-merge — nothing to do here; merge it by hand.   terminal
 
 Otherwise, from phase 2's own ping-and-wait, one line, whichever applies:
-  reviewed: <base> -> <n>                     the count rose; the post-review wait starts next
-  reviewed clean, count unchanged at <n>      it ran and found nothing, arms directly
-  auto-reping disabled — the ping is yours, nothing was posted
-  cannot post the ping — nothing to wait for
-  ping timestamp is unreadable — nothing to compare against
+  CodeRabbit reviewed it and found something.   the count rose; the post-review wait starts next
+  CodeRabbit reviewed it and found nothing. Merging once the checks pass.   arms directly
+  CodeRabbit is rate limited and automatic retry is off — no review was requested.
+  the review request could not be posted — nothing to wait for.
+  GitHub returned no usable timestamp for the review request — stopping rather than guessing.
+  CodeRabbit is rate limited and the retry could not be posted. Use another reviewer.
+  CodeRabbit is rate limited and did not review. Use another reviewer.
+  CodeRabbit is rate limited for another <n>m — too long to wait. Use another reviewer.
+  CodeRabbit is rate limited and its countdown is unreadable — ask again yourself, or use another reviewer.
+  CodeRabbit refused twice — the window is longer than it advertised. Use another reviewer.
+  CodeRabbit refused twice — the included review budget is spent, not a short wait. Use another reviewer.
+  already merged — CodeRabbit will not review it now or ever.
+  a push landed mid-review and CodeRabbit stopped. It read <sha> and nothing since.
+  CodeRabbit's review failed — its comment on the PR says why.
+  CodeRabbit never picked up the review request. Nothing was spent — ask again.
+  nothing in this diff is reviewable — that is the review, not a failure.
   offline: [re-]ping suppressed, continuing as if posted
-  refused: rate limited, and the [re-]ping could not be posted
-  refused: rate limited                       cool down, recompute, re-ping
-  refused: rate limited, cooldown <n>m exceeds threshold
-  refused: rate limited, countdown unreadable — the ping is yours
-  refused: rate limited again after one re-ping
-  refused: rate limited again after one re-ping — the included review budget is spent, not a short cooldown
-  refused: merged, CodeRabbit is done for good
-  refused: head commit changed mid-review, reviewed head was <sha>
-  refused: review failed — read the comment
-  refused: skipped — ping did not register    re-ping, nothing was spent
-  nothing reviewable — that IS the review
 
 Also on stdout, from `ride_out_cooldown` itself — reached at arm time before
 the first ping, or from either poll-loop refusal above, comment or status —
 whenever the cooldown is short enough to ride out rather than refuse. A live
 cooldown can run up to SHIP_PR_MAX_COOLDOWN (30m default) with nothing else
 printed, and this is the one line that says the run is still alive through it:
-  cooling down <n>m, [re-]pinging at <time>   riding out a rate limit, then one ping
+  CodeRabbit is rate limited — waiting <n>m, asking again at <time>.
 
-The post-review wait — reached from `reviewed: <base> -> <n>`, from the
+The post-review wait — reached from the "found something" row above, from the
 startup baseline read finding the review count already > 0, and, minus the
 checks recheck, from `--no-review` once auto-merge is on — on stdout:
   the same three checks lines phase 1 prints, carrying `Nothing is armed to merge.`
-  findings: <n> unresolved review thread(s) — reply and fix   said once, the first non-zero count
-  threads still unresolved after <m>m — reply and re-arm, or resolve by hand   terminal, exit 0
-  thread count API ERROR xN — stopping rather than waiting blind   three consecutive failures, exit 2
+  CodeRabbit raised <n> review thread(s).     said once, on the first non-zero count
+  <path>:<line>                               one per thread, each followed by CodeRabbit's own
+                                              text with its collapsed blocks and HTML comments
+                                              stripped out — unprefixed, since it is quoted prose
+                                              rather than a row of this script's own
+  CodeRabbit raised <n> review thread(s) — the finding text could not be read; open the threads on GitHub.
+  CodeRabbit raised <m> review thread(s); a separate read counted <n>, so one was resolved or opened in between.
+  <n> review thread(s) still open after <m>m. Answer them and start the watch again, or resolve them on GitHub.   terminal, exit 0
+  the review-thread count failed 3 times in a row — stopping rather than waiting blind.   exit 2
+
+A finding that arrives as summary body text with no inline comment opens no
+thread, so nothing above ever sees it. Read the walkthrough comment for those.
 
 Then the arm, on stdout — the same code and the same lines regardless of which
 of the three call sites (clean review, findings resolved, --no-review) reached
@@ -548,11 +560,11 @@ it. The live `gh pr merge` call succeeding leads to the wait-for-merge phase
 below, and so, offline only, does either "armed" line when
 SHIP_PR_MERGE_FIXTURES supplies cases for that phase to consume; every other
 line here is arm_auto_merge()'s own return of 1:
-  auto-merge is off — nothing armed, merge by hand
-  auto-merge not armed — PR is a draft
-  auto-merge not armed — <n> unresolved threads
-  auto-merge not armed — the PR state could not be read
-  auto-merge could NOT be armed — merge by hand
+  everything cleared, auto-merge is off — merge it by hand.
+  everything cleared but the PR is a draft — mark it ready and start the watch again.
+  <n> review threads are still open — nothing will merge until they are resolved.
+  the PR's state could not be read — nothing was armed, deliberately.
+  GitHub refused to arm the merge — merge it by hand.
   offline: auto-merge not armed (auto-merge is off)
   offline: auto-merge not armed (would arm on <sha>)
   offline: auto-merge not armed (would be UNREVIEWED on <sha>)
@@ -561,20 +573,20 @@ line here is arm_auto_merge()'s own return of 1:
 
 The wait-for-merge phase, reached from a successful arm — see "After the
 arm" above — on stdout:
-  merged <sha>                                terminal
-  PR closed without merging — nothing left to watch   terminal
-  required check red after arm: <names> — the arm survives; GitHub retries when it goes green on <sha>   not terminal
-  head changed after arm, from <sha> to <sha> — auto-merge disabled; re-arm by hand: gh pr merge ...   terminal
-  head changed after arm, from <sha> to <sha> — auto-merge could NOT be disabled ...disable it by hand now: gh pr merge ...   terminal
-  base branch changed after arm, from <name> to <name> — ...re-arm by hand: gh pr merge ...   terminal
-  branch went BEHIND after arm — the arm is live but cannot fire; update and re-arm: gh pr update-branch ...   terminal
-  branch went DIRTY after arm — the arm is live but cannot fire; resolve the conflicts and re-arm   terminal
-  merge-wait API ERROR xN — stopping rather than waiting blind   three consecutive failures, exit 2
+  merged — <sha>                              terminal
+  closed without merging — nothing left to watch.   terminal
+  <names> went red after the merge was armed. Nothing to do — GitHub retries on its own when it goes green again on <sha>.   not terminal
+  a push landed after the merge was armed. The merge is off again ...Re-arm on the new head when ready: gh pr merge ...   terminal
+  a push landed after the merge was armed and the merge could NOT be turned off ...Turn it off now: gh pr merge ...   terminal
+  the base branch changed from <name> to <name>, which turns the merge off. Re-arm when ready: gh pr merge ...   terminal
+  the branch fell behind main, so the armed merge can never fire. Update it, then re-arm: gh pr update-branch ...   terminal
+  the branch has conflicts, so the armed merge can never fire. Resolve them and start the watch again.   terminal
+  GitHub's PR read failed 3 times in a row — stopping rather than watching blind. The merge may still be armed.   exit 2
 
 Either phase, the post-review wait, or the wait-for-merge phase can also end
 on stdout with:
   GitHub's checks API failed 3 times in a row — stopping rather than gating blind. Last error: <message>
-  API ERROR xN (count=<n>) — <message>        three consecutive failures in phase 2's own wait
+  GitHub's comment API failed 3 times in a row — stopping rather than waiting blind. Last error: <message>
   FIXTURES EXHAUSTED                          offline runs only
 
 On stderr, every 10th poll of any wait, so it reaches a terminal and the
@@ -1144,6 +1156,124 @@ unresolved_threads() {
        END { if (bad || NR == 0) exit 1 ; print total + 0 }' <<<"$pages"
 }
 
+# Every unresolved thread as "<path>:<line>\t<the first comment's body, base64>",
+# one line each. Nothing on failure.
+#
+# Deliberately NOT folded into `unresolved_threads()` above. That function's
+# contract is "a bare integer or nothing", and `arm_auto_merge` reads a missing
+# integer as a refusal to merge — the fail-closed guard on an unattended merge.
+# Widening its query would put that guard behind a second, larger read with more
+# ways to come back empty.
+#
+# `line` is null on a thread whose hunk has moved since the review — 3 of 5
+# measured on PRs 281/282/284 — so `originalLine` is the fallback. Base64 per
+# body for the reason `read_bodies()` uses it: a body is multi-line and has to
+# survive `mapfile` whole.
+threads_jq='.data.repository.pullRequest.reviewThreads.nodes[]
+  | select(.isResolved == false)
+  | "\(.path):\(.line // .originalLine)\t\(.comments.nodes[0].body // "" | @base64)"'
+
+unresolved_thread_bodies() {
+  if [ -n "${1:-}" ]; then
+    [ -f "$1" ] || return 1
+    jq -r "$threads_jq" "$1" 2>/dev/null || return 1
+  else
+    # shellcheck disable=SC2016  # GraphQL variables, not shell: $owner/$name/$pr
+    # are bound by the -F flags above, and $endCursor by --paginate.
+    gh api graphql --paginate -F owner="${repo%%/*}" -F name="${repo##*/}" -F pr="$pr" \
+      --jq "$threads_jq" \
+      -f query='query($owner: String!, $name: String!, $pr: Int!, $endCursor: String) {
+        repository(owner: $owner, name: $name) {
+          pullRequest(number: $pr) {
+            reviewThreads(first: 100, after: $endCursor) {
+              nodes {
+                isResolved
+                path
+                line
+                originalLine
+                comments(first: 1) { nodes { body } }
+              }
+              pageInfo { hasNextPage endCursor }
+            }
+          }
+        }
+      }' 2>/dev/null || return 1
+  fi
+}
+
+# CodeRabbit's finding, with everything that is not the finding taken out: the
+# collapsed `<details>` blocks and the HTML comments. Measured over the 26
+# comments on PRs 281/282/284, that is 65 KB of body down to 16 KB of prose,
+# largest 1059 bytes.
+#
+# Dropping every block rather than a list of labelled ones — 🧩 Analysis chain,
+# 📝 Committable suggestion, 🤖 Prompt for AI Agents — because a label list goes
+# stale silently the first time CodeRabbit adds a block, and what survives is
+# already the whole finding: the metadata line, the bold headline, the prose.
+# `🤖 Prompt for AI Agents` in particular is third-party instructions addressed
+# to an agent, and this text is relayed into one.
+#
+# Line-oriented, because every `<details>`, `</details>` and `<!--` in the
+# sample opens its own line. Depth is tracked so a nested block does not close
+# its parent early, and fences are tracked only OUTSIDE a block — the suggestion
+# blocks being dropped carry ``` fences of their own, so toggling on those would
+# desync everything after them.
+strip_finding() {
+  awk '
+    depth == 0 && /^[[:space:]]*```/ { infence = !infence; print; next }
+    infence { print; next }
+    /^[[:space:]]*<details/ { depth++; next }
+    /^[[:space:]]*<\/details>/ { if (depth > 0) depth--; next }
+    depth > 0 { next }
+    /^[[:space:]]*<!--/ { if ($0 !~ /-->/) incomment = 1; next }
+    incomment { if ($0 ~ /-->/) incomment = 0; next }
+    /^[[:space:]]*$/ { blank = 1; next }
+    { if (blank && printed) print ""; blank = 0; printed = 1; print }
+  '
+}
+
+# The findings notification: what CodeRabbit actually said, not how many times it
+# said something. A count alone costs the reader a round trip to GitHub before
+# they know whether it is a typo or a security hole.
+#
+# `$1` is the count `unresolved_threads()` already read; the bodies come from a
+# second, independent call, so a thread resolved between the two makes them
+# disagree. Reported rather than reconciled — a headline number the list under it
+# contradicts is worse than an admitted mismatch. A body read that fails outright
+# falls back to the count and changes neither the wait nor the gate.
+announce_findings() {
+  local count=$1 fixture=${2:-} raw="" rows=() row loc body found noun
+  raw=$(unresolved_thread_bodies "$fixture") || raw=""
+  if [ -z "$raw" ]; then
+    noun="threads"
+    [ "$count" = "1" ] && noun="thread"
+    notify "CodeRabbit raised $count review $noun — the finding text could not be read; open the threads on GitHub."
+    return 0
+  fi
+  mapfile -t rows <<<"$raw"
+  found=${#rows[@]}
+  noun="threads"
+  [ "$found" = "1" ] && noun="thread"
+  if [ "$found" = "$count" ]; then
+    notify "CodeRabbit raised $found review $noun."
+  else
+    notify "CodeRabbit raised $found review $noun; a separate read counted $count, so one was resolved or opened in between."
+  fi
+  for row in "${rows[@]}"; do
+    loc=${row%%$'\t'*}
+    body=$(base64 -d <<<"${row#*$'\t'}" 2>/dev/null | strip_finding) || body=""
+    # The cap never fires on anything measured; it is here so a format change
+    # cannot put 47 KB of collapsed blocks into one notification.
+    [ "${#body}" -gt 2000 ] && body="${body:0:2000}… (truncated — read the thread on GitHub)"
+    notify "$loc"
+    [ -n "$body" ] && printf '%s\n' "$body"
+  done
+  # Not decoration: a last thread whose body strips to nothing leaves that `&&`
+  # as the function's exit status, and `set -e` would end the run on a finding
+  # that was merely quiet.
+  return 0
+}
+
 # Waits for `unresolved_threads()` to read 0, the same mechanism the arm
 # already gates on — deliberately not a second "was this replied to" check
 # with its own definition of done, since two definitions of "handled"
@@ -1167,7 +1297,7 @@ wait_for_threads_replied() {
   threads_started=$(date +%s)
 
   while true; do
-    local rc=0 threads="" entry
+    local rc=0 threads="" entry=""
     if [ "$offline" -eq 1 ]; then
       if [ "$threads_step" -ge "${#threads_fixtures[@]}" ]; then
         echo "FIXTURES EXHAUSTED"
@@ -1195,20 +1325,23 @@ wait_for_threads_replied() {
       # operator sees is the timeout, and the silence before it is
       # indistinguishable from progress.
       #
-      # Separate from `reviewed: <base> -> <n>` rather than folded into it,
-      # because that line reports a count change and a bodied review can carry
+      # Separate from the "found something" row rather than folded into it,
+      # because that row reports a count change and a bodied review can carry
       # no inline comments at all — in which case this wait returns above and
       # the run arms without ever printing this.
       if [ "$announced" -eq 0 ]; then
         announced=1
-        local noun="threads"
-        [ "$threads" -eq 1 ] && noun="thread"
-        echo "findings: $threads unresolved review $noun — reply and fix"
+        # `$entry` is THIS poll's fixture path, re-read rather than consumed:
+        # advancing `threads_step` here would desync every
+        # SHIP_PR_THREADS_FIXTURES list by one. Empty live, which is the
+        # "optional first arg is a fixture path" idiom the rest of this file
+        # uses.
+        announce_findings "$threads" "$entry"
       fi
     else
       threads_fails=$((threads_fails + 1))
       if [ "$threads_fails" -ge 3 ]; then
-        echo "thread count API ERROR x$threads_fails — stopping rather than waiting blind"
+        notify "the review-thread count failed $threads_fails times in a row — stopping rather than waiting blind."
         exit 2
       fi
     fi
@@ -1223,7 +1356,12 @@ wait_for_threads_replied() {
     # error — the PR just needs the same manual step it would have needed
     # without this script at all.
     if [ "$threads_elapsed" -ge "$thread_wait_timeout" ]; then
-      echo "threads still unresolved after $((threads_elapsed / 60))m — reply and re-arm, or resolve by hand"
+      local open_noun="threads"
+      [ "$threads" = "1" ] && open_noun="thread"
+      # `some` covers the poll that failed its read without reaching three
+      # strikes: the cap can fire before the count is known, and a bare `m`
+      # would read as zero threads rather than as an unread one.
+      notify "${threads:-some} review $open_noun still open after $((threads_elapsed / 60))m. Answer them and start the watch again, or resolve them on GitHub."
       exit 0
     fi
 
@@ -1273,7 +1411,7 @@ arm_auto_merge() {
     if [ "$offline" -eq 1 ]; then
       echo "offline: auto-merge not armed (auto-merge is off)"
     else
-      echo "auto-merge is off — nothing armed, merge by hand"
+      notify "everything cleared, auto-merge is off — merge it by hand."
     fi
     return 1
   fi
@@ -1309,15 +1447,15 @@ arm_auto_merge() {
   # Fails closed. A state that could not be read is not a state that permits an
   # unattended merge.
   if [ -z "$draft" ] || [ -z "$threads" ]; then
-    echo "auto-merge not armed — the PR state could not be read"
+    notify "the PR's state could not be read — nothing was armed, deliberately."
     return 1
   fi
   if [ "$draft" = "true" ]; then
-    echo "auto-merge not armed — PR is a draft"
+    notify "everything cleared but the PR is a draft — mark it ready and start the watch again."
     return 1
   fi
   if [ "$threads" -ne 0 ]; then
-    echo "auto-merge not armed — $threads unresolved threads"
+    notify "$threads review threads are still open — nothing will merge until they are resolved."
     return 1
   fi
   if gh pr merge "$pr" --repo "$repo" --auto --squash --match-head-commit "$head_sha" >/dev/null 2>&1; then
@@ -1330,7 +1468,7 @@ arm_auto_merge() {
     # Never silent, and never phrased as though it merged. Arming fails for
     # reasons worth seeing: auto-merge disabled on the repo, a branch GitHub will
     # not fast-forward, missing permission.
-    echo "auto-merge could NOT be armed — merge by hand"
+    notify "GitHub refused to arm the merge — merge it by hand."
     return 1
   fi
 }
@@ -1392,11 +1530,11 @@ wait_for_merge() {
       merge_state=$(jq -r '.mergeStateStatus // ""' <<<"$pr_json")
 
       if [ "$state" = "MERGED" ]; then
-        echo "merged ${merged_sha:-$cur_sha}"
+        notify "merged — ${merged_sha:-$cur_sha}"
         exit 0
       fi
       if [ "$state" = "CLOSED" ]; then
-        echo "PR closed without merging — nothing left to watch"
+        notify "closed without merging — nothing left to watch."
         exit 0
       fi
 
@@ -1408,7 +1546,7 @@ wait_for_merge() {
       if [ -z "$armed_base" ]; then
         armed_base=$base_ref
       elif [ -n "$base_ref" ] && [ "$base_ref" != "$armed_base" ]; then
-        echo "base branch changed after arm, from $armed_base to $base_ref — GitHub disables the arm on a base switch; re-arm by hand: gh pr merge $pr --repo $repo --auto --squash --match-head-commit $cur_sha"
+        notify "the base branch changed from $armed_base to $base_ref, which turns the merge off. Re-arm when ready: gh pr merge $pr --repo $repo --auto --squash --match-head-commit $cur_sha"
         exit 0
       fi
 
@@ -1432,9 +1570,9 @@ wait_for_merge() {
           disabled=0
         fi
         if [ "$disabled" -eq 1 ]; then
-          echo "head changed after arm, from $armed_sha to $cur_sha — auto-merge disabled; re-arm by hand: gh pr merge $pr --repo $repo --auto --squash --match-head-commit $cur_sha"
+          notify "a push landed after the merge was armed. The merge is off again so nothing unreviewed lands. Re-arm on the new head when ready: gh pr merge $pr --repo $repo --auto --squash --match-head-commit $cur_sha"
         else
-          echo "head changed after arm, from $armed_sha to $cur_sha — auto-merge could NOT be disabled and is still armed on an unreviewed head; disable it by hand now: gh pr merge $pr --repo $repo --disable-auto"
+          notify "a push landed after the merge was armed and the merge could NOT be turned off — it is still set to merge a head nothing reviewed. Turn it off now: gh pr merge $pr --repo $repo --disable-auto"
         fi
         # Terminal. The arm this wait exists to watch is gone either way, and
         # falling through would reach the red-check line below, whose "the arm
@@ -1464,11 +1602,11 @@ wait_for_merge() {
       # ordinary state of a PR whose checks have not all reported yet.
       case $merge_state in
         BEHIND)
-          echo "branch went BEHIND after arm — the arm is live but cannot fire; update and re-arm: gh pr update-branch $pr --repo $repo, then gh pr merge $pr --repo $repo --auto --squash --match-head-commit \$(gh pr view $pr --repo $repo --json headRefOid --jq .headRefOid)"
+          notify "the branch fell behind main, so the armed merge can never fire. Update it, then re-arm: gh pr update-branch $pr --repo $repo, then gh pr merge $pr --repo $repo --auto --squash --match-head-commit \$(gh pr view $pr --repo $repo --json headRefOid --jq .headRefOid)"
           exit 0
           ;;
         DIRTY)
-          echo "branch went DIRTY after arm — the arm is live but cannot fire; resolve the conflicts and re-arm"
+          notify "the branch has conflicts, so the armed merge can never fire. Resolve them and start the watch again."
           exit 0
           ;;
       esac
@@ -1492,7 +1630,7 @@ wait_for_merge() {
           # would be redundant work, and the earlier wording asking for it was
           # wrong. The head moving is the case that really does break the arm,
           # and it has its own line above.
-          echo "required check red after arm: ${red%,} — the arm survives; GitHub retries when it goes green on $cur_sha"
+          notify "${red%,} went red after the merge was armed. Nothing to do — GitHub retries on its own when it goes green again on $cur_sha."
         elif [ -z "$red" ]; then
           last_red=""
         fi
@@ -1507,7 +1645,7 @@ wait_for_merge() {
     else
       fails=$((fails + 1))
       if [ "$fails" -ge 3 ]; then
-        printf 'merge-wait API ERROR x%s — stopping rather than waiting blind\n' "$fails"
+        notify "GitHub's PR read failed $fails times in a row — stopping rather than watching blind. The merge may still be armed."
         exit 2
       fi
     fi
@@ -1612,7 +1750,7 @@ re_pin_head_sha() {
 }
 
 # Reached from two places: the findings row of phase 2's own wait
-# ("reviewed: <base> -> <n>"), and the startup check below that finds the
+# (the "found something" row), and the startup check below that finds the
 # review-count baseline already > 0 before ever posting a ping. Both get the
 # full treatment, checks recheck included — a restart resuming an
 # already-reviewed PR may have real wall-clock behind it since that review
@@ -1654,7 +1792,7 @@ post_review_wait() {
 # indistinguishable from a script that died.
 if [ "$no_review" -eq 1 ]; then
   if [ "$auto_merge" != 1 ]; then
-    echo "no review requested, and auto-merge is off — nothing armed"
+    notify "no review and no auto-merge — nothing to do here; merge it by hand."
     exit 0
   fi
   wait_for_threads_replied
@@ -1773,7 +1911,7 @@ post_ping() {
 # timestamp everything agrees on, or the run stops.
 adopt_ping_at() {
   if ! ping_epoch=$(date -u -d "$ping_at" +%s 2>/dev/null); then
-    echo "ping timestamp is unreadable — nothing to compare against"
+    notify "GitHub returned no usable timestamp for the review request — stopping rather than guessing."
     exit 1
   fi
   ping_posted=1
@@ -1887,20 +2025,20 @@ ride_out_cooldown() {
     # `refusals_absorbed=0` is why the startup call can never reach this
     # branch, so whichever poll-loop arm got here has already populated it
     # for the refusal being reported.
-    local quota="" b
+    local quota=" — the window is longer than it advertised." b
     for b in ${bodies+"${bodies[@]}"}; do
       case $b in
         *"Fair Usage Limits Policy"*)
-          quota=" — the included review budget is spent, not a short cooldown"
+          quota=" — the included review budget is spent, not a short wait."
           break
           ;;
       esac
     done
-    echo "refused: rate limited again after one re-ping${quota}"
+    notify "CodeRabbit refused twice${quota} Use another reviewer."
     return 1
   fi
   if [ "$auto_reping" -ne 1 ]; then
-    echo "refused: rate limited"
+    notify "CodeRabbit is rate limited and did not review. Use another reviewer."
     return 1
   fi
   # rc=2 is "the marker is there, only the arithmetic is missing", and collapsing
@@ -1912,17 +2050,17 @@ ride_out_cooldown() {
   case $rc in
     0) : ;;
     2)
-      echo "refused: rate limited, countdown unreadable — the ping is yours"
+      notify "CodeRabbit is rate limited and its countdown is unreadable — ask again yourself, or use another reviewer."
       return 1
       ;;
     *)
-      echo "refused: rate limited"
+      notify "CodeRabbit is rate limited and did not review. Use another reviewer."
       return 1
       ;;
   esac
   [ "$remaining" -lt 0 ] && remaining=0
   if [ "$remaining" -gt "$max_cooldown" ]; then
-    echo "refused: rate limited, cooldown $((remaining / 60))m exceeds threshold"
+    notify "CodeRabbit is rate limited for another $((remaining / 60))m — too long to wait. Use another reviewer."
     return 1
   fi
   # +15s of slack: the countdown is whatever was true when the comment was last
@@ -1933,7 +2071,7 @@ ride_out_cooldown() {
   # default) with nothing else printed in between, and on stderr that stretch
   # produced no `Monitor` notification at all — indistinguishable from a dead
   # script for as long as the cooldown lasts.
-  echo "cooling down $((remaining / 60))m, ${again}pinging at $(local_time $(($(date -u +%s) + remaining)))"
+  notify "CodeRabbit is rate limited — waiting $((remaining / 60))m, asking again at $(local_time $(($(date -u +%s) + remaining)))."
   # Offline is the fixture harness, and it has to reach the arithmetic above —
   # that is the point of routing both entry points through one function. What it
   # must not do is sleep out a real countdown or post to a real PR, so it skips
@@ -1951,7 +2089,7 @@ ride_out_cooldown() {
   local created
   created=$(post_ping) || created=""
   if [ -z "$created" ]; then
-    echo "refused: rate limited, and the ${again}ping could not be posted"
+    notify "CodeRabbit is rate limited and the retry could not be posted. Use another reviewer."
     return 1
   fi
   # Adopting the new ping's timestamp also advances `since`, which is what keeps
@@ -1992,7 +2130,7 @@ case $startup_rc in
       if [ "$auto_reping" -eq 1 ]; then
         ride_out_cooldown || exit 0
       else
-        echo "auto-reping disabled — the ping is yours, nothing was posted"
+        notify "CodeRabbit is rate limited and automatic retry is off — no review was requested."
         exit 0
       fi
     else
@@ -2024,7 +2162,7 @@ if [ "$ping_posted" -eq 0 ]; then
   else
     ping_at=$(post_ping) || ping_at=""
     if [ -z "$ping_at" ]; then
-      echo "cannot post the ping — nothing to wait for"
+      notify "the review request could not be posted — nothing to wait for."
       exit 1
     fi
   fi
@@ -2112,7 +2250,7 @@ while true; do
           # our ping, it is this repo's resting state and there is nothing to
           # announce. Newer, the ping was swallowed.
           if [ "$(date -u -d "$status_at" +%s 2>/dev/null || echo 0)" -gt "$ping_epoch" ]; then
-            echo "refused: skipped — ping did not register"
+            notify "CodeRabbit never picked up the review request. Nothing was spent — ask again."
             exit 0
           fi
           ;;
@@ -2142,7 +2280,7 @@ while true; do
     fi
 
     if [ "$n" -gt "$base" ]; then
-      echo "reviewed: $base -> $n"
+      notify "CodeRabbit reviewed it and found something."
       # Findings, not a stop: the reply-and-fix cycle is a real workflow with
       # real wall-clock in it, and ending the run here pushed that whole cycle
       # onto a human running a second `watch-pr.sh --no-review` — the flag
@@ -2181,7 +2319,7 @@ while true; do
         # a body carrying both means the review ended while stale progress text
         # was still in it.
         *"No actionable comments were generated"*)
-          echo "reviewed clean, count unchanged at $n"
+          notify "CodeRabbit reviewed it and found nothing. Merging once the checks pass."
           if arm_auto_merge 0; then
             wait_for_merge "$head_sha"
           fi
@@ -2203,19 +2341,19 @@ while true; do
           break
           ;;
         *"did not have any reviewable changes"*)
-          echo "nothing reviewable — that IS the review"
+          notify "nothing in this diff is reviewable — that is the review, not a failure."
           exit 0
           ;;
         *"The pull request is closed"*)
-          echo "refused: merged, CodeRabbit is done for good"
+          notify "already merged — CodeRabbit will not review it now or ever."
           exit 0
           ;;
         *"The head commit changed during the review"*)
-          echo "refused: head commit changed mid-review, reviewed head was $head_sha"
+          notify "a push landed mid-review and CodeRabbit stopped. It read $head_sha and nothing since."
           exit 0
           ;;
         *"Review failed"*)
-          echo "refused: review failed — read the comment"
+          notify "CodeRabbit's review failed — its comment on the PR says why."
           exit 0
           ;;
         *"review in progress"*)
@@ -2233,7 +2371,7 @@ while true; do
           # ambiguity is already gone by the time it is: `bodies` holds nothing
           # older than the ping this script posted, so a skip notice in here is a
           # skip notice that arrived in answer to it.
-          echo "refused: skipped — ping did not register"
+          notify "CodeRabbit never picked up the review request. Nothing was spent — ask again."
           exit 0
           ;;
       esac
@@ -2241,7 +2379,7 @@ while true; do
   else
     fails=$((fails + 1))
     if [ "$fails" -ge 3 ]; then
-      printf 'API ERROR x%s (count=%s) — stopping rather than waiting blind: %s\n' "$fails" "$n" "$err"
+      notify "GitHub's comment API failed $fails times in a row — stopping rather than waiting blind. Last error: $err"
       exit 2
     fi
   fi

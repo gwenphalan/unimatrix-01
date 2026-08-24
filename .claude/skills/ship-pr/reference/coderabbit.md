@@ -123,8 +123,8 @@ A refusal is not a review, and a short cooldown is worth riding out: that is che
 blind and cheaper than the follow-up PR a missed finding turns into.
 
 **How short is not yours to judge.** `watch-pr.sh` rides one out up to `SHIP_PR_MAX_COOLDOWN` and
-refuses anything longer, printing `refused: rate limited, cooldown <n>m exceeds threshold`. When it
-refuses, **that is the answer** — CodeRabbit is not reviewing this PR. Do not re-arm the watcher
+refuses anything longer, printing `CodeRabbit is rate limited for another <n>m — too long to wait`.
+When it refuses, **that is the answer** — CodeRabbit is not reviewing this PR. Do not re-arm the watcher
 behind a `sleep`, do not poll for the window to lapse, and do not raise the variable to make a long
 one fit. A free wall-clock is not a reason to wait: a reviewer arriving an hour later reviews a PR
 the session has already moved past, and the ladder in `SKILL.md` has readers that answer in minutes.
@@ -196,9 +196,9 @@ against the baseline taken before the ping
 **Replying to findings inflates the count, and `review-count.sh` filters that out.** CodeRabbit
 files a review object for every thread reply it posts, so its acknowledgement of your reply raises
 the raw count without any review having run. Measured on PR #187: the raw count read 11 where three
-reviews had actually happened, and a genuinely **clean** third review was reported as
-`reviewed: 10 -> 11` — the arm that means "it found something", which is why auto-merge never fired.
-The script now counts only reviews carrying a body. If you read the count by hand, apply the same
+reviews had actually happened, so a genuinely **clean** third review came back on the arm that means
+"it found something", which is why auto-merge never fired. The script now counts only reviews
+carrying a body. If you read the count by hand, apply the same
 filter.
 
 **The count only moves when there were findings.** A review that comes back clean leaves it exactly
@@ -254,9 +254,11 @@ every required check passes, so nothing here re-verifies green or races a branch
 A push landing between the review and the arm makes the arm fail outright — measured, see below — and
 a push landing *after* a successful arm is caught too, see below.
 
-On a review **with findings**, it does not exit at `reviewed: <base> -> <n>`. It prints
-`findings: <n> unresolved review thread(s) — reply and fix` — on stdout, once, so it reaches a
-`Monitor` caller, which never sees the stderr heartbeats — and waits for every
+On a review **with findings**, it does not exit at the "found something" row. It prints
+`CodeRabbit raised <n> review thread(s).` and then, per thread, the file and line and CodeRabbit's
+own text — collapsed `<details>` blocks and HTML comments stripped, so what lands is the headline
+and the prose rather than 3 KB of analysis chain and committable-suggestion UI. On stdout, once, so
+it reaches a `Monitor` caller, which never sees the stderr heartbeats. Then it waits for every
 review thread to clear (`unresolvedThreads`, `isResolved == false`, the same check the clean row's
 arm already used defensively — reused rather than duplicated, so the two can't disagree), then waits
 for required checks to go green again on whatever head that leaves, then re-reads the live head sha
@@ -297,7 +299,7 @@ measurement: the required context was a hand-posted commit status rather than an
 there was one of them rather than eight.
 
 **On both rows the watcher polls past every successful arm** rather than leaning on GitHub's silence. It
-watches required checks and the live head sha, reports `merged <sha>` once GitHub squashes, reports a
+watches required checks and the live head sha, reports `merged — <sha>` once GitHub squashes, reports a
 red required check as survivable, and reports the head moving — which genuinely does break the arm —
 with the exact `gh pr merge --match-head-commit` command to re-arm. On the findings row this sits
 alongside the pre-arm recheck: the post-review wait re-checks required checks once, right before

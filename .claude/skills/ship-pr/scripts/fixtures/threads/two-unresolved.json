@@ -3,8 +3,38 @@
     "repository": {
       "pullRequest": {
         "reviewThreads": {
-          "nodes": [{ "isResolved": false }, { "isResolved": false }],
-          "pageInfo": { "hasNextPage": false, "endCursor": null }
+          "nodes": [
+            {
+              "isResolved": false,
+              "path": "apps/api/src/app.ts",
+              "line": 42,
+              "originalLine": 42,
+              "comments": {
+                "nodes": [
+                  {
+                    "body": "**Guard the empty list.**\n\n`required` can be empty here, and an empty gate reads as green."
+                  }
+                ]
+              }
+            },
+            {
+              "isResolved": false,
+              "path": "apps/api/src/config.ts",
+              "line": null,
+              "originalLine": 17,
+              "comments": {
+                "nodes": [
+                  {
+                    "body": "**Fail closed on an unreadable state.**\n\nAn unreadable draft flag currently arms the merge."
+                  }
+                ]
+              }
+            }
+          ],
+          "pageInfo": {
+            "hasNextPage": false,
+            "endCursor": null
+          }
         }
       }
     }

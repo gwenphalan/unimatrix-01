@@ -18,7 +18,7 @@
 # and every commit status reads as newer than the ping. The skip fixtures then
 # pass while proving the opposite of their names. `skipped-resting` in
 # particular is the regression test for the whole commit-status redesign, and
-# under the default it printed `refused: skipped — ping did not register`.
+# under the default it reported the ping as swallowed.
 #
 # So the ping is pinned here, once, at 18:03:02Z — where the fixture data puts
 # it — and the pair that carries the proof is:
@@ -112,7 +112,7 @@ check() {
   rc=$?
   # Normalised after the run, not piped through: a pipeline's exit code is the
   # last stage's, and the exit code is half of what each case asserts.
-  actual=$(sed -E 's/(pinging at ).*/\1<time>/' <<<"$actual")
+  actual=$(sed -E 's/(asking again at )[^.]*\./\1<time>./' <<<"$actual")
   if [ "$actual" = "$expected" ] && [ "$rc" = "$want_rc" ]; then
     printf '  ok    %s\n' "$name"
     return 0
@@ -270,7 +270,7 @@ EOF
 # before the thread wait or the baseline read, so the fixture directory here
 # does not matter; `never-reviewed` is used for consistency with the other two.
 check no-review-auto-merge-off 0 "$(f never-reviewed)" SHIP_PR_AUTO_MERGE=0 -- --no-review <<'EOF'
-no review requested, and auto-merge is off — nothing armed
+PR #1: no review and no auto-merge — nothing to do here; merge it by hand.
 EOF
 
 # Skipping the review does not skip the gate: the flag is read long after phase
@@ -307,7 +307,7 @@ EOF
 check merge-wait-merged 0 "$(f never-reviewed)" \
   SHIP_PR_MERGE_FIXTURES="$here/merge-wait/merged.json" -- --no-review <<'EOF'
 offline: auto-merge armed UNREVIEWED (would arm on fixture-head-sha) — merge-wait fixtures follow
-merged fixture-merge-sha
+PR #1: merged — fixture-merge-sha
 EOF
 
 # `state: CLOSED` is the other terminal state `gh pr view` can report — closed
@@ -315,7 +315,7 @@ EOF
 check merge-wait-closed 0 "$(f never-reviewed)" \
   SHIP_PR_MERGE_FIXTURES="$here/merge-wait/closed.json" -- --no-review <<'EOF'
 offline: auto-merge armed UNREVIEWED (would arm on fixture-head-sha) — merge-wait fixtures follow
-PR closed without merging — nothing left to watch
+PR #1: closed without merging — nothing left to watch.
 EOF
 
 # A required check going red after the arm, on an unmoved head. `three` and
@@ -329,7 +329,7 @@ check merge-wait-checks-red 0 "$(f never-reviewed)" "$three" \
   SHIP_PR_CHECKS_FIXTURES="$(cf checks-green-three.json checks-terminal.json)" \
   SHIP_PR_MERGE_FIXTURES="$here/merge-wait/open-same-head.json" -- --no-review <<'EOF'
 offline: auto-merge armed UNREVIEWED (would arm on fixture-head-sha) — merge-wait fixtures follow
-required check red after arm: Images (api) — the arm survives; GitHub retries when it goes green on fixture-head-sha
+PR #1: Images (api) went red after the merge was armed. Nothing to do — GitHub retries on its own when it goes green again on fixture-head-sha.
 FIXTURES EXHAUSTED
 EOF
 
@@ -345,7 +345,7 @@ check merge-wait-head-moved 0 "$(f never-reviewed)" \
   SHIP_PR_CHECKS_FIXTURES="$(cf checks-green-one.json checks-green-one.json)" \
   SHIP_PR_MERGE_FIXTURES="$here/merge-wait/head-moved.json" -- --no-review <<'EOF'
 offline: auto-merge armed UNREVIEWED (would arm on fixture-head-sha) — merge-wait fixtures follow
-head changed after arm, from fixture-head-sha to fixture-head-sha-2 — auto-merge disabled; re-arm by hand: gh pr merge 1 --repo fixture/repo --auto --squash --match-head-commit fixture-head-sha-2
+PR #1: a push landed after the merge was armed. The merge is off again so nothing unreviewed lands. Re-arm on the new head when ready: gh pr merge 1 --repo fixture/repo --auto --squash --match-head-commit fixture-head-sha-2
 EOF
 
 # A base switch with the head sha untouched — invisible to the head comparison,
@@ -355,7 +355,7 @@ check merge-wait-base-switched 0 "$(f never-reviewed)" \
   SHIP_PR_CHECKS_FIXTURES="$(cf checks-green-one.json checks-green-one.json checks-green-one.json)" \
   SHIP_PR_MERGE_FIXTURES="$(mf open-same-head.json base-switched.json)" -- --no-review <<'EOF'
 offline: auto-merge armed UNREVIEWED (would arm on fixture-head-sha) — merge-wait fixtures follow
-base branch changed after arm, from main to release-2 — GitHub disables the arm on a base switch; re-arm by hand: gh pr merge 1 --repo fixture/repo --auto --squash --match-head-commit fixture-head-sha
+PR #1: the base branch changed from main to release-2, which turns the merge off. Re-arm when ready: gh pr merge 1 --repo fixture/repo --auto --squash --match-head-commit fixture-head-sha
 EOF
 
 # A merge to the base after the arm. The head sha, the base name and the checks
@@ -367,7 +367,7 @@ check merge-wait-behind 0 "$(f never-reviewed)" \
   SHIP_PR_CHECKS_FIXTURES="$(cf checks-green-one.json checks-green-one.json)" \
   SHIP_PR_MERGE_FIXTURES="$here/merge-wait/behind.json" -- --no-review <<'EOF'
 offline: auto-merge armed UNREVIEWED (would arm on fixture-head-sha) — merge-wait fixtures follow
-branch went BEHIND after arm — the arm is live but cannot fire; update and re-arm: gh pr update-branch 1 --repo fixture/repo, then gh pr merge 1 --repo fixture/repo --auto --squash --match-head-commit $(gh pr view 1 --repo fixture/repo --json headRefOid --jq .headRefOid)
+PR #1: the branch fell behind main, so the armed merge can never fire. Update it, then re-arm: gh pr update-branch 1 --repo fixture/repo, then gh pr merge 1 --repo fixture/repo --auto --squash --match-head-commit $(gh pr view 1 --repo fixture/repo --json headRefOid --jq .headRefOid)
 EOF
 
 # The same shape for a conflicted branch, which also cannot merge without the
@@ -376,7 +376,7 @@ check merge-wait-dirty 0 "$(f never-reviewed)" \
   SHIP_PR_CHECKS_FIXTURES="$(cf checks-green-one.json checks-green-one.json)" \
   SHIP_PR_MERGE_FIXTURES="$here/merge-wait/dirty.json" -- --no-review <<'EOF'
 offline: auto-merge armed UNREVIEWED (would arm on fixture-head-sha) — merge-wait fixtures follow
-branch went DIRTY after arm — the arm is live but cannot fire; resolve the conflicts and re-arm
+PR #1: the branch has conflicts, so the armed merge can never fire. Resolve them and start the watch again.
 EOF
 
 # `BLOCKED` must NOT be terminal — it is the ordinary state of an armed PR whose
@@ -394,7 +394,7 @@ EOF
 # --- Phase 2: the review wait ----------------------------------------------
 
 check clean 0 "$(f clean)" <<'EOF'
-reviewed clean, count unchanged at 0
+PR #1: CodeRabbit reviewed it and found nothing. Merging once the checks pass.
 offline: auto-merge not armed (would arm on fixture-head-sha)
 EOF
 
@@ -402,12 +402,12 @@ EOF
 # return code is what wait_for_merge() gates on — a non-zero return here must
 # not enter that wait.
 check clean-auto-merge-off 0 "$(f clean)" SHIP_PR_AUTO_MERGE=0 <<'EOF'
-reviewed clean, count unchanged at 0
+PR #1: CodeRabbit reviewed it and found nothing. Merging once the checks pass.
 offline: auto-merge not armed (auto-merge is off)
 EOF
 
 check head-changed 0 "$(f head-changed)" <<'EOF'
-refused: head commit changed mid-review, reviewed head was fixture-head-sha
+PR #1: a push landed mid-review and CodeRabbit stopped. It read fixture-head-sha and nothing since.
 EOF
 
 check in-progress 0 "$(f in-progress)" <<'EOF'
@@ -415,11 +415,11 @@ FIXTURES EXHAUSTED
 EOF
 
 check merged 0 "$(f merged)" <<'EOF'
-refused: merged, CodeRabbit is done for good
+PR #1: already merged — CodeRabbit will not review it now or ever.
 EOF
 
 check no-changes 0 "$(f no-changes)" <<'EOF'
-nothing reviewable — that IS the review
+PR #1: nothing in this diff is reviewable — that is the review, not a failure.
 EOF
 
 check quiet 0 "$(f quiet)" <<'EOF'
@@ -434,7 +434,7 @@ EOF
 # describes, since the default single-entry list would otherwise exhaust here.
 check reviewed 0 "$(f quiet reviewed)" \
   SHIP_PR_CHECKS_FIXTURES="$(cf checks-green-one.json checks-green-one.json)" <<'EOF'
-reviewed: 0 -> 1
+PR #1: CodeRabbit reviewed it and found something.
 offline: auto-merge not armed (would arm on fixture-head-sha)
 EOF
 
@@ -445,7 +445,7 @@ EOF
 check reviewed-head-moved 0 "$(f quiet reviewed)" \
   SHIP_PR_CHECKS_FIXTURES="$(cf checks-green-one.json checks-green-one.json)" \
   SHIP_PR_HEAD_SHA_2=fixture-head-sha-2 <<'EOF'
-reviewed: 0 -> 1
+PR #1: CodeRabbit reviewed it and found something.
 offline: auto-merge not armed (would arm on fixture-head-sha-2)
 EOF
 
@@ -455,8 +455,12 @@ EOF
 check reviewed-threads-clear 0 "$(f quiet reviewed)" \
   SHIP_PR_CHECKS_FIXTURES="$(cf checks-green-one.json checks-green-one.json)" \
   SHIP_PR_THREADS_FIXTURES="$(tf one-unresolved.json clear.json)" <<'EOF'
-reviewed: 0 -> 1
-findings: 1 unresolved review thread — reply and fix
+PR #1: CodeRabbit reviewed it and found something.
+PR #1: CodeRabbit raised 1 review thread.
+PR #1: apps/api/src/app.ts:42
+**Guard the empty list.**
+
+`required` can be empty here, and an empty gate reads as green.
 offline: auto-merge not armed (would arm on fixture-head-sha)
 EOF
 
@@ -472,8 +476,43 @@ EOF
 check reviewed-threads-plural 0 "$(f quiet reviewed)" \
   SHIP_PR_CHECKS_FIXTURES="$(cf checks-green-one.json checks-green-one.json)" \
   SHIP_PR_THREADS_FIXTURES="$(tf two-unresolved.json two-unresolved.json clear.json)" <<'EOF'
-reviewed: 0 -> 1
-findings: 2 unresolved review threads — reply and fix
+PR #1: CodeRabbit reviewed it and found something.
+PR #1: CodeRabbit raised 2 review threads.
+PR #1: apps/api/src/app.ts:42
+**Guard the empty list.**
+
+`required` can be empty here, and an empty gate reads as green.
+PR #1: apps/api/src/config.ts:17
+**Fail closed on an unreadable state.**
+
+An unreadable draft flag currently arms the merge.
+offline: auto-merge not armed (would arm on fixture-head-sha)
+EOF
+
+# A real CodeRabbit finding, taken off PR #284 unedited: a metadata line, a bold
+# headline, two paragraphs of prose, and then a `🧩 Analysis chain` block, a
+# `📝 Committable suggestion` block with its ‼️ IMPORTANT boilerplate, a
+# `🤖 Prompt for AI Agents` block and four HTML comments.
+#
+# The expectation below is byte-for-byte, so it is also the absence assertion:
+# any collapsed block or HTML comment surviving the stripper fails this case. The
+# thread's `line` is null and `originalLine` is 95, which is what puts a location
+# on a finding whose hunk has moved — the common case, 3 of 5 measured.
+check reviewed-threads-noise 0 "$(f quiet reviewed)" \
+  SHIP_PR_CHECKS_FIXTURES="$(cf checks-green-one.json checks-green-one.json)" \
+  SHIP_PR_THREADS_FIXTURES="$(tf one-unresolved-with-noise.json clear.json)" <<'EOF'
+PR #1: CodeRabbit reviewed it and found something.
+PR #1: CodeRabbit raised 1 review thread.
+PR #1: apps/deploy/src/secret-env/status.ts:95
+_🎯 Functional Correctness_ | _🟠 Major_ | _⚡ Quick win_
+
+**Classify only a 404 response as unresolved.**
+
+`SecretsClientError` represents every non-success HTTP response. A 401, 403, 429, or 500 has a non-null status and currently becomes `unresolved`. The CLI then returns exit code 3 for a refused or failed store call.
+
+Treat only status 404 as `unresolved`. Keep other statuses as `error` so the CLI returns exit code 4.
+
+✅ Confirmed as addressed by @gwenphalan
 offline: auto-merge not armed (would arm on fixture-head-sha)
 EOF
 
@@ -481,8 +520,8 @@ EOF
 # own three-strikes abort, on its own counter.
 check reviewed-threads-three-strikes 2 "$(f quiet reviewed)" \
   SHIP_PR_THREADS_FIXTURES="ERROR=a:ERROR=b:ERROR=c" <<'EOF'
-reviewed: 0 -> 1
-thread count API ERROR x3 — stopping rather than waiting blind
+PR #1: CodeRabbit reviewed it and found something.
+PR #1: the review-thread count failed 3 times in a row — stopping rather than waiting blind.
 EOF
 
 # 0 means the very first poll is the last one, the same idiom
@@ -490,9 +529,13 @@ EOF
 # — a PR that needs a reply and a re-arm, not a script failure.
 check reviewed-threads-timeout 0 "$(f quiet reviewed)" \
   SHIP_PR_THREAD_WAIT_TIMEOUT=0 SHIP_PR_THREADS_FIXTURES="$(tf one-unresolved.json)" <<'EOF'
-reviewed: 0 -> 1
-findings: 1 unresolved review thread — reply and fix
-threads still unresolved after 0m — reply and re-arm, or resolve by hand
+PR #1: CodeRabbit reviewed it and found something.
+PR #1: CodeRabbit raised 1 review thread.
+PR #1: apps/api/src/app.ts:42
+**Guard the empty list.**
+
+`required` can be empty here, and an empty gate reads as green.
+PR #1: 1 review thread still open after 0m. Answer them and start the watch again, or resolve them on GitHub.
 EOF
 
 # The recheck's own red-check line ends `— not arming`, not phase 1's
@@ -501,7 +544,7 @@ EOF
 # actually registers against the gate.
 check reviewed-checks-recheck-red 0 "$(f quiet reviewed)" "$three" \
   SHIP_PR_CHECKS_FIXTURES="$(cf checks-green-three.json checks-terminal.json)" <<'EOF'
-reviewed: 0 -> 1
+PR #1: CodeRabbit reviewed it and found something.
 PR #1: checks failed — 1 red, 2 green. Red: Images (api). Nothing is armed to merge.
 EOF
 
@@ -522,37 +565,37 @@ EOF
 # No comments fixture, so the cooldown arithmetic has nothing to read and the
 # refusal is reported rather than ridden out.
 check rate-limited 0 "$(f rate-limited)" <<'EOF'
-refused: rate limited
+PR #1: CodeRabbit is rate limited and did not review. Use another reviewer.
 EOF
 
 check rate-limited-retry 0 "$(f rate-limited clean)" \
   SHIP_PR_COMMENTS_FIXTURE="$here/wait/rate-limited/comments.json" <<'EOF'
-cooling down 0m, re-pinging at <time>
+PR #1: CodeRabbit is rate limited — waiting 0m, asking again at <time>.
 offline: re-ping suppressed, continuing as if posted
-reviewed clean, count unchanged at 0
+PR #1: CodeRabbit reviewed it and found nothing. Merging once the checks pass.
 offline: auto-merge not armed (would arm on fixture-head-sha)
 EOF
 
 # One retry and no more: the second refusal is the owner's call.
 check rate-limited-cap 0 "$(f rate-limited rate-limited)" \
   SHIP_PR_COMMENTS_FIXTURE="$here/wait/rate-limited/comments.json" <<'EOF'
-cooling down 0m, re-pinging at <time>
+PR #1: CodeRabbit is rate limited — waiting 0m, asking again at <time>.
 offline: re-ping suppressed, continuing as if posted
-refused: rate limited again after one re-ping
+PR #1: CodeRabbit refused twice — the window is longer than it advertised. Use another reviewer.
 EOF
 
 # CodeRabbit's newer wording, matched on its own with no commit status to
 # help — proves the widened body-loop arm catches "Review rate limited." the
 # same way it already caught "rate limited by coderabbit.ai".
 check rate-limited-new-wording 0 "$(f rate-limited-new)" <<'EOF'
-refused: rate limited
+PR #1: CodeRabbit is rate limited and did not review. Use another reviewer.
 EOF
 
 # An empty comment list, so only the commit status can be responsible for
 # this outcome — proves the "Review rate limited" status arm acts on its own,
 # not merely alongside a comment the body loop would have caught anyway.
 check rate-limited-status 0 "$(f rate-limited-status)" <<'EOF'
-refused: rate limited
+PR #1: CodeRabbit is rate limited and did not review. Use another reviewer.
 EOF
 
 # The status twin of skipped-resting: the same description, stamped BEFORE
@@ -571,9 +614,9 @@ EOF
 # exactly one refusal.
 check rate-limited-realistic 0 "$(f rate-limited-realistic clean)" \
   SHIP_PR_COMMENTS_FIXTURE="$here/wait/rate-limited-realistic/comments.json" <<'EOF'
-cooling down 0m, re-pinging at <time>
+PR #1: CodeRabbit is rate limited — waiting 0m, asking again at <time>.
 offline: re-ping suppressed, continuing as if posted
-reviewed clean, count unchanged at 0
+PR #1: CodeRabbit reviewed it and found nothing. Merging once the checks pass.
 offline: auto-merge not armed (would arm on fixture-head-sha)
 EOF
 
@@ -586,9 +629,9 @@ EOF
 # reads a second time.
 check rate-limited-status-and-no-changes 0 "$(f rate-limited-status-and-no-changes)" \
   SHIP_PR_COMMENTS_FIXTURE="$here/wait/rate-limited/comments.json" <<'EOF'
-cooling down 0m, re-pinging at <time>
+PR #1: CodeRabbit is rate limited — waiting 0m, asking again at <time>.
 offline: re-ping suppressed, continuing as if posted
-nothing reviewable — that IS the review
+PR #1: nothing in this diff is reviewable — that is the review, not a failure.
 EOF
 
 # The cap message names the quota when the refusal that tripped it carries the
@@ -597,20 +640,20 @@ EOF
 # changed the outcome.
 check rate-limited-cap-quota 0 "$(f rate-limited rate-limited-quota)" \
   SHIP_PR_COMMENTS_FIXTURE="$here/wait/rate-limited/comments.json" <<'EOF'
-cooling down 0m, re-pinging at <time>
+PR #1: CodeRabbit is rate limited — waiting 0m, asking again at <time>.
 offline: re-ping suppressed, continuing as if posted
-refused: rate limited again after one re-ping — the included review budget is spent, not a short cooldown
+PR #1: CodeRabbit refused twice — the included review budget is spent, not a short wait. Use another reviewer.
 EOF
 
 # No commit status at all — the comment fallback reads the skip notice, and
 # everything in `bodies` is already newer than the ping.
 check skipped 0 "$(f skipped)" <<'EOF'
-refused: skipped — ping did not register
+PR #1: CodeRabbit never picked up the review request. Nothing was spent — ask again.
 EOF
 
 # The pair. Same "Review skipped" description, opposite sides of the ping.
 check skipped-after-ping 0 "$(f skipped-after-ping)" <<'EOF'
-refused: skipped — ping did not register
+PR #1: CodeRabbit never picked up the review request. Nothing was spent — ask again.
 EOF
 
 check skipped-resting 0 "$(f skipped-resting)" <<'EOF'
@@ -623,13 +666,13 @@ check no-baseline 1 "ERROR=boom" <<'EOF'
 EOF
 
 check three-strikes 2 "$(f quiet),ERROR=a,ERROR=b,ERROR=c" <<'EOF'
-API ERROR x3 (count=0) — stopping rather than waiting blind: c
+PR #1: GitHub's comment API failed 3 times in a row — stopping rather than waiting blind. Last error: c
 EOF
 
 # An unreadable ping has no timestamp for either branch to compare against, so
 # the run stops instead of letting the two disagree.
 check unreadable-ping 1 "$(f clean)" SHIP_PR_PING_AT=not-a-timestamp <<'EOF'
-ping timestamp is unreadable — nothing to compare against
+PR #1: GitHub returned no usable timestamp for the review request — stopping rather than guessing.
 EOF
 
 # The rows moved to stderr, not away. Every case above proves they are off

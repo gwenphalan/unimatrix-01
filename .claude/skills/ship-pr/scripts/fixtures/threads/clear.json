@@ -3,8 +3,25 @@
     "repository": {
       "pullRequest": {
         "reviewThreads": {
-          "nodes": [{ "isResolved": true }],
-          "pageInfo": { "hasNextPage": false, "endCursor": null }
+          "nodes": [
+            {
+              "isResolved": true,
+              "path": "apps/api/src/app.ts",
+              "line": 42,
+              "originalLine": 42,
+              "comments": {
+                "nodes": [
+                  {
+                    "body": "**Guard the empty list.**\n\n`required` can be empty here, and an empty gate reads as green."
+                  }
+                ]
+              }
+            }
+          ],
+          "pageInfo": {
+            "hasNextPage": false,
+            "endCursor": null
+          }
         }
       }
     }
