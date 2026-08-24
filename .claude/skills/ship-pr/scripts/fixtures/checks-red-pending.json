@@ -1,0 +1,5 @@
+[
+  { "name": "Verify", "bucket": "fail" },
+  { "name": "Images (api)", "bucket": "pending" },
+  { "name": "CodeQL", "bucket": "pass" }
+]

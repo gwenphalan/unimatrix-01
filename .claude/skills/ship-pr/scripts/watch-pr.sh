@@ -71,22 +71,31 @@ complete rather than guessed; `skipping` on a *required* context is unreachable
 in this repo, since no required job carries a job-level `if:`, so that arm is
 precaution rather than a path anything takes.
 
-A red required context is terminal on the poll it appears, without waiting for
-the rest to report. Nothing that arrives later un-reds it.
+A red required context does not end the run on the poll it appears. It opens a
+grace window — SHIP_PR_CHECKS_RED_GRACE, 600s — and the run ends at whichever
+comes first: every required context reporting, or that window closing. Either
+way it ends on one line carrying the whole tally, so one fix round covers every
+red instead of chasing them a CI cycle at a time. The window is what bounds the
+wait: a context that never reports at all — a renamed one, a workflow this PR
+does not trigger, a job queued behind a concurrency group — would otherwise hold
+a known red until SHIP_PR_CHECKS_TIMEOUT. A run that ends on the window names
+what had not reported, so a partial tally reads as partial.
 
-Every terminal bucket is printed as it lands — PASS, FAIL and SKIPPING alike,
-required or not. A filter that matched only success would be silent through a
-failure, and silence is indistinguishable from still-running. FAIL and CANCEL
-go to stdout; PASS and SKIPPING go to stderr, which still reaches the terminal
-and the Monitor output file — the same split the heartbeat below already
-uses. Under Monitor every stdout line is a notification, so this keeps a
-clean PR's dozen passing checks from waking the caller a dozen times to be
-told nothing.
+It also rides out a false alarm this repo actually produces: ci.yml sets
+`cancel-in-progress`, so a push mid-run leaves cancelled contexts, which bucket
+as red. The replacement run reports inside the window and they clear.
 
-`gh pr checks <pr> --watch` is the wrong tool for this: it reports once, after
-everything has reported, so a `Verify` failure two minutes in stays invisible
-until the slowest job finishes ten minutes later and you sit on a fixable red
-the whole time.
+Every terminal bucket is printed as it lands — PASS, FAIL, CANCEL and SKIPPING
+alike, required or not, all four on stderr, which still reaches the terminal and
+the Monitor output file. A filter that matched only success would be silent
+through a failure, and silence is indistinguishable from still-running. Under
+Monitor every stdout line is a notification, so phase 1 puts nothing there on a
+clean run, and exactly one line — the summary above, with every red named — on a
+failing one.
+
+`gh pr checks <pr> --watch` is the wrong tool for this: it knows nothing about
+which contexts are required, so it cannot gate on the list required-checks.sh
+returns — the distinction this whole section rests on.
 
 A check's description is appended when it has one, because a green bucket does
 not always mean the check did its job. `CodeRabbit` is `pass` either way, and
@@ -368,6 +377,15 @@ Environment:
                         first poll is the last one. Also the timeout for the
                         post-review recheck of the same contexts, which reuses
                         this script's own name for the reason above.
+  SHIP_PR_CHECKS_RED_GRACE
+                        Seconds a known red waits for the rest of the required
+                        contexts to report before the run ends on a partial
+                        tally. Default 600 (10 minutes). 0 ends the run on the
+                        poll the first red appears, naming whatever had not
+                        reported yet. The clock starts at the first red and
+                        resets when every red clears, which is what lets a
+                        cancel-in-progress push recover instead of reading as a
+                        failure.
   SHIP_PR_THREAD_WAIT_TIMEOUT
                         Seconds the post-review wait will wait for every review
                         thread to clear. Default 2700, matching
@@ -463,22 +481,26 @@ Environment:
                         skips the startup check rather than reaching the
                         network.
 
-Output from phase 1, in order, on stdout:
-  <BUCKET>  <check-name>                      FAIL or CANCEL, the first time it appears
-  <BUCKET>  <check-name>  — <desc>            same, for a check that carries one
-  no required status checks — refusing to read an empty list as green
-  cannot read the PR's base branch — refusing to gate blind
-  the required check list could not be read — refusing to gate blind
-  checks red: <names> — not pinging           terminal, phase 1's own call only
-  checks timed out after <m>m — never reported: <names>
-  branch is BEHIND — update it and re-arm     terminal, nothing pinged
-  branch is DIRTY — resolve the conflicts and re-arm
-  PR is a draft — mark it ready and re-arm
+Output from phase 1, on stdout. Each row is prefixed `PR #<num>: ` and written
+as a sentence, because under Monitor it is a notification a caller relays as it
+stands:
+  GitHub lists no required checks for this branch — stopping rather than reading an empty list as green.
+  the PR's base branch could not be read — stopping rather than gating blind.
+  the required-check list could not be read — stopping rather than gating blind.
+  checks failed — <r> red, <g> green. Red: <names>. <verdict>   terminal, every required context reported
+  checks failed — <r> red, <g> green, <o> never reported after <m>m. Red: <names>. Never reported: <names>. <verdict>   terminal, the grace window closed first
+  checks never finished — <m>m waited. <r> red: <names>. Never reported: <names>. <verdict>   the cap; the red clause is dropped when there is none
+  the branch is behind main and cannot merge — update it, then start the watch again.
+  the branch has conflicts — resolve them, then start the watch again.
+  the PR is still a draft — mark it ready, then start the watch again.
+
+<verdict> is `Nothing was reviewed and nothing will merge.` from phase 1's own
+call, and `Nothing is armed to merge.` from the post-review recheck below.
 
 On stderr, so a clean run does not wake a `Monitor` caller to be told nothing:
-  <BUCKET>  <check-name>                      PASS or SKIPPING, the first time it appears
+  <BUCKET>  <check-name>                      PASS, FAIL, CANCEL or SKIPPING, the first time it appears
   <BUCKET>  <check-name>  — <desc>            same, for a check that carries one
-  checks green on <sha>                       the phase boundary; the slot is about to be spent
+  all <n> required checks green on <sha>      the phase boundary; the slot is about to be spent
 
 On the startup baseline read, before any ping:
   already reviewed (count=<n>) — the ping is not needed   stderr; the post-review wait starts next
@@ -515,8 +537,7 @@ printed, and this is the one line that says the run is still alive through it:
 The post-review wait — reached from `reviewed: <base> -> <n>`, from the
 startup baseline read finding the review count already > 0, and, minus the
 checks recheck, from `--no-review` once auto-merge is on — on stdout:
-  checks red: <names> — not arming             terminal, the recheck's own call only
-  checks timed out after <m>m — never reported: <names>   the recheck's own clock
+  the same three checks lines phase 1 prints, carrying `Nothing is armed to merge.`
   findings: <n> unresolved review thread(s) — reply and fix   said once, the first non-zero count
   threads still unresolved after <m>m — reply and re-arm, or resolve by hand   terminal, exit 0
   thread count API ERROR xN — stopping rather than waiting blind   three consecutive failures, exit 2
@@ -552,13 +573,13 @@ arm" above — on stdout:
 
 Either phase, the post-review wait, or the wait-for-merge phase can also end
 on stdout with:
-  checks API ERROR xN — <message>             three consecutive failures in phase 1 or the recheck
+  GitHub's checks API failed 3 times in a row — stopping rather than gating blind. Last error: <message>
   API ERROR xN (count=<n>) — <message>        three consecutive failures in phase 2's own wait
   FIXTURES EXHAUSTED                          offline runs only
 
 On stderr, every 10th poll of any wait, so it reaches a terminal and the
 monitor's output file without waking a caller that only reads stdout:
-  still waiting on checks, <k>/<n> required reported, outstanding: <names>, <m>m elapsed
+  still waiting on checks, <k>/<n> reported, <r> red so far (<names>), <m>m elapsed
   still waiting, review running, count=<n>, <m>m elapsed
   still waiting, nothing from CodeRabbit yet, count=<n>, <m>m elapsed
   still waiting, <n> unresolved review threads, <m>m elapsed
@@ -570,7 +591,7 @@ Also on stderr, said once where they apply:
   merge state reads <VALUE>
   no CodeRabbit commit status on <sha> — falling back to comment matching
   offline: first ping suppressed, ping_at=<time>
-  checks green again on <sha>                  the recheck's own boundary
+  all <n> required checks green again on <sha>   the recheck's own boundary
   re-pinned head to <sha>                       immediately before the arm; unchanged from the
                                                  original pin unless a push landed during the wait
   review in progress                          said once, then carried by the heartbeat
@@ -584,8 +605,9 @@ Also on stderr, said once where they apply:
 Exit codes:
   0  a terminal outcome in any wait was reached, or a fixture list ran out
   1  bad usage, stdout and stderr pointing at the same destination on a
-     non-tty run, a partial fixture set, a non-numeric SHIP_PR_CHECKS_TIMEOUT or
-     SHIP_PR_THREAD_WAIT_TIMEOUT, an empty or unreadable required-context list,
+     non-tty run, a partial fixture set, a non-numeric SHIP_PR_CHECKS_TIMEOUT,
+     SHIP_PR_CHECKS_RED_GRACE or SHIP_PR_THREAD_WAIT_TIMEOUT, an empty or
+     unreadable required-context list,
      an unreadable base branch or head sha (including the re-pin's own read),
      a failed baseline, or a ping that would not post or came back with a
      timestamp nothing can compare against
@@ -659,6 +681,7 @@ if [ ! -t 1 ] && [ /dev/stdout -ef /dev/stderr ]; then
 fi
 poll=${SHIP_PR_POLL_SECONDS:-30}
 checks_timeout=${SHIP_PR_CHECKS_TIMEOUT:-2700}
+checks_red_grace=${SHIP_PR_CHECKS_RED_GRACE:-600}
 thread_wait_timeout=${SHIP_PR_THREAD_WAIT_TIMEOUT:-2700}
 
 # The three fixture variables are one switch. Setting one without the others
@@ -680,6 +703,10 @@ fi
 # single poll.
 if ! [[ $checks_timeout =~ ^[0-9]+$ ]]; then
   echo "SHIP_PR_CHECKS_TIMEOUT must be a whole number of seconds, got: $checks_timeout" >&2
+  exit 1
+fi
+if ! [[ $checks_red_grace =~ ^[0-9]+$ ]]; then
+  echo "SHIP_PR_CHECKS_RED_GRACE must be a whole number of seconds, got: $checks_red_grace" >&2
   exit 1
 fi
 if ! [[ $thread_wait_timeout =~ ^[0-9]+$ ]]; then
@@ -737,6 +764,14 @@ join_names() {
   printf '%s' "${out%, }"
 }
 
+# Every owner-facing stdout row goes through here. Under `Monitor` each one is a
+# notification the caller relays verbatim, so it carries the PR it is about and
+# reads as a sentence rather than as a row to be translated first.
+#
+# `FIXTURES EXHAUSTED` and the `offline:` lines stay on bare `echo`: neither can
+# reach a live Monitor, so a prefix on them would only churn the fixtures.
+notify() { printf 'PR #%s: %s\n' "$pr" "$1"; }
+
 ########################################################################
 # Phase 1 — every required check reports, and every one of them is green
 ########################################################################
@@ -758,26 +793,26 @@ if [ "$offline" -eq 1 ]; then
 else
   base_ref=$(gh pr view "$pr" --repo "$repo" --json baseRefName --jq '.baseRefName' 2>/dev/null) || base_ref=""
   if [ -z "$base_ref" ]; then
-    echo "cannot read the PR's base branch — refusing to gate blind"
+    notify "the PR's base branch could not be read — stopping rather than gating blind."
     exit 1
   fi
   required_out=$("$here/required-checks.sh" --ref "$base_ref" "$repo") || required_read=0
 fi
 
 if [ "$required_read" -eq 0 ]; then
-  echo "the required check list could not be read — refusing to gate blind"
+  notify "the required-check list could not be read — stopping rather than gating blind."
   exit 1
 fi
 
 required=()
 mapfile -t required < <(printf '%s\n' "$required_out" | sed '/^$/d')
 if [ "${#required[@]}" -eq 0 ]; then
-  echo "no required status checks — refusing to read an empty list as green"
+  notify "GitHub lists no required checks for this branch — stopping rather than reading an empty list as green."
   exit 1
 fi
 required_json=$(printf '%s\n' "${required[@]}" | jq -Rsc 'split("\n") | map(select(length > 0))')
 
-# One-shot bucket read: red/green/outstanding per required context, given a
+# One-shot bucket read: red/green/pending/absent per required context, given a
 # `gh pr checks --json name,bucket,description` payload. $required_json is
 # read from the enclosing scope, same as every other reference to it in this
 # file. Shared by wait_for_required_checks()'s own gate and by
@@ -789,9 +824,9 @@ required_gate() {
     | $req[]
     | . as $ctx
     | ([$rows[] | select(.name == $ctx) | .bucket]) as $b
-    | (if ($b | length) == 0 then "outstanding"
+    | (if ($b | length) == 0 then "absent"
        elif ($b | any(. == "fail" or . == "cancel")) then "red"
-       elif ($b | any(. != "pass" and . != "skipping")) then "outstanding"
+       elif ($b | any(. != "pass" and . != "skipping")) then "pending"
        else "green" end) as $s
     | "\($s)\t\($ctx)"
   ' <<<"$1"
@@ -903,6 +938,12 @@ wait_for_required_checks() {
   # Seeded, not left empty: a run whose every poll failed still has to name what
   # it was waiting for when the cap fires.
   local outstanding=("${required[@]}")
+  # Same reasoning, and the cap and the heartbeat below both read these from
+  # outside the successful-poll branch that fills them: a run whose first poll
+  # fails and then hits the cap would die on `set -u` instead of reporting.
+  # `red_since` is the grace clock — 0 until a red appears, and back to 0 the
+  # moment every red clears again.
+  local checks_red=() checks_green=0 red_since=0
 
   while true; do
     # read_checks_payload() sets script-scope checks_payload / checks_rc /
@@ -939,22 +980,17 @@ wait_for_required_checks() {
         | "\(.bucket | ascii_upcase)  \(.name)"
           + (if (.description // "") == "" then "" else "  — \(.description)" end)
       ' <<<"$payload" | LC_ALL=C sort)
-      # Non-actionable rows go to stderr, which still reaches the terminal and the
+      # All four buckets go to stderr, which still reaches the terminal and the
       # Monitor output file. Every stdout line under Monitor is a notification, and
       # each notification is one main-loop turn over the whole session context — so
-      # ~a dozen PASS rows on a clean PR are a dozen wakes to be told nothing. On
-      # the reused call this fires again for every context still green from the
-      # first call, since `checks_prev` reset empty — a repeat of PASS rows already
-      # seen, and accepted, because a fresh call has no other way to know what was
-      # already reported.
-      # FAIL and CANCEL stay on stdout: those are the rows a caller must act on.
-      LC_ALL=C comm -13 <(printf '%s\n' "$checks_prev") <(printf '%s\n' "$cur") \
-        | while IFS= read -r row; do
-            case $row in
-              FAIL* | CANCEL*) printf '%s\n' "$row" ;;
-              *) printf '%s\n' "$row" >&2 ;;
-            esac
-          done
+      # ~a dozen PASS rows on a clean PR are a dozen wakes to be told nothing, and
+      # a FAIL row on its own is a name and a bucket the reader still has to turn
+      # into "what now". The single summary row below is the actionable one, and it
+      # is what stdout carries instead. On the reused call this fires again for
+      # every context still green from the first call, since `checks_prev` reset
+      # empty — a repeat of rows already seen, and accepted, because a fresh call
+      # has no other way to know what was already reported.
+      LC_ALL=C comm -13 <(printf '%s\n' "$checks_prev") <(printf '%s\n' "$cur") >&2
       checks_prev=$cur
 
       # green = {pass, skipping}, red = {fail, cancel}, and anything else keeps
@@ -963,22 +999,45 @@ wait_for_required_checks() {
       local gate=()
       mapfile -t gate < <(required_gate "$payload")
 
-      local checks_red=()
+      checks_red=()
+      checks_green=0
       outstanding=()
       for line in ${gate+"${gate[@]}"}; do
         case ${line%%$'\t'*} in
           red) checks_red+=("${line#*$'\t'}") ;;
-          green) : ;;
+          green) checks_green=$((checks_green + 1)) ;;
+          # `pending`, `absent`, and any verdict a later vocabulary adds: not
+          # green, not red, so keep polling. Both current callers treat the two
+          # the same — the gate tells them apart so a reader of the payload can.
           *) outstanding+=("${line#*$'\t'}") ;;
         esac
       done
 
-      # Terminal on the poll it appears, without waiting for the rest to report.
-      # Nothing arriving later un-reds a required check. `$suffix` is the only
-      # line that differs between the two calls this function serves.
+      # A red opens a grace window rather than ending the run. Reporting on the
+      # poll the first red lands sends a fix round after one red while the rest
+      # of the ledger is still arriving, so the next round finds the next red;
+      # waiting for the whole ledger instead can wait out SHIP_PR_CHECKS_TIMEOUT
+      # on a context that never reports at all. The window is the bound: whole
+      # ledger or grace expiry, whichever comes first, and one row either way.
+      #
+      # Clearing the reds resets the clock, which is what carries a
+      # cancel-in-progress push — cancelled contexts bucket red until the
+      # replacement run reports — rather than calling it a failure.
       if [ "${#checks_red[@]}" -gt 0 ]; then
-        echo "checks red: $(join_names ${checks_red+"${checks_red[@]}"}) $suffix"
-        exit 0
+        [ "$red_since" -eq 0 ] && red_since=$(date +%s)
+        local red_waited=$(($(date +%s) - red_since))
+        # `$suffix` is the only thing that differs between the two calls this
+        # function serves.
+        if [ "${#outstanding[@]}" -eq 0 ]; then
+          notify "checks failed — ${#checks_red[@]} red, $checks_green green. Red: $(join_names ${checks_red+"${checks_red[@]}"}). $suffix"
+          exit 0
+        fi
+        if [ "$red_waited" -ge "$checks_red_grace" ]; then
+          notify "checks failed — ${#checks_red[@]} red, $checks_green green, ${#outstanding[@]} never reported after $((red_waited / 60))m. Red: $(join_names ${checks_red+"${checks_red[@]}"}). Never reported: $(join_names ${outstanding+"${outstanding[@]}"}). $suffix"
+          exit 0
+        fi
+      else
+        red_since=0
       fi
       if [ "${#outstanding[@]}" -eq 0 ]; then
         return 0
@@ -989,7 +1048,7 @@ wait_for_required_checks() {
         # stderr where there is any, since that is where gh says what went wrong;
         # the stdout payload otherwise, which is what a call that failed without a
         # word on stderr leaves behind.
-        printf 'checks API ERROR x%s — stopping rather than gating blind: %s\n' "$checks_fails" "${checks_err:-$payload}"
+        notify "GitHub's checks API failed 3 times in a row — stopping rather than gating blind. Last error: ${checks_err:-$payload}"
         exit 2
       fi
     fi
@@ -1001,8 +1060,12 @@ wait_for_required_checks() {
     # SHIP_PR_CHECKS_TIMEOUT rather than whatever phase 1 left on it — the fix
     # commit's CI run is a new wait, not a continuation of the first one.
     if [ "$checks_elapsed" -ge "$checks_timeout" ]; then
-      printf 'checks timed out after %sm — never reported: %s\n' \
-        "$((checks_elapsed / 60))" "$(join_names ${outstanding+"${outstanding[@]}"})"
+      # The red clause is dropped rather than printed empty: the cap is reached
+      # far more often with nothing red than with something, and " 0 red: ." is
+      # a sentence the reader has to parse before finding it says nothing.
+      local capped_red=""
+      [ "${#checks_red[@]}" -gt 0 ] && capped_red=" ${#checks_red[@]} red: $(join_names ${checks_red+"${checks_red[@]}"})."
+      notify "checks never finished — $((checks_elapsed / 60))m waited.${capped_red} Never reported: $(join_names ${outstanding+"${outstanding[@]}"}). $suffix"
       exit 0
     fi
 
@@ -1010,14 +1073,16 @@ wait_for_required_checks() {
       # stderr, for the same reason phase 2's heartbeat is on stderr. Without it a
       # gate stuck on a context that never appears is indistinguishable from a dead
       # script.
-      echo "still waiting on checks, $((${#required[@]} - ${#outstanding[@]}))/${#required[@]} required reported, outstanding: $(join_names ${outstanding+"${outstanding[@]}"}), $((checks_elapsed / 60))m elapsed" >&2
+      local beat_red=""
+      [ "${#checks_red[@]}" -gt 0 ] && beat_red=", ${#checks_red[@]} red so far ($(join_names ${checks_red+"${checks_red[@]}"}))"
+      echo "still waiting on checks, $((${#required[@]} - ${#outstanding[@]}))/${#required[@]} reported${beat_red}, $((checks_elapsed / 60))m elapsed" >&2
     fi
 
     sleep "$poll"
   done
 }
 
-wait_for_required_checks "— not pinging"
+wait_for_required_checks "Nothing was reviewed and nothing will merge."
 
 ########################################################################
 # Arming the merge
@@ -1506,21 +1571,21 @@ else
   # --match-head-commit arm below would be cancelled by the replacement.
   case $merge_state in
     BEHIND)
-      echo "branch is BEHIND — update it and re-arm"
+      notify "the branch is behind main and cannot merge — update it, then start the watch again."
       exit 0
       ;;
     DIRTY)
-      echo "branch is DIRTY — resolve the conflicts and re-arm"
+      notify "the branch has conflicts — resolve them, then start the watch again."
       exit 0
       ;;
   esac
   if [ "$is_draft" = "true" ]; then
-    echo "PR is a draft — mark it ready and re-arm"
+    notify "the PR is still a draft — mark it ready, then start the watch again."
     exit 0
   fi
 fi
 
-echo "checks green on $head_sha" >&2
+echo "all ${#required[@]} required checks green on $head_sha" >&2
 
 # Re-reads the live head sha, once, immediately before arming — used by the
 # findings row of phase 2's own wait and by `--no-review`, never by the
@@ -1563,8 +1628,8 @@ re_pin_head_sha() {
 # new code nothing has run CI on, and `--no-review` by definition has none.
 post_review_wait() {
   wait_for_threads_replied
-  wait_for_required_checks "— not arming"
-  echo "checks green again on $head_sha" >&2
+  wait_for_required_checks "Nothing is armed to merge."
+  echo "all ${#required[@]} required checks green again on $head_sha" >&2
   re_pin_head_sha
   if arm_auto_merge 0; then
     wait_for_merge "$head_sha"

@@ -8,8 +8,8 @@
 # from SHIP_PR_CHECKS_FIXTURES, phase 2 reads reviews and comments from
 # SHIP_PR_FIXTURES. The script requires all three together, so every case gets
 # the one-context gate below by default and the review cases pass through it
-# unchanged — invisibly now, since `PASS  Verify` and `checks green on <sha>`
-# moved to stderr and stdout is dropped here (see below).
+# unchanged — invisibly now, since the whole phase-1 ledger moved to stderr and
+# stdout is dropped here (see below).
 #
 # The ping timestamp is the reason this exists rather than a README of
 # invocations. `SHIP_PR_PING_AT` defaults to the epoch, which sits before every
@@ -34,7 +34,8 @@
 # never proved.
 #
 # stderr is dropped: it carries the heartbeats, the offline notices, the whole
-# phase-1 ledger (`PASS`/`SKIPPING` rows and `checks green on <sha>`), and now
+# phase-1 ledger (every bucket row and the `all <n> required checks green on
+# <sha>` boundary), and now
 # `review in progress` and the rate-limit progress lines, none of which say
 # anything about which arm was taken. Wall-clock times in the output are
 # normalised, since a cooldown line renders the reader's own clock.
@@ -169,12 +170,37 @@ check checks-non-required-only 0 "$(f quiet)" "$three" \
 FIXTURES EXHAUSTED
 EOF
 
-# A red required context is terminal on the poll it appears, and phase 2 never
-# runs — no ping, no outcome line.
+# Every required context has reported and one of them is red, so the run ends on
+# the poll that completes the ledger — one row carrying the whole tally, and
+# phase 2 never runs. The `FAIL` row itself is on stderr; `fail-row-on-stderr`
+# below is what proves it is still printed.
 check checks-red 0 "$(f quiet)" "$three" \
   SHIP_PR_CHECKS_FIXTURES="$(cf checks-terminal.json)" <<'EOF'
-FAIL  Images (api)
-checks red: Images (api) — not pinging
+PR #1: checks failed — 1 red, 2 green. Red: Images (api). Nothing was reviewed and nothing will merge.
+EOF
+
+# A red alongside a context that has not finished is NOT terminal: the grace
+# window is open, so the run says nothing and polls again. Asserted by the
+# absence of any row and the presence of `FIXTURES EXHAUSTED` — the run asked
+# for a second payload.
+check checks-red-pending 0 "$(f quiet)" "$three" \
+  SHIP_PR_CHECKS_FIXTURES="$(cf checks-red-pending.json)" <<'EOF'
+FIXTURES EXHAUSTED
+EOF
+
+# The same payload with the window shut. 0 makes the poll the first red appears
+# the last one, the same idiom SHIP_PR_CHECKS_TIMEOUT=0 uses below. The row names
+# what never reported, so a partial tally cannot read as a complete one.
+check checks-red-grace-expiry 0 "$(f quiet)" "$three" SHIP_PR_CHECKS_RED_GRACE=0 \
+  SHIP_PR_CHECKS_FIXTURES="$(cf checks-red-pending.json)" <<'EOF'
+PR #1: checks failed — 1 red, 1 green, 1 never reported after 0m. Red: Verify. Never reported: Images (api). Nothing was reviewed and nothing will merge.
+EOF
+
+# A non-numeric grace is rejected at startup, for the same reason the two
+# timeouts are: left to the comparison it evaluates false on every poll, so the
+# window never closes and the bound it exists to provide is silently gone.
+check checks-red-grace-non-numeric 1 "$(f quiet)" "$three" SHIP_PR_CHECKS_RED_GRACE=soon \
+  SHIP_PR_CHECKS_FIXTURES="$(cf checks-red-pending.json)" <<'EOF'
 EOF
 
 # Results print as they land, once each, and then the gate closes.
@@ -200,14 +226,14 @@ EOF
 # Phase 1 keeps its own ledger; these three are not shared with phase 2's.
 check checks-three-strikes 2 "$(f quiet)" \
   SHIP_PR_CHECKS_FIXTURES="ERROR=a:ERROR=b:ERROR=c" <<'EOF'
-checks API ERROR x3 — stopping rather than gating blind: c
+PR #1: GitHub's checks API failed 3 times in a row — stopping rather than gating blind. Last error: c
 EOF
 
 # A required context that never appears ends the run naming it, rather than
 # polling forever behind a heartbeat.
 check checks-timeout 0 "$(f quiet)" "$three" SHIP_PR_CHECKS_TIMEOUT=0 \
   SHIP_PR_CHECKS_FIXTURES="$(cf checks-all-pending.json)" <<'EOF'
-checks timed out after 0m — never reported: Verify, Images (api), CodeQL
+PR #1: checks never finished — 0m waited. Never reported: Verify, Images (api), CodeQL. Nothing was reviewed and nothing will merge.
 EOF
 
 # A non-numeric cap is rejected at startup. Left to the comparison it evaluates
@@ -220,7 +246,7 @@ EOF
 # An empty required list is a failure, not a vacuously green gate.
 check no-required-contexts 1 "$(f quiet)" \
   SHIP_PR_BRANCH_RULES_FIXTURE="$here/branch-rules-empty.json" <<'EOF'
-no required status checks — refusing to read an empty list as green
+PR #1: GitHub lists no required checks for this branch — stopping rather than reading an empty list as green.
 EOF
 
 # The three fixture variables are one switch. Two of them set is a usage error,
@@ -252,8 +278,7 @@ EOF
 # than derived from it — so the two are equal by two copies, not by construction.
 check no-review-checks-red 0 "$(f never-reviewed)" "$three" \
   SHIP_PR_CHECKS_FIXTURES="$(cf checks-terminal.json)" -- --no-review <<'EOF'
-FAIL  Images (api)
-checks red: Images (api) — not pinging
+PR #1: checks failed — 1 red, 2 green. Red: Images (api). Nothing was reviewed and nothing will merge.
 EOF
 
 # `already-reviewed`'s baseline carries one bodied CodeRabbit review — a PR
@@ -477,8 +502,7 @@ EOF
 check reviewed-checks-recheck-red 0 "$(f quiet reviewed)" "$three" \
   SHIP_PR_CHECKS_FIXTURES="$(cf checks-green-three.json checks-terminal.json)" <<'EOF'
 reviewed: 0 -> 1
-FAIL  Images (api)
-checks red: Images (api) — not arming
+PR #1: checks failed — 1 red, 2 green. Red: Images (api). Nothing is armed to merge.
 EOF
 
 # The startup auto-skip: `already-reviewed`'s baseline is already > 0 before
@@ -626,7 +650,7 @@ combined=$(printf '%s\n%s\n' "$combined" "$(cat "$ledger_err_file")")
 rm -f "$ledger_err_file"
 ran=$((ran + 1))
 if grep -q '^PASS  Verify$' <<<"$combined" \
-  && grep -q '^checks green on fixture-head-sha$' <<<"$combined"; then
+  && grep -q '^all 1 required checks green on fixture-head-sha$' <<<"$combined"; then
   printf '  ok    phase-1-ledger-on-stderr\n'
 else
   failures=$((failures + 1))
@@ -649,6 +673,51 @@ if grep -q '^SKIPPING  Verify$' <<<"$skipping"; then
 else
   failures=$((failures + 1))
   printf '  FAIL  skipping-row-on-stderr (the SKIPPING row is not printed on either stream)\n'
+fi
+
+# FAIL and CANCEL moved to stderr along with PASS and SKIPPING, and unlike those
+# two they lost their only other proof at the same time: three `check()` cases
+# used to assert a `FAIL` row on stdout byte-for-byte, and they now assert the
+# summary row instead. Without these two, a FAIL or CANCEL row that stopped
+# being emitted at all would fail nothing anywhere.
+#
+# Both assert the stream rather than only the printing — off stdout and on
+# stderr — the way in-progress-on-stderr does, since `check()` above proves the
+# stdout half for FAIL but nothing covers CANCEL at all.
+fail_err_file=$(mktemp "${TMPDIR:-/tmp}/ship-pr-fail-err.XXXXXX") || exit 1
+fail_out=$(env SHIP_PR_POLL_SECONDS=0 SHIP_PR_PING_AT="$ping" \
+  SHIP_PR_BRANCH_RULES_FIXTURE="$here/branch-rules.json" \
+  SHIP_PR_CHECKS_FIXTURES="$here/checks-terminal.json" \
+  SHIP_PR_FIXTURES="$(f quiet)" "$script" fixture/repo 1 2>"$fail_err_file")
+fail_err=$(cat "$fail_err_file")
+rm -f "$fail_err_file"
+ran=$((ran + 1))
+if ! grep -q '^FAIL  Images (api)$' <<<"$fail_out" \
+  && grep -q '^FAIL  Images (api)$' <<<"$fail_err"; then
+  printf '  ok    fail-row-on-stderr\n'
+else
+  failures=$((failures + 1))
+  printf '  FAIL  fail-row-on-stderr (expected off stdout and on stderr)\n'
+fi
+
+# `CANCEL` is the bucket a push mid-run leaves behind, since ci.yml sets
+# cancel-in-progress — the one red this repo produces without anything being
+# broken, and the one no other case here exercises.
+cancel_err_file=$(mktemp "${TMPDIR:-/tmp}/ship-pr-cancel-err.XXXXXX") || exit 1
+cancel_out=$(env SHIP_PR_POLL_SECONDS=0 SHIP_PR_PING_AT="$ping" \
+  SHIP_PR_BRANCH_RULES_FIXTURE="$here/branch-rules-one.json" \
+  SHIP_PR_CHECKS_FIXTURES="$here/checks-cancelled.json" \
+  SHIP_PR_FIXTURES="$(f quiet)" "$script" fixture/repo 1 2>"$cancel_err_file")
+cancel_err=$(cat "$cancel_err_file")
+rm -f "$cancel_err_file"
+ran=$((ran + 1))
+if ! grep -q '^CANCEL  Verify$' <<<"$cancel_out" \
+  && grep -q '^CANCEL  Verify$' <<<"$cancel_err" \
+  && grep -qF 'PR #1: checks failed — 1 red, 0 green. Red: Verify.' <<<"$cancel_out"; then
+  printf '  ok    cancel-row-on-stderr\n'
+else
+  failures=$((failures + 1))
+  printf '  FAIL  cancel-row-on-stderr (expected off stdout, on stderr, and a summary row counting it red)\n'
 fi
 
 # The refusal itself, with genuinely merged streams — the one case that must not

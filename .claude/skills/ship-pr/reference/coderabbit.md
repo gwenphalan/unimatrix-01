@@ -301,7 +301,8 @@ watches required checks and the live head sha, reports `merged <sha>` once GitHu
 red required check as survivable, and reports the head moving — which genuinely does break the arm —
 with the exact `gh pr merge --match-head-commit` command to re-arm. On the findings row this sits
 alongside the pre-arm recheck: the post-review wait re-checks required checks once, right before
-arming, and a red check there is caught and reported (`— not arming`) before the arm is attempted.
+arming, and a red check there is caught and reported (`Nothing is armed to merge.`) before the arm is
+attempted.
 
 Unmeasured: whether GitHub's auto-merge updates an out-of-date branch by itself. Read as no, and the
 failure direction is benign either way — a self-update moves the head sha, which the watcher's polling
