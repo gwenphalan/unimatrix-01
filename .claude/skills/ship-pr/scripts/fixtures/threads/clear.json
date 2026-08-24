@@ -12,6 +12,9 @@
               "comments": {
                 "nodes": [
                   {
+                    "author": {
+                      "login": "coderabbitai"
+                    },
                     "body": "**Guard the empty list.**\n\n`required` can be empty here, and an empty gate reads as green."
                   }
                 ]
