@@ -20,7 +20,7 @@
   "devDependencies": {
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.2",
-    "@tanstack/react-router": "^1.170.27",
+    "@tanstack/react-router": "^1.170.28",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
     "@unimatrix/config-eslint": "workspace:*",
@@ -39,7 +39,7 @@
     "@unimatrix/ui": "workspace:*"
   },
   "peerDependencies": {
-    "@tanstack/react-router": "^1.170.27",
+    "@tanstack/react-router": "^1.170.28",
     "react": "^19.2.4",
     "react-dom": "^19.2.4"
   }
